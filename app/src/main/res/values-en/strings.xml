@@ -40,6 +40,7 @@
     <string name="otp_verify">Verify</string>
     <string name="otp_resend">Resend code</string>
     <string name="otp_resend_wait">Resend in %1$d s</string>
+    <string name="otp_resend_sending">Sending code…</string>
     <string name="otp_back_cd">Back to email</string>
     <string name="otp_invalid_length">The code must be 6 digits.</string>
     <string name="otp_verify_failed">Invalid or expired code. Try again.</string>

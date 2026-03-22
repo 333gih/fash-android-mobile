@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -51,6 +51,7 @@ import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.order.OrderItem
+import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -153,7 +154,10 @@ fun OrdersScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(items, key = { it.orderId }) { order ->
+                    itemsIndexed(
+                        items,
+                        key = { index, order -> stableLazyKey(order.orderId, index, "ord") },
+                    ) { _, order ->
                         OrderCard(
                             order = order,
                             isConfirming = confirmingOrderId == order.orderId,

@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +61,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.data.chat.ProductCard
+import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -194,7 +195,10 @@ fun ChatDetailScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
                         }
-                        items(messages.reversed(), key = { it.messageId }) { msg ->
+                        itemsIndexed(
+                            messages.reversed(),
+                            key = { index, msg -> stableLazyKey(msg.messageId, index, "msg") },
+                        ) { _, msg ->
                             MessageBubble(
                                 message = msg,
                                 formatTime = viewModel::formatTime,

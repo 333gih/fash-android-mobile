@@ -40,6 +40,7 @@
     <string name="otp_verify">Xác minh</string>
     <string name="otp_resend">Gửi lại mã</string>
     <string name="otp_resend_wait">Gửi lại sau %1$d giây</string>
+    <string name="otp_resend_sending">Đang gửi lại mã…</string>
     <string name="otp_back_cd">Quay lại nhập email</string>
     <string name="otp_invalid_length">Mã phải gồm 6 chữ số.</string>
     <string name="otp_verify_failed">Mã không đúng hoặc đã hết hạn. Thử lại.</string>

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -150,7 +151,8 @@ fun OtpVerifyScreen(
                     onOtpChange(digits)
                 },
                 focusRequester = focusRequester,
-                onImeDone = { if (otpComplete && !isVerifyLoading) onVerifyClick() },
+                // FIX: only trigger verify when otp is complete and not already loading
+                onImeDone = { if (otpComplete && !isVerifyLoading && !isSendOtpLoading) onVerifyClick() },
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -162,6 +164,12 @@ fun OtpVerifyScreen(
                 cornerRadius = 24.dp,
                 solidFill = scheme.primary,
                 softShadowElevation = OTP_SHADOW_DP.dp,
+                // FIX: enforce a minimum height so the button does not collapse to spinner
+                // size when the label text is hidden during loading — important for
+                // long-text locales (e.g. Vietnamese) where the button normally is taller.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
             ) {
                 if (isVerifyLoading) {
                     CircularProgressIndicator(
@@ -180,20 +188,35 @@ fun OtpVerifyScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // FIX: pull canResend out so it is shared between enabled state and color logic
+            val canResend = resendCooldownSec <= 0 && !isSendOtpLoading
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                val canResend = resendCooldownSec <= 0 && !isSendOtpLoading
+                // FIX: do not use `enabled` on TextButton to gate the color — Material3
+                // applies its own disabled alpha on top of any manually set color, causing
+                // a double-tint that makes the countdown text too faint.  Instead keep the
+                // button always technically enabled and handle the guard inside onClick.
                 TextButton(
-                    onClick = onResendClick,
-                    enabled = canResend,
+                    onClick = { if (canResend) onResendClick() },
                 ) {
                     if (isSendOtpLoading) {
+                        // FIX: show both spinner AND a label so the button area is never
+                        // just an unlabelled spinner — this matters especially for
+                        // Vietnamese and other translated locales where context is needed.
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             color = FashColors.Primary,
                             strokeWidth = 2.dp,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.otp_resend_sending),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
                         )
                     } else {
                         Text(
@@ -203,6 +226,8 @@ fun OtpVerifyScreen(
                                 stringResource(R.string.otp_resend)
                             },
                             style = MaterialTheme.typography.labelLarge,
+                            // FIX: colour is now driven solely by our own logic; no
+                            // Material3 disabled-alpha interference.
                             color = if (canResend) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.6f),
                         )
                     }
@@ -260,11 +285,16 @@ private fun OtpSixCells(
             }
         }
 
+        // FIX: was `fillMaxSize()` which made the invisible text field cover the entire
+        // column below the OTP row (buttons, resend link), eating all touch events on
+        // those elements.  Constrained to just the cell row height so only the OTP area
+        // captures taps.
         BasicTextField(
             value = otp,
             onValueChange = onOtpChange,
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(CellHeight)
                 .focusRequester(focusRequester)
                 .alpha(0f),
             singleLine = true,

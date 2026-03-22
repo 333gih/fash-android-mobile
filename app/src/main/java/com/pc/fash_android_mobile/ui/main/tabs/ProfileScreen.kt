@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +52,7 @@ import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -415,7 +416,10 @@ private fun ProfileProductGrid(
             vertical = 16.dp,
         ),
     ) {
-        items(items, key = { it.id }) { item ->
+        itemsIndexed(
+            items,
+            key = { index, item -> stableLazyKey(item.id, index, "prof") },
+        ) { _, item ->
             ProfileProductCard(
                 item = item,
                 onClick = { onItemClick(item.id) },

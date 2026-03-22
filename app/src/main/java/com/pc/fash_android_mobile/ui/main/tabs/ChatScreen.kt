@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.chat.ChatFilter
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
@@ -138,7 +139,10 @@ fun ChatScreen(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 content = {
-                    items(conversations, key = { it.conversationId }) { item ->
+                    itemsIndexed(
+                        conversations,
+                        key = { index, item -> stableLazyKey(item.conversationId, index, "conv") },
+                    ) { _, item ->
                         ConversationRow(
                             item = item,
                             formatTimestamp = viewModel::formatTimestamp,
