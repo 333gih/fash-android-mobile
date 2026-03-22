@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Minimal editorial trench illustration; tonal fills sit on surfaceContainer card -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="260dp"
+    android:viewportWidth="320"
+    android:viewportHeight="260">
+    <!-- Coat body -->
+    <path
+        android:fillColor="#C6A57B"
+        android:pathData="M108,82c18,-28 86,-28 104,0l26,58l-8,92c-2,12 -12,22 -24,22H114c-12,0 -22,-10 -24,-22l-8,-92z" />
+    <!-- Inner lapels / shadow -->
+    <path
+        android:fillColor="#B89568"
+        android:pathData="M142,88L160,142l-6,48c-12,-4 -20,-14 -22,-28zM178,88L160,142l6,48c12,-4 20,-14 22,-28z" />
+    <!-- Double-breast seam -->
+    <path
+        android:fillColor="#A88762"
+        android:pathData="M156,95L160,155L164,95z" />
+    <!-- Belt -->
+    <path
+        android:fillColor="#8F6E4E"
+        android:pathData="M112,158h196v10H112z" />
+    <!-- Belt knot -->
+    <path
+        android:fillColor="#7D5F44"
+        android:pathData="M148,154h24c4,0 8,4 8,8v12c0,4 -4,8 -8,8h-24c-4,0 -8,-4 -8,-8v-12c0,-4 4,-8 8,-8z" />
+    <!-- Head -->
+    <path
+        android:fillColor="#E6D2BE"
+        android:pathData="M160,46c-14,0 -25,11 -25,25s11,25 25,25s25,-11 25,-25s-11,-25 -25,-25z" />
+    <!-- Legs / trousers -->
+    <path
+        android:fillColor="#B89872"
+        android:pathData="M132,210L128,248h28l4,-38zM160,210L156,248h28l4,-38z" />
+    <!-- Shoulder line -->
+    <path
+        android:fillColor="#9E7B56"
+        android:pathData="M96,90c28,-18 100,-18 128,0v12c-32,-14 -96,-14 -128,0z" />
+</vector>

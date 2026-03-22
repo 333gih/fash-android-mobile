@@ -1,0 +1,159 @@
+import com.android.build.api.dsl.ApplicationProductFlavor
+import java.io.File
+
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+fun loadEnvFile(envFile: File): Map<String, String> {
+    if (!envFile.exists()) {
+        error(
+            "Missing env file: ${envFile.absolutePath}\n" +
+                "Add env/dev.env and env/prod.env at the project root.",
+        )
+    }
+    return envFile.readLines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") }
+        .associate { line ->
+            val eq = line.indexOf('=')
+            require(eq > 0) { "Invalid env line (expected KEY=value): $line" }
+            val key = line.substring(0, eq).trim()
+            val value = line.substring(eq + 1).trim()
+            key to value
+        }
+}
+
+fun buildConfigStringLiteral(raw: String): String =
+    "\"${raw.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName: String) {
+    fun envVal(key: String): String? = env[key]?.trim()?.takeIf { it.isNotEmpty() }
+    fun envOrEmpty(key: String): String = env[key]?.trim() ?: ""
+
+    val authBase = envVal("AUTH_SERVICE_BASE_URL")
+        ?: error("AUTH_SERVICE_BASE_URL is required in env for flavor '$flavorName'")
+    val apiBase = envVal("API_BASE_URL") ?: authBase
+    val envName = envVal("ENVIRONMENT_NAME") ?: flavorName
+
+    buildConfigField("String", "ENVIRONMENT_NAME", buildConfigStringLiteral(envName))
+    buildConfigField("String", "AUTH_SERVICE_BASE_URL", buildConfigStringLiteral(authBase))
+    buildConfigField("String", "API_BASE_URL", buildConfigStringLiteral(apiBase))
+    buildConfigField(
+        "String",
+        "AUTH_CLIENT_ID",
+        buildConfigStringLiteral(envVal("AUTH_CLIENT_ID") ?: error("AUTH_CLIENT_ID required for '$flavorName'")),
+    )
+    buildConfigField("String", "AUTH_CLIENT_SECRET", buildConfigStringLiteral(envOrEmpty("AUTH_CLIENT_SECRET")))
+    val otpPath = envVal("AUTH_OTP_REQUEST_PATH") ?: "api/v1/auth/otp/request"
+    buildConfigField("String", "AUTH_OTP_REQUEST_PATH", buildConfigStringLiteral(otpPath))
+    val otpVerifyPath = envVal("AUTH_OTP_VERIFY_PATH") ?: "api/v1/auth/otp/verify"
+    buildConfigField("String", "AUTH_OTP_VERIFY_PATH", buildConfigStringLiteral(otpVerifyPath))
+    val applicationId = envVal("AUTH_APPLICATION_ID")
+        ?: error("AUTH_APPLICATION_ID (UUID of the row in applications table) is required for flavor '$flavorName'")
+    buildConfigField("String", "AUTH_APPLICATION_ID", buildConfigStringLiteral(applicationId))
+    val socialPath = envVal("AUTH_SOCIAL_LOGIN_PATH") ?: "api/v1/auth/social-login"
+    buildConfigField("String", "AUTH_SOCIAL_LOGIN_PATH", buildConfigStringLiteral(socialPath))
+    val refreshPath = envVal("AUTH_REFRESH_PATH") ?: "api/v1/auth/refresh"
+    buildConfigField("String", "AUTH_REFRESH_PATH", buildConfigStringLiteral(refreshPath))
+    val logoutPath = envVal("AUTH_LOGOUT_PATH") ?: "api/v1/auth/logout"
+    buildConfigField("String", "AUTH_LOGOUT_PATH", buildConfigStringLiteral(logoutPath))
+    val logoutAllPath = envVal("AUTH_LOGOUT_ALL_PATH") ?: "api/v1/auth/logout-all"
+    buildConfigField("String", "AUTH_LOGOUT_ALL_PATH", buildConfigStringLiteral(logoutAllPath))
+    val loginPath = envVal("AUTH_LOGIN_PATH") ?: "api/v1/auth/login"
+    buildConfigField("String", "AUTH_LOGIN_PATH", buildConfigStringLiteral(loginPath))
+    val fcmRegisterPath = envVal("AUTH_FCM_REGISTER_PATH") ?: "api/v1/auth/fcm/register"
+    buildConfigField("String", "AUTH_FCM_REGISTER_PATH", buildConfigStringLiteral(fcmRegisterPath))
+    val fbAppId = envOrEmpty("FACEBOOK_APP_ID")
+    val fbClientToken = envOrEmpty("FACEBOOK_CLIENT_TOKEN")
+    buildConfigField("String", "FACEBOOK_APP_ID", buildConfigStringLiteral(fbAppId))
+    buildConfigField("String", "FACEBOOK_CLIENT_TOKEN", buildConfigStringLiteral(fbClientToken))
+    resValue("string", "facebook_app_id", fbAppId.ifEmpty { "0" })
+    resValue("string", "facebook_client_token", fbClientToken.ifEmpty { "unset" })
+    val googleWebClientId = envOrEmpty("GOOGLE_WEB_CLIENT_ID")
+    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", buildConfigStringLiteral(googleWebClientId))
+}
+
+android {
+    namespace = "com.pc.fash_android_mobile"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.pc.fash_android_mobile"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "environment"
+    val devEnv = loadEnvFile(rootProject.file("env/dev.env"))
+    val prodEnv = loadEnvFile(rootProject.file("env/prod.env"))
+
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            injectFromEnv(devEnv, "dev")
+        }
+        create("prod") {
+            dimension = "environment"
+            injectFromEnv(prodEnv, "prod")
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.coil.compose)
+    // Explicit coordinates — ensures IDE/Kotlin resolve `com.facebook.*` (Catalog `libs.fb.login` can fail indexing in some setups).
+    implementation("com.facebook.android:facebook-login:17.0.2")
+    implementation(libs.play.services.auth)
+    implementation(libs.androidx.security.crypto)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Digital Editorial — XML mirrors for splash / legacy views; Compose uses [FashColors]. -->
+    <color name="fash_primary">#FFFF4B64</color>
+    <color name="fash_primary_deep">#FFE03E56</color>
+    <color name="fash_primary_container">#FFFF7480</color>
+    <color name="fash_on_primary">#FFFFEFEC</color>
+    <color name="fash_surface_variant">#FFF5F0E8</color>
+    <color name="fash_surface_lowest">#FFFFFBF7</color>
+    <color name="fash_on_surface">#FF1C1917</color>
+</resources>
