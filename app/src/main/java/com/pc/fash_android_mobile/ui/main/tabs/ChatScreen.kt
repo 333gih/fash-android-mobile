@@ -43,8 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.data.chat.ConversationItem
@@ -256,8 +255,8 @@ private fun ConversationRow(
                     .background(scheme.surfaceContainerHigh),
             ) {
                 if (avatarUrl != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
+                    FashAsyncImage(
+                        model = avatarUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
@@ -317,8 +316,8 @@ private fun ConversationRow(
                 .background(scheme.surfaceContainerHigh),
         ) {
             if (thumbUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbUrl).crossfade(true).build(),
+                FashAsyncImage(
+                    model = thumbUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,

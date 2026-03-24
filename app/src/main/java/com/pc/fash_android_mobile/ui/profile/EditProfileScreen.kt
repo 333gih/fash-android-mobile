@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
@@ -53,8 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.AestheticTag
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
@@ -195,8 +195,8 @@ fun EditProfileScreen(
                     ) {
                         val cover = coverImageUrl ?: profile?.coverImageUrl?.takeIf { it.isNotBlank() }
                         if (cover != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context).data(cover).crossfade(true).build(),
+                            FashAsyncImage(
+                                model = cover,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
@@ -243,8 +243,8 @@ fun EditProfileScreen(
                         ) {
                             val avatar = avatarUrl ?: profile?.avatarUrl?.takeIf { it.isNotBlank() }
                             if (avatar != null) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context).data(avatar).crossfade(true).build(),
+                                FashAsyncImage(
+                                    model = avatar,
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop,
@@ -521,6 +521,7 @@ private fun BioInput(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StyleChipsSection(
     label: String,

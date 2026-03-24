@@ -124,6 +124,74 @@ class UserRepository(
      * Unfollow user (core-service: `DELETE /api/v1/users/:id/follow`).
      * Accepts UUID or username; returns canonical user id (UUID) on success.
      */
+    /** `POST /users/{id}/block` */
+    fun blockUser(userIdOrUsername: String): Result<Unit> = runCatching {
+        val targetId = resolveFollowTargetUserId(userIdOrUsername)
+        val seg = encodePathSegment(targetId)
+        val url = AppEnvironment.apiPath("api/v1/users/$seg/block")
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post("{}".toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val body = response.body?.string().orEmpty()
+                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
+    /** `DELETE /users/{id}/block` */
+    fun unblockUser(userIdOrUsername: String): Result<Unit> = runCatching {
+        val targetId = resolveFollowTargetUserId(userIdOrUsername)
+        val seg = encodePathSegment(targetId)
+        val url = AppEnvironment.apiPath("api/v1/users/$seg/block")
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .delete()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful && response.code != 404) {
+                val body = response.body?.string().orEmpty()
+                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
+    /** `GET /users/suggested-username?phone=` */
+    fun getSuggestedUsername(phone: String): Result<String> = runCatching {
+        val q = phone.trim()
+        if (q.isBlank()) error("phone required")
+        val url = "${AppEnvironment.apiPath("api/v1/users/suggested-username")}?phone=${Uri.encode(q)}"
+        val body = publicClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
+                error("HTTP ${response.code}: $msg")
+            }
+            response.body?.string().orEmpty()
+        }
+        val obj = JSONObject(body.trim())
+        val root = if (obj.has("data")) obj.getJSONObject("data") else obj
+        root.optString("suggested_username", "").ifBlank { error("No suggested_username") }
+    }
+
     fun unfollow(userIdOrUsername: String): Result<String> = runCatching {
         val targetId = resolveFollowTargetUserId(userIdOrUsername)
         val seg = encodePathSegment(targetId)
@@ -228,7 +296,10 @@ class UserRepository(
         username?.let { json.put("username", it) }
         bio?.let { json.put("bio", it) }
         avatarUrl?.let { json.put("avatar_url", it) }
-        coverImageUrl?.let { json.put("cover_image_url", it) }
+        coverImageUrl?.let {
+            json.put("cover_image_url", it)
+            json.put("cover_url", it)
+        }
         aestheticTags?.let { json.put("aesthetic_tags", JSONArray(it)) }
         val body = json.toString()
         val url = AppEnvironment.apiPath("api/v1/users/me")

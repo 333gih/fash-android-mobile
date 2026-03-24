@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.payment.CheckoutAddress
 import com.pc.fash_android_mobile.data.payment.PaymentRequest
 import com.pc.fash_android_mobile.data.payment.PaymentService
@@ -34,6 +35,8 @@ class CheckoutViewModel(
 
     private val listingRepository: ListingRepository =
         (application as FashApplication).listingRepository
+    private val orderRepository: OrderRepository =
+        (application as FashApplication).orderRepository
     private val paymentService: PaymentService =
         (application as FashApplication).paymentService
 
@@ -154,7 +157,19 @@ class CheckoutViewModel(
             result.fold(
                 onSuccess = {
                     _events.tryEmit(it.message ?: getApplication<Application>().getString(R.string.checkout_success))
-                    onSuccess()
+                    viewModelScope.launch {
+                        val orderResult = withContext(Dispatchers.IO) {
+                            orderRepository.createOrder(d.id, productPriceVnd)
+                        }
+                        orderResult.fold(
+                            onSuccess = { onSuccess() },
+                            onFailure = { e ->
+                                _events.tryEmit(
+                                    e.message ?: getApplication<Application>().getString(R.string.checkout_payment_error),
+                                )
+                            },
+                        )
+                    }
                 },
                 onFailure = {
                     _events.tryEmit(it.message ?: getApplication<Application>().getString(R.string.checkout_payment_error))

@@ -44,8 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.user.ProfileInfo
@@ -189,11 +188,8 @@ private fun ListingPreviewCard(
                 ) {
                     meProfile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { url ->
                         val fullUrl = resolveImageUrl(url)
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(fullUrl)
-                                .crossfade(true)
-                                .build(),
+                        FashAsyncImage(
+                            model = fullUrl,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
@@ -240,11 +236,8 @@ private fun ListingPreviewCard(
                     else -> null
                 }
                 if (imageModel != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(imageModel)
-                            .crossfade(true)
-                            .build(),
+                    FashAsyncImage(
+                        model = imageModel,
                         contentDescription = draft.title,
                         modifier = Modifier
                             .fillMaxSize()

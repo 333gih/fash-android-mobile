@@ -144,6 +144,11 @@
     <string name="create_listing_brand_label">Thương hiệu</string>
     <string name="create_listing_select">Chọn</string>
     <string name="create_listing_style_label">Phong cách (Chọn nhiều)</string>
+    <string name="create_listing_step2_incomplete_header">Để bật nút Tiếp theo, cần:</string>
+    <string name="create_listing_step2_need_title">Tiêu đề 3–60 ký tự</string>
+    <string name="create_listing_step2_need_price">Giá từ 1.000 đến 100.000.000 đ</string>
+    <string name="create_listing_step2_need_condition">Chọn một tình trạng (chip phía trên)</string>
+    <string name="create_listing_step2_need_category">Chọn danh mục (danh sách tải từ máy chủ)</string>
     <string name="condition_new">Mới</string>
     <string name="condition_like_new">Như mới</string>
     <string name="condition_good">Tốt</string>

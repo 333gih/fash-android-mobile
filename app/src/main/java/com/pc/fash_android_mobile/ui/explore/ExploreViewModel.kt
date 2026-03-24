@@ -44,6 +44,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _loadError = MutableStateFlow(false)
     val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
 
@@ -122,6 +125,19 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun retryLoad() {
         loadAll()
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            _loadError.value = false
+            withContext(Dispatchers.IO) {
+                loadTags()
+                loadFeaturedSellers()
+                loadListings()
+            }
+            _isRefreshing.value = false
+        }
     }
 
     fun follow(userId: String) {

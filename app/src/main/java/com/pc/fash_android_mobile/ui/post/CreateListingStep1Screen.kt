@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.ui.post
 
 import android.net.Uri
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -35,7 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,8 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -59,8 +59,12 @@ fun CreateListingStep1Screen(
     onNext: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val draft by viewModel.draft.collectAsState()
     val isUploading by viewModel.isUploading.collectAsState()
+    val uriResolver: (Uri) -> ByteArray? = { uri ->
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents(),
@@ -109,8 +113,14 @@ fun CreateListingStep1Screen(
             onCancel = onClose,
             onNext = {
                 if (isUploading) return@BottomBar
-                viewModel.nextStep()
-                onNext()
+                // Upload photos while gallery URIs are still readable; step 3 submit then skips re-upload.
+                scope.launch {
+                    val ok = viewModel.uploadImages(uriResolver)
+                    if (ok) {
+                        viewModel.nextStep()
+                        onNext()
+                    }
+                }
             },
             nextEnabled = draft.canProceedFromStep1() && !isUploading,
             isLoading = isUploading,
@@ -205,8 +215,8 @@ private fun ImagePreviewRow(
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(uri).crossfade(true).build(),
+                FashAsyncImage(
+                    model = uri,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,

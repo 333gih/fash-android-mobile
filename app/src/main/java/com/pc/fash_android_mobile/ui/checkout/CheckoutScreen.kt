@@ -51,8 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -220,8 +219,8 @@ private fun ProductSummaryCard(detail: com.pc.fash_android_mobile.data.listing.L
                     .background(scheme.surfaceContainerHigh),
             ) {
                 if (imageUrl != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(context).data(imageUrl).build(),
+                    FashAsyncImage(
+                        model = imageUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,

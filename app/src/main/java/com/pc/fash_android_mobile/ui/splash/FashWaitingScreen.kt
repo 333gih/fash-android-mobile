@@ -188,7 +188,8 @@ private fun SplashCornerImage(
     cropAlignment: Alignment,
 ) {
     Image(
-        painter = painterResource(R.drawable.splash_reference),
+        // Vector drawable only — layer-list XML is not supported by painterResource() (crashes at runtime).
+        painter = painterResource(R.drawable.login_hero_trench),
         contentDescription = null,
         contentScale = ContentScale.Crop,
         alignment = cropAlignment,

@@ -47,12 +47,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -156,8 +155,8 @@ private fun ProfileHeader(
                 .background(scheme.surfaceContainerHigh),
         ) {
             if (coverUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(coverUrl).crossfade(true).build(),
+                FashAsyncImage(
+                    model = coverUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -190,8 +189,8 @@ private fun ProfileHeader(
                     .padding(4.dp),
             ) {
                 if (avatarUrl != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current).data(avatarUrl).crossfade(true).build(),
+                    FashAsyncImage(
+                        model = avatarUrl,
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize()
@@ -441,11 +440,8 @@ private fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
             .clickable(onClick = onClick),
     ) {
         if (imageUrl.isNotEmpty()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .crossfade(true)
-                    .build(),
+            FashAsyncImage(
+                model = imageUrl,
                 contentDescription = item.title,
                 modifier = Modifier
                     .fillMaxSize()

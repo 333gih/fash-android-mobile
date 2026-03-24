@@ -46,8 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.order.OrderItem
@@ -253,11 +252,8 @@ private fun OrderCard(
                     .background(scheme.surfaceContainerHigh),
             ) {
                 if (imageUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(imageUrl)
-                            .crossfade(true)
-                            .build(),
+                    FashAsyncImage(
+                        model = imageUrl,
                         contentDescription = order.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,

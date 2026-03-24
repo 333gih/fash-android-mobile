@@ -1,5 +1,6 @@
 import com.android.build.api.dsl.ApplicationProductFlavor
 import java.io.File
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -28,6 +29,22 @@ fun loadEnvFile(envFile: File): Map<String, String> {
 
 fun buildConfigStringLiteral(raw: String): String =
     "\"${raw.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+/** Reads `gradle.properties`, `~/.gradle/gradle.properties`, or `local.properties` (same keys). */
+fun org.gradle.api.Project.prop(key: String): String? {
+    (findProperty(key) as String?)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    val lp = rootProject.file("local.properties")
+    if (!lp.exists()) return null
+    val p = Properties()
+    lp.inputStream().use { p.load(it) }
+    return p.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+/** Release keystore file if [FASH_RELEASE_STORE_FILE] points to an existing file (path relative to project root). */
+val releaseKeystoreFile: File? =
+    project.prop("FASH_RELEASE_STORE_FILE")
+        ?.let { rootProject.file(it) }
+        ?.takeIf { it.isFile }
 
 fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName: String) {
     fun envVal(key: String): String? = env[key]?.trim()?.takeIf { it.isNotEmpty() }
@@ -106,6 +123,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseKeystoreFile != null) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = project.prop("FASH_RELEASE_STORE_PASSWORD").orEmpty()
+                keyAlias = project.prop("FASH_RELEASE_KEY_ALIAS") ?: "upload"
+                keyPassword = project.prop("FASH_RELEASE_KEY_PASSWORD").orEmpty()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -114,6 +142,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Without a release keystore, sign with the debug key so the APK is installable (not *-unsigned).
+            // For Play Store / real distribution, set FASH_RELEASE_* in local.properties (see SIGNING.md).
+            signingConfig = if (releaseKeystoreFile != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {

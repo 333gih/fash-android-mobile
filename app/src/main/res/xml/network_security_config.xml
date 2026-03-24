@@ -7,10 +7,12 @@
             <certificates src="user" />
         </trust-anchors>
     </base-config>
-    <!-- Dev/emulator: 10.0.2.2 = host. Physical device: add your PC's LAN IP as a domain -->
+    <!-- Dev/emulator: 10.0.2.2 = host. Physical device: add your PC's LAN IP. -->
+    <!-- Remote dev server (e.g. env/dev.env AUTH_SERVICE_BASE_URL / API_BASE_URL HTTP) -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">76.13.211.193</domain>
     </domain-config>
 </network-security-config>

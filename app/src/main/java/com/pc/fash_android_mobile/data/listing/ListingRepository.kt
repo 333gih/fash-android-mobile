@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.data.listing
 
+import android.net.Uri
 import com.pc.fash_android_mobile.config.AppEnvironment
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -18,6 +19,12 @@ import java.io.File
 class ListingRepository(
     private val securedClient: OkHttpClient,
 ) {
+
+    private val userIdUuidRegex =
+        Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+    private fun encodeUserPathSegment(segment: String): String =
+        if (userIdUuidRegex.matches(segment)) segment else Uri.encode(segment, null)
 
     fun getHomeFeed(limit: Int = 20, offset: Int = 0): Result<List<ListingFeedItem>> = runCatching {
         val url = "${AppEnvironment.apiPath("api/v1/listings/home")}?limit=$limit&offset=$offset"
@@ -52,19 +59,83 @@ class ListingRepository(
         parseListingDetail(executeGet(url))
     }
 
+    /**
+     * Core-service: `GET /users/{id}/listings`. Falls back to explore `seller_id` if needed.
+     */
     fun getListingsBySeller(
         sellerId: String,
         status: String? = null,
         limit: Int = 50,
         offset: Int = 0,
     ): Result<List<ListingFeedItem>> = runCatching {
+        val seg = encodeUserPathSegment(sellerId.trim())
         val q = mutableListOf<String>()
         q.add("limit=$limit")
         q.add("offset=$offset")
-        q.add("seller_id=$sellerId")
         status?.takeIf { it.isNotBlank() }?.let { q.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
-        val url = AppEnvironment.apiPath("api/v1/listings/explore") + "?" + q.joinToString("&")
-        parseFeedResponse(executeGet(url))
+        val primary = AppEnvironment.apiPath("api/v1/users/$seg/listings") + "?" + q.joinToString("&")
+        try {
+            parseFeedResponse(executeGet(primary))
+        } catch (_: Exception) {
+            val fb = mutableListOf<String>()
+            fb.add("limit=$limit")
+            fb.add("offset=$offset")
+            fb.add("seller_id=$sellerId")
+            status?.takeIf { it.isNotBlank() }?.let { fb.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            val url = AppEnvironment.apiPath("api/v1/listings/explore") + "?" + fb.joinToString("&")
+            parseFeedResponse(executeGet(url))
+        }
+    }
+
+    /** `GET /listings/wishlist` → listing id list. */
+    fun getWishlistListingIds(limit: Int = 50, offset: Int = 0): Result<List<String>> = runCatching {
+        val url = "${AppEnvironment.apiPath("api/v1/listings/wishlist")}?limit=$limit&offset=$offset"
+        val body = executeGet(url)
+        val obj = JSONObject(body.trim())
+        val root = if (obj.has("data")) obj.getJSONObject("data") else obj
+        val arr = root.optJSONArray("listing_ids") ?: JSONArray("[]")
+        (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
+    }
+
+    /** `PUT /listings/{id}` — category cannot change (omit). */
+    fun updateListing(listingId: String, update: UpdateListingRequest): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/listings/${listingId.trim()}")
+        val json = JSONObject()
+        update.title?.let { json.put("title", it) }
+        update.condition?.let { json.put("condition", it) }
+        update.priceVnd?.let { json.put("price", it) }
+        update.description?.let { json.put("description", it) }
+        update.brand?.let { json.put("brand", it) }
+        update.size?.let { json.put("size", it) }
+        update.aestheticTags?.let { json.put("aesthetic_tags", JSONArray(it)) }
+        if (json.length() == 0) return@runCatching
+        executePutJson(url, json.toString())
+    }
+
+    /** `DELETE /listings/{id}` */
+    fun deleteListing(listingId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/listings/${listingId.trim()}")
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .delete()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
+    /** `POST /listings/{id}/sold` */
+    fun markListingSoldOutsidePlatform(listingId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/listings/${listingId.trim()}/sold")
+        executePost(url)
+        Unit
     }
 
     fun getCategories(): Result<List<Category>> = runCatching {
@@ -84,8 +155,12 @@ class ListingRepository(
         }
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
+            val catId = o.optString("id", "")
+                .ifBlank { o.optString("ID", "") }
+                .ifBlank { o.optString("category_id", "") }
+                .ifBlank { o.optString("uuid", "") }
             Category(
-                id = o.optString("id", o.optString("ID", "")),
+                id = catId,
                 name = o.optString("name", o.optString("Name", "")),
                 slug = o.optString("slug", o.optString("Slug", "")),
             )
@@ -217,49 +292,29 @@ class ListingRepository(
         }
     }
 
-    private fun parseFeedResponse(json: String): List<ListingFeedItem> {
-        val raw = json.trim()
-        val arr = when {
-            raw.startsWith("[") -> JSONArray(raw)
-            else -> try {
-                val obj = JSONObject(raw)
-                if (obj.has("data")) obj.getJSONArray("data") else JSONArray("[]")
-            } catch (_: Exception) { JSONArray("[]") }
-        }
-        val list = mutableListOf<ListingFeedItem>()
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val seller = o.optJSONObject("seller")
-            val firstTag = seller?.optJSONArray("aesthetic_tags")?.optJSONObject(0)
-            list.add(
-                ListingFeedItem(
-                    id = o.optString("id", o.optString("ID", "")),
-                    title = o.optString("title", o.optString("Title", "")),
-                    coverImageUrl = (o.optString("cover_image_url", "")
-                        .ifBlank { o.optString("CoverImageURL", "") })
-                        .ifBlank { o.optJSONArray("image_urls")?.optString(0) ?: o.optJSONArray("ImageURLs")?.optString(0) ?: "" },
-                    imageUrls = parseStringArray(o.optJSONArray("image_urls")),
-                    priceVnd = o.optLong("price", o.optLong("Price", 0L)),
-                    condition = o.optString("condition", o.optString("Condition", "")),
-                    likeCount = o.optInt("like_count", o.optInt("LikeCount", 0)),
-                    saveCount = o.optInt("save_count", o.optInt("SaveCount", 0)),
-                    sellerId = o.optString("seller_id", "").ifBlank { null }
-                        ?: o.optString("SellerID", "").ifBlank { null }
-                        ?: seller?.optString("user_id", "")?.ifBlank { null },
-                    sellerUsername = (seller?.optString("username", "")?.takeIf { it.isNotBlank() }
-                        ?: o.optString("seller_id", "").take(8).let { if (it.isNotBlank()) "user_$it" else "user" }),
-                    sellerAvatarUrl = seller?.optString("avatar_url", "")?.ifBlank { null },
-                    sellerStyleTag = firstTag?.let { it.optString("name", it.optString("display_name", "")) }?.ifBlank { null },
-                    createdAt = o.optString("created_at", "")?.ifBlank { null },
-                )
-            )
-        }
-        return list
-    }
+    private fun parseFeedResponse(json: String): List<ListingFeedItem> =
+        ListingFeedJsonParser.parseFeedArray(json)
 
     private fun parseStringArray(arr: JSONArray?): List<String> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
+    }
+
+    private fun executePutJson(url: String, json: String) {
+        val request = Request.Builder()
+            .url(url)
+            .put(json.toRequestBody(JSON_MEDIA))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        securedClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
     }
 
     private fun parseListingDetail(json: String): ListingDetail {
@@ -271,13 +326,19 @@ class ListingRepository(
             } catch (_: Exception) { JSONObject(raw) }
             else -> JSONObject("{}")
         }
-        val seller = o.optJSONObject("seller")
-        val imageUrls = parseStringArray(o.optJSONArray("image_urls"))
-        val coverUrl = o.optString("cover_image_url", "").ifBlank {
-            o.optString("CoverImageURL", "").ifBlank { imageUrls.firstOrNull() ?: "" }
-        }
+        // Backend returns PascalCase ("Seller", "Category") for Go structs
+        val seller = o.optJSONObject("seller") ?: o.optJSONObject("Seller")
+        val categoryObj = o.optJSONObject("category") ?: o.optJSONObject("Category")
+        val imageUrls = parseStringArray(
+            o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs"),
+        )
+        val coverUrl = o.optString("cover_image_url", "")
+            .ifBlank { o.optString("CoverImageURL", "") }
+            .ifBlank { imageUrls.firstOrNull() ?: "" }
         val tagsArr = o.optJSONArray("tags")
-        val tags = parseStringArray(tagsArr)
+            ?: o.optJSONArray("Tags")
+            ?: o.optJSONArray("aesthetic_tags")
+            ?: o.optJSONArray("AestheticTags")
         return ListingDetail(
             id = o.optString("id", o.optString("ID", "")),
             title = o.optString("title", o.optString("Title", "")),
@@ -285,19 +346,28 @@ class ListingRepository(
             imageUrls = imageUrls.ifEmpty { listOf(coverUrl).filter { it.isNotBlank() } },
             priceVnd = o.optLong("price", o.optLong("Price", 0L)),
             condition = o.optString("condition", o.optString("Condition", "")),
-            category = o.optString("category", "").ifBlank { null },
-            size = o.optString("size", "").ifBlank { null },
-            brand = o.optString("brand", "").ifBlank { null },
+            // Resolve category name from nested Category object or flat field
+            category = categoryObj?.optString("name", "")?.ifBlank { null }
+                ?: categoryObj?.optString("Name", "")?.ifBlank { null }
+                ?: o.optString("category", "").ifBlank { null },
+            size = o.optString("size", "").ifBlank { o.optString("Size", "").ifBlank { null } },
+            brand = o.optString("brand", "").ifBlank { o.optString("Brand", "").ifBlank { null } },
             material = o.optString("material", "").ifBlank { null },
-            tags = tags,
+            tags = parseStringArray(tagsArr),
             likeCount = o.optInt("like_count", o.optInt("LikeCount", 0)),
             saveCount = o.optInt("save_count", o.optInt("SaveCount", 0)),
+            // Prefer Seller.UserID (auth user) then top-level SellerID
             sellerId = seller?.optString("user_id", "")?.ifBlank { null }
-                ?: o.optString("seller_id", "").ifBlank { null },
+                ?: seller?.optString("UserID", "")?.ifBlank { null }
+                ?: o.optString("seller_id", "").ifBlank { null }
+                ?: o.optString("SellerID", "").ifBlank { null },
             sellerUsername = seller?.optString("username", "")?.ifBlank { null }
+                ?: seller?.optString("Username", "")?.ifBlank { null }
                 ?: o.optString("seller_username", "").ifBlank { null },
-            sellerAvatarUrl = seller?.optString("avatar_url", "")?.ifBlank { null },
-            sellerDisplayName = seller?.optString("display_name", "")?.ifBlank { null },
+            sellerAvatarUrl = seller?.optString("avatar_url", "")?.ifBlank { null }
+                ?: seller?.optString("AvatarURL", "")?.ifBlank { null },
+            sellerDisplayName = seller?.optString("display_name", "")?.ifBlank { null }
+                ?: seller?.optString("DisplayName", "")?.ifBlank { null },
             isLiked = o.optBoolean("is_liked", false),
             isSaved = o.optBoolean("is_saved", false),
         )
@@ -318,6 +388,17 @@ data class CreateListingRequest(
     val size: String = "",
     val brand: String = "",
     val aestheticTags: List<String> = emptyList(),
+)
+
+/** Partial update for `PUT /listings/{id}`. */
+data class UpdateListingRequest(
+    val title: String? = null,
+    val condition: String? = null,
+    val priceVnd: Long? = null,
+    val description: String? = null,
+    val brand: String? = null,
+    val size: String? = null,
+    val aestheticTags: List<String>? = null,
 )
 
 data class CreateListingResponse(val id: String)

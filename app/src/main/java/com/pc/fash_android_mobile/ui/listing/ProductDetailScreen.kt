@@ -59,13 +59,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.ProfileInfo
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -210,11 +209,8 @@ private fun ProductImageSection(
             .aspectRatio(1f),
     ) {
         if (imageUrl.isNotEmpty()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .crossfade(true)
-                    .build(),
+            FashAsyncImage(
+                model = imageUrl,
                 contentDescription = detail.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -315,8 +311,8 @@ private fun SellerInfoCard(
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
                 if (avatarUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current).data(avatarUrl).crossfade(true).build(),
+                    FashAsyncImage(
+                        model = avatarUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
@@ -601,8 +597,8 @@ private fun MoreFromSellerCard(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         ) {
             if (imageUrl.isNotEmpty()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(imageUrl).crossfade(true).build(),
+                FashAsyncImage(
+                    model = imageUrl,
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,

@@ -144,6 +144,11 @@
     <string name="create_listing_brand_label">Brand</string>
     <string name="create_listing_select">Select</string>
     <string name="create_listing_style_label">Style (Select multiple)</string>
+    <string name="create_listing_step2_incomplete_header">To enable Next, still needed:</string>
+    <string name="create_listing_step2_need_title">Title: 3–60 characters</string>
+    <string name="create_listing_step2_need_price">Price: 1,000 – 100,000,000 VND</string>
+    <string name="create_listing_step2_need_condition">Pick a condition (chips above)</string>
+    <string name="create_listing_step2_need_category">Pick a category (loaded from server)</string>
     <string name="condition_new">New</string>
     <string name="condition_like_new">Like new</string>
     <string name="condition_good">Good</string>

@@ -185,6 +185,8 @@ fun CreateListingStep2Screen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
+        Step2IncompleteHint(keys = draft.step2MissingRequirementKeys())
+
         Step2BottomBar(
             onCancel = onClose,
             onNext = {
@@ -635,6 +637,40 @@ private fun StyleChips(
                     text = tag.displayName.ifBlank { tag.name },
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isSelected) FashColors.Primary else scheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Step2IncompleteHint(keys: List<String>) {
+    if (keys.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.create_listing_step2_incomplete_header),
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.error,
+        )
+        keys.forEach { key ->
+            val msg = when (key) {
+                "title" -> stringResource(R.string.create_listing_step2_need_title)
+                "price" -> stringResource(R.string.create_listing_step2_need_price)
+                "condition" -> stringResource(R.string.create_listing_step2_need_condition)
+                "category" -> stringResource(R.string.create_listing_step2_need_category)
+                else -> ""
+            }
+            if (msg.isNotBlank()) {
+                Text(
+                    text = "• $msg",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
                 )
             }
         }

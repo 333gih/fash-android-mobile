@@ -38,7 +38,9 @@ import com.facebook.login.LoginManager
 import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
+import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
@@ -69,6 +71,33 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SPLASH_DISPLAY_MS = 2_500L
+
+/**
+ * True when the user must complete onboarding (style + username).
+ * Uses [UserRepository.getMeProfile] so we don't rely on GET /users/me returning 404 for new users
+ * (the API often returns 200 with an incomplete profile).
+ */
+private fun computeNeedsOnboarding(
+    userRepo: UserRepository,
+    sessionStore: AuthSessionStore,
+): Boolean {
+    val session = sessionStore.read() ?: return false
+    val profileResult = userRepo.getMeProfile()
+    return profileResult.fold(
+        onSuccess = { profile ->
+            !isProfileOnboardingComplete(profile.username)
+        },
+        onFailure = {
+            session.isNewUser || userRepo.getMe().isFailure
+        },
+    )
+}
+
+/** Matches [com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel.isUsernameValid] rules. */
+private fun isProfileOnboardingComplete(username: String): Boolean {
+    val u = username.trim()
+    return u.length in 3..30 && u.matches(Regex("^[a-z0-9_.]+$"))
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -185,7 +214,7 @@ class MainActivity : ComponentActivity() {
                     if (needsOnboarding != null) return@LaunchedEffect
                     val userRepo = (this@MainActivity.application as FashApplication).userRepository
                     needsOnboarding = withContext(Dispatchers.IO) {
-                        userRepo.getMe().isFailure
+                        computeNeedsOnboarding(userRepo, authManager.sessionStore)
                     }
                 }
 
@@ -237,6 +266,11 @@ class MainActivity : ComponentActivity() {
                                             progressTotal = 3,
                                             onComplete = {
                                                 onboardingViewModel.submitOnboard {
+                                                    authManager.sessionStore.read()?.let { s ->
+                                                        authManager.sessionStore.save(
+                                                            s.copy(isNewUser = false),
+                                                        )
+                                                    }
                                                     needsOnboarding = false
                                                 }
                                             },

@@ -25,33 +25,37 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExploreScreen(
     modifier: Modifier = Modifier,
@@ -63,9 +67,26 @@ fun ExploreScreen(
     val featuredSellers by viewModel.featuredSellers.collectAsState()
     val listings by viewModel.listings.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val pullState = rememberPullToRefreshState()
 
-    Column(modifier = modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        modifier = modifier.fillMaxSize(),
+        state = pullState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                color = FashColors.Primary,
+                containerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         if (isLoading && tags.isEmpty() && listings.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -197,6 +218,7 @@ fun ExploreScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -213,8 +235,8 @@ private fun FeaturedSellerItem(seller: UserSearchResult) {
         ) {
             if (seller.avatarUrl.isNotBlank()) {
                 val url = resolveImageUrl(seller.avatarUrl)
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
+                FashAsyncImage(
+                    model = url,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -247,8 +269,8 @@ private fun ExploreGridCard(item: ListingFeedItem, onClick: () -> Unit = {}) {
             .clickable(onClick = onClick),
     ) {
         if (imageUrl.isNotEmpty()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(imageUrl).crossfade(true).build(),
+            FashAsyncImage(
+                model = imageUrl,
                 contentDescription = item.title,
                 modifier = Modifier
                     .fillMaxSize()

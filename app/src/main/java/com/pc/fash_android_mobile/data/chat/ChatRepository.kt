@@ -155,19 +155,63 @@ class ChatRepository(
         parseMessage(body)
     }
 
-    fun createOffer(conversationId: String, listingId: String, amountVnd: Long): Result<PriceOffer> = runCatching {
+    /**
+     * `POST /chat/offers` — tries doc body (`conversation_id` + `amount_vnd`), then legacy with `listing_id`.
+     */
+    fun createOffer(conversationId: String, listingId: String?, amountVnd: Long): Result<PriceOffer> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/chat/offers")
-        val json = JSONObject()
+        val minimal = JSONObject()
             .put("conversation_id", conversationId)
-            .put("listing_id", listingId)
             .put("amount_vnd", amountVnd)
             .toString()
+        val body = try {
+            postJson(url, minimal)
+        } catch (_: Exception) {
+            if (listingId.isNullOrBlank()) throw IllegalStateException("listing_id required for offer on this server")
+            val full = JSONObject()
+                .put("conversation_id", conversationId)
+                .put("listing_id", listingId)
+                .put("amount_vnd", amountVnd)
+                .toString()
+            postJson(url, full)
+        }
+        parseOffer(body)
+    }
+
+    /**
+     * Accept/decline offer: `POST /chat/offers/accept|decline` (doc), fallback to `POST /offers/{id}/respond`.
+     */
+    fun respondToOffer(
+        conversationId: String,
+        offerMessageId: String,
+        accept: Boolean,
+    ): Result<Unit> = runCatching {
+        val docPath = if (accept) "api/v1/chat/offers/accept" else "api/v1/chat/offers/decline"
+        val docBody = JSONObject()
+            .put("conversation_id", conversationId)
+            .put("offer_message_id", offerMessageId)
+            .toString()
+        try {
+            postJson(AppEnvironment.apiPath(docPath), docBody)
+        } catch (_: Exception) {
+            val url = AppEnvironment.apiPath("api/v1/offers/$offerMessageId/respond")
+            val legacy = JSONObject().put("accept", accept).toString()
+            postJson(url, legacy)
+        }
+    }
+
+    /** `GET /chat/conversations/{id}/messages` — newest first. */
+    fun getMessages(
+        conversationId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+    ): Result<List<ChatMessage>> = runCatching {
+        val url = "${AppEnvironment.apiPath("api/v1/chat/conversations/$conversationId/messages")}?limit=$limit&offset=$offset"
         val body = securedClient.newCall(
             Request.Builder()
                 .url(url)
-                .post(json.toRequestBody(JSON_MEDIA))
+                .get()
                 .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
                 .header("User-Agent", "FashAndroid/1.0")
                 .build(),
         ).execute().use { response ->
@@ -178,16 +222,16 @@ class ChatRepository(
             }
             response.body?.string().orEmpty()
         }
-        parseOffer(body)
+        parseMessagesArray(body)
     }
 
-    fun respondToOffer(offerId: String, accept: Boolean): Result<Unit> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/offers/$offerId/respond")
-        val json = JSONObject().put("accept", accept).toString()
+    /** `POST /chat/conversations/{id}/read` */
+    fun markConversationRead(conversationId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/chat/conversations/$conversationId/read")
         securedClient.newCall(
             Request.Builder()
                 .url(url)
-                .post(json.toRequestBody(JSON_MEDIA))
+                .post("{}".toRequestBody(JSON_MEDIA))
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "FashAndroid/1.0")
@@ -199,6 +243,62 @@ class ChatRepository(
                 error("HTTP ${response.code}: $msg")
             }
         }
+    }
+
+    /** `GET /chat/unread` */
+    fun getUnreadCount(): Result<Int> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/chat/unread")
+        val body = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
+                error("HTTP ${response.code}: $msg")
+            }
+            response.body?.string().orEmpty()
+        }
+        val obj = JSONObject(body.trim())
+        val root = if (obj.has("data")) obj.getJSONObject("data") else obj
+        root.optInt("unread_count", root.optInt("unread", 0))
+    }
+
+    private fun postJson(url: String, json: String): String {
+        return securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val b = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
+                error("HTTP ${response.code}: $msg")
+            }
+            b
+        }
+    }
+
+    private fun parseMessagesArray(json: String): List<ChatMessage> {
+        val raw = json.trim()
+        val arr = when {
+            raw.startsWith("[") -> JSONArray(raw)
+            else -> try {
+                val obj = JSONObject(raw)
+                if (obj.has("data")) obj.getJSONArray("data") else JSONArray("[]")
+            } catch (_: Exception) {
+                JSONArray("[]")
+            }
+        }
+        return (0 until arr.length()).map { i -> parseMessageObj(arr.getJSONObject(i)) }
     }
 
     private fun parseConversationDetail(json: String): ConversationDetail {

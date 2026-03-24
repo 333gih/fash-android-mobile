@@ -46,4 +46,16 @@ data class CreateListingDraft(
             priceVnd in 1_000..100_000_000 &&
             condition.isNotBlank() &&
             categoryId.isNotBlank()
+
+    /**
+     * Human-readable reasons the Next button stays disabled (size/brand/tags are optional).
+     */
+    fun step2MissingRequirementKeys(): List<String> {
+        val keys = mutableListOf<String>()
+        if (title.length !in 3..60) keys.add("title")
+        if (priceVnd !in 1_000L..100_000_000L) keys.add("price")
+        if (condition.isBlank()) keys.add("condition")
+        if (categoryId.isBlank()) keys.add("category")
+        return keys
+    }
 }

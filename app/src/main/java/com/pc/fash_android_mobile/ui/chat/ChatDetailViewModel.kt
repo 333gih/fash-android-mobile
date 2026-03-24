@@ -72,6 +72,15 @@ class ChatDetailViewModel(
                 onSuccess = { d ->
                     _detail.value = d
                     _messages.value = d.messages
+                    viewModelScope.launch {
+                        val msgResult = withContext(Dispatchers.IO) {
+                            chatRepository.getMessages(conversationId)
+                        }
+                        msgResult.getOrNull()?.takeIf { it.isNotEmpty() }?.let { _messages.value = it }
+                        withContext(Dispatchers.IO) {
+                            chatRepository.markConversationRead(conversationId)
+                        }
+                    }
                 },
                 onFailure = {
                     _loadError.value = it.message ?: getApplication<Application>().getString(R.string.chat_load_error)
@@ -118,11 +127,11 @@ class ChatDetailViewModel(
 
     fun createOffer(amountVnd: Long) {
         val d = _detail.value ?: return
-        val listingId = d.product?.listingId ?: return
+        val listingId = d.product?.listingId
         viewModelScope.launch {
             _showOfferDialog.value = false
             val result = withContext(Dispatchers.IO) {
-                chatRepository.createOffer(d.conversationId, listingId, amountVnd)
+                chatRepository.createOffer(d.conversationId, listingId?.takeIf { it.isNotBlank() }, amountVnd)
             }
             result.fold(
                 onSuccess = { offer ->
@@ -136,10 +145,11 @@ class ChatDetailViewModel(
     }
 
     fun acceptOffer(offer: PriceOffer) {
+        val convId = _detail.value?.conversationId ?: return
         viewModelScope.launch {
             _isRespondingToOffer.value = true
             val result = withContext(Dispatchers.IO) {
-                chatRepository.respondToOffer(offer.offerId, true)
+                chatRepository.respondToOffer(convId, offer.offerId, true)
             }
             _isRespondingToOffer.value = false
             result.fold(
@@ -155,10 +165,11 @@ class ChatDetailViewModel(
     }
 
     fun declineOffer(offer: PriceOffer) {
+        val convId = _detail.value?.conversationId ?: return
         viewModelScope.launch {
             _isRespondingToOffer.value = true
             val result = withContext(Dispatchers.IO) {
-                chatRepository.respondToOffer(offer.offerId, false)
+                chatRepository.respondToOffer(convId, offer.offerId, false)
             }
             _isRespondingToOffer.value = false
             result.fold(

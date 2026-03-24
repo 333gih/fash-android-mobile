@@ -28,11 +28,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,19 +45,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeFeedContent(
     modifier: Modifier = Modifier,
@@ -64,8 +67,23 @@ fun HomeFeedContent(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val pullState = rememberPullToRefreshState()
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        modifier = modifier.fillMaxWidth(),
+        state = pullState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                color = FashColors.Primary,
+                containerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+    ) {
         when {
             isLoading && items.isEmpty() -> {
                 Box(
@@ -114,16 +132,6 @@ fun HomeFeedContent(
                     }
                 }
             }
-        }
-
-        if (isRefreshing && items.isNotEmpty()) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(8.dp)
-                    .size(24.dp),
-                color = FashColors.Primary,
-            )
         }
     }
 }
@@ -212,11 +220,8 @@ private fun FeedPostCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     if (!avatarUrl.isNullOrEmpty()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(avatarUrl)
-                                .crossfade(true)
-                                .build(),
+                        FashAsyncImage(
+                            model = avatarUrl,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
@@ -276,11 +281,8 @@ private fun FeedPostCard(
                     .padding(horizontal = FashTheme.spacing.spacing3),
             ) {
                 if (imageUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(imageUrl)
-                            .crossfade(true)
-                            .build(),
+                    FashAsyncImage(
+                        model = imageUrl,
                         contentDescription = item.title,
                         modifier = Modifier
                             .fillMaxWidth()

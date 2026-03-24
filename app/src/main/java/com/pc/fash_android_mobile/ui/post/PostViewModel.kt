@@ -45,15 +45,21 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
-    private val _events = MutableSharedFlow<String>()
+    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 32)
     val events = _events.asSharedFlow()
 
+    /** Emits on [viewModelScope] so messages are never dropped (unlike bare [tryEmit]). */
+    private fun publishUi(message: String) {
+        viewModelScope.launch { _events.emit(message) }
+    }
+
     fun setImageUris(uris: List<Uri>) {
-        _draft.value = _draft.value.withImageUris(uris.take(6))
+        // New picks invalidate any prior upload URLs — must re-upload when leaving step 1.
+        _draft.value = _draft.value.withImageUris(uris.take(6)).copy(imageUrls = emptyList())
     }
 
     fun removeImage(index: Int) {
-        _draft.value = _draft.value.removeImageAtIndex(index)
+        _draft.value = _draft.value.removeImageAtIndex(index).copy(imageUrls = emptyList())
     }
 
     fun nextStep() {
@@ -116,14 +122,14 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
         for ((i, uri) in uris.withIndex()) {
             val bytes = withContext(Dispatchers.IO) { uriResolver(uri) }
             if (bytes == null || bytes.isEmpty()) {
-                _events.tryEmit(getApplication<Application>().getString(R.string.create_listing_image_error))
+                publishUi(getApplication<Application>().getString(R.string.create_listing_image_error))
                 _isUploading.value = false
                 return false
             }
             listingRepository.uploadListingImage(bytes, "image_$i.jpg").fold(
                 onSuccess = { urls.add(it) },
                 onFailure = {
-                    _events.tryEmit(it.message ?: getApplication<Application>().getString(R.string.create_listing_upload_error))
+                    publishUi(it.message ?: getApplication<Application>().getString(R.string.create_listing_upload_error))
                     _isUploading.value = false
                     return false
                 },
@@ -149,7 +155,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 if (finalUrls.isEmpty()) {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.create_listing_no_images))
+                    publishUi(getApplication<Application>().getString(R.string.create_listing_no_images))
                     return@launch
                 }
                 val req = CreateListingRequest(
@@ -165,12 +171,12 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 listingRepository.createListing(req).fold(
                     onSuccess = {
-                        _events.tryEmit(getApplication<Application>().getString(R.string.create_listing_success))
+                        publishUi(getApplication<Application>().getString(R.string.create_listing_success))
                         resetDraft()
                         onSuccess()
                     },
                     onFailure = {
-                        _events.tryEmit(it.message ?: getApplication<Application>().getString(R.string.create_listing_error))
+                        publishUi(it.message ?: getApplication<Application>().getString(R.string.create_listing_error))
                     },
                 )
             } finally {

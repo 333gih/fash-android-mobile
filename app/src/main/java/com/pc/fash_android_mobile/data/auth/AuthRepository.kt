@@ -49,7 +49,6 @@ class AuthRepository(
             .put("application_id", AppEnvironment.authApplicationId.trim())
             .toString()
         val body = postJsonBody(url, json)
-        print("Fucking body: " + body);
         parseLoginResponse(body)
     }
 
