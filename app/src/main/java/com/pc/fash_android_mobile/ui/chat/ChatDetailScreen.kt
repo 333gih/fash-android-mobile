@@ -1,14 +1,18 @@
 package com.pc.fash_android_mobile.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -18,7 +22,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -73,6 +76,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -351,11 +355,11 @@ fun ChatDetailScreen(
                         }
                     }
 
-                    // Typing indicator
+                    // Typing indicator — use expand/shrink so the bar animates smoothly
                     AnimatedVisibility(
                         visible = isOtherTyping,
-                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                        enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(tween(220)),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(tween(180)),
                     ) {
                         TypingIndicator(name = d.otherUser.displayName.ifBlank { d.otherUser.username })
                     }
@@ -1117,43 +1121,44 @@ private fun OfferPriceBottomSheet(
  * - Bubble shape and color match the LEFT (incoming) message bubble.
  * - Mini avatar uses [FashColors.Primary] tint with a letter fallback — identical to
  *   [ChatDetailHeader].
- * - Three dots animate with a sequential wave using [FashColors.OnSurfaceVariant] tint.
- * - Typography uses [FashTypography] via [MaterialTheme.typography].
- * - Each dot's [animateFloat] is declared separately (never inside a loop) to respect
- *   Compose composable ordering rules.
+ * - Three dots use a **scale pulse** (not vertical offset) so motion is never clipped by the
+ *   bubble’s [RoundedCornerShape] clip. Stagger uses [StartOffset] on [infiniteRepeatable].
+ * - Each dot’s [animateFloat] is declared separately (never inside a loop).
  */
 @Composable
 private fun TypingIndicator(name: String) {
     val scheme = MaterialTheme.colorScheme
 
-    // ── Three staggered bounce animations — declared individually, NOT in a loop ──
     val transition = rememberInfiniteTransition(label = "typing_indicator")
 
-    // Each dot lifts 7dp upward then returns; delay staggers create the rolling wave.
-    val yDot0 by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -7f,
+    // Staggered wave: same pulse, different phase (StartOffset — not tween delayMillis)
+    val scaleDot0 by transition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 360, delayMillis = 0, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 420, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
+            initialStartOffset = StartOffset(0, StartOffsetType.FastForward),
         ),
         label = "typing_dot0",
     )
-    val yDot1 by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -7f,
+    val scaleDot1 by transition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 360, delayMillis = 120, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 420, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
+            initialStartOffset = StartOffset(110, StartOffsetType.FastForward),
         ),
         label = "typing_dot1",
     )
-    val yDot2 by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -7f,
+    val scaleDot2 by transition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 360, delayMillis = 240, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 420, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
+            initialStartOffset = StartOffset(220, StartOffsetType.FastForward),
         ),
         label = "typing_dot2",
     )
@@ -1206,34 +1211,32 @@ private fun TypingIndicator(name: String) {
                     .background(scheme.surfaceContainerHigh)
                     .padding(horizontal = 18.dp, vertical = 14.dp),
             ) {
-                // Fixed-height row so the bouncing dots never shift the bubble layout
                 Row(
-                    modifier = Modifier.height(14.dp),
+                    modifier = Modifier.height(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.Bottom,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Dot size and color use OnSurfaceVariant — same as caption text in bubbles
                     val dotColor = FashColors.OnSurfaceVariant.copy(alpha = 0.55f)
                     val dotSize = 8.dp
 
                     Box(
                         modifier = Modifier
                             .size(dotSize)
-                            .offset(y = yDot0.dp)
+                            .scale(scaleDot0)
                             .clip(CircleShape)
                             .background(dotColor),
                     )
                     Box(
                         modifier = Modifier
                             .size(dotSize)
-                            .offset(y = yDot1.dp)
+                            .scale(scaleDot1)
                             .clip(CircleShape)
                             .background(dotColor),
                     )
                     Box(
                         modifier = Modifier
                             .size(dotSize)
-                            .offset(y = yDot2.dp)
+                            .scale(scaleDot2)
                             .clip(CircleShape)
                             .background(dotColor),
                     )

@@ -497,7 +497,9 @@ class ChatRepository(
             .map { i -> arr.getJSONObject(i) }
             .filterNot { it.optBoolean("IsDeleted", it.optBoolean("is_deleted", false)) }
             .map { parseMessageObj(it) }
-            .sortedBy { it.timestamp }   // Ensure ascending order (oldest first) regardless of API response order
+            .groupBy { it.messageId }
+            .map { (_, rows) -> rows.last() }
+            .sortedBy { it.timestamp }   // Ascending (oldest first); dedupe by id in case API repeats a row
     }
 
     private fun parseMessage(json: String): ChatMessage {

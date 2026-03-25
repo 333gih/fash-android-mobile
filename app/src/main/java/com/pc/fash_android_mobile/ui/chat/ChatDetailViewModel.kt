@@ -148,8 +148,9 @@ class ChatDetailViewModel(
                     }
                     is RealtimeEvent.TypingStart -> {
                         if (sameConversation(event.conversationId, conversationId)) {
-                            val myId = sessionStore.read()?.userId.orEmpty()
-                            if (event.userId != myId) {
+                            val myId = sessionStore.read()?.userId?.trim().orEmpty()
+                            val other = event.userId.trim()
+                            if (other.isNotBlank() && !other.equals(myId, ignoreCase = true)) {
                                 _isOtherTyping.value = true
                                 scheduleTypingTimeout()
                             }
@@ -157,8 +158,15 @@ class ChatDetailViewModel(
                     }
                     is RealtimeEvent.TypingStop -> {
                         if (sameConversation(event.conversationId, conversationId)) {
-                            _isOtherTyping.value = false
-                            typingTimeoutJob?.cancel()
+                            val myId = sessionStore.read()?.userId?.trim().orEmpty()
+                            val uid = event.userId.trim()
+                            // Ignore stop events that refer to us (echo); otherwise hide "other typing"
+                            if (uid.isNotBlank() && uid.equals(myId, ignoreCase = true)) {
+                                Unit
+                            } else {
+                                _isOtherTyping.value = false
+                                typingTimeoutJob?.cancel()
+                            }
                         }
                     }
                     is RealtimeEvent.OrderStatusChanged -> {
@@ -207,6 +215,16 @@ class ChatDetailViewModel(
     }
 
     /**
+     * Collapses duplicate [ChatMessage.messageId] rows (race: silentPoll + send success both add
+     * the same server id). Last row wins so the newest snapshot is kept.
+     */
+    private fun dedupeMessagesByIdPreferLast(messages: List<ChatMessage>): List<ChatMessage> =
+        messages
+            .groupBy { it.messageId }
+            .map { (_, rows) -> rows.last() }
+            .sortedBy { it.timestamp }
+
+    /**
      * Server list is authoritative. Keeps in-flight optimistic rows (`local-*` ids) until the
      * same text appears from the API (then the duplicate pending row is dropped).
      */
@@ -215,7 +233,7 @@ class ChatDetailViewModel(
         current: List<ChatMessage>,
     ): List<ChatMessage> {
         val pending = current.filter { it.messageId.startsWith("local-") }
-        if (pending.isEmpty()) return server.distinctBy { it.messageId }
+        if (pending.isEmpty()) return dedupeMessagesByIdPreferLast(server)
         val merged = server.toMutableList()
         for (p in pending) {
             val superseded = server.any { s ->
@@ -226,7 +244,7 @@ class ChatDetailViewModel(
             }
             if (!superseded) merged.add(p)
         }
-        return merged.distinctBy { it.messageId }.sortedBy { it.timestamp }
+        return dedupeMessagesByIdPreferLast(merged)
     }
 
     private suspend fun silentPoll(conversationId: String) {
@@ -436,15 +454,17 @@ class ChatDetailViewModel(
             )
             _isSending.value = true
             _inputText.value = ""
+            // Field cleared programmatically — OutlinedTextField may not call onValueChange; tell peer we stopped typing
+            realtimeManager.sendTypingStop(convId)
             _messages.value = _messages.value + optimistic
             val result = withContext(Dispatchers.IO) { chatRepository.sendMessage(convId, text) }
             _isSending.value = false
             result.fold(
                 onSuccess = { msg ->
-                    _messages.value = _messages.value
-                        .filter { it.messageId != tempId }
-                        .let { it + msg }
-                        .sortedBy { it.timestamp }
+                    val withoutTemp = _messages.value.filter { it.messageId != tempId }
+                    // Race: silentPoll may already have inserted this server id — avoid duplicate keys in LazyColumn
+                    val withoutDup = withoutTemp.filter { it.messageId != msg.messageId }
+                    _messages.value = (withoutDup + msg).sortedBy { it.timestamp }
                 },
                 onFailure = {
                     _messages.value = _messages.value.map { row ->
