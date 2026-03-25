@@ -24,11 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -44,8 +46,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
@@ -69,6 +73,7 @@ fun ExploreScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val followingIds by viewModel.followingIds.collectAsState()
     val pullState = rememberPullToRefreshState()
 
     PullToRefreshBox(
@@ -152,9 +157,15 @@ fun ExploreScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Top,
             ) {
+                Spacer(modifier = Modifier.width(FashTheme.spacing.editorialStart))
                 featuredSellers.forEach { seller ->
-                    FeaturedSellerItem(seller = seller)
+                    FeaturedSellerItem(
+                        seller = seller,
+                        isFollowing = followingIds.contains(seller.userId) || followingIds.contains(seller.username),
+                        onFollow = { viewModel.follow(seller.userId.ifBlank { seller.username }) },
+                    )
                 }
+                Spacer(modifier = Modifier.width(FashTheme.spacing.editorialStart))
             }
         }
 
@@ -222,40 +233,72 @@ fun ExploreScreen(
 }
 
 @Composable
-private fun FeaturedSellerItem(seller: UserSearchResult) {
+private fun FeaturedSellerItem(
+    seller: UserSearchResult,
+    isFollowing: Boolean = false,
+    onFollow: () -> Unit = {},
+) {
+    val scheme = MaterialTheme.colorScheme
     Column(
-        modifier = Modifier.width(80.dp),
+        modifier = Modifier.width(96.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(64.dp)
+                .size(68.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .background(FashColors.Primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
         ) {
             if (seller.avatarUrl.isNotBlank()) {
-                val url = resolveImageUrl(seller.avatarUrl)
                 FashAsyncImage(
-                    model = url,
+                    model = resolveImageUrl(seller.avatarUrl),
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
                     contentScale = ContentScale.Crop,
+                )
+            } else {
+                // Letter avatar placeholder
+                Text(
+                    text = (seller.displayName.firstOrNull() ?: seller.username.firstOrNull() ?: '?')
+                        .uppercaseChar().toString(),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                    ),
+                    color = FashColors.Primary,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "@${seller.username}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            text = seller.displayName.ifBlank { "@${seller.username}" },
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
         )
         Text(
             text = "${formatFollowerCount(seller.followerCount)} ${stringResource(R.string.explore_followers)}",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = scheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedButton(
+            onClick = onFollow,
+            enabled = !isFollowing,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.height(28.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+        ) {
+            Text(
+                text = if (isFollowing) stringResource(R.string.following_button) else stringResource(R.string.follow_button),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
 

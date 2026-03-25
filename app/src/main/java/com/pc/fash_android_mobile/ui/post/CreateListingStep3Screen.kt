@@ -66,8 +66,11 @@ fun CreateListingStep3Screen(
     val aestheticTags by viewModel.aestheticTags.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val context = LocalContext.current
-    val uriResolver: (Uri) -> ByteArray? = { uri ->
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    val uriResolver: (Uri) -> Pair<ByteArray, String>? = { uri ->
+        val mimeType = context.contentResolver.getType(uri)?.takeIf { !it.contains('*') } ?: "image/jpeg"
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            Pair(stream.readBytes(), mimeType)
+        }
     }
 
     LaunchedEffect(Unit) {

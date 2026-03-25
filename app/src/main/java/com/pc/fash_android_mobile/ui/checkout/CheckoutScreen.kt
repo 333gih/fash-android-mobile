@@ -65,6 +65,7 @@ private val ProductImageSize = 64.dp
 fun CheckoutScreen(
     modifier: Modifier = Modifier,
     listingId: String,
+    overridePriceVnd: Long = 0L,
     viewModel: CheckoutViewModel,
     onBack: () -> Unit,
     onSuccess: () -> Unit,
@@ -81,8 +82,8 @@ fun CheckoutScreen(
     val loadError by viewModel.loadError.collectAsState()
     val scheme = MaterialTheme.colorScheme
 
-    LaunchedEffect(listingId) {
-        viewModel.loadListing(listingId)
+    LaunchedEffect(listingId, overridePriceVnd) {
+        viewModel.loadListing(listingId, overridePriceVnd)
     }
 
     BackHandler { onBack() }

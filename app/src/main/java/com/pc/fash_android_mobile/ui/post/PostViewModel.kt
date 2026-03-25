@@ -113,20 +113,29 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
         _draft.value = block(_draft.value)
     }
 
-    /** Uploads images from draft and stores URLs. Call before proceeding to step 2 or at submit. */
-    suspend fun uploadImages(uriResolver: (Uri) -> ByteArray?): Boolean {
+    /**
+     * Uploads images from draft and stores URLs.
+     * [uriResolver] must return (bytes, mimeType) for each URI.
+     * All network calls are dispatched to [Dispatchers.IO].
+     */
+    suspend fun uploadImages(uriResolver: (Uri) -> Pair<ByteArray, String>?): Boolean {
         val uris = _draft.value.imageUris
         if (uris.isEmpty()) return true
         _isUploading.value = true
         val urls = mutableListOf<String>()
         for ((i, uri) in uris.withIndex()) {
-            val bytes = withContext(Dispatchers.IO) { uriResolver(uri) }
-            if (bytes == null || bytes.isEmpty()) {
+            val data = withContext(Dispatchers.IO) { uriResolver(uri) }
+            if (data == null || data.first.isEmpty()) {
                 publishUi(getApplication<Application>().getString(R.string.create_listing_image_error))
                 _isUploading.value = false
                 return false
             }
-            listingRepository.uploadListingImage(bytes, "image_$i.jpg").fold(
+            val (bytes, mimeType) = data
+            val ext = mimeTypeToExt(mimeType)
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.uploadListingImage(bytes, "image_$i.$ext", mimeType)
+            }
+            result.fold(
                 onSuccess = { urls.add(it) },
                 onFailure = {
                     publishUi(it.message ?: getApplication<Application>().getString(R.string.create_listing_upload_error))
@@ -140,17 +149,15 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    fun submitListing(uriResolver: (Uri) -> ByteArray?, onSuccess: () -> Unit) {
+    fun submitListing(uriResolver: (Uri) -> Pair<ByteArray, String>?, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
                 val d = _draft.value
-                val urls = d.imageUrls
-                val uris = d.imageUris
                 val finalUrls = when {
-                    urls.size == uris.size -> urls
+                    d.imageUrls.size == d.imageUris.size && d.imageUrls.isNotEmpty() -> d.imageUrls
                     else -> {
-                        if (!uploadImages(uriResolver)) return@launch
+                        if (!uploadImages(uriResolver ?: { null })) return@launch
                         _draft.value.imageUrls
                     }
                 }
@@ -169,7 +176,10 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     brand = d.brand,
                     aestheticTags = d.aestheticTags,
                 )
-                listingRepository.createListing(req).fold(
+                val createResult = withContext(Dispatchers.IO) {
+                    listingRepository.createListing(req)
+                }
+                createResult.fold(
                     onSuccess = {
                         publishUi(getApplication<Application>().getString(R.string.create_listing_success))
                         resetDraft()
@@ -183,6 +193,13 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                 _isSubmitting.value = false
             }
         }
+    }
+
+    private fun mimeTypeToExt(mimeType: String): String = when (mimeType.lowercase()) {
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/gif" -> "gif"
+        else -> "jpg"
     }
 
     fun cancel() {

@@ -91,6 +91,8 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     resValue("string", "facebook_client_token", fbClientToken.ifEmpty { "unset" })
     val googleWebClientId = envOrEmpty("GOOGLE_WEB_CLIENT_ID")
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", buildConfigStringLiteral(googleWebClientId))
+    val realtimeBase = envVal("REALTIME_BASE_URL") ?: "http://76.13.211.193/realtime-service/"
+    buildConfigField("String", "REALTIME_BASE_URL", buildConfigStringLiteral(realtimeBase))
 }
 
 android {

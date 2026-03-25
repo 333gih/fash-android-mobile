@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.pc.fash_android_mobile.ui.explore.ExploreScreen
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
+import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
@@ -77,7 +78,7 @@ fun MainNavScreen(
     onListingClick: (String) -> Unit = {},
     onEditProfile: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
-    onConversationClick: (String) -> Unit = {},
+    onConversationClick: (ConversationItem) -> Unit = {},
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
 ) {

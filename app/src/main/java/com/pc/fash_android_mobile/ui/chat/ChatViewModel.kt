@@ -7,6 +7,8 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
+import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,17 +19,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-enum class ChatFilter(val status: String?, val role: String?) {
-    All(null, null),
-    Unread("unread", null),
-    Seller(null, "seller"),
-    Buyer(null, "buyer"),
+/**
+ * Chat list filter — applied client-side after fetching all conversations from the API.
+ * The API (GET /chat/conversations) only supports limit/offset; it has no status or role filter.
+ */
+enum class ChatFilter {
+    All,
+    Unread,
+    Seller,  // conversations where the current user is the seller
+    Buyer,   // conversations where the current user is the buyer
 }
 
 class ChatViewModel(
@@ -36,15 +41,39 @@ class ChatViewModel(
 
     private val chatRepository: ChatRepository =
         (application as FashApplication).chatRepository
+    private val realtimeManager: RealtimeManager =
+        (application as FashApplication).realtimeManager
+    private val sessionStore =
+        (application as FashApplication).authManager.sessionStore
 
+    init {
+        // Refresh conversation list in real-time when a new message arrives for this user
+        viewModelScope.launch {
+            realtimeManager.events.collect { event ->
+                when (event) {
+                    is RealtimeEvent.MessageNew -> silentRefreshConversations()
+                    is RealtimeEvent.ReadReceipts -> silentRefreshConversations()
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    /** Full unfiltered list returned by the API. */
+    private val _allConversations = MutableStateFlow<List<ConversationItem>>(emptyList())
+
+    /** Filtered view shown in the UI. */
     private val _conversations = MutableStateFlow<List<ConversationItem>>(emptyList())
     val conversations: StateFlow<List<ConversationItem>> = _conversations.asStateFlow()
 
     private val _selectedFilter = MutableStateFlow(ChatFilter.All)
     val selectedFilter: StateFlow<ChatFilter> = _selectedFilter.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
@@ -56,18 +85,16 @@ class ChatViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = null
-            val filter = _selectedFilter.value
             val result = withContext(Dispatchers.IO) {
-                chatRepository.getConversations(
-                    limit = 50,
-                    offset = 0,
-                    status = filter.status,
-                    role = filter.role,
-                )
+                // API only accepts limit + offset — no status or role params
+                chatRepository.getConversations(limit = 50, offset = 0)
             }
             _isLoading.value = false
             result.fold(
-                onSuccess = { _conversations.value = it },
+                onSuccess = { all ->
+                    _allConversations.value = all
+                    applyFilter(_selectedFilter.value, all)
+                },
                 onFailure = {
                     _loadError.value = it.message ?: getApplication<Application>().getString(R.string.chat_load_error)
                     _events.tryEmit(_loadError.value!!)
@@ -76,9 +103,45 @@ class ChatViewModel(
         }
     }
 
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            silentRefreshConversations()
+            _isRefreshing.value = false
+        }
+    }
+
+    /** Quietly re-fetches conversations without showing a loading indicator. */
+    private suspend fun silentRefreshConversations() {
+        val result = withContext(Dispatchers.IO) {
+            chatRepository.getConversations(limit = 50, offset = 0)
+        }
+        result.getOrNull()?.let { all ->
+            _allConversations.value = all
+            applyFilter(_selectedFilter.value, all)
+        }
+    }
+
     fun setFilter(filter: ChatFilter) {
         _selectedFilter.value = filter
-        loadConversations()
+        applyFilter(filter, _allConversations.value)
+    }
+
+    /**
+     * Client-side filter applied after fetching all conversations.
+     * - [ChatFilter.All]    — show everything
+     * - [ChatFilter.Unread] — items where isUnread == true
+     * - [ChatFilter.Seller] — conversations where current user is the seller
+     * - [ChatFilter.Buyer]  — conversations where current user is the buyer
+     */
+    private fun applyFilter(filter: ChatFilter, all: List<ConversationItem>) {
+        val myId = sessionStore.read()?.userId.orEmpty()
+        _conversations.value = when (filter) {
+            ChatFilter.All -> all
+            ChatFilter.Unread -> all.filter { it.isUnread }
+            ChatFilter.Seller -> if (myId.isBlank()) all else all.filter { it.sellerUserId == myId }
+            ChatFilter.Buyer -> if (myId.isBlank()) all else all.filter { it.buyerUserId == myId }
+        }
     }
 
     suspend fun startConversation(listingId: String): Result<String> =

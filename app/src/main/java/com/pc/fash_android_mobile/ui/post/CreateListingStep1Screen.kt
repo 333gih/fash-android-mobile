@@ -62,8 +62,11 @@ fun CreateListingStep1Screen(
     val scope = rememberCoroutineScope()
     val draft by viewModel.draft.collectAsState()
     val isUploading by viewModel.isUploading.collectAsState()
-    val uriResolver: (Uri) -> ByteArray? = { uri ->
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    val uriResolver: (Uri) -> Pair<ByteArray, String>? = { uri ->
+        val mimeType = context.contentResolver.getType(uri)?.takeIf { !it.contains('*') } ?: "image/jpeg"
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            Pair(stream.readBytes(), mimeType)
+        }
     }
 
     val imagePicker = rememberLauncherForActivityResult(

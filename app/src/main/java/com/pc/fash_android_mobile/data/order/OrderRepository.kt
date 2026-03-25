@@ -60,8 +60,9 @@ class OrderRepository(
         val body = executePostJson(url, json)
         val o = JSONObject(body.trim())
         val root = if (o.has("data")) o.getJSONObject("data") else o
-        root.optString("order_id", root.optString("id", "")).ifBlank {
-            o.optString("order_id", o.optString("id", ""))
+        // Handle both snake_case and PascalCase responses from the backend
+        root.optString("ID", root.optString("id", root.optString("order_id", ""))).ifBlank {
+            o.optString("ID", o.optString("id", o.optString("order_id", "")))
         }.ifBlank { error("No order id in response") }
     }
 
@@ -174,18 +175,25 @@ class OrderRepository(
     }
 
     private fun mapOrderJson(o: JSONObject): OrderItem {
-        val listing = o.optJSONObject("listing") ?: o.optJSONObject("product") ?: o
-        val seller = o.optJSONObject("seller") ?: o
+        val listing = o.optJSONObject("listing") ?: o.optJSONObject("Listing")
+            ?: o.optJSONObject("product") ?: o.optJSONObject("Product") ?: o
+        val seller = o.optJSONObject("seller") ?: o.optJSONObject("Seller")
+            ?: o.optJSONObject("buyer") ?: o.optJSONObject("Buyer") ?: o
+        val rawStatus = o.optString("status", o.optString("Status", "payment_pending")).lowercase()
+        val imageUrlsArr = listing.optJSONArray("image_urls") ?: listing.optJSONArray("ImageURLs")
+        val coverUrl = listing.optString("cover_image_url", "")
+            .ifBlank { listing.optString("CoverImageURL", "") }
+            .ifBlank { imageUrlsArr?.optString(0) ?: "" }
         return OrderItem(
-            orderId = o.optString("order_id", o.optString("id", "")),
-            listingId = listing.optString("listing_id", listing.optString("id", "")),
-            title = listing.optString("title", listing.optString("Title", o.optString("title", ""))),
-            imageUrl = listing.optString("image_url", listing.optString("cover_image_url", listing.optJSONArray("image_urls")?.optString(0) ?: "")),
-            sellerUsername = seller.optString("username", o.optString("seller_username", "")),
-            priceVnd = o.optLong("price_vnd", listing.optLong("price", listing.optLong("priceVnd", 0L))),
-            status = o.optString("status", "pending").lowercase(),
-            canConfirm = o.optBoolean("can_confirm", o.optString("status", "").lowercase() == "delivering" || o.optString("status", "").lowercase() == "shipped" || o.optString("status", "").lowercase() == "in_transit"),
-            canReview = o.optBoolean("can_review", o.optString("status", "").lowercase() == "completed" || o.optString("status", "").lowercase() == "delivered_confirmed"),
+            orderId = o.optString("id", o.optString("ID", o.optString("order_id", ""))),
+            listingId = o.optString("listing_id", o.optString("ListingID", listing.optString("id", listing.optString("ID", "")))),
+            title = listing.optString("title", listing.optString("Title", o.optString("title", o.optString("Title", "")))),
+            imageUrl = coverUrl,
+            sellerUsername = seller.optString("username", seller.optString("Username", o.optString("seller_username", ""))),
+            priceVnd = o.optLong("amount_vnd", o.optLong("AmountVND", listing.optLong("price", listing.optLong("Price", 0L)))),
+            status = rawStatus,
+            canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit"),
+            canReview = o.optBoolean("can_review", rawStatus == "delivered_confirmed"),
         )
     }
 }

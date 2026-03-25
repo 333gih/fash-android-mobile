@@ -47,6 +47,7 @@ import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
 import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
 import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
+import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.chat.ChatDetailScreen
 import com.pc.fash_android_mobile.ui.chat.ChatDetailViewModel
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
@@ -176,6 +177,13 @@ class MainActivity : ComponentActivity() {
             val usePasswordLogin by loginViewModel.usePasswordLogin.collectAsState()
             val isPasswordLoading by loginViewModel.isPasswordLoading.collectAsState()
             val isAuthenticated by authManager.isAuthenticated.collectAsState(initial = authManager.sessionStore.read() != null)
+            val sessionExpiredMessage by authManager.sessionExpiredMessage.collectAsState()
+            // Show snackbar when the server force-expires the session, then navigate to login
+            LaunchedEffect(sessionExpiredMessage) {
+                val msg = sessionExpiredMessage ?: return@LaunchedEffect
+                snackbarHostState.showSnackbar(msg)
+                authManager.clearSessionExpiredMessage()
+            }
             var needsOnboarding by rememberSaveable { mutableStateOf<Boolean?>(null) }
             val isLoggingOut by loginViewModel.isLoggingOut.collectAsState()
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
@@ -205,8 +213,15 @@ class MainActivity : ComponentActivity() {
                     splashFinished = true
                 }
 
+                // Connect / disconnect the realtime WebSocket on auth state changes
+                val realtimeManager = (application as FashApplication).realtimeManager
                 LaunchedEffect(isAuthenticated) {
-                    if (!isAuthenticated) needsOnboarding = null
+                    if (isAuthenticated) {
+                        realtimeManager.connect()
+                    } else {
+                        realtimeManager.disconnect()
+                        needsOnboarding = null
+                    }
                 }
 
                 LaunchedEffect(splashFinished, isAuthenticated) {
@@ -228,6 +243,7 @@ class MainActivity : ComponentActivity() {
                     if (splashFinished) {
                         Box(Modifier.fillMaxSize()) {
                             when {
+                                isLoggingOut -> FashWaitingScreen()
                                 isAuthenticated && needsOnboarding == null -> FashWaitingScreen()
                                 isAuthenticated && needsOnboarding == true -> {
                                     LaunchedEffect(Unit) {
@@ -282,7 +298,9 @@ class MainActivity : ComponentActivity() {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var selectedConversationItem by remember { mutableStateOf<ConversationItem?>(null) }
                                     var selectedCheckoutListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var selectedCheckoutOfferPrice by rememberSaveable { mutableStateOf(0L) }
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
@@ -299,7 +317,11 @@ class MainActivity : ComponentActivity() {
                                             onListingClick = { selectedListingId = it },
                                             onEditProfile = { showEditProfile = true },
                                             onOrdersClick = { showOrdersScreen = true },
-                                            onConversationClick = { selectedConversationId = it },
+                                            onConversationClick = { item ->
+                                                selectedConversationItem = item
+                                                chatDetailViewModel.loadFromItem(item)
+                                                selectedConversationId = item.conversationId
+                                            },
                                             selectedTab = selectedTab,
                                             onTabChange = { selectedTab = it },
                                         )
@@ -317,6 +339,7 @@ class MainActivity : ComponentActivity() {
                                                             onSuccess = { convId ->
                                                                 selectedListingId = null
                                                                 selectedTab = MainTab.Chat.ordinal
+                                                                selectedConversationItem = null
                                                                 selectedConversationId = convId
                                                             },
                                                             onFailure = {
@@ -356,10 +379,32 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 conversationId = selectedConversationId!!,
                                                 viewModel = chatDetailViewModel,
-                                                onBack = { selectedConversationId = null },
+                                                onBack = {
+                                                    selectedConversationId = null
+                                                    selectedConversationItem = null
+                                                },
                                                 onProductClick = {
                                                     selectedConversationId = null
                                                     selectedListingId = it
+                                                },
+                                                onCheckout = { listingId, offerAmount ->
+                                                    selectedCheckoutListingId = listingId
+                                                    selectedCheckoutOfferPrice = offerAmount
+                                                },
+                                                onPayNow = { _, listingId, amountVnd ->
+                                                    // Order already created by backend; open CheckoutScreen
+                                                    // with the agreed price so the buyer can confirm payment.
+                                                    if (listingId.isNotBlank()) {
+                                                        selectedCheckoutListingId = listingId
+                                                        selectedCheckoutOfferPrice = amountVnd
+                                                        selectedConversationId = null
+                                                        selectedConversationItem = null
+                                                    }
+                                                },
+                                                onOrderDetails = {
+                                                    selectedConversationId = null
+                                                    selectedConversationItem = null
+                                                    selectedTab = MainTab.Profile.ordinal
                                                 },
                                             )
                                         }
@@ -369,9 +414,16 @@ class MainActivity : ComponentActivity() {
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 listingId = selectedCheckoutListingId!!,
+                                                overridePriceVnd = selectedCheckoutOfferPrice,
                                                 viewModel = checkoutViewModel,
-                                                onBack = { selectedCheckoutListingId = null },
-                                                onSuccess = { selectedCheckoutListingId = null },
+                                                onBack = {
+                                                    selectedCheckoutListingId = null
+                                                    selectedCheckoutOfferPrice = 0L
+                                                },
+                                                onSuccess = {
+                                                    selectedCheckoutListingId = null
+                                                    selectedCheckoutOfferPrice = 0L
+                                                },
                                             )
                                         }
                                         if (showOrdersScreen) {

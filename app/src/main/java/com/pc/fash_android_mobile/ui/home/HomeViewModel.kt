@@ -44,6 +44,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _likedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _savedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _followingIds = MutableStateFlow<Set<String>>(emptySet())
+    val followingIds: kotlinx.coroutines.flow.StateFlow<Set<String>> = _followingIds.asStateFlow()
 
     init {
         loadFeed()

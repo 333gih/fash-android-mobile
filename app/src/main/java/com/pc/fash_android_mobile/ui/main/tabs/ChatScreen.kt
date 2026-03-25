@@ -1,5 +1,11 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,6 +35,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,6 +45,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -61,13 +71,15 @@ private val ChipCorner = RoundedCornerShape(20.dp)
 fun ChatScreen(
     modifier: Modifier = Modifier,
     viewModel: ChatViewModel,
-    onConversationClick: (String) -> Unit = {},
+    onConversationClick: (ConversationItem) -> Unit = {},
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val scheme = MaterialTheme.colorScheme
+    val pullState = rememberPullToRefreshState()
 
     LaunchedEffect(Unit) {
         viewModel.loadConversations()
@@ -79,19 +91,25 @@ fun ChatScreen(
             onFilterClick = viewModel::setFilter,
         )
 
-        when {
-            isLoading -> Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(color = FashColors.Primary)
-            }
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            state = pullState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = pullState,
+                    isRefreshing = isRefreshing,
+                    color = FashColors.Primary,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
+        ) { when {
+            isLoading -> ConversationSkeletonList()
             loadError != null -> Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .padding(FashTheme.spacing.editorialStart),
                 contentAlignment = Alignment.Center,
             ) {
@@ -110,32 +128,43 @@ fun ChatScreen(
                 }
             }
             conversations.isEmpty() -> Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(FashTheme.spacing.editorialStart),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(horizontal = 40.dp),
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(FashColors.Primary.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp),
+                            tint = FashColors.Primary,
+                        )
+                    }
                     Text(
                         text = stringResource(R.string.chat_empty),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = scheme.onSurface,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                     Text(
                         text = stringResource(R.string.chat_empty_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
             }
             else -> LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 content = {
                     itemsIndexed(
@@ -145,12 +174,12 @@ fun ChatScreen(
                         ConversationRow(
                             item = item,
                             formatTimestamp = viewModel::formatTimestamp,
-                            onClick = { onConversationClick(item.conversationId) },
+                            onClick = { onConversationClick(item) },
                         )
                     }
                 },
             )
-        }
+        } }
     }
 }
 
@@ -286,22 +315,29 @@ private fun ConversationRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "@${item.username.ifBlank { "user" }}",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
+                    text = item.displayName.ifBlank { "@${item.username.ifBlank { "user" }}" },
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = if (item.isUnread) FontWeight.ExtraBold else FontWeight.Bold,
+                    ),
+                    color = if (item.isUnread) scheme.onSurface else scheme.onSurface.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 Text(
                     text = formatTimestamp(item.timestamp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (item.isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                    ),
+                    color = if (item.isUnread) FashColors.Primary else scheme.onSurfaceVariant,
                 )
             }
             Text(
                 text = item.lastMessageText.ifBlank { " " },
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (item.isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color = if (item.isUnread) scheme.onSurface else scheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -321,6 +357,75 @@ private fun ConversationRow(
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationSkeletonList() {
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.surfaceContainerHigh,
+        MaterialTheme.colorScheme.surfaceContainerHighest,
+        MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "shimmer_translate",
+    )
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateAnim - 200f, translateAnim - 200f),
+        end = Offset(translateAnim, translateAnim),
+    )
+
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(7) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(AvatarSize)
+                        .clip(CircleShape)
+                        .background(brush),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(brush),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(brush),
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Box(
+                    modifier = Modifier
+                        .size(ProductThumbSize)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(brush),
                 )
             }
         }

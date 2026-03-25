@@ -86,6 +86,7 @@
     <string name="nav_profile">Cá nhân</string>
 
     <string name="follow_button">Theo dõi</string>
+    <string name="following_button">Đang theo dõi</string>
     <string name="like">Thích</string>
     <string name="save">Lưu</string>
     <string name="comment">Bình luận</string>
@@ -222,8 +223,54 @@
     <string name="chat_offer_error">Thao tác thất bại. Thử lại.</string>
     <string name="chat_offer_accepted">Đã chấp nhận đề xuất giá.</string>
     <string name="chat_offer_dialog_title">Đề xuất giá</string>
-    <string name="chat_offer_dialog_hint">Nhập giá (VND)</string>
-    <string name="chat_offer_dialog_submit">Đề xuất</string>
+    <string name="chat_offer_dialog_hint">Nhập giá bạn muốn đề</string>
+    <string name="chat_offer_dialog_submit">Gửi đề xuất</string>
+    <string name="chat_offer_dialog_helper">Đề xuất giá hợp lý giúp bạn chốt đơn nhanh hơn.</string>
+    <string name="chat_delete_message_title">Xóa tin nhắn</string>
+    <string name="chat_delete_message_body">Tin nhắn sẽ bị xóa. Chỉ có thể xóa trong vòng 5 phút.</string>
+    <string name="chat_delete_message_confirm">Xóa</string>
+    <string name="chat_offer_accepted_label">Giá đề xuất được chấp nhận</string>
+    <string name="chat_offer_checkout">Đặt hàng ngay</string>
+
+    <!-- Chat: strings referenced by ChatDetailScreen redesign -->
+    <string name="chat_set_price">Đề xuất giá</string>
+    <string name="chat_input_hint">Nhập tin nhắn…</string>
+    <string name="chat_send">Gửi</string>
+    <string name="chat_empty_messages">Chưa có tin nhắn nào.\nHãy bắt đầu cuộc trò chuyện!</string>
+    <string name="chat_offer_label">Đề xuất giá</string>
+    <string name="chat_offer_accept">Chấp nhận</string>
+    <string name="chat_offer_decline">Từ chối</string>
+    <string name="chat_offer_dialog_listed_price">Giá niêm yết: %s</string>
+    <string name="chat_offer_dialog_placeholder">Nhập số tiền</string>
+
+    <!-- Deal banner (STATE B — order exists) -->
+    <string name="chat_deal_banner_buyer_pending">Giao dịch thành công! Nhấn để thanh toán</string>
+    <string name="chat_deal_banner_seller_pending">Đang chờ người mua thanh toán</string>
+    <string name="chat_deal_banner_in_progress">Đơn hàng đang được xử lý</string>
+    <string name="chat_deal_banner_done">Giao dịch đã hoàn thành</string>
+    <string name="chat_deal_banner_view_order">Xem đơn →</string>
+    <string name="chat_deal_pay_now">Thanh toán ngay</string>
+
+    <!-- Offer status badges -->
+    <string name="chat_offer_status_waiting">Đang chờ…</string>
+    <string name="chat_offer_status_accepted">Đã chấp nhận ✓</string>
+    <string name="chat_offer_status_declined">Đã từ chối</string>
+    <string name="chat_offer_status_expired">Đã hết hạn</string>
+    <string name="chat_offer_status_cancelled">Đã hủy</string>
+
+    <!-- Buyer waiting subtext in offer bubble -->
+    <string name="chat_offer_waiting_seller">Chờ phản hồi từ người bán…</string>
+    <!-- Offer button when buyer already has a pending offer -->
+    <string name="chat_pending_offer_button_waiting">Đang chờ…</string>
+
+    <!-- Listing sold/reserved overlay badge -->
+    <string name="chat_listing_sold_label">ĐÃ BÁN</string>
+
+    <!-- Error messages mapped from HTTP codes -->
+    <string name="chat_error_pending_offer">Vui lòng chờ người bán phản hồi đề xuất hiện tại</string>
+    <string name="chat_error_order_exists">Giao dịch đã được thực hiện cho sản phẩm này</string>
+    <string name="chat_error_forbidden">Bạn không có quyền truy cập</string>
+    <string name="chat_error_not_found">Không tìm thấy cuộc trò chuyện</string>
 
     <string name="checkout_title">Thanh toán</string>
     <string name="checkout_address_label">Địa chỉ nhận hàng</string>

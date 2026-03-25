@@ -324,15 +324,17 @@ class UserRepository(
         bytes: ByteArray,
         filename: String = "image.jpg",
         type: String = "avatar",
+        mimeType: String = "image/jpeg",
     ): Result<String> = runCatching {
         val path = when (type.lowercase()) {
             "cover" -> "api/v1/users/me/cover"
             else -> "api/v1/users/me/avatar"
         }
         val url = AppEnvironment.apiPath(path)
+        val safeMime = mimeType.takeIf { it.contains('/') && !it.contains('*') } ?: "image/jpeg"
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("file", filename, bytes.toRequestBody("image/*".toMediaType()))
+            .addFormDataPart("file", filename, bytes.toRequestBody(safeMime.toMediaType()))
             .build()
         val request = Request.Builder()
             .url(url)

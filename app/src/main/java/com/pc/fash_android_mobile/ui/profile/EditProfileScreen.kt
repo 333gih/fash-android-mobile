@@ -43,7 +43,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +77,7 @@ fun EditProfileScreen(
     onSaved: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val profile by viewModel.profile.collectAsState()
     val displayName by viewModel.displayName.collectAsState()
     val username by viewModel.username.collectAsState()
@@ -90,11 +95,17 @@ fun EditProfileScreen(
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
-        uri?.let {
-            context.contentResolver.openInputStream(it)?.use { stream ->
-                val bytes = stream.readBytes()
-                if (bytes.isNotEmpty()) {
-                    viewModel.setAvatarFromBytes(bytes)
+        uri?.let { u ->
+            scope.launch {
+                val pair = withContext(Dispatchers.IO) {
+                    val mimeType = context.contentResolver.getType(u)
+                        ?.takeIf { !it.contains('*') } ?: "image/jpeg"
+                    context.contentResolver.openInputStream(u)?.use { stream ->
+                        Pair(stream.readBytes(), mimeType)
+                    }
+                }
+                pair?.let { (bytes, mime) ->
+                    if (bytes.isNotEmpty()) viewModel.setAvatarFromBytes(bytes, mime)
                 }
             }
         }
@@ -103,11 +114,17 @@ fun EditProfileScreen(
     val coverPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
-        uri?.let {
-            context.contentResolver.openInputStream(it)?.use { stream ->
-                val bytes = stream.readBytes()
-                if (bytes.isNotEmpty()) {
-                    viewModel.setCoverFromBytes(bytes)
+        uri?.let { u ->
+            scope.launch {
+                val pair = withContext(Dispatchers.IO) {
+                    val mimeType = context.contentResolver.getType(u)
+                        ?.takeIf { !it.contains('*') } ?: "image/jpeg"
+                    context.contentResolver.openInputStream(u)?.use { stream ->
+                        Pair(stream.readBytes(), mimeType)
+                    }
+                }
+                pair?.let { (bytes, mime) ->
+                    if (bytes.isNotEmpty()) viewModel.setCoverFromBytes(bytes, mime)
                 }
             }
         }

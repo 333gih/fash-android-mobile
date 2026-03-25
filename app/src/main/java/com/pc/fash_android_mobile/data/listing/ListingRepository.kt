@@ -188,16 +188,21 @@ class ListingRepository(
     }
 
     fun uploadListingImage(file: File): Result<String> =
-        uploadListingImage(file.readBytes(), file.name)
+        uploadListingImage(file.readBytes(), file.name, "image/jpeg")
 
-    fun uploadListingImage(bytes: ByteArray, filename: String = "image.jpg"): Result<String> = runCatching {
+    fun uploadListingImage(
+        bytes: ByteArray,
+        filename: String = "image.jpg",
+        mimeType: String = "image/jpeg",
+    ): Result<String> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/listings/images")
+        val safeMime = mimeType.takeIf { it.contains('/') && !it.contains('*') } ?: "image/jpeg"
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
                 "file",
                 filename,
-                bytes.toRequestBody("image/*".toMediaType()),
+                bytes.toRequestBody(safeMime.toMediaType()),
             )
             .build()
         val request = Request.Builder()
@@ -232,9 +237,9 @@ class ListingRepository(
             .toString()
         val body = executePostJson(url, json)
         val o = JSONObject(body)
-        val id = when {
-            o.has("data") -> o.getJSONObject("data").optString("id", "").ifBlank { o.optString("id", "") }
-            else -> o.optString("id", "")
+        val dataObj = if (o.has("data")) o.optJSONObject("data") else null
+        val id = (dataObj ?: o).let { obj ->
+            obj.optString("ID", "").ifBlank { obj.optString("id", "") }
         }
         CreateListingResponse(id = id.ifBlank { error("No id in response") })
     }

@@ -228,8 +228,8 @@ private fun OrderCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val imageUrl = order.imageUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }.orEmpty()
-    val isDelivering = order.status in listOf("delivering", "shipped", "shipping")
-    val isCompleted = order.status == "completed"
+    val isDelivering = order.status in listOf("in_transit", "delivering", "shipped", "shipping")
+    val isCompleted = order.status in listOf("delivered_confirmed", "completed")
 
     Card(
         modifier = Modifier

@@ -70,6 +70,10 @@ class CheckoutViewModel(
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
 
+    /** When non-zero, overrides the listing price (e.g. an accepted offer price). */
+    private val _overridePriceVnd = MutableStateFlow(0L)
+    val overridePriceVnd: StateFlow<Long> = _overridePriceVnd.asStateFlow()
+
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
@@ -79,7 +83,8 @@ class CheckoutViewModel(
         PaymentMethodOption("vnpay", "VNPay"),
     )
 
-    fun loadListing(listingId: String) {
+    fun loadListing(listingId: String, overridePriceVnd: Long = 0L) {
+        _overridePriceVnd.value = overridePriceVnd
         if (listingId.isBlank()) {
             _loadError.value = getApplication<Application>().getString(R.string.checkout_load_error)
             _isLoading.value = false
@@ -111,7 +116,7 @@ class CheckoutViewModel(
     fun selectPaymentMethod(index: Int) { _selectedPaymentIndex.value = index }
 
     val productPriceVnd: Long
-        get() = _detail.value?.priceVnd ?: 0L
+        get() = _overridePriceVnd.value.takeIf { it > 0 } ?: (_detail.value?.priceVnd ?: 0L)
 
     val platformFeeVnd: Long
         get() = (productPriceVnd * PLATFORM_FEE_PERCENT).toLong()
@@ -132,47 +137,22 @@ class CheckoutViewModel(
     fun submitPayment(onSuccess: () -> Unit) {
         if (!canSubmit() || _isSubmitting.value) return
         val d = _detail.value ?: return
-        val method = paymentMethods.getOrNull(_selectedPaymentIndex.value) ?: paymentMethods[0]
         viewModelScope.launch {
             _isSubmitting.value = true
-            val request = PaymentRequest(
-                listingId = d.id,
-                productTitle = d.title,
-                productPriceVnd = productPriceVnd,
-                platformFeeVnd = platformFeeVnd,
-                totalAmountVnd = totalAmountVnd,
-                address = CheckoutAddress(
-                    fullName = _fullName.value.trim(),
-                    phone = _phone.value.trim(),
-                    address = _address.value.trim(),
-                    district = _district.value.trim(),
-                    city = _city.value.trim(),
-                ),
-                paymentMethodId = method.id,
-            )
-            val result = withContext(Dispatchers.IO) {
-                paymentService.processPayment(request)
+            // Step 1: Create the order via POST /orders (sets status = payment_pending)
+            val orderResult = withContext(Dispatchers.IO) {
+                orderRepository.createOrder(d.id, productPriceVnd)
             }
             _isSubmitting.value = false
-            result.fold(
+            orderResult.fold(
                 onSuccess = {
-                    _events.tryEmit(it.message ?: getApplication<Application>().getString(R.string.checkout_success))
-                    viewModelScope.launch {
-                        val orderResult = withContext(Dispatchers.IO) {
-                            orderRepository.createOrder(d.id, productPriceVnd)
-                        }
-                        orderResult.fold(
-                            onSuccess = { onSuccess() },
-                            onFailure = { e ->
-                                _events.tryEmit(
-                                    e.message ?: getApplication<Application>().getString(R.string.checkout_payment_error),
-                                )
-                            },
-                        )
-                    }
+                    _events.tryEmit(getApplication<Application>().getString(R.string.checkout_success))
+                    onSuccess()
                 },
-                onFailure = {
-                    _events.tryEmit(it.message ?: getApplication<Application>().getString(R.string.checkout_payment_error))
+                onFailure = { e ->
+                    _events.tryEmit(
+                        e.message ?: getApplication<Application>().getString(R.string.checkout_payment_error),
+                    )
                 },
             )
         }

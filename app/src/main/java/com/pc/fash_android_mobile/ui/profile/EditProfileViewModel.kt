@@ -156,10 +156,11 @@ class EditProfileViewModel(
         }
     }
 
-    fun setAvatarFromBytes(bytes: ByteArray) {
+    fun setAvatarFromBytes(bytes: ByteArray, mimeType: String = "image/jpeg") {
+        val ext = mimeTypeToExt(mimeType)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                userRepository.uploadProfileImage(bytes, "avatar.jpg", "avatar")
+                userRepository.uploadProfileImage(bytes, "avatar.$ext", "avatar", mimeType)
             }
             result.fold(
                 onSuccess = { _avatarUrl.value = it },
@@ -172,10 +173,11 @@ class EditProfileViewModel(
         }
     }
 
-    fun setCoverFromBytes(bytes: ByteArray) {
+    fun setCoverFromBytes(bytes: ByteArray, mimeType: String = "image/jpeg") {
+        val ext = mimeTypeToExt(mimeType)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                userRepository.uploadProfileImage(bytes, "cover.jpg", "cover")
+                userRepository.uploadProfileImage(bytes, "cover.$ext", "cover", mimeType)
             }
             result.fold(
                 onSuccess = { _coverImageUrl.value = it },
@@ -186,6 +188,13 @@ class EditProfileViewModel(
                 },
             )
         }
+    }
+
+    private fun mimeTypeToExt(mimeType: String): String = when (mimeType.lowercase()) {
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/gif" -> "gif"
+        else -> "jpg"
     }
 
     fun isUsernameValid(): Boolean {

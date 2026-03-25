@@ -67,6 +67,7 @@ fun HomeFeedContent(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val followingIds by viewModel.followingIds.collectAsState()
     val pullState = rememberPullToRefreshState()
 
     PullToRefreshBox(
@@ -123,8 +124,8 @@ fun HomeFeedContent(
                                     ?: item.sellerUsername?.takeIf { it.isNotBlank() }
                                 viewModel.follow(key)
                             },
-                            isFollowing = viewModel.isFollowing(item.sellerId)
-                                || viewModel.isFollowing(item.sellerUsername),
+                            isFollowing = followingIds.contains(item.sellerId)
+                                || followingIds.contains(item.sellerUsername),
                             onComment = { },
                             onShare = { },
                             onItemClick = { onListingClick(item.id) },

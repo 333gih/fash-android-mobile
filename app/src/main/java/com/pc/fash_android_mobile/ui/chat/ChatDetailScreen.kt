@@ -1,650 +1,1292 @@
 package com.pc.fash_android_mobile.ui.chat
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.data.chat.ChatMessage
-import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.data.chat.ProductCard
-import com.pc.fash_android_mobile.ui.common.stableLazyKey
+import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.theme.FashColors
-import com.pc.fash_android_mobile.ui.theme.FashTheme
+import kotlinx.coroutines.launch
 
-private val AvatarSize = 40.dp
-private val ProductThumbSize = 48.dp
-private val BubbleCorner = RoundedCornerShape(16.dp)
-private val ProductCardCorner = RoundedCornerShape(12.dp)
+// ─────────────────────────────────────────────────────────────────────────────
+// Screen entry point
+// ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailScreen(
-    modifier: Modifier = Modifier,
     conversationId: String,
     viewModel: ChatDetailViewModel,
-    onBack: () -> Unit,
-    onProductClick: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
+    onProductClick: (listingId: String) -> Unit = {},
+    /**
+     * Called when the buyer taps "Pay Now" in the deal banner.
+     * Carries the orderId, listingId and the accepted offer amount so the caller can open
+     * CheckoutScreen with the correct price.
+     */
+    onPayNow: (orderId: String, listingId: String, acceptedAmountVnd: Long) -> Unit = { _, _, _ -> },
+    /** Called when any party taps the banner area (view order details). */
+    onOrderDetails: (orderId: String) -> Unit = {},
+    /** Legacy callback kept for backward compat; not triggered by the offer→order flow. */
+    onCheckout: (listingId: String, acceptedAmountVnd: Long) -> Unit = { _, _ -> },
 ) {
     val detail by viewModel.detail.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val loadError by viewModel.loadError.collectAsState()
+    val isMessagesLoading by viewModel.isMessagesLoading.collectAsState()
+    val isSending by viewModel.isSending.collectAsState()
+    val isRespondingToOffer by viewModel.isRespondingToOffer.collectAsState()
+    val isCreatingOffer by viewModel.isCreatingOffer.collectAsState()
     val showOfferDialog by viewModel.showOfferDialog.collectAsState()
-    val scheme = MaterialTheme.colorScheme
+    val orderId by viewModel.orderId.collectAsState()
+    val orderStatus by viewModel.orderStatus.collectAsState()
+    val isOtherTyping by viewModel.isOtherTyping.collectAsState()
 
-    LaunchedEffect(conversationId) {
-        viewModel.loadConversation(conversationId)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
     }
 
-    BackHandler { onBack() }
-
-    when {
-        isLoading && detail == null -> Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator(color = FashColors.Primary)
+    LaunchedEffect(conversationId) {
+        if (detail == null || detail?.conversationId != conversationId) {
+            viewModel.loadConversation(conversationId)
         }
-        loadError != null && detail == null -> Scaffold(
-            modifier = modifier.fillMaxSize(),
-            topBar = {
-                TopAppBar(
-                    title = { },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.orders_back),
-                                tint = FashColors.Primary,
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = scheme.surface,
-                        navigationIconContentColor = FashColors.Primary,
-                    ),
-                )
-            },
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Text(loadError!!, color = scheme.onSurfaceVariant)
-                    OutlinedButton(
-                        onClick = { viewModel.loadConversation(conversationId) },
-                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                            contentColor = FashColors.Primary,
-                        ),
-                    ) {
-                        Text(stringResource(R.string.chat_retry))
+    }
+
+    Scaffold(
+        modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    if (detail != null) {
+                        ChatDetailHeader(
+                            displayName = detail!!.otherUser.displayName
+                                .ifBlank { "@${detail!!.otherUser.username}" },
+                            avatarUrl = detail!!.otherUser.avatarUrl,
+                        )
                     }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { paddingValues ->
+        when {
+            isLoading && detail == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = FashColors.Primary)
                 }
             }
-        }
-        detail != null -> {
-            val d = detail!!
-            Scaffold(
-                modifier = modifier.fillMaxSize(),
-                topBar = {
-                    ChatDetailHeader(
-                        otherName = d.otherUser.displayName.ifBlank { d.otherUser.username },
-                        username = d.otherUser.username,
-                        avatarUrl = d.otherUser.avatarUrl,
-                        isOnline = d.otherUser.isOnline,
-                        productThumbUrl = d.product?.imageUrl,
-                        onBack = onBack,
-                        onProductThumbClick = { d.product?.listingId?.let { onProductClick(it) } },
+
+            detail == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_load_error),
+                        color = MaterialTheme.colorScheme.error,
                     )
-                },
-            ) { paddingValues ->
+                }
+            }
+
+            else -> {
+                val d = detail!!
+                val hasPendingOfferFromMe = d.pendingOffer?.proposedByMe == true
+                val hasOrder = orderId != null
+                val sortedMessages = messages.sortedBy { it.timestamp }
+
+                // The amount from the most-recently accepted offer (used for Pay Now)
+                val acceptedOfferAmount = remember(sortedMessages) {
+                    sortedMessages
+                        .filter { it.messageType == "offer" && it.offerStatus == "accepted" }
+                        .maxByOrNull { it.timestamp }
+                        ?.offerAmountVnd ?: 0L
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
                 ) {
+                    // STATE B: Deal banner (slides in from top when order_id becomes non-null)
+                    AnimatedVisibility(
+                        visible = hasOrder,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    ) {
+                        DealBanner(
+                            isBuyer = d.isBuyer,
+                            orderStatus = orderStatus,
+                            onTap = { orderId?.let { onOrderDetails(it) } },
+                            onPayNow = {
+                                orderId?.let { oid ->
+                                    onPayNow(
+                                        oid,
+                                        d.product?.listingId.orEmpty(),
+                                        acceptedOfferAmount,
+                                    )
+                                }
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Product reference card
                     d.product?.let { product ->
                         ProductReferenceCard(
                             product = product,
-                            onViewProduct = { onProductClick(product.listingId) },
+                            onClick = { onProductClick(product.listingId) },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    }
+
+                    // Offer price bottom sheet
+                    if (showOfferDialog) {
+                        OfferPriceBottomSheet(
+                            priceVnd = d.product?.priceVnd ?: 0L,
+                            isLoading = isCreatingOffer,
+                            onDismiss = { viewModel.dismissOfferDialog() },
+                            onSubmit = { amt -> viewModel.createOffer(amt) },
                         )
                     }
-                    val pendingOffer = d.pendingOffer?.takeIf { it.status == "pending" && !it.proposedByMe }
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        state = rememberLazyListState(),
-                        reverseLayout = true,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            horizontal = FashTheme.spacing.editorialStart,
-                            vertical = 12.dp,
-                        ),
-                    ) {
-                        if (pendingOffer != null) {
-                            item {
-                                PriceOfferCard(
-                                    offer = pendingOffer,
-                                    formatPrice = ::formatPrice,
-                                    onAccept = { viewModel.acceptOffer(pendingOffer) },
-                                    onDecline = { viewModel.declineOffer(pendingOffer) },
-                                    isResponding = viewModel.isRespondingToOffer.collectAsState().value,
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                            }
-                        }
-                        itemsIndexed(
-                            messages.reversed(),
-                            key = { index, msg -> stableLazyKey(msg.messageId, index, "msg") },
-                        ) { _, msg ->
-                            MessageBubble(
-                                message = msg,
-                                formatTime = viewModel::formatTime,
-                            )
+
+                    // Messages
+                    val listState = rememberLazyListState()
+
+                    LaunchedEffect(sortedMessages.size) {
+                        if (sortedMessages.isNotEmpty()) {
+                            // reverseLayout=true → index 0 is the newest message (bottom)
+                            listState.animateScrollToItem(0)
                         }
                     }
+
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (isMessagesLoading && sortedMessages.isEmpty()) {
+                            MessageSkeletonList(
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else if (sortedMessages.isEmpty() && !isMessagesLoading) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.chat_empty_messages),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                reverseLayout = true,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (isMessagesLoading) {
+                                    item { LoadingMessageIndicator() }
+                                }
+                                itemsIndexed(
+                                    items = sortedMessages.reversed(),
+                                    key = { _, msg -> msg.messageId },
+                                ) { _, msg ->
+                                    when (msg.messageType) {
+                                        "offer" -> OfferMessageBubble(
+                                            message = msg,
+                                            isBuyer = d.isBuyer,
+                                            hasOrder = hasOrder,
+                                            isResponding = isRespondingToOffer,
+                                            onAccept = {
+                                                viewModel.acceptOffer(
+                                                    PriceOffer(
+                                                        offerId = msg.messageId,
+                                                        amountVnd = msg.offerAmountVnd,
+                                                        proposedByMe = msg.isFromMe,
+                                                        status = msg.offerStatus,
+                                                    ),
+                                                )
+                                            },
+                                            onDecline = {
+                                                viewModel.declineOffer(
+                                                    PriceOffer(
+                                                        offerId = msg.messageId,
+                                                        amountVnd = msg.offerAmountVnd,
+                                                        proposedByMe = msg.isFromMe,
+                                                        status = msg.offerStatus,
+                                                    ),
+                                                )
+                                            },
+                                            formatTime = viewModel::formatTime,
+                                        )
+                                        "system" -> SystemMessageBubble(
+                                            message = msg,
+                                            formatTime = viewModel::formatTime,
+                                        )
+                                        else -> if (msg.text.isNotBlank()) {
+                                            MessageBubble(
+                                                message = msg,
+                                                formatTime = viewModel::formatTime,
+                                                onDeleteRequest = { viewModel.deleteMessage(msg) },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Typing indicator
+                    AnimatedVisibility(
+                        visible = isOtherTyping,
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                    ) {
+                        TypingIndicator(name = d.otherUser.displayName.ifBlank { d.otherUser.username })
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                    // Chat input bar
                     ChatInputBar(
-                        inputText = inputText,
-                        onInputChange = viewModel::onInputChange,
-                        onSetPrice = viewModel::onSetPriceClick,
-                        onSend = viewModel::sendMessage,
-                        isSending = viewModel.isSending.collectAsState().value,
-                        product = d.product,
+                        text = inputText,
+                        onTextChange = viewModel::onInputChange,
+                        onSend = { viewModel.sendMessage() },
+                        isSending = isSending,
+                        showOfferButton = d.isBuyer && !hasOrder,
+                        offerButtonEnabled = !hasPendingOfferFromMe,
+                        onOfferClick = { viewModel.onSetPriceClick() },
                     )
                 }
             }
         }
     }
-
-    var offerAmount by remember { mutableStateOf("") }
-    if (showOfferDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissOfferDialog() },
-            title = { Text(stringResource(R.string.chat_offer_dialog_title)) },
-            text = {
-                BasicTextField(
-                    value = offerAmount,
-                    onValueChange = { offerAmount = it.filter { c -> c.isDigit() } },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
-                        .border(1.dp, scheme.outlineVariant, RoundedCornerShape(8.dp))
-                        .padding(12.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
-                    singleLine = true,
-                    decorationBox = { inner ->
-                        Box {
-                            if (offerAmount.isEmpty()) {
-                                Text(
-                                    stringResource(R.string.chat_offer_dialog_hint),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                )
-                            }
-                            inner()
-                        }
-                    },
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        offerAmount.toLongOrNull()?.let { viewModel.createOffer(it) }
-                        offerAmount = ""
-                    },
-                ) {
-                    Text(stringResource(R.string.chat_offer_dialog_submit), color = FashColors.Primary)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissOfferDialog(); offerAmount = "" }) {
-                    Text(stringResource(R.string.create_listing_cancel), color = FashColors.Primary)
-                }
-            },
-        )
-    }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deal banner (STATE B — order exists)
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ChatDetailHeader(
-    otherName: String,
-    username: String,
-    avatarUrl: String,
-    isOnline: Boolean,
-    productThumbUrl: String?,
-    onBack: () -> Unit,
-    onProductThumbClick: (() -> Unit)?,
+private fun DealBanner(
+    isBuyer: Boolean,
+    orderStatus: String?,
+    onTap: () -> Unit,
+    onPayNow: () -> Unit = {},
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    val resolvedAvatar = avatarUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
-    val resolvedThumb = productThumbUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
+    val buyerNeedsToPay = isBuyer && orderStatus == "payment_pending"
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(scheme.surface)
-            .padding(horizontal = 4.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(Color(0xFFE8F5E9)),
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                tint = scheme.onSurface,
-            )
-        }
+        // Status row — always visible
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onTap)
+                .padding(horizontal = 16.dp, vertical = if (buyerNeedsToPay) 10.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(modifier = Modifier.size(AvatarSize)) {
-                Box(
-                    modifier = Modifier
-                        .size(AvatarSize)
-                        .clip(CircleShape)
-                        .background(scheme.surfaceContainerHigh),
-                ) {
-                    if (resolvedAvatar != null) {
-                        FashAsyncImage(
-                            model = resolvedAvatar,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                    }
-                }
-                if (isOnline) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(10.dp)
-                            .background(FashColors.Success, CircleShape)
-                            .padding(1.dp),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
+            Icon(
+                imageVector = if (buyerNeedsToPay) Icons.Filled.ShoppingBag else Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF388E3C),
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = when {
+                    buyerNeedsToPay ->
+                        stringResource(R.string.chat_deal_banner_buyer_pending)
+                    !isBuyer && orderStatus == "payment_pending" ->
+                        stringResource(R.string.chat_deal_banner_seller_pending)
+                    orderStatus in listOf("payment_held", "in_transit") ->
+                        stringResource(R.string.chat_deal_banner_in_progress)
+                    else -> stringResource(R.string.chat_deal_banner_done)
+                },
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Color(0xFF1B5E20),
+                modifier = Modifier.weight(1f),
+            )
+            if (!buyerNeedsToPay) {
                 Text(
-                    text = otherName.ifBlank { "@$username" },
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
-                )
-                Text(
-                    text = "@$username • ${stringResource(R.string.chat_detail_active)}",
+                    text = stringResource(R.string.chat_deal_banner_view_order),
                     style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
+                    color = Color(0xFF388E3C),
                 )
             }
         }
-        if (resolvedThumb != null && onProductThumbClick != null) {
-            Box(
+
+        // Prominent "Pay Now" button — only for buyer awaiting payment
+        if (buyerNeedsToPay) {
+            Button(
+                onClick = onPayNow,
                 modifier = Modifier
-                    .size(ProductThumbSize)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(scheme.surfaceContainerHigh)
-                    .clickable(onClick = onProductThumbClick),
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp)
+                    .height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
             ) {
-                FashAsyncImage(
-                    model = resolvedThumb,
+                Icon(
+                    imageVector = Icons.Filled.ShoppingBag,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.chat_deal_pay_now),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 )
             }
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product reference card (with SOLD badge)
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ProductReferenceCard(
     product: ProductCard,
-    onViewProduct: () -> Unit,
+    onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    val imageUrl = product.imageUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
+    val isSold = product.listingStatus in listOf("sold", "reserved")
 
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
-        shape = ProductCardCorner,
-        color = scheme.surfaceContainerLow,
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
+        // Thumbnail with optional SOLD overlay
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onViewProduct)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp)),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(scheme.surfaceContainerHigh),
-            ) {
-                if (imageUrl != null) {
-                    FashAsyncImage(
-                        model = imageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
+            AsyncImage(
+                model = product.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (isSold) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x88000000)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_listing_sold_label),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = product.title.ifBlank { "Sản phẩm" },
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
-                )
-                Text(
-                    text = formatPrice(product.priceVnd),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = FashColors.Primary,
-                )
-            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.chat_detail_view_product),
-                style = MaterialTheme.typography.labelMedium,
+                text = product.title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = formatPrice(product.priceVnd),
+                style = MaterialTheme.typography.bodySmall,
                 color = FashColors.Primary,
             )
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Offer message bubble (full-width card with status badge)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OfferMessageBubble(
+    message: ChatMessage,
+    isBuyer: Boolean,
+    hasOrder: Boolean,
+    isResponding: Boolean,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    formatTime: (String) -> String,
+) {
+    val scheme = MaterialTheme.colorScheme
+
+    // Show Accept/Decline only when: seller + offer pending + offer is from the other person
+    val showSellerActions = !isBuyer &&
+        message.offerStatus == "pending" &&
+        !message.isFromMe &&
+        !hasOrder
+
+    // Buyer sees "Waiting..." subtext when their own pending offer exists
+    val showBuyerWaiting = isBuyer &&
+        message.offerStatus == "pending" &&
+        message.isFromMe
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.surfaceContainerLow)
+                .border(
+                    width = 1.dp,
+                    color = scheme.outlineVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(16.dp),
+                )
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LocalOffer,
+                    contentDescription = null,
+                    tint = FashColors.Primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = stringResource(R.string.chat_offer_label),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                )
+            }
+
+            // Amount
+            Text(
+                text = formatPrice(message.offerAmountVnd),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+            )
+
+            // Status badge
+            OfferStatusBadge(status = message.offerStatus)
+
+            // Conditional sub-content
+            when {
+                showBuyerWaiting -> {
+                    Text(
+                        text = stringResource(R.string.chat_offer_waiting_seller),
+                        style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                        color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+
+                showSellerActions -> {
+                    if (isResponding) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = FashColors.Primary,
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = onDecline,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                                ),
+                            ) {
+                                Text(
+                                    stringResource(R.string.chat_offer_decline),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                            Button(
+                                onClick = onAccept,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            ) {
+                                Text(
+                                    stringResource(R.string.chat_offer_accept),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Timestamp
+            Text(
+                text = formatTime(message.timestamp),
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.align(Alignment.End),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OfferStatusBadge(status: String) {
+    val (bgColor, textColor, label) = when (status.lowercase()) {
+        "pending" -> Triple(
+            Color(0xFFFFF3CD),
+            Color(0xFF856404),
+            stringResource(R.string.chat_offer_status_waiting),
+        )
+        "accepted" -> Triple(
+            Color(0xFFD1E7DD),
+            Color(0xFF155724),
+            stringResource(R.string.chat_offer_status_accepted),
+        )
+        "declined" -> Triple(
+            Color(0xFFF8D7DA),
+            Color(0xFF842029),
+            stringResource(R.string.chat_offer_status_declined),
+        )
+        "expired" -> Triple(
+            MaterialTheme.colorScheme.surfaceContainerHighest,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            stringResource(R.string.chat_offer_status_expired),
+        )
+        else -> Triple(
+            MaterialTheme.colorScheme.surfaceContainerHighest,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            stringResource(R.string.chat_offer_status_cancelled),
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(bgColor)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = textColor,
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// System message bubble
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SystemMessageBubble(
+    message: ChatMessage,
+    formatTime: (String) -> String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp, horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = message.text,
+            style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = formatTime(message.timestamp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Normal text message bubble
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
     formatTime: (String) -> String,
+    onDeleteRequest: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
-    val align = if (message.isFromMe) Alignment.End else Alignment.Start
-    Column(
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(stringResource(R.string.chat_delete_message_title)) },
+            text = { Text(stringResource(R.string.chat_delete_message_confirm)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDeleteRequest()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = scheme.error),
+                ) {
+                    Text(stringResource(R.string.chat_delete_message_confirm))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteDialog = false }) {
+                    Text(stringResource(R.string.create_listing_cancel))
+                }
+            },
+        )
+    }
+
+    val isMe = message.isFromMe
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = align,
+        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
     ) {
-        Surface(
-            shape = BubbleCorner,
-            color = if (message.isFromMe) FashColors.Primary else scheme.surfaceContainerHigh,
+        Column(
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 18.dp,
+                        topEnd = 18.dp,
+                        bottomStart = if (isMe) 18.dp else 4.dp,
+                        bottomEnd = if (isMe) 4.dp else 18.dp,
+                    ),
+                )
+                .background(if (isMe) FashColors.Primary else scheme.surfaceContainerHigh)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { if (isMe) showDeleteDialog = true },
+                    )
+                }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = message.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (message.isFromMe) FashColors.OnPrimary else scheme.onSurface,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                color = if (isMe) Color.White else scheme.onSurface,
             )
-        }
-        Row(
-            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
-            horizontalArrangement = if (message.isFromMe) Arrangement.End else Arrangement.Start,
-        ) {
             Text(
                 text = formatTime(message.timestamp),
                 style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
+                color = if (isMe) Color.White.copy(alpha = 0.65f) else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.align(Alignment.End),
             )
-            if (message.isFromMe && message.isRead) {
-                Text(
-                    text = " • ${stringResource(R.string.chat_detail_read)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat header (avatar + name inside TopAppBar title)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun PriceOfferCard(
-    offer: PriceOffer,
-    formatPrice: (Long) -> String,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit,
-    isResponding: Boolean,
+private fun ChatDetailHeader(
+    displayName: String,
+    avatarUrl: String,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = scheme.surface,
-        shadowElevation = 4.dp,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(FashColors.Primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.AttachMoney,
+            if (avatarUrl.isNotBlank()) {
+                AsyncImage(
+                    model = avatarUrl,
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(FashColors.Primary.copy(alpha = 0.2f), CircleShape)
-                        .padding(6.dp),
-                    tint = FashColors.Primary,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = stringResource(R.string.chat_detail_price_proposal),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = FashColors.Primary,
-                    )
-                    Text(
-                        text = formatPrice(offer.amountVnd),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = scheme.onSurface,
-                    )
-                }
-            }
-            Text(
-                text = stringResource(R.string.chat_detail_offer_prompt),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onDecline,
-                    enabled = !isResponding,
-                    modifier = Modifier.weight(1f),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = FashColors.Primary,
-                    ),
-                ) {
-                    Text(stringResource(R.string.chat_detail_decline))
-                }
-                androidx.compose.material3.Button(
-                    onClick = onAccept,
-                    enabled = !isResponding,
-                    modifier = Modifier.weight(1f),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = FashColors.Success,
-                        contentColor = FashColors.OnPrimary,
-                    ),
-                ) {
-                    if (isResponding) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = FashColors.OnPrimary,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(stringResource(R.string.chat_detail_accept))
-                    }
-                }
+            } else {
+                Text(
+                    text = (displayName.firstOrNull() ?: '?').uppercaseChar().toString(),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = FashColors.Primary,
+                )
             }
         }
+        Text(
+            text = displayName,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat input bar
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ChatInputBar(
-    inputText: String,
-    onInputChange: (String) -> Unit,
-    onSetPrice: () -> Unit,
+    text: String,
+    onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     isSending: Boolean,
-    product: ProductCard?,
+    /** True when current user is buyer AND no order exists yet. */
+    showOfferButton: Boolean,
+    /** Disables the offer button when the buyer already has a pending offer. */
+    offerButtonEnabled: Boolean,
+    onOfferClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Surface(
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding(),
-        color = scheme.surface,
-        shadowElevation = 8.dp,
+            .background(scheme.surface)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (product != null) {
-                OutlinedButton(
-                    onClick = onSetPrice,
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = FashColors.Primary,
-                    ),
-                ) {
-                    Text(
-                        stringResource(R.string.chat_detail_set_price),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(24.dp),
-                color = scheme.surfaceContainerHighest,
+        // Offer button (STATE A, buyer only)
+        if (showOfferButton) {
+            OutlinedButton(
+                onClick = onOfferClick,
+                enabled = offerButtonEnabled,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(40.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (offerButtonEnabled) FashColors.Primary else scheme.outline.copy(alpha = 0.4f),
+                ),
             ) {
-                BasicTextField(
-                    value = inputText,
-                    onValueChange = onInputChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
-                    singleLine = true,
-                    decorationBox = { inner ->
-                        Box {
-                            if (inputText.isEmpty()) {
-                                Text(
-                                    stringResource(R.string.chat_detail_message_placeholder),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                )
-                            }
-                            inner()
-                        }
+                Icon(
+                    Icons.Filled.LocalOffer,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (offerButtonEnabled) {
+                        stringResource(R.string.chat_set_price)
+                    } else {
+                        stringResource(R.string.chat_pending_offer_button_waiting)
                     },
+                    style = MaterialTheme.typography.labelSmall,
                 )
             }
-            IconButton(
-                onClick = onSend,
-                enabled = inputText.isNotBlank() && !isSending,
+        }
+
+        // Text field
+        OutlinedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            modifier = Modifier.weight(1f),
+            placeholder = {
+                Text(
+                    text = stringResource(R.string.chat_input_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+            },
+            keyboardOptions = KeyboardOptions(
+                imeAction = ImeAction.Send,
+                keyboardType = KeyboardType.Text,
+            ),
+            keyboardActions = KeyboardActions(onSend = { onSend() }),
+            shape = RoundedCornerShape(24.dp),
+            maxLines = 4,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FashColors.Primary.copy(alpha = 0.7f),
+                unfocusedBorderColor = scheme.outline.copy(alpha = 0.4f),
+                focusedContainerColor = scheme.surfaceContainerLow,
+                unfocusedContainerColor = scheme.surfaceContainerLow,
+            ),
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
+
+        // Send button
+        IconButton(
+            onClick = onSend,
+            enabled = text.isNotBlank() && !isSending,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(
+                    if (text.isNotBlank() && !isSending) FashColors.Primary
+                    else scheme.surfaceContainerHigh,
+                ),
+        ) {
+            if (isSending) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White,
+                )
+            } else {
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = stringResource(R.string.chat_send),
+                    tint = if (text.isNotBlank()) Color.White else scheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offer price bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OfferPriceBottomSheet(
+    priceVnd: Long,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (Long) -> Unit,
+) {
+    var rawInput by remember { mutableStateOf("") }
+    val parsedAmount = rawInput.filter { it.isDigit() }.toLongOrNull() ?: 0L
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+        dragHandle = { androidx.compose.material3.BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_offer_dialog_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (priceVnd > 0L) {
+                Text(
+                    text = stringResource(R.string.chat_offer_dialog_listed_price, formatPrice(priceVnd)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "₫",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = FashColors.Primary,
+                    modifier = Modifier.padding(end = 6.dp),
+                )
+                OutlinedTextField(
+                    value = rawInput,
+                    onValueChange = { rawInput = it.filter { c -> c.isDigit() } },
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            stringResource(R.string.chat_offer_dialog_placeholder),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = FashColors.Primary,
+                    ),
+                )
+            }
+
+            if (parsedAmount > 0L) {
+                Text(
+                    text = formatPrice(parsedAmount),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                )
+            }
+
+            Button(
+                onClick = { if (parsedAmount > 0L) onSubmit(parsedAmount) },
+                enabled = parsedAmount > 0L && !isLoading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
             ) {
-                if (isSending) {
+                if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = FashColors.Primary,
+                        modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
+                        color = Color.White,
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(FashColors.Primary, CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = FashColors.OnPrimary,
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.chat_offer_dialog_submit),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
                 }
             }
         }
     }
 }
 
-private fun resolveImageUrl(path: String): String {
-    if (path.startsWith("http")) return path
-    val base = com.pc.fash_android_mobile.config.AppEnvironment.apiBaseUrl.trimEnd('/')
-    return if (path.startsWith("/")) "$base$path" else "$base/$path"
+// ─────────────────────────────────────────────────────────────────────────────
+// Typing indicator
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Typing indicator displayed when the other participant is composing a message.
+ *
+ * Design-system compliance:
+ * - Bubble shape and color match the LEFT (incoming) message bubble.
+ * - Mini avatar uses [FashColors.Primary] tint with a letter fallback — identical to
+ *   [ChatDetailHeader].
+ * - Three dots animate with a sequential wave using [FashColors.OnSurfaceVariant] tint.
+ * - Typography uses [FashTypography] via [MaterialTheme.typography].
+ * - Each dot's [animateFloat] is declared separately (never inside a loop) to respect
+ *   Compose composable ordering rules.
+ */
+@Composable
+private fun TypingIndicator(name: String) {
+    val scheme = MaterialTheme.colorScheme
+
+    // ── Three staggered bounce animations — declared individually, NOT in a loop ──
+    val transition = rememberInfiniteTransition(label = "typing_indicator")
+
+    // Each dot lifts 7dp upward then returns; delay staggers create the rolling wave.
+    val yDot0 by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = -7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 360, delayMillis = 0, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "typing_dot0",
+    )
+    val yDot1 by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = -7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 360, delayMillis = 120, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "typing_dot1",
+    )
+    val yDot2 by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = -7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 360, delayMillis = 240, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "typing_dot2",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 64.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Mini avatar — mirrors ChatDetailHeader style
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(FashColors.Primary.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = (name.firstOrNull() ?: '?').uppercaseChar().toString(),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                ),
+                color = FashColors.Primary,
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            // Sender name label — matches caption style from the design system
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.padding(start = 2.dp),
+            )
+
+            // Bubble — same shape token as the incoming (left-side) message bubble
+            Box(
+                modifier = Modifier
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 18.dp,
+                            topEnd = 18.dp,
+                            bottomEnd = 18.dp,
+                            bottomStart = 4.dp,
+                        ),
+                    )
+                    .background(scheme.surfaceContainerHigh)
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+            ) {
+                // Fixed-height row so the bouncing dots never shift the bubble layout
+                Row(
+                    modifier = Modifier.height(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    // Dot size and color use OnSurfaceVariant — same as caption text in bubbles
+                    val dotColor = FashColors.OnSurfaceVariant.copy(alpha = 0.55f)
+                    val dotSize = 8.dp
+
+                    Box(
+                        modifier = Modifier
+                            .size(dotSize)
+                            .offset(y = yDot0.dp)
+                            .clip(CircleShape)
+                            .background(dotColor),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(dotSize)
+                            .offset(y = yDot1.dp)
+                            .clip(CircleShape)
+                            .background(dotColor),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(dotSize)
+                            .offset(y = yDot2.dp)
+                            .clip(CircleShape)
+                            .background(dotColor),
+                    )
+                }
+            }
+        }
+    }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Message loading skeleton
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun MessageSkeletonList(modifier: Modifier = Modifier) {
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.surfaceContainerHigh,
+        MaterialTheme.colorScheme.surfaceContainerHighest,
+        MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1200f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shimmer_translate",
+    )
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateAnim - 300f, 0f),
+        end = Offset(translateAnim, 0f),
+    )
+    Column(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        repeat(6) { idx ->
+            val isRight = idx % 2 == 0
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (isRight) Arrangement.End else Arrangement.Start,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(if (idx % 3 == 0) 220.dp else 160.dp)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(brush),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingMessageIndicator() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = FashColors.Primary.copy(alpha = 0.6f),
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Formats VND amount as ₫80.000 (spec format with dot separators). */
 private fun formatPrice(vnd: Long): String =
-    "đ ${"%,d".format(vnd).replace(',', '.')}"
+    "₫${"%,d".format(vnd).replace(',', '.')}"
+

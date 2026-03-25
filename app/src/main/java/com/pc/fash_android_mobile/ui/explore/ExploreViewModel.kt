@@ -51,6 +51,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
 
     private val _followingIds = MutableStateFlow<Set<String>>(emptySet())
+    val followingIds: StateFlow<Set<String>> = _followingIds.asStateFlow()
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
 
