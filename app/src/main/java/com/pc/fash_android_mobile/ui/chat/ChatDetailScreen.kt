@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Button
@@ -87,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
+import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -801,7 +803,9 @@ private fun MessageBubble(
                 .background(if (isMe) FashColors.Primary else scheme.surfaceContainerHigh)
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onLongPress = { if (isMe) showDeleteDialog = true },
+                        onLongPress = {
+                            if (isMe && !message.messageId.startsWith("local-")) showDeleteDialog = true
+                        },
                     )
                 }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -812,12 +816,33 @@ private fun MessageBubble(
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isMe) Color.White else scheme.onSurface,
             )
-            Text(
-                text = formatTime(message.timestamp),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isMe) Color.White.copy(alpha = 0.65f) else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+            Row(
                 modifier = Modifier.align(Alignment.End),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (isMe && message.outboundState != OutboundSendState.NONE) {
+                    when (message.outboundState) {
+                        OutboundSendState.SENDING -> CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = Color.White.copy(alpha = 0.75f),
+                            strokeWidth = 2.dp,
+                        )
+                        OutboundSendState.FAILED -> Icon(
+                            imageVector = Icons.Filled.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White.copy(alpha = 0.85f),
+                        )
+                        OutboundSendState.NONE -> Unit
+                    }
+                }
+                Text(
+                    text = formatTime(message.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isMe) Color.White.copy(alpha = 0.65f) else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+                )
+            }
         }
     }
 }

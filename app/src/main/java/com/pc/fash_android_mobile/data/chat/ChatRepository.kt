@@ -475,6 +475,7 @@ class ChatRepository(
             messageType = rawType,
             offerAmountVnd = offerAmount,
             offerStatus = offerStatus,
+            outboundState = OutboundSendState.NONE,
         )
     }
 
@@ -558,6 +559,16 @@ data class ProductCard(
     val listingStatus: String = "active",
 )
 
+/**
+ * Local-only state for outbound text messages (optimistic UI).
+ * Server-backed rows use [NONE]; [SENDING]/[FAILED] are for pending client sends.
+ */
+enum class OutboundSendState {
+    NONE,
+    SENDING,
+    FAILED,
+}
+
 data class ChatMessage(
     val messageId: String,
     val text: String,
@@ -570,6 +581,8 @@ data class ChatMessage(
     /** Populated when messageType == "offer" */
     val offerAmountVnd: Long = 0L,
     val offerStatus: String = "",
+    /** Only for optimistic sends; cleared when the server row is merged in. */
+    val outboundState: OutboundSendState = OutboundSendState.NONE,
 )
 
 data class PriceOffer(

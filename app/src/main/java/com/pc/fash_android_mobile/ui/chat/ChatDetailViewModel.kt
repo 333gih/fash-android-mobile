@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.ChatRepository
+import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ConversationDetail
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.data.chat.OtherUser
@@ -27,12 +28,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /**
  * Polling is a fallback when `message.new` is missed or the WS is down.
  * When the WS is healthy, `message.new` triggers immediate HTTP refreshes.
  */
 private const val POLL_INTERVAL_FALLBACK_MS = 5_000L
+
+/** Coalesce rapid `message.new` / read-receipt bursts into one GET /messages (reduces load). */
+private const val SILENT_POLL_DEBOUNCE_MS = 400L
 
 class ChatDetailViewModel(
     application: Application,
@@ -107,12 +112,14 @@ class ChatDetailViewModel(
     private var wsJob: Job? = null
     private var pollingJob: Job? = null
     private var typingTimeoutJob: Job? = null
+    private var silentPollDebounceJob: Job? = null
 
     override fun onCleared() {
         super.onCleared()
         wsJob?.cancel()
         pollingJob?.cancel()
         typingTimeoutJob?.cancel()
+        silentPollDebounceJob?.cancel()
         _detail.value?.conversationId?.let { realtimeManager.unsubscribeFromConversation(it) }
     }
 
@@ -129,14 +136,14 @@ class ChatDetailViewModel(
                 when (event) {
                     is RealtimeEvent.MessageNew -> {
                         if (messageNewShouldRefreshChat(event, conversationId)) {
-                            silentPoll(conversationId)
+                            scheduleDebouncedSilentPoll(conversationId)
                         }
                     }
                     is RealtimeEvent.ReadReceipts -> {
                         // INTEGRATION.md §5: other participant read our messages — refresh to show
                         // updated readAt timestamps on sent bubbles
                         if (sameConversation(event.conversationId, conversationId)) {
-                            silentPoll(conversationId)
+                            scheduleDebouncedSilentPoll(conversationId)
                         }
                     }
                     is RealtimeEvent.TypingStart -> {
@@ -168,7 +175,7 @@ class ChatDetailViewModel(
             }
         }
 
-        // 30-second fallback — keeps messages fresh when WS is disconnected
+        // Periodic fallback when WS signals are missed
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (isActive) {
@@ -187,12 +194,48 @@ class ChatDetailViewModel(
         }
     }
 
+    /**
+     * Batches rapid WebSocket-driven refreshes so we do not issue back-to-back GET /messages
+     * when Redis emits several events in a row.
+     */
+    private fun scheduleDebouncedSilentPoll(conversationId: String) {
+        silentPollDebounceJob?.cancel()
+        silentPollDebounceJob = viewModelScope.launch {
+            delay(SILENT_POLL_DEBOUNCE_MS)
+            silentPoll(conversationId)
+        }
+    }
+
+    /**
+     * Server list is authoritative. Keeps in-flight optimistic rows (`local-*` ids) until the
+     * same text appears from the API (then the duplicate pending row is dropped).
+     */
+    private fun mergeServerWithPendingLocal(
+        server: List<ChatMessage>,
+        current: List<ChatMessage>,
+    ): List<ChatMessage> {
+        val pending = current.filter { it.messageId.startsWith("local-") }
+        if (pending.isEmpty()) return server.distinctBy { it.messageId }
+        val merged = server.toMutableList()
+        for (p in pending) {
+            val superseded = server.any { s ->
+                s.isFromMe &&
+                    s.messageType == p.messageType &&
+                    s.text == p.text &&
+                    p.messageType == "text"
+            }
+            if (!superseded) merged.add(p)
+        }
+        return merged.distinctBy { it.messageId }.sortedBy { it.timestamp }
+    }
+
     private suspend fun silentPoll(conversationId: String) {
         val msgResult = withContext(Dispatchers.IO) { chatRepository.getMessages(conversationId) }
         msgResult.getOrNull()?.let { newMsgs ->
-            if (newMsgs != _messages.value) {
-                _messages.value = newMsgs
-                syncPendingOfferFromMessages(newMsgs, conversationId)
+            val merged = mergeServerWithPendingLocal(newMsgs, _messages.value)
+            if (merged != _messages.value) {
+                _messages.value = merged
+                syncPendingOfferFromMessages(merged, conversationId)
             }
         }
     }
@@ -237,6 +280,7 @@ class ChatDetailViewModel(
      */
     fun loadFromItem(item: ConversationItem) {
         pollingJob?.cancel()
+        silentPollDebounceJob?.cancel()
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = null
@@ -323,6 +367,7 @@ class ChatDetailViewModel(
             return
         }
         pollingJob?.cancel()
+        silentPollDebounceJob?.cancel()
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = null
@@ -376,13 +421,35 @@ class ChatDetailViewModel(
         val text = _inputText.value.trim()
         if (text.isBlank() || _isSending.value) return
         viewModelScope.launch {
+            val tempId = "local-${UUID.randomUUID()}"
+            val now = java.time.Instant.now().toString()
+            val myId = sessionStore.read()?.userId.orEmpty()
+            val optimistic = ChatMessage(
+                messageId = tempId,
+                text = text,
+                isFromMe = true,
+                timestamp = now,
+                isRead = false,
+                senderId = myId,
+                messageType = "text",
+                outboundState = OutboundSendState.SENDING,
+            )
             _isSending.value = true
             _inputText.value = ""
+            _messages.value = _messages.value + optimistic
             val result = withContext(Dispatchers.IO) { chatRepository.sendMessage(convId, text) }
             _isSending.value = false
             result.fold(
-                onSuccess = { msg -> _messages.value = _messages.value + msg },
+                onSuccess = { msg ->
+                    _messages.value = _messages.value
+                        .filter { it.messageId != tempId }
+                        .let { it + msg }
+                        .sortedBy { it.timestamp }
+                },
                 onFailure = {
+                    _messages.value = _messages.value.map { row ->
+                        if (row.messageId == tempId) row.copy(outboundState = OutboundSendState.FAILED) else row
+                    }
                     _inputText.value = text
                     _events.tryEmit(
                         it.message ?: getApplication<Application>().getString(R.string.chat_send_error),
@@ -471,6 +538,10 @@ class ChatDetailViewModel(
 
     fun deleteMessage(message: ChatMessage) {
         if (!message.isFromMe) return
+        if (message.messageId.startsWith("local-")) {
+            _messages.value = _messages.value.filter { it.messageId != message.messageId }
+            return
+        }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) { chatRepository.deleteMessage(message.messageId) }
             result.fold(
@@ -549,8 +620,9 @@ class ChatDetailViewModel(
         _isMessagesLoading.value = false
         _isCreatingOffer.value = false
         result.getOrNull()?.takeIf { it.isNotEmpty() }?.let { msgs ->
-            _messages.value = msgs
-            syncPendingOfferFromMessages(msgs, conversationId)
+            val merged = mergeServerWithPendingLocal(msgs, _messages.value)
+            _messages.value = merged
+            syncPendingOfferFromMessages(merged, conversationId)
         }
     }
 
