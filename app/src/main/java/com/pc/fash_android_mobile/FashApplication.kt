@@ -1,6 +1,5 @@
 package com.pc.fash_android_mobile
 
-import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
@@ -77,11 +76,31 @@ class FashApplication : android.app.Application() {
      * Singleton WebSocket manager for the Fash realtime service.
      * Call [RealtimeManager.connect] once after a successful login and
      * [RealtimeManager.disconnect] on sign-out.
+     *
+     * URL is derived from the existing API_BASE_URL (same host, realtime-service path)
+     * so no extra BuildConfig field is required — the app boots safely even without a
+     * full Gradle re-sync after adding REALTIME_BASE_URL to the env files.
      */
     val realtimeManager: RealtimeManager by lazy {
+        val realtimeBaseUrl = BuildConfig.API_BASE_URL
+            .replace("core-service", "realtime-service")
+            .takeIf { it.contains("realtime-service") }
+            ?: "http://76.13.211.193/realtime-service/"
         RealtimeManager(
             sessionStore = authManager.sessionStore,
-            realtimeBaseUrl = BuildConfig.REALTIME_BASE_URL,
+            realtimeBaseUrl = realtimeBaseUrl,
+            // INTEGRATION.md §3.1: when the server returns 401 on the WS handshake, refresh
+            // the access token before retrying so we never loop with a stale token.
+            tokenRefresher = {
+                val session = authManager.sessionStore.read() ?: return@RealtimeManager null
+                authManager.authRepository.refresh(session.refreshToken)
+                    .getOrNull()
+                    ?.also { newSession ->
+                        authManager.sessionStore.save(newSession)
+                        authManager.onSessionSaved()
+                    }
+                    ?.accessToken
+            },
         )
     }
 }

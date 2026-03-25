@@ -21,31 +21,57 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
+ * Reads the first non-blank string among [keys]. Core-service / Redis often use PascalCase
+ * (`ConversationID`) while the integration doc shows snake_case (`conversation_id`).
+ */
+private fun JSONObject.firstNonBlank(vararg keys: String): String {
+    keys.forEach { key ->
+        if (has(key) && !isNull(key)) {
+            val s = optString(key, "").trim()
+            if (s.isNotBlank()) return s
+        }
+    }
+    return ""
+}
+
+/** Tries [payload] first, then envelope [root] (some gateways put fields next to `type`/`ts`). */
+private fun firstNonBlankPayload(payload: JSONObject, root: JSONObject, vararg keys: String): String {
+    val a = payload.firstNonBlank(*keys)
+    if (a.isNotBlank()) return a
+    return root.firstNonBlank(*keys)
+}
+
+/**
  * Manages the single long-lived WebSocket connection to the Fash realtime service.
  *
- * ### Connection lifecycle
- * - Call [connect] when the user is authenticated; the manager stores the token and opens the
- *   socket automatically.
- * - The socket reconnects with exponential back-off whenever it drops (network error or server
- *   close) until [disconnect] is called.
- * - Call [disconnect] on sign-out so stale tokens cannot be used.
+ * ### INTEGRATION.md compliance
+ * - §2.1 Step 2 : token is URL-encoded in the query string (`?token=…&platform=android`)
+ * - §2.1 Step 4 : OkHttp handles WS-level pings automatically via [pingInterval]
+ * - §2.1 Step 5 : [subscribeToConversation] tracks rooms so they are **re-subscribed
+ *                 automatically on every reconnect** (fixes the silent-drop + reconnect bugs)
+ * - §3.1        : When the server returns 401, [tokenRefresher] is called before retrying
+ *                 so we never loop with a stale token
+ * - §3.3        : Conversation subscriptions survive disconnects via [subscribedConversations]
  *
- * ### Chat integration
- * - [subscribeToConversation] and [unsubscribeFromConversation] send lightweight JSON frames so
- *   the server routes **typing** events and room-scoped events to this connection.
- * - `message.new` and `read.receipts` are delivered by **user id** — no subscription needed,
- *   but calling [subscribeToConversation] is still required for typing indicators.
- *
- * All parsed events are emitted on [events] as [RealtimeEvent] values.
+ * ### Delivery model (from §2.2)
+ * - `message.new` and `read.receipts` are delivered by **user-id** — no subscription needed
+ * - `typing.*` events require the room subscription sent by [subscribeToConversation]
  */
 class RealtimeManager(
     private val sessionStore: AuthSessionStore,
     /** Base URL of the realtime service, e.g. `http://76.13.211.193/realtime-service/` */
     private val realtimeBaseUrl: String,
+    /**
+     * Optional callback invoked when the server returns HTTP 401 on the WS handshake.
+     * Per INTEGRATION.md §3.1: refresh the access token and return the new value, or
+     * return null if refresh is impossible (user will be signed out by the auth layer).
+     */
+    private val tokenRefresher: (suspend () -> String?)? = null,
 ) {
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -60,7 +86,7 @@ class RealtimeManager(
     )
     val events: SharedFlow<RealtimeEvent> = _events.asSharedFlow()
 
-    /** True when the user is typing — toggle with [sendTypingStart] / [sendTypingStop]. */
+    /** True while the local user is typing — toggled by [sendTypingStart]/[sendTypingStop]. */
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
@@ -71,11 +97,18 @@ class RealtimeManager(
     private var webSocket: WebSocket? = null
     private var reconnectJob: Job? = null
 
+    /**
+     * Tracks every conversation we subscribed to so they can be re-sent after each reconnect.
+     * INTEGRATION.md §2.1 Step 5 + §3.3: subscriptions must survive disconnections.
+     */
+    private val subscribedConversations: MutableSet<String> =
+        Collections.synchronizedSet(mutableSetOf())
+
     private val client: OkHttpClient = OkHttpClient.Builder()
-        // OkHttp handles WS ping/pong at transport level
+        // Transport-level keep-alive (OkHttp answers server ping frames automatically)
         .pingInterval(25, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.SECONDS)  // no timeout — long-lived connection
+        .readTimeout(0, TimeUnit.SECONDS)   // no timeout — long-lived connection
         .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 
@@ -98,21 +131,30 @@ class RealtimeManager(
         webSocket?.close(CLOSE_NORMAL, "User signed out")
         webSocket = null
         _state.value = State.DISCONNECTED
+        subscribedConversations.clear()
     }
 
     /**
-     * Sends `subscribe.conversation` so the server routes typing events and room-scoped events
-     * to this connection. Safe to call while disconnected — the frame will be dropped silently.
+     * Sends `subscribe.conversation` and tracks the room so it is **automatically re-subscribed
+     * after every reconnect**.
+     *
+     * BUG FIX (§2.1 Step 5): previously the message was silently dropped when the WS was still
+     * in CONNECTING state and was never re-sent after a reconnect.
      */
     fun subscribeToConversation(conversationId: String) {
-        send(JSONObject().apply {
-            put("type", "subscribe.conversation")
-            put("conversation_id", conversationId)
-        })
+        subscribedConversations.add(conversationId)
+        if (_state.value == State.CONNECTED) {
+            send(JSONObject().apply {
+                put("type", "subscribe.conversation")
+                put("conversation_id", conversationId)
+            })
+        }
+        // Not connected yet → will be sent inside resubscribeAll() when Connected fires
     }
 
-    /** Sends `unsubscribe.conversation` to stop receiving typing events for this room. */
+    /** Sends `unsubscribe.conversation` and stops tracking the room. */
     fun unsubscribeFromConversation(conversationId: String) {
+        subscribedConversations.remove(conversationId)
         send(JSONObject().apply {
             put("type", "unsubscribe.conversation")
             put("conversation_id", conversationId)
@@ -145,10 +187,7 @@ class RealtimeManager(
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private fun openSocket() {
-        val token = sessionStore.read()?.accessToken ?: run {
-            // No session yet — stay disconnected; connect() will be called after login
-            return
-        }
+        val token = sessionStore.read()?.accessToken ?: return
         _state.value = State.CONNECTING
 
         val wsUrl = buildWsUrl(token)
@@ -173,25 +212,63 @@ class RealtimeManager(
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                 _state.value = State.DISCONNECTED
                 _events.tryEmit(RealtimeEvent.Disconnected(willReconnect = !intentionalDisconnect.get()))
-                if (!intentionalDisconnect.get()) scheduleReconnect()
+                if (!intentionalDisconnect.get()) scheduleReconnect(isAuthFailure = false)
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 _state.value = State.DISCONNECTED
+                // BUG FIX (§3.1): detect 401 so we can refresh the token before retrying
+                val is401 = response?.code == 401
                 _events.tryEmit(RealtimeEvent.Disconnected(willReconnect = !intentionalDisconnect.get()))
-                if (!intentionalDisconnect.get()) scheduleReconnect()
+                if (!intentionalDisconnect.get()) scheduleReconnect(isAuthFailure = is401)
             }
         })
     }
 
     private var reconnectDelay = BASE_RECONNECT_DELAY_MS
 
-    private fun scheduleReconnect() {
+    /**
+     * Schedules a reconnect with exponential back-off.
+     *
+     * BUG FIX (§3.1): when [isAuthFailure] is true (server returned 401), the [tokenRefresher]
+     * is called first. Only if the refresh succeeds do we reconnect — using the new token that
+     * was saved to [sessionStore] by the refresher. If refresh fails we stop, because the auth
+     * layer will sign the user out.
+     */
+    private fun scheduleReconnect(isAuthFailure: Boolean = false) {
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             delay(reconnectDelay)
             reconnectDelay = minOf(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS)
-            if (isActive && !intentionalDisconnect.get()) openSocket()
+            if (!isActive || intentionalDisconnect.get()) return@launch
+
+            if (isAuthFailure && tokenRefresher != null) {
+                val freshToken = tokenRefresher.invoke()
+                if (freshToken == null) {
+                    // Refresh failed → auth layer will sign out user; don't loop
+                    return@launch
+                }
+                // freshToken is already persisted to sessionStore by the caller;
+                // openSocket() will read it from there
+            }
+
+            openSocket()
+        }
+    }
+
+    /**
+     * Re-sends `subscribe.conversation` for every tracked room.
+     * Called after each `connected` message (initial connect and every reconnect).
+     * Fixes the re-subscribe-after-reconnect bug (INTEGRATION.md §3.3).
+     */
+    private fun resubscribeAll() {
+        synchronized(subscribedConversations) {
+            subscribedConversations.forEach { convId ->
+                send(JSONObject().apply {
+                    put("type", "subscribe.conversation")
+                    put("conversation_id", convId)
+                })
+            }
         }
     }
 
@@ -201,7 +278,8 @@ class RealtimeManager(
 
     /**
      * Builds the WebSocket URL.
-     * Converts `http://` → `ws://` and `https://` → `wss://`, then appends `/ws?token=...`.
+     * INTEGRATION.md §1.3: token is passed as `?token=…` query parameter (not a header),
+     * and the scheme is converted from http/https to ws/wss.
      */
     private fun buildWsUrl(token: String): String {
         val normalised = realtimeBaseUrl.trimEnd('/')
@@ -217,48 +295,93 @@ class RealtimeManager(
             val json = JSONObject(text)
             val type = json.optString("type", "")
 
-            // First message after connect is not always in the standard envelope
+            // First message after connect is NOT in the standard envelope (§1.3)
             if (type == "connected") {
                 return@runCatching RealtimeEvent.Connected(
-                    userId = json.optString("user_id", ""),
-                    connId = json.optString("conn_id", ""),
+                    userId = json.firstNonBlank("user_id", "UserID", "userId"),
+                    connId = json.firstNonBlank("conn_id", "ConnID", "connId"),
                 )
             }
 
-            // All other messages: envelope with type + payload
+            // Envelope: { type, payload, ts } — payload may be empty; fields may live on root
             val payload = json.optJSONObject("payload") ?: JSONObject()
 
             when (type) {
                 "message.new" -> RealtimeEvent.MessageNew(
-                    conversationId = payload.optString("conversation_id", ""),
-                    messageId = payload.optString("message_id", ""),
-                    senderId = payload.optString("sender_id", ""),
-                    recipientId = payload.optString("recipient_id", ""),
-                    preview = payload.optString("preview", ""),
-                    messageType = payload.optString("message_type", "text"),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    messageId = firstNonBlankPayload(
+                        payload, json,
+                        "message_id", "MessageID", "messageId", "ID", "Id",
+                    ),
+                    senderId = firstNonBlankPayload(
+                        payload, json,
+                        "sender_id", "SenderID", "senderId",
+                    ),
+                    recipientId = firstNonBlankPayload(
+                        payload, json,
+                        "recipient_id", "RecipientID", "recipientId",
+                    ),
+                    preview = firstNonBlankPayload(payload, json, "preview", "Preview"),
+                    messageType = firstNonBlankPayload(
+                        payload, json,
+                        "message_type", "MessageType",
+                    ).ifBlank { "text" },
                 )
                 "read.receipts" -> RealtimeEvent.ReadReceipts(
-                    conversationId = payload.optString("conversation_id", ""),
-                    readerId = payload.optString("recipient_id", payload.optString("reader_id", "")),
-                    notifyUserId = payload.optString("notify_user_id", ""),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    readerId = firstNonBlankPayload(
+                        payload, json,
+                        "recipient_id", "RecipientID", "reader_id", "ReaderID",
+                    ),
+                    notifyUserId = firstNonBlankPayload(
+                        payload, json,
+                        "notify_user_id", "NotifyUserID",
+                    ),
                 )
                 "read.ack" -> RealtimeEvent.ReadReceipts(
-                    conversationId = payload.optString("conversation_id", ""),
-                    readerId = payload.optString("reader_id", ""),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    readerId = firstNonBlankPayload(payload, json, "reader_id", "ReaderID"),
                     notifyUserId = "",
                 )
                 "typing.start" -> RealtimeEvent.TypingStart(
-                    conversationId = payload.optString("conversation_id", ""),
-                    userId = payload.optString("user_id", payload.optString("sender_id", "")),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    userId = firstNonBlankPayload(
+                        payload, json,
+                        "user_id", "UserID", "sender_id", "SenderID",
+                    ),
                 )
                 "typing.stop" -> RealtimeEvent.TypingStop(
-                    conversationId = payload.optString("conversation_id", ""),
-                    userId = payload.optString("user_id", payload.optString("sender_id", "")),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    userId = firstNonBlankPayload(
+                        payload, json,
+                        "user_id", "UserID", "sender_id", "SenderID",
+                    ),
                 )
                 "order.status_changed" -> RealtimeEvent.OrderStatusChanged(
-                    orderId = payload.optString("order_id", ""),
-                    conversationId = payload.optString("conversation_id", ""),
-                    newStatus = payload.optString("status", payload.optString("new_status", "")),
+                    orderId = firstNonBlankPayload(payload, json, "order_id", "OrderID", "orderId"),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    newStatus = firstNonBlankPayload(
+                        payload, json,
+                        "status", "Status", "new_status", "NewStatus",
+                    ),
                 )
                 "feed.refresh" -> RealtimeEvent.FeedRefresh
                 "pong" -> RealtimeEvent.Pong
@@ -268,8 +391,12 @@ class RealtimeManager(
 
         _events.tryEmit(event)
 
-        // Reset reconnect delay on successful message
-        if (event is RealtimeEvent.Connected) reconnectDelay = BASE_RECONNECT_DELAY_MS
+        if (event is RealtimeEvent.Connected) {
+            reconnectDelay = BASE_RECONNECT_DELAY_MS
+            // BUG FIX (§2.1 Step 5 + §3.3): re-subscribe to all tracked rooms after every
+            // connect/reconnect so typing events work even after network interruptions
+            resubscribeAll()
+        }
     }
 
     companion object {

@@ -29,10 +29,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Polling is used only as a fallback when the WebSocket is not connected.
- * When the WS is healthy, message.new events trigger immediate HTTP refreshes.
+ * Polling is a fallback when `message.new` is missed or the WS is down.
+ * When the WS is healthy, `message.new` triggers immediate HTTP refreshes.
  */
-private const val POLL_INTERVAL_FALLBACK_MS = 30_000L
+private const val POLL_INTERVAL_FALLBACK_MS = 5_000L
 
 class ChatDetailViewModel(
     application: Application,
@@ -128,13 +128,19 @@ class ChatDetailViewModel(
             realtimeManager.events.collect { event ->
                 when (event) {
                     is RealtimeEvent.MessageNew -> {
-                        if (event.conversationId == conversationId) {
-                            // Lightweight signal — fetch full data via HTTP
+                        if (messageNewShouldRefreshChat(event, conversationId)) {
+                            silentPoll(conversationId)
+                        }
+                    }
+                    is RealtimeEvent.ReadReceipts -> {
+                        // INTEGRATION.md §5: other participant read our messages — refresh to show
+                        // updated readAt timestamps on sent bubbles
+                        if (sameConversation(event.conversationId, conversationId)) {
                             silentPoll(conversationId)
                         }
                     }
                     is RealtimeEvent.TypingStart -> {
-                        if (event.conversationId == conversationId) {
+                        if (sameConversation(event.conversationId, conversationId)) {
                             val myId = sessionStore.read()?.userId.orEmpty()
                             if (event.userId != myId) {
                                 _isOtherTyping.value = true
@@ -143,7 +149,7 @@ class ChatDetailViewModel(
                         }
                     }
                     is RealtimeEvent.TypingStop -> {
-                        if (event.conversationId == conversationId) {
+                        if (sameConversation(event.conversationId, conversationId)) {
                             _isOtherTyping.value = false
                             typingTimeoutJob?.cancel()
                         }
@@ -153,7 +159,7 @@ class ChatDetailViewModel(
                         when {
                             knownOrderId != null && event.orderId == knownOrderId ->
                                 _orderStatus.value = event.newStatus
-                            event.conversationId == conversationId && knownOrderId == null ->
+                            sameConversation(event.conversationId, conversationId) && knownOrderId == null ->
                                 viewModelScope.launch { checkForOrderId(conversationId) }
                         }
                     }
@@ -189,6 +195,36 @@ class ChatDetailViewModel(
                 syncPendingOfferFromMessages(newMsgs, conversationId)
             }
         }
+    }
+
+    /** WebSocket payloads may use different casing; backend UUID strings should still match. */
+    private fun sameConversation(eventConvId: String, openConvId: String): Boolean =
+        eventConvId.isNotBlank() && eventConvId.equals(openConvId, ignoreCase = true)
+
+    /**
+     * Triggers REST refresh when `message.new` applies to this thread.
+     * Primary match: [RealtimeEvent.MessageNew.conversationId] (now parsed with PascalCase too).
+     * Fallback: if the id is missing in the payload, match sender/recipient to this chat's peer.
+     */
+    private fun messageNewShouldRefreshChat(
+        event: RealtimeEvent.MessageNew,
+        openConversationId: String,
+    ): Boolean {
+        if (sameConversation(event.conversationId, openConversationId)) return true
+        if (event.conversationId.isNotBlank() &&
+            !event.conversationId.equals(openConversationId, ignoreCase = true)
+        ) {
+            return false
+        }
+        val myId = sessionStore.read()?.userId?.trim().orEmpty()
+        val otherId = _detail.value?.otherUser?.userId?.trim().orEmpty()
+        if (myId.isBlank() || otherId.isBlank()) return false
+        val fromOther = event.senderId.equals(otherId, ignoreCase = true) &&
+            event.senderId.isNotBlank() &&
+            !event.senderId.equals(myId, ignoreCase = true)
+        val forMe = event.recipientId.isBlank() ||
+            event.recipientId.equals(myId, ignoreCase = true)
+        return fromOther && forMe
     }
 
     // ── Entry points ──────────────────────────────────────────────────────

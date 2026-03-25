@@ -7,6 +7,8 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
+import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,6 +26,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         (application as FashApplication).listingRepository
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val realtimeManager: RealtimeManager =
+        (application as FashApplication).realtimeManager
 
     private val _items = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val items: StateFlow<List<ListingFeedItem>> = _items.asStateFlow()
@@ -48,6 +52,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadFeed()
+        // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
+        viewModelScope.launch {
+            realtimeManager.events.collect { event ->
+                if (event is RealtimeEvent.FeedRefresh) {
+                    withContext(Dispatchers.IO) { fetchFeedWithFallback() }
+                        .getOrNull()?.let { _items.value = it }
+                }
+            }
+        }
     }
 
     fun loadFeed() {

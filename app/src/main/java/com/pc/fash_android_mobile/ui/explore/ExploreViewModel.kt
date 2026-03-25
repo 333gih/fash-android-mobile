@@ -7,6 +7,8 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
+import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
@@ -28,6 +30,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         (application as FashApplication).searchRepository
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val realtimeManager: RealtimeManager =
+        (application as FashApplication).realtimeManager
 
     private val _tags = MutableStateFlow<List<String>>(emptyList())
     val tags: StateFlow<List<String>> = _tags.asStateFlow()
@@ -57,6 +61,14 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         loadAll()
+        // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
+        viewModelScope.launch {
+            realtimeManager.events.collect { event ->
+                if (event is RealtimeEvent.FeedRefresh) {
+                    withContext(Dispatchers.IO) { loadListings() }
+                }
+            }
+        }
     }
 
     fun loadAll() {
