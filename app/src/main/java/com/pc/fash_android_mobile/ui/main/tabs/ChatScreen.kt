@@ -93,7 +93,7 @@ fun ChatScreen(
     val pullState = rememberPullToRefreshState()
 
     LaunchedEffect(Unit) {
-        viewModel.loadConversations()
+        viewModel.loadConversationsWhenNeeded()
     }
 
     val showGroupedInbox =

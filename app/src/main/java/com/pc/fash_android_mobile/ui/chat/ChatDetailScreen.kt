@@ -147,10 +147,9 @@ fun ChatDetailScreen(
         }
     }
 
+    // Loads full detail when [conversationId] changes; same id + cached detail is a no-op in the ViewModel.
     LaunchedEffect(conversationId) {
-        if (detail == null || detail?.conversationId != conversationId) {
-            viewModel.loadConversation(conversationId)
-        }
+        viewModel.loadConversation(conversationId)
     }
 
     Scaffold(

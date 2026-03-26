@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.ui.chat
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
@@ -118,6 +119,9 @@ class ChatViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    /** Monotonic time of last successful inbox GET; used to skip redundant tab re-entry fetches. */
+    private var lastSuccessfulInboxFetchMs: Long = 0L
+
     private fun isGroupedInbox(): Boolean =
         _sellerHasActiveListings.value &&
             _sellerInboxGroupMode.value == SellerInboxGroupMode.ByProduct
@@ -127,11 +131,13 @@ class ChatViewModel(
             _isLoading.value = true
             _loadError.value = null
             refreshSellerListingEligibilityInternal()
+            var fetchSucceeded = false
             if (isGroupedInbox()) {
                 withContext(Dispatchers.IO) {
                     chatRepository.getConversationsGroupedByListing(limit = 50, offset = 0)
                 }.fold(
                     onSuccess = { groups ->
+                        fetchSucceeded = true
                         _conversationGroups.value = groups
                         _expandedGroupListingIds.setAll(groups.map { it.listingId })
                         applyCurrentViewFilter()
@@ -147,6 +153,7 @@ class ChatViewModel(
                     chatRepository.getConversations(limit = 50, offset = 0)
                 }.fold(
                     onSuccess = { all ->
+                        fetchSucceeded = true
                         _allConversations.value = all
                         applyCurrentViewFilter()
                     },
@@ -157,9 +164,30 @@ class ChatViewModel(
                     },
                 )
             }
+            if (fetchSucceeded) {
+                lastSuccessfulInboxFetchMs = SystemClock.elapsedRealtime()
+            }
             _isLoading.value = false
             refreshUnreadCount()
         }
+    }
+
+    /**
+     * Loads inbox unless we already fetched successfully recently (tab re-entry).
+     * Pull-to-refresh and [loadConversations] still force a full load.
+     */
+    fun loadConversationsWhenNeeded(staleAfterMs: Long = 60_000L) {
+        if (_loadError.value != null) {
+            loadConversations()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val everFetched = lastSuccessfulInboxFetchMs > 0L
+        val stale = (now - lastSuccessfulInboxFetchMs) >= staleAfterMs
+        if (everFetched && !stale) {
+            return
+        }
+        loadConversations()
     }
 
     private fun MutableStateFlow<Set<String>>.setAll(ids: List<String>) {

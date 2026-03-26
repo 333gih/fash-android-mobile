@@ -76,10 +76,41 @@ class ChatRepository(
         if (listingId.isBlank()) error("listing_id is required")
         val json = JSONObject().put("listing_id", listingId).toString()
         val body = postJson(AppEnvironment.apiPath("api/v1/chat/conversations"), json)
-        val obj = JSONObject(body.trim())
-        val data = if (obj.has("data")) obj.getJSONObject("data") else obj
-        data.optString("ID", data.optString("id", data.optString("conversation_id", ""))).takeIf { it.isNotBlank() }
-            ?: error("No conversation id in response")
+        extractConversationIdFromStartResponse(body)
+    }
+
+    /**
+     * Backend may return the conversation id at `id`, under `data`, or nested as `data.conversation.id`.
+     */
+    private fun extractConversationIdFromStartResponse(body: String): String {
+        val raw = body.trim()
+        if (raw.isEmpty()) error("Empty response body")
+        val root = JSONObject(raw)
+        val payload: JSONObject = when {
+            !root.has("data") -> root
+            else -> when (val d = root.get("data")) {
+                is JSONObject -> d
+                is String -> return d.trim().takeIf { it.isNotBlank() }
+                    ?: error("No conversation id in response")
+                else -> error("Unexpected data in response")
+            }
+        }
+        fun idFrom(o: JSONObject): String {
+            val direct = o.optString("ID", o.optString("id", o.optString("conversation_id", "")))
+            if (direct.isNotBlank()) return direct
+            val nested = o.optJSONObject("conversation") ?: o.optJSONObject("Conversation")
+            if (nested != null) {
+                val inner = nested.optString(
+                    "ID",
+                    nested.optString("id", nested.optString("conversation_id", "")),
+                )
+                if (inner.isNotBlank()) return inner
+            }
+            return ""
+        }
+        val id = idFrom(payload)
+        if (id.isNotBlank()) return id
+        error("No conversation id in response")
     }
 
     // ── Conversation detail ───────────────────────────────────────────────
@@ -405,14 +436,18 @@ class ChatRepository(
         val raw = json.trim()
         val obj = if (raw.startsWith("{")) JSONObject(raw) else JSONObject("{}")
         val data = if (obj.has("data")) obj.getJSONObject("data") else obj
+        // Some gateways wrap the resource as data.conversation { ... }
+        val root = data.optJSONObject("conversation")
+            ?: data.optJSONObject("Conversation")
+            ?: data
 
-        val convId = data.optString("ID", data.optString("id", data.optString("conversation_id", "")))
+        val convId = root.optString("ID", root.optString("id", root.optString("conversation_id", "")))
 
         val myId = currentUserId
-        val buyerId = data.optString("BuyerID", data.optString("buyer_id", ""))
-        val sellerId = data.optString("SellerID", data.optString("seller_id", ""))
-        val buyerObj = data.optJSONObject("Buyer") ?: data.optJSONObject("buyer")
-        val sellerObj = data.optJSONObject("Seller") ?: data.optJSONObject("seller")
+        val buyerId = root.optString("BuyerID", root.optString("buyer_id", ""))
+        val sellerId = root.optString("SellerID", root.optString("seller_id", ""))
+        val buyerObj = root.optJSONObject("Buyer") ?: root.optJSONObject("buyer")
+        val sellerObj = root.optJSONObject("Seller") ?: root.optJSONObject("seller")
         val otherProfile: JSONObject? = when {
             myId.isNotBlank() && myId == buyerId -> sellerObj
             myId.isNotBlank() && myId == sellerId -> buyerObj
@@ -420,21 +455,21 @@ class ChatRepository(
             else -> buyerObj
         }
         // Also try legacy "other_user" key from older API versions
-        val otherUser = parseOtherUser(otherProfile ?: data.optJSONObject("other_user") ?: data)
+        val otherUser = parseOtherUser(otherProfile ?: root.optJSONObject("other_user") ?: root)
 
-        val listingObj = data.optJSONObject("Listing")
-            ?: data.optJSONObject("listing")
-            ?: data.optJSONObject("product")
+        val listingObj = root.optJSONObject("Listing")
+            ?: root.optJSONObject("listing")
+            ?: root.optJSONObject("product")
         val product = listingObj?.let { parseProductCard(it) }
 
         // Messages embedded in detail response (optional — separate getMessages() call preferred)
-        val messagesArr = data.optJSONArray("Messages")
-            ?: data.optJSONArray("messages")
-            ?: data.optJSONArray("message_list")
+        val messagesArr = root.optJSONArray("Messages")
+            ?: root.optJSONArray("messages")
+            ?: root.optJSONArray("message_list")
             ?: JSONArray("[]")
         val messages = (0 until messagesArr.length()).map { i -> parseMessageObj(messagesArr.getJSONObject(i)) }
 
-        val pendingOffer = data.optJSONObject("pending_offer")?.let { parseOfferObj(it) }
+        val pendingOffer = root.optJSONObject("pending_offer")?.let { parseOfferObj(it) }
 
         val isBuyer = when {
             myId.isNotBlank() && buyerId.isNotBlank() -> myId == buyerId
@@ -442,11 +477,11 @@ class ChatRepository(
         }
 
         // Extract order_id — non-null means the seller accepted an offer and an order was created
-        val orderId = data.optString("order_id", data.optString("OrderID", ""))
+        val orderId = root.optString("order_id", root.optString("OrderID", ""))
             .takeIf { it.isNotBlank() && it != "null" }
 
-        val offerCount = data.optInt("offer_count", data.optInt("OfferCount", 0))
-        val isClosed = data.optBoolean("is_closed", data.optBoolean("IsClosed", false))
+        val offerCount = root.optInt("offer_count", root.optInt("OfferCount", 0))
+        val isClosed = root.optBoolean("is_closed", root.optBoolean("IsClosed", false))
 
         return ConversationDetail(
             conversationId = convId,

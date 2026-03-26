@@ -69,6 +69,10 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _bottomBarMode = MutableStateFlow(ProductBottomBarMode.Normal)
     val bottomBarMode: StateFlow<ProductBottomBarMode> = _bottomBarMode.asStateFlow()
 
+    /** True while navigating to chat after Message — drives full-screen [com.pc.fash_android_mobile.ui.splash.FashWaitingScreen]. */
+    private val _isOpeningChat = MutableStateFlow(false)
+    val isOpeningChat: StateFlow<Boolean> = _isOpeningChat.asStateFlow()
+
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
 
@@ -98,6 +102,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _sellerProfile.value = null
             _moreFromSeller.value = emptyList()
             _bottomBarMode.value = ProductBottomBarMode.Normal
+            _isOpeningChat.value = false
             _isLoading.value = true
             _loadError.value = null
             withContext(Dispatchers.IO) {
@@ -279,5 +284,9 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
 
     fun clearError() {
         _loadError.value = null
+    }
+
+    fun setOpeningChat(opening: Boolean) {
+        _isOpeningChat.value = opening
     }
 }

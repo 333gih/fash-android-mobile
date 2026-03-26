@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,7 +30,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocalMall
-import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -38,13 +39,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,8 +62,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +76,7 @@ import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -91,19 +100,25 @@ fun ProductDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val isFollowing by viewModel.isFollowing.collectAsState()
+    val isOpeningChat by viewModel.isOpeningChat.collectAsState()
 
     LaunchedEffect(listingId) {
         viewModel.loadDetail(listingId)
     }
 
     BackHandler {
-        onBack()
+        if (isOpeningChat) {
+            viewModel.setOpeningChat(false)
+        } else {
+            onBack()
+        }
     }
 
+    Box(modifier = modifier.fillMaxSize()) {
     when {
         isLoading && detail == null -> {
             Box(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(48.dp),
                 contentAlignment = Alignment.Center,
@@ -114,7 +129,7 @@ fun ProductDetailScreen(
         loadError != null && detail == null -> {
             val err = loadError!!
             Box(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(48.dp),
                 contentAlignment = Alignment.Center,
@@ -135,7 +150,7 @@ fun ProductDetailScreen(
         detail != null -> {
             val d: ListingDetail = requireNotNull(detail)
             val bottomBarMode by viewModel.bottomBarMode.collectAsState()
-            Box(modifier = modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
@@ -194,6 +209,14 @@ fun ProductDetailScreen(
                     ),
                 )
             }
+        }
+    }
+        if (isOpeningChat) {
+            FashWaitingScreen(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface),
+            )
         }
     }
 }
@@ -366,17 +389,25 @@ private fun SellerInfoCard(
                     }
                 }
             }
-            OutlinedButton(
+            PressScaleOutlinedButton(
                 onClick = if (isFollowing) onUnfollow else onFollow,
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = FashColors.Primary,
                 ),
             ) {
-                Text(
-                    text = stringResource(if (isFollowing) R.string.follow_following else R.string.follow_button),
-                    style = MaterialTheme.typography.labelMedium,
-                )
+                Crossfade(
+                    targetState = isFollowing,
+                    animationSpec = tween(220),
+                    label = "followLabel",
+                ) { following ->
+                    Text(
+                        text = stringResource(
+                            if (following) R.string.follow_following else R.string.follow_button,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
         }
     }
@@ -711,15 +742,15 @@ private fun BottomActionBar(
                 softWrap = false,
             )
         }
-        OutlinedButton(
+        PressScaleOutlinedButton(
             onClick = onChat,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+            colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = FashColors.Primary,
             ),
         ) {
             Icon(
-                imageVector = Icons.Default.Message,
+                imageVector = Icons.AutoMirrored.Filled.Message,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
             )
@@ -729,7 +760,7 @@ private fun BottomActionBar(
         Button(
             onClick = onBuyNow,
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            colors = ButtonDefaults.buttonColors(
                 containerColor = FashColors.Primary,
                 contentColor = FashColors.OnPrimary,
             ),
@@ -742,6 +773,44 @@ private fun BottomActionBar(
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.product_buy_now))
         }
+    }
+}
+
+/**
+ * Outlined button with press scale + light haptic so taps don’t feel static.
+ */
+@Composable
+private fun PressScaleOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+    colors: ButtonColors = ButtonDefaults.outlinedButtonColors(),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = tween(95),
+        label = "outlinedPressScale",
+    )
+    val haptic = LocalHapticFeedback.current
+    OutlinedButton(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+            onClick()
+        },
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
+        enabled = enabled,
+        interactionSource = interactionSource,
+        contentPadding = contentPadding,
+        colors = colors,
+    ) {
+        content()
     }
 }
 

@@ -337,14 +337,18 @@ class MainActivity : ComponentActivity() {
                                                 onBack = { selectedListingId = null },
                                                 onChat = { listingId ->
                                                     scope.launch {
+                                                        productDetailViewModel.setOpeningChat(true)
                                                         chatViewModel.startConversation(listingId).fold(
                                                             onSuccess = { convId ->
+                                                                productDetailViewModel.setOpeningChat(false)
                                                                 selectedListingId = null
                                                                 selectedTab = MainTab.Chat.ordinal
                                                                 selectedConversationItem = null
                                                                 selectedConversationId = convId
+                                                                chatViewModel.loadConversations()
                                                             },
                                                             onFailure = {
+                                                                productDetailViewModel.setOpeningChat(false)
                                                                 selectedListingId = null
                                                                 selectedTab = MainTab.Chat.ordinal
                                                                 snackbarHostState.showSnackbar(

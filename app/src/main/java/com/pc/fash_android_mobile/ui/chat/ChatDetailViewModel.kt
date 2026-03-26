@@ -502,14 +502,7 @@ class ChatDetailViewModel(
         }
         val existing = _detail.value
         if (existing?.conversationId == conversationId) {
-            viewModelScope.launch {
-                val msgResult = withContext(Dispatchers.IO) { chatRepository.getMessages(conversationId) }
-                msgResult.getOrNull()?.let { msgs ->
-                    _messages.value = msgs
-                    syncPendingOfferFromMessages(msgs, conversationId)
-                    syncDetailClosedStateFromMessages(msgs)
-                }
-            }
+            // Already showing this thread (e.g. after [loadFromItem]); WS + polling refresh messages.
             return
         }
         pollingJob?.cancel()
