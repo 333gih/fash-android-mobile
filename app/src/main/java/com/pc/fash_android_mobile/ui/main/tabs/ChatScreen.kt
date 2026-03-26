@@ -8,6 +8,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,15 +100,18 @@ fun ChatScreen(
         sellerHasActiveListings && sellerInboxGroupMode == SellerInboxGroupMode.ByProduct
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (sellerHasActiveListings) {
-            SellerInboxSegmentRow(
-                mode = sellerInboxGroupMode,
-                onModeChange = viewModel::setSellerInboxGroupMode,
-            )
-        }
-        FilterBar(
+        InboxFilterBar(
             selectedFilter = selectedFilter,
             onFilterClick = viewModel::setFilter,
+            sellerHasActiveListings = sellerHasActiveListings,
+            groupByProductSelected = sellerInboxGroupMode == SellerInboxGroupMode.ByProduct,
+            onGroupByProductClick = {
+                if (sellerInboxGroupMode == SellerInboxGroupMode.ByProduct) {
+                    viewModel.setSellerInboxGroupMode(SellerInboxGroupMode.AllConversations)
+                } else {
+                    viewModel.setSellerInboxGroupMode(SellerInboxGroupMode.ByProduct)
+                }
+            },
         )
 
         PullToRefreshBox(
@@ -274,49 +279,73 @@ private fun EmptyInboxHint() {
     }
 }
 
+/**
+ * Single scrollable row: conversation filters + optional seller **Theo sản phẩm** toggle
+ * (no duplicate “All” row).
+ */
 @Composable
-private fun SellerInboxSegmentRow(
-    mode: SellerInboxGroupMode,
-    onModeChange: (SellerInboxGroupMode) -> Unit,
+private fun InboxFilterBar(
+    selectedFilter: ChatFilter,
+    onFilterClick: (ChatFilter) -> Unit,
+    sellerHasActiveListings: Boolean,
+    groupByProductSelected: Boolean,
+    onGroupByProductClick: () -> Unit,
 ) {
+    val scrollState = rememberScrollState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+            .horizontalScroll(scrollState)
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SellerSegmentChip(
-            selected = mode == SellerInboxGroupMode.AllConversations,
-            label = stringResource(R.string.chat_filter_all),
-            onClick = { onModeChange(SellerInboxGroupMode.AllConversations) },
-        )
-        SellerSegmentChip(
-            selected = mode == SellerInboxGroupMode.ByProduct,
-            label = stringResource(R.string.chat_inbox_by_product),
-            onClick = { onModeChange(SellerInboxGroupMode.ByProduct) },
-        )
-    }
-}
-
-@Composable
-private fun SellerSegmentChip(
-    selected: Boolean,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = ChipCorner,
-        color = if (selected) FashColors.Primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-        modifier = Modifier
-            .clip(ChipCorner)
-            .clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-            color = if (selected) FashColors.OnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        )
+        listOf(
+            ChatFilter.All to R.string.chat_filter_all,
+            ChatFilter.Unread to R.string.chat_filter_unread,
+            ChatFilter.Seller to R.string.chat_filter_seller,
+            ChatFilter.Buyer to R.string.chat_filter_buyer,
+        ).forEach { (filter, labelRes) ->
+            val selected = filter == selectedFilter
+            Surface(
+                shape = ChipCorner,
+                color = if (selected) FashColors.Primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier
+                    .clip(ChipCorner)
+                    .clickable { onFilterClick(filter) },
+            ) {
+                Text(
+                    text = stringResource(labelRes),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                    color = if (selected) FashColors.OnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+            }
+        }
+        if (sellerHasActiveListings) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Surface(
+                shape = ChipCorner,
+                color = if (groupByProductSelected) {
+                    FashColors.Primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                },
+                modifier = Modifier
+                    .clip(ChipCorner)
+                    .clickable(onClick = onGroupByProductClick),
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_inbox_by_product),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                    color = if (groupByProductSelected) {
+                        FashColors.OnPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+            }
+        }
     }
 }
 
@@ -386,42 +415,6 @@ private fun ListingGroupHeader(
             contentDescription = null,
             tint = scheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun FilterBar(
-    selectedFilter: ChatFilter,
-    onFilterClick: (ChatFilter) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        listOf(
-            ChatFilter.All to R.string.chat_filter_all,
-            ChatFilter.Unread to R.string.chat_filter_unread,
-            ChatFilter.Seller to R.string.chat_filter_seller,
-            ChatFilter.Buyer to R.string.chat_filter_buyer,
-        ).forEach { (filter, labelRes) ->
-            val selected = filter == selectedFilter
-            Surface(
-                shape = ChipCorner,
-                color = if (selected) FashColors.Primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier
-                    .clip(ChipCorner)
-                    .clickable { onFilterClick(filter) },
-            ) {
-                Text(
-                    text = stringResource(labelRes),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                    color = if (selected) FashColors.OnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                )
-            }
-        }
     }
 }
 
