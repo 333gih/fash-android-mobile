@@ -150,7 +150,7 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
 
     /**
      * core-service: `PUT` accepts optional fields only; omit unchanged fields.
-     * Omit `aesthetic_tags` when unchanged; send `[]` to clear; send ids to replace.
+     * Omit `aesthetic_tags` when unchanged; send `[]` to clear; send **tag names** (not ids) to replace.
      */
     private fun buildDeltaUpdate(
         d: ListingDetail,
@@ -174,7 +174,14 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
         val condP = if (cond != dCond) cond else null
         val sizeP = if (size != dSize) size else null
         val brandP = if (brand != dBrand) brand else null
-        val tagsP = if (f.selectedTagIds != baselineTags) f.selectedTagIds.sorted() else null
+        val tagsP = if (f.selectedTagIds != baselineTags) {
+            f.selectedTagIds
+                .mapNotNull { id -> _catalogTags.value.find { it.id == id }?.name?.trim() }
+                .filter { it.isNotBlank() }
+                .sorted()
+        } else {
+            null
+        }
 
         if (titleP == null && descP == null && priceP == null && condP == null &&
             sizeP == null && brandP == null && tagsP == null

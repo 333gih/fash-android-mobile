@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.ChatRepository
@@ -614,6 +615,15 @@ class ChatDetailViewModel(
             _events.tryEmit(getApplication<Application>().getString(R.string.chat_error_order_exists))
             return
         }
+        if (d.offerCount >= BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION) {
+            _events.tryEmit(
+                getApplication<Application>().getString(
+                    R.string.chat_error_offer_limit,
+                    BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION,
+                ),
+            )
+            return
+        }
         viewModelScope.launch {
             _showOfferDialog.value = false
             _isCreatingOffer.value = true
@@ -863,7 +873,10 @@ class ChatDetailViewModel(
         val msg = e.message.orEmpty()
         return when {
             msg.contains("409") && msg.contains("OFFER_LIMIT_REACHED", ignoreCase = true) ->
-                getApplication<Application>().getString(R.string.chat_error_offer_limit)
+                getApplication<Application>().getString(
+                    R.string.chat_error_offer_limit,
+                    BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION,
+                )
             msg.contains("409") && msg.contains("PENDING_OFFER", ignoreCase = true) ->
                 getApplication<Application>().getString(R.string.chat_error_pending_offer)
             msg.contains("409") && msg.contains("pending offer", ignoreCase = true) ->

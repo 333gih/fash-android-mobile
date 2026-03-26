@@ -7,11 +7,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -32,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -48,6 +52,7 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -67,6 +72,7 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -86,6 +92,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -101,6 +109,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
@@ -114,7 +123,7 @@ import kotlinx.coroutines.launch
 // Screen entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatDetailScreen(
     conversationId: String,
@@ -218,6 +227,7 @@ fun ChatDetailScreen(
 
             else -> {
                 val d = detail!!
+                val maxOffers = BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION
                 val hasPendingOfferFromMe = d.pendingOffer?.proposedByMe == true
                 val hasOrder = orderId != null
                 val composerReadOnly =
@@ -226,7 +236,7 @@ fun ChatDetailScreen(
                     d.isClosed ||
                         d.product?.listingStatus == "sold" ||
                         d.product?.listingStatus == "reserved"
-                val offerLimitReached = d.offerCount >= 3
+                val offerLimitReached = d.offerCount >= maxOffers
                 val sortedMessages = messages.sortedBy { it.timestamp }
 
                 // The amount from the most-recently accepted offer (used for Pay Now)
@@ -275,6 +285,17 @@ fun ChatDetailScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     }
 
+                    if (d.isBuyer && !hasOrder && !offerBlocked) {
+                        OfferLimitPolicyBanner(
+                            usedCount = d.offerCount,
+                            maxOffers = maxOffers,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    }
+
                     // Offer price bottom sheet
                     if (showOfferDialog) {
                         OfferPriceBottomSheet(
@@ -288,9 +309,11 @@ fun ChatDetailScreen(
                     // Messages
                     val listState = rememberLazyListState()
 
-                    LaunchedEffect(sortedMessages.size) {
-                        if (sortedMessages.isNotEmpty()) {
-                            // reverseLayout=true → index 0 is the newest message (bottom)
+                    // Only snap to newest when the user is already at the bottom (index 0 in reverse list).
+                    // Scrolling on every list update was fighting the user when reading older messages.
+                    LaunchedEffect(sortedMessages.size, sortedMessages.lastOrNull()?.messageId) {
+                        if (sortedMessages.isEmpty()) return@LaunchedEffect
+                        if (listState.firstVisibleItemIndex == 0) {
                             listState.animateScrollToItem(0)
                         }
                     }
@@ -315,52 +338,109 @@ fun ChatDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 if (isMessagesLoading) {
-                                    item { LoadingMessageIndicator() }
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .animateItem(
+                                                    fadeInSpec = tween(200, easing = FastOutSlowInEasing),
+                                                    fadeOutSpec = tween(160),
+                                                    placementSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow,
+                                                    ),
+                                                )
+                                                .fillMaxWidth(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            LoadingMessageIndicator()
+                                        }
+                                    }
                                 }
                                 itemsIndexed(
                                     items = sortedMessages.reversed(),
                                     key = { index, msg ->
                                         stableLazyKey(msg.messageId, index, "msg")
                                     },
-                                ) { _, msg ->
-                                    when (msg.messageType) {
-                                        "offer" -> OfferMessageBubble(
-                                            message = msg,
-                                            isBuyer = d.isBuyer,
-                                            hasOrder = hasOrder,
-                                            isResponding = isRespondingToOffer,
-                                            onAccept = {
-                                                viewModel.acceptOffer(
-                                                    PriceOffer(
-                                                        offerId = msg.messageId,
-                                                        amountVnd = msg.offerAmountVnd,
-                                                        proposedByMe = msg.isFromMe,
-                                                        status = msg.offerStatus,
-                                                    ),
-                                                )
-                                            },
-                                            onDecline = {
-                                                viewModel.declineOffer(
-                                                    PriceOffer(
-                                                        offerId = msg.messageId,
-                                                        amountVnd = msg.offerAmountVnd,
-                                                        proposedByMe = msg.isFromMe,
-                                                        status = msg.offerStatus,
-                                                    ),
-                                                )
-                                            },
-                                            formatTime = viewModel::formatTime,
-                                        )
-                                        "system" -> SystemMessageBubble(
-                                            message = msg,
-                                            formatTime = viewModel::formatTime,
-                                        )
-                                        else -> if (msg.text.isNotBlank()) {
-                                            MessageBubble(
+                                ) { index, msg ->
+                                    val isNewestRow = index == 0
+                                    var revealed by remember(msg.messageId, index) {
+                                        mutableStateOf(!isNewestRow)
+                                    }
+                                    LaunchedEffect(msg.messageId, index) {
+                                        if (isNewestRow) {
+                                            revealed = true
+                                        }
+                                    }
+                                    val newestScale by animateFloatAsState(
+                                        targetValue = if (!isNewestRow || revealed) 1f else 0.94f,
+                                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                        label = "chat_newest_scale",
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .animateItem(
+                                                fadeInSpec = tween(
+                                                    280,
+                                                    easing = FastOutSlowInEasing,
+                                                ),
+                                                fadeOutSpec = tween(180),
+                                                placementSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow,
+                                                ),
+                                            )
+                                            .fillMaxWidth()
+                                            .then(
+                                                if (isNewestRow) {
+                                                    Modifier.graphicsLayer {
+                                                        scaleX = newestScale
+                                                        scaleY = newestScale
+                                                        transformOrigin = TransformOrigin(0.5f, 1f)
+                                                    }
+                                                } else {
+                                                    Modifier
+                                                },
+                                            ),
+                                    ) {
+                                        when (msg.messageType) {
+                                            "offer" -> OfferMessageBubble(
+                                                message = msg,
+                                                isBuyer = d.isBuyer,
+                                                hasOrder = hasOrder,
+                                                isResponding = isRespondingToOffer,
+                                                onAccept = {
+                                                    viewModel.acceptOffer(
+                                                        PriceOffer(
+                                                            offerId = msg.messageId,
+                                                            amountVnd = msg.offerAmountVnd,
+                                                            proposedByMe = msg.isFromMe,
+                                                            status = msg.offerStatus,
+                                                        ),
+                                                    )
+                                                },
+                                                onDecline = {
+                                                    viewModel.declineOffer(
+                                                        PriceOffer(
+                                                            offerId = msg.messageId,
+                                                            amountVnd = msg.offerAmountVnd,
+                                                            proposedByMe = msg.isFromMe,
+                                                            status = msg.offerStatus,
+                                                        ),
+                                                    )
+                                                },
+                                                formatTime = viewModel::formatTime,
+                                            )
+                                            "system" -> SystemMessageBubble(
                                                 message = msg,
                                                 formatTime = viewModel::formatTime,
-                                                onDeleteRequest = { viewModel.deleteMessage(msg) },
                                             )
+                                            else -> if (msg.text.isNotBlank()) {
+                                                MessageBubble(
+                                                    message = msg,
+                                                    formatTime = viewModel::formatTime,
+                                                    onDeleteRequest = { viewModel.deleteMessage(msg) },
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -392,11 +472,75 @@ fun ChatDetailScreen(
                             showOfferButton = d.isBuyer && !hasOrder,
                             offerButtonEnabled = !hasPendingOfferFromMe && !offerLimitReached && !offerBlocked,
                             offerShowLimitTooltip = d.isBuyer && !hasOrder && offerLimitReached && !offerBlocked,
+                            offerLimitMax = maxOffers,
                             onOfferClick = { viewModel.onSetPriceClick() },
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offer limit (buyer — max from CHAT_MAX_OFFERS_PER_CONVERSATION in env / BuildConfig)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OfferLimitPolicyBanner(
+    usedCount: Int,
+    maxOffers: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (maxOffers < 1) return
+    val scheme = MaterialTheme.colorScheme
+    val used = usedCount.coerceAtLeast(0)
+    val atLimit = used >= maxOffers
+    val lastRemaining = !atLimit && maxOffers - used == 1 && maxOffers > 1
+    val introOnly = used == 0
+    val (container, onContainer, icon) = when {
+        atLimit ->
+            Triple(scheme.errorContainer, scheme.onErrorContainer, Icons.Filled.ErrorOutline)
+        lastRemaining ->
+            Triple(scheme.tertiaryContainer, scheme.onTertiaryContainer, Icons.Filled.Warning)
+        else ->
+            Triple(
+                scheme.surfaceContainerHighest,
+                scheme.onSurfaceVariant,
+                Icons.Outlined.Info,
+            )
+    }
+    val text = when {
+        atLimit ->
+            stringResource(R.string.chat_offer_policy_at_limit, used, maxOffers)
+        lastRemaining ->
+            stringResource(R.string.chat_offer_policy_last, maxOffers)
+        introOnly ->
+            stringResource(R.string.chat_offer_policy_intro, maxOffers)
+        else ->
+            stringResource(R.string.chat_offer_policy_progress, used, maxOffers)
+    }
+    Surface(
+        modifier = modifier,
+        color = container,
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = onContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = onContainer,
+            )
         }
     }
 }
@@ -1068,6 +1212,8 @@ private fun ChatInputBar(
     offerButtonEnabled: Boolean,
     /** When true, offer button stays disabled and shows a plain tooltip (offer limit). */
     offerShowLimitTooltip: Boolean = false,
+    /** Max offers from env (shown in limit tooltip). */
+    offerLimitMax: Int,
     onOfferClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -1088,7 +1234,12 @@ private fun ChatInputBar(
                     positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                     tooltip = {
                         PlainTooltip {
-                            Text(stringResource(R.string.chat_offer_limit_tooltip))
+                            Text(
+                                stringResource(
+                                    R.string.chat_offer_limit_tooltip,
+                                    offerLimitMax,
+                                ),
+                            )
                         }
                     },
                     state = tooltipState,

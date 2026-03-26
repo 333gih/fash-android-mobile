@@ -392,6 +392,7 @@ data class CreateListingRequest(
     val description: String = "",
     val size: String = "",
     val brand: String = "",
+    /** Aesthetic tag names from the catalog (not UUID ids). Serialized as `aesthetic_tags`. */
     val aestheticTags: List<String> = emptyList(),
 )
 
@@ -403,6 +404,7 @@ data class UpdateListingRequest(
     val description: String? = null,
     val brand: String? = null,
     val size: String? = null,
+    /** Tag names (not ids); `[]` clears when explicitly replacing tags. */
     val aestheticTags: List<String>? = null,
 )
 

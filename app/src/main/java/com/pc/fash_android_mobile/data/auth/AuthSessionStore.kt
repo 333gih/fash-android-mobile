@@ -34,7 +34,9 @@ class AuthSessionStore(private val context: Context) {
 
     fun save(session: AuthSession) {
         try {
-            prefs.edit()
+            // Use commit() (synchronous) so tokens are on disk before the process can be killed
+            // (e.g. user swipes the app away immediately after login). apply() is async and can lose data.
+            val ok = prefs.edit()
                 .putString(KEY_ACCESS, session.accessToken)
                 .putString(KEY_REFRESH, session.refreshToken)
                 .putString(KEY_TYPE, session.tokenType)
@@ -43,7 +45,10 @@ class AuthSessionStore(private val context: Context) {
                 .putString(KEY_USER_ID, session.userId)
                 .putLong(KEY_UNREAD_COUNT, session.unreadCount)
                 .putLong(KEY_ISSUED_AT, System.currentTimeMillis())
-                .apply()
+                .commit()
+            if (!ok) {
+                Log.w(TAG, "save: SharedPreferences.commit() returned false")
+            }
         } catch (e: Exception) {
             Log.w(TAG, "save failed — Keystore key likely invalidated; wiping store", e)
             recoverAndReset()
@@ -90,7 +95,9 @@ class AuthSessionStore(private val context: Context) {
 
     fun clear() {
         try {
-            prefs.edit().clear().apply()
+            if (!prefs.edit().clear().commit()) {
+                Log.w(TAG, "clear: SharedPreferences.commit() returned false")
+            }
         } catch (e: Exception) {
             Log.w(TAG, "clear failed — forcing full wipe", e)
             recoverAndReset()

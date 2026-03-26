@@ -109,7 +109,7 @@ class AuthRepository(
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error(formatHttpError(response.code, body))
+                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
             }
         }
     }
@@ -124,7 +124,7 @@ class AuthRepository(
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error(formatHttpError(response.code, body))
+                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
             }
         }
     }
@@ -141,7 +141,7 @@ class AuthRepository(
         ).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error(formatHttpError(response.code, body))
+                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
             }
         }
     }
@@ -157,7 +157,7 @@ class AuthRepository(
         return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error(formatHttpError(response.code, body))
+                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
             }
             body
         }
@@ -175,9 +175,6 @@ class AuthRepository(
             unreadCount = o.optLong("unread_count", 0L),
         )
     }
-
-    private fun formatHttpError(code: Int, body: String): String =
-        CoreServiceErrors.parseErrorMessage(code, body)
 
     companion object {
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()

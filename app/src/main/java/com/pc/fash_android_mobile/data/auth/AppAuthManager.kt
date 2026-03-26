@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.data.auth
 
 import com.pc.fash_android_mobile.network.SecuredApiClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,23 +56,38 @@ class AppAuthManager(
         _sessionExpiredMessage.value = null
     }
 
-    /** Validate session on app start: refresh if needed, clear if invalid. Returns true if valid. */
+    /**
+     * Cold-start validation: refresh tokens. On **network / 5xx / 429** failures, keeps the
+     * session and returns true (retries a few times first). Only **clears** on definitive
+     * auth failures (invalid/expired refresh).
+     */
     suspend fun validateOrClearSession(): Boolean {
         val session = sessionStore.read() ?: return false
-        val refreshResult = authRepository.refresh(session.refreshToken)
-        return refreshResult.fold(
-            onSuccess = { newSession ->
+        for (attempt in 0 until REFRESH_ATTEMPTS) {
+            val result = authRepository.refresh(session.refreshToken)
+            result.getOrNull()?.let { newSession ->
                 sessionStore.save(newSession)
                 onSessionSaved()
-                true
-            },
-            onFailure = {
-                sessionStore.clear()
-                // Silent clear on app start — no reason message needed
-                _isAuthenticated.value = false
-                false
-            },
-        )
+                return true
+            }
+            val err = result.exceptionOrNull()!!
+            if (err.isTransientRefreshFailure()) {
+                if (attempt < REFRESH_ATTEMPTS - 1) {
+                    delay(400L * (attempt + 1))
+                    continue
+                }
+                _isAuthenticated.value = sessionStore.read() != null
+                return true
+            }
+            sessionStore.clear()
+            _isAuthenticated.value = false
+            return false
+        }
+        return true
+    }
+
+    private companion object {
+        private const val REFRESH_ATTEMPTS = 3
     }
 
     fun logout(accessToken: String): Result<Unit> =

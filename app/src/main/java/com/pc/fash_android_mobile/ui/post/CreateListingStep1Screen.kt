@@ -32,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -113,7 +112,6 @@ fun CreateListingStep1Screen(
         }
 
         BottomBar(
-            onCancel = onClose,
             onNext = {
                 if (isUploading) return@BottomBar
                 // Upload photos while gallery URIs are still readable; step 3 submit then skips re-upload.
@@ -309,7 +307,6 @@ private fun TipBox() {
 
 @Composable
 private fun BottomBar(
-    onCancel: () -> Unit,
     onNext: () -> Unit,
     nextEnabled: Boolean,
     isLoading: Boolean,
@@ -318,15 +315,9 @@ private fun BottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onCancel) {
-            Text(
-                text = stringResource(R.string.create_listing_cancel),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         androidx.compose.material3.Button(
             onClick = onNext,
             enabled = nextEnabled && !isLoading,

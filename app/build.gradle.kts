@@ -92,6 +92,15 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     resValue("string", "facebook_client_token", fbClientToken.ifEmpty { "unset" })
     val googleWebClientId = envOrEmpty("GOOGLE_WEB_CLIENT_ID")
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", buildConfigStringLiteral(googleWebClientId))
+
+    val maxOffersPerConversation = envVal("CHAT_MAX_OFFERS_PER_CONVERSATION")?.toIntOrNull()
+        ?: error(
+            "CHAT_MAX_OFFERS_PER_CONVERSATION (positive integer) is required in env for flavor '$flavorName'",
+        )
+    require(maxOffersPerConversation >= 1) {
+        "CHAT_MAX_OFFERS_PER_CONVERSATION must be >= 1 for flavor '$flavorName'"
+    }
+    buildConfigField("int", "CHAT_MAX_OFFERS_PER_CONVERSATION", maxOffersPerConversation.toString())
 }
 
 android {

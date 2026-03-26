@@ -165,6 +165,10 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     publishUi(getApplication<Application>().getString(R.string.create_listing_no_images))
                     return@launch
                 }
+                val aestheticTagNames = d.aestheticTags.mapNotNull { tagId ->
+                    _aestheticTags.value.find { it.id.equals(tagId, ignoreCase = true) }
+                        ?.name?.trim()
+                }.filter { it.isNotBlank() }
                 val req = CreateListingRequest(
                     title = d.title,
                     imageUrls = finalUrls,
@@ -174,7 +178,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     description = d.description,
                     size = d.size,
                     brand = d.brand,
-                    aestheticTags = d.aestheticTags,
+                    aestheticTags = aestheticTagNames,
                 )
                 val createResult = withContext(Dispatchers.IO) {
                     listingRepository.createListing(req)

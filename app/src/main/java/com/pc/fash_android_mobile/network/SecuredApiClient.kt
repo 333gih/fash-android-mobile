@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.network
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSession
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
+import com.pc.fash_android_mobile.data.auth.isTransientRefreshFailure
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -85,7 +86,10 @@ class SecuredApiClient(
                         sessionStore.save(newSession)
                         newSession
                     },
-                    onFailure = {
+                    onFailure = { t ->
+                        if (t.isTransientRefreshFailure()) {
+                            throw IOException("Transient token refresh failure", t)
+                        }
                         sessionStore.clear()
                         onSessionInvalidated?.invoke(SESSION_EXPIRED_MSG)
                         null

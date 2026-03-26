@@ -689,7 +689,7 @@ data class ConversationDetail(
     val isBuyer: Boolean = true,
     /** Non-null when the seller has accepted an offer and the backend created an order. */
     val orderId: String? = null,
-    /** Server offer counter; buyer offer button disabled when >= 3. */
+    /** Server offer counter; buyer offer button disabled when >= env max per conversation (see CHAT_MAX_OFFERS_PER_CONVERSATION). */
     val offerCount: Int = 0,
     /** Listing reserved / chat read-only. */
     val isClosed: Boolean = false,
