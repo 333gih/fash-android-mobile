@@ -7,6 +7,8 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.data.chat.ConversationListingGroup
+import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +18,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -35,39 +39,72 @@ enum class ChatFilter {
     Buyer,   // conversations where the current user is the buyer
 }
 
+/** Seller-only segmented control: flat inbox vs `group_by=listing`. */
+enum class SellerInboxGroupMode {
+    /** Default — same as today (Flat list). */
+    AllConversations,
+    /** GET …?group_by=listing */
+    ByProduct,
+}
+
 class ChatViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
 
     private val chatRepository: ChatRepository =
         (application as FashApplication).chatRepository
+    private val listingRepository: ListingRepository =
+        (application as FashApplication).listingRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
     private val sessionStore =
         (application as FashApplication).authManager.sessionStore
 
     init {
-        // Refresh conversation list in real-time when a new message arrives for this user
         viewModelScope.launch {
             realtimeManager.events.collect { event ->
                 when (event) {
-                    is RealtimeEvent.MessageNew -> silentRefreshConversations()
-                    is RealtimeEvent.ReadReceipts -> silentRefreshConversations()
+                    is RealtimeEvent.MessageNew,
+                    is RealtimeEvent.ReadReceipts,
+                    -> {
+                        silentRefreshConversations()
+                        refreshUnreadCount()
+                    }
                     else -> Unit
                 }
             }
         }
     }
 
-    /** Full unfiltered list returned by the API. */
+    /** Full unfiltered list returned by the API (flat). */
     private val _allConversations = MutableStateFlow<List<ConversationItem>>(emptyList())
 
-    /** Filtered view shown in the UI. */
+    /** Raw grouped payload when seller selects “Theo sản phẩm”. */
+    private val _conversationGroups = MutableStateFlow<List<ConversationListingGroup>>(emptyList())
+
+    /** Filtered view shown in the UI (flat). */
     private val _conversations = MutableStateFlow<List<ConversationItem>>(emptyList())
     val conversations: StateFlow<List<ConversationItem>> = _conversations.asStateFlow()
 
+    /** Filtered groups for grouped inbox. */
+    private val _displayGroups = MutableStateFlow<List<ConversationListingGroup>>(emptyList())
+    val displayGroups: StateFlow<List<ConversationListingGroup>> = _displayGroups.asStateFlow()
+
+    /** Expanded group headers (listing ids); default = all expanded. */
+    private val _expandedGroupListingIds = MutableStateFlow<Set<String>>(emptySet())
+    val expandedGroupListingIds: StateFlow<Set<String>> = _expandedGroupListingIds.asStateFlow()
+
     private val _selectedFilter = MutableStateFlow(ChatFilter.All)
     val selectedFilter: StateFlow<ChatFilter> = _selectedFilter.asStateFlow()
+
+    private val _sellerInboxGroupMode = MutableStateFlow(SellerInboxGroupMode.AllConversations)
+    val sellerInboxGroupMode: StateFlow<SellerInboxGroupMode> = _sellerInboxGroupMode.asStateFlow()
+
+    private val _sellerHasActiveListings = MutableStateFlow(false)
+    val sellerHasActiveListings: StateFlow<Boolean> = _sellerHasActiveListings.asStateFlow()
+
+    private val _unreadBadgeCount = MutableStateFlow(0)
+    val unreadBadgeCount: StateFlow<Int> = _unreadBadgeCount.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -81,59 +118,139 @@ class ChatViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    private fun isGroupedInbox(): Boolean =
+        _sellerHasActiveListings.value &&
+            _sellerInboxGroupMode.value == SellerInboxGroupMode.ByProduct
+
     fun loadConversations() {
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = null
-            val result = withContext(Dispatchers.IO) {
-                // API only accepts limit + offset — no status or role params
-                chatRepository.getConversations(limit = 50, offset = 0)
+            refreshSellerListingEligibilityInternal()
+            if (isGroupedInbox()) {
+                withContext(Dispatchers.IO) {
+                    chatRepository.getConversationsGroupedByListing(limit = 50, offset = 0)
+                }.fold(
+                    onSuccess = { groups ->
+                        _conversationGroups.value = groups
+                        _expandedGroupListingIds.setAll(groups.map { it.listingId })
+                        applyCurrentViewFilter()
+                    },
+                    onFailure = {
+                        _loadError.value = it.message
+                            ?: getApplication<Application>().getString(R.string.chat_load_error)
+                        _events.tryEmit(_loadError.value!!)
+                    },
+                )
+            } else {
+                withContext(Dispatchers.IO) {
+                    chatRepository.getConversations(limit = 50, offset = 0)
+                }.fold(
+                    onSuccess = { all ->
+                        _allConversations.value = all
+                        applyCurrentViewFilter()
+                    },
+                    onFailure = {
+                        _loadError.value = it.message
+                            ?: getApplication<Application>().getString(R.string.chat_load_error)
+                        _events.tryEmit(_loadError.value!!)
+                    },
+                )
             }
             _isLoading.value = false
-            result.fold(
-                onSuccess = { all ->
-                    _allConversations.value = all
-                    applyFilter(_selectedFilter.value, all)
-                },
-                onFailure = {
-                    _loadError.value = it.message ?: getApplication<Application>().getString(R.string.chat_load_error)
-                    _events.tryEmit(_loadError.value!!)
-                },
-            )
+            refreshUnreadCount()
         }
+    }
+
+    private fun MutableStateFlow<Set<String>>.setAll(ids: List<String>) {
+        value = ids.toSet()
     }
 
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
             silentRefreshConversations()
+            refreshUnreadCount()
             _isRefreshing.value = false
         }
     }
 
-    /** Quietly re-fetches conversations without showing a loading indicator. */
     private suspend fun silentRefreshConversations() {
-        val result = withContext(Dispatchers.IO) {
-            chatRepository.getConversations(limit = 50, offset = 0)
+        if (isGroupedInbox()) {
+            val r = withContext(Dispatchers.IO) {
+                chatRepository.getConversationsGroupedByListing(limit = 50, offset = 0)
+            }
+            r.getOrNull()?.let { groups ->
+                _conversationGroups.value = groups
+                if (_expandedGroupListingIds.value.isEmpty()) {
+                    _expandedGroupListingIds.setAll(groups.map { it.listingId })
+                }
+            }
+            applyCurrentViewFilter()
+        } else {
+            val result = withContext(Dispatchers.IO) {
+                chatRepository.getConversations(limit = 50, offset = 0)
+            }
+            result.getOrNull()?.let { all ->
+                _allConversations.value = all
+                applyCurrentViewFilter()
+            }
         }
-        result.getOrNull()?.let { all ->
-            _allConversations.value = all
-            applyFilter(_selectedFilter.value, all)
+    }
+
+    fun refreshSellerListingEligibility() {
+        viewModelScope.launch { refreshSellerListingEligibilityInternal() }
+    }
+
+    private suspend fun refreshSellerListingEligibilityInternal() {
+        val myId = sessionStore.read()?.userId?.trim().orEmpty()
+        if (myId.isBlank()) {
+            _sellerHasActiveListings.value = false
+            return
+        }
+        val r = withContext(Dispatchers.IO) {
+            listingRepository.getListingsBySeller(myId, status = "active", limit = 1, offset = 0)
+        }
+        _sellerHasActiveListings.value = r.getOrNull()?.isNotEmpty() == true
+    }
+
+    fun refreshUnreadCount() {
+        viewModelScope.launch {
+            val n = withContext(Dispatchers.IO) { chatRepository.getUnreadCount() }.getOrNull() ?: 0
+            _unreadBadgeCount.value = n
         }
     }
 
     fun setFilter(filter: ChatFilter) {
         _selectedFilter.value = filter
-        applyFilter(filter, _allConversations.value)
+        applyCurrentViewFilter()
     }
 
-    /**
-     * Client-side filter applied after fetching all conversations.
-     * - [ChatFilter.All]    — show everything
-     * - [ChatFilter.Unread] — items where isUnread == true
-     * - [ChatFilter.Seller] — conversations where current user is the seller
-     * - [ChatFilter.Buyer]  — conversations where current user is the buyer
-     */
+    fun setSellerInboxGroupMode(mode: SellerInboxGroupMode) {
+        if (_sellerInboxGroupMode.value == mode) return
+        _sellerInboxGroupMode.value = mode
+        viewModelScope.launch {
+            _loadError.value = null
+            silentRefreshConversations()
+            refreshUnreadCount()
+        }
+    }
+
+    fun toggleListingGroupExpanded(listingId: String) {
+        _expandedGroupListingIds.update { cur ->
+            if (listingId in cur) cur - listingId else cur + listingId
+        }
+    }
+
+    private fun applyCurrentViewFilter() {
+        if (isGroupedInbox()) {
+            applyGroupFilter(_selectedFilter.value, _conversationGroups.value)
+        } else {
+            _displayGroups.value = emptyList()
+            applyFilter(_selectedFilter.value, _allConversations.value)
+        }
+    }
+
     private fun applyFilter(filter: ChatFilter, all: List<ConversationItem>) {
         val myId = sessionStore.read()?.userId.orEmpty()
         _conversations.value = when (filter) {
@@ -142,6 +259,23 @@ class ChatViewModel(
             ChatFilter.Seller -> if (myId.isBlank()) all else all.filter { it.sellerUserId == myId }
             ChatFilter.Buyer -> if (myId.isBlank()) all else all.filter { it.buyerUserId == myId }
         }
+    }
+
+    private fun applyGroupFilter(filter: ChatFilter, groups: List<ConversationListingGroup>) {
+        val myId = sessionStore.read()?.userId.orEmpty()
+        fun passItem(item: ConversationItem): Boolean = when (filter) {
+            ChatFilter.All -> true
+            ChatFilter.Unread -> item.isUnread
+            ChatFilter.Seller -> myId.isBlank() || item.sellerUserId == myId
+            ChatFilter.Buyer -> myId.isBlank() || item.buyerUserId == myId
+        }
+        _displayGroups.value = groups.map { g ->
+            val convs = g.conversations.filter(::passItem)
+            g.copy(
+                conversations = convs,
+                conversationCountBadge = convs.size,
+            )
+        }.filter { it.conversations.isNotEmpty() }
     }
 
     suspend fun startConversation(listingId: String): Result<String> =
@@ -187,5 +321,10 @@ class ChatViewModel(
         } catch (_: Exception) {
             raw.take(16)
         }
+    }
+
+    fun formatPriceVnd(amount: Long): String {
+        val formatter = NumberFormat.getNumberInstance(Locale("vi", "VN"))
+        return "₫${formatter.format(amount)}"
     }
 }

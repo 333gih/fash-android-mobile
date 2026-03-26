@@ -75,6 +75,8 @@ fun MainNavScreen(
     postViewModel: com.pc.fash_android_mobile.ui.post.PostViewModel,
     profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel,
     chatViewModel: com.pc.fash_android_mobile.ui.chat.ChatViewModel,
+    /** Total unread messages for chat tab badge ([ChatRepository.getUnreadCount]). */
+    chatUnreadCount: Int = 0,
     onListingClick: (String) -> Unit = {},
     onEditProfile: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
@@ -117,10 +119,31 @@ fun MainNavScreen(
                     val selected = selectedTab == index
                     NavigationBarItem(
                         icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = stringResource(tab.labelRes),
-                            )
+                            if (tab == MainTab.Chat && chatUnreadCount > 0) {
+                                BadgedBox(
+                                    badge = {
+                                        androidx.compose.material3.Badge(
+                                            containerColor = FashColors.Primary,
+                                        ) {
+                                            androidx.compose.material3.Text(
+                                                text = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = FashColors.OnPrimary,
+                                            )
+                                        }
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = stringResource(tab.labelRes),
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = stringResource(tab.labelRes),
+                                )
+                            }
                         },
                         label = {
                             Text(

@@ -304,6 +304,7 @@ class MainActivity : ComponentActivity() {
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
+                                    val chatUnreadCount by chatViewModel.unreadBadgeCount.collectAsState()
                                     Box(modifier = Modifier.fillMaxSize()) {
                                         MainNavScreen(
                                             onLogout = loginViewModel::logout,
@@ -314,6 +315,7 @@ class MainActivity : ComponentActivity() {
                                             postViewModel = postViewModel,
                                             profileViewModel = profileViewModel,
                                             chatViewModel = chatViewModel,
+                                            chatUnreadCount = chatUnreadCount,
                                             onListingClick = { selectedListingId = it },
                                             onEditProfile = { showEditProfile = true },
                                             onOrdersClick = { showOrdersScreen = true },

@@ -20,10 +20,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,8 +60,10 @@ import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.data.chat.ConversationListingGroup
 import com.pc.fash_android_mobile.ui.chat.ChatFilter
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
+import com.pc.fash_android_mobile.ui.chat.SellerInboxGroupMode
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -74,6 +79,10 @@ fun ChatScreen(
     onConversationClick: (ConversationItem) -> Unit = {},
 ) {
     val conversations by viewModel.conversations.collectAsState()
+    val displayGroups by viewModel.displayGroups.collectAsState()
+    val expandedGroupIds by viewModel.expandedGroupListingIds.collectAsState()
+    val sellerHasActiveListings by viewModel.sellerHasActiveListings.collectAsState()
+    val sellerInboxGroupMode by viewModel.sellerInboxGroupMode.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -85,7 +94,16 @@ fun ChatScreen(
         viewModel.loadConversations()
     }
 
+    val showGroupedInbox =
+        sellerHasActiveListings && sellerInboxGroupMode == SellerInboxGroupMode.ByProduct
+
     Column(modifier = modifier.fillMaxSize()) {
+        if (sellerHasActiveListings) {
+            SellerInboxSegmentRow(
+                mode = sellerInboxGroupMode,
+                onModeChange = viewModel::setSellerInboxGroupMode,
+            )
+        }
         FilterBar(
             selectedFilter = selectedFilter,
             onFilterClick = viewModel::setFilter,
@@ -127,58 +145,51 @@ fun ChatScreen(
                     }
                 }
             }
-            conversations.isEmpty() -> Box(
+            showGroupedInbox && displayGroups.isEmpty() -> EmptyInboxHint()
+            !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint()
+            showGroupedInbox -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(horizontal = 40.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .background(FashColors.Primary.copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = null,
-                            modifier = Modifier.size(36.dp),
-                            tint = FashColors.Primary,
+                displayGroups.forEach { group ->
+                    item(key = "h-group-${group.listingId}") {
+                        ListingGroupHeader(
+                            group = group,
+                            expanded = group.listingId in expandedGroupIds,
+                            formatPrice = viewModel::formatPriceVnd,
+                            onToggle = { viewModel.toggleListingGroupExpanded(group.listingId) },
                         )
                     }
-                    Text(
-                        text = stringResource(R.string.chat_empty),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = scheme.onSurface,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_empty_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
+                    if (group.listingId in expandedGroupIds) {
+                        items(
+                            count = group.conversations.size,
+                            key = { idx -> "${group.listingId}-${group.conversations[idx].conversationId}" },
+                        ) { idx ->
+                            val item = group.conversations[idx]
+                            ConversationRow(
+                                item = item,
+                                formatTimestamp = viewModel::formatTimestamp,
+                                onClick = { onConversationClick(item) },
+                            )
+                        }
+                    }
                 }
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
-                content = {
-                    itemsIndexed(
-                        conversations,
-                        key = { index, item -> stableLazyKey(item.conversationId, index, "conv") },
-                    ) { _, item ->
-                        ConversationRow(
-                            item = item,
-                            formatTimestamp = viewModel::formatTimestamp,
-                            onClick = { onConversationClick(item) },
-                        )
-                    }
-                },
-            )
+            ) {
+                itemsIndexed(
+                    conversations,
+                    key = { index, item -> stableLazyKey(item.conversationId, index, "conv") },
+                ) { _, item ->
+                    ConversationRow(
+                        item = item,
+                        formatTimestamp = viewModel::formatTimestamp,
+                        onClick = { onConversationClick(item) },
+                    )
+                }
+            }
         } }
     }
 }
@@ -220,6 +231,162 @@ fun ChatTopBar(
             titleContentColor = MaterialTheme.colorScheme.onSurface,
         ),
     )
+}
+
+@Composable
+private fun EmptyInboxHint() {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 40.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .background(FashColors.Primary.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = FashColors.Primary,
+                )
+            }
+            Text(
+                text = stringResource(R.string.chat_empty),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Text(
+                text = stringResource(R.string.chat_empty_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SellerInboxSegmentRow(
+    mode: SellerInboxGroupMode,
+    onModeChange: (SellerInboxGroupMode) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SellerSegmentChip(
+            selected = mode == SellerInboxGroupMode.AllConversations,
+            label = stringResource(R.string.chat_filter_all),
+            onClick = { onModeChange(SellerInboxGroupMode.AllConversations) },
+        )
+        SellerSegmentChip(
+            selected = mode == SellerInboxGroupMode.ByProduct,
+            label = stringResource(R.string.chat_inbox_by_product),
+            onClick = { onModeChange(SellerInboxGroupMode.ByProduct) },
+        )
+    }
+}
+
+@Composable
+private fun SellerSegmentChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = ChipCorner,
+        color = if (selected) FashColors.Primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = Modifier
+            .clip(ChipCorner)
+            .clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = if (selected) FashColors.OnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+    }
+}
+
+@Composable
+private fun ListingGroupHeader(
+    group: ConversationListingGroup,
+    expanded: Boolean,
+    formatPrice: (Long) -> String,
+    onToggle: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val thumb = group.coverImageUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(scheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (thumb != null) {
+                FashAsyncImage(
+                    model = thumb,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = group.title.ifBlank { "—" },
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = formatPrice(group.priceVnd),
+                style = MaterialTheme.typography.labelMedium,
+                color = FashColors.Primary,
+            )
+        }
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = FashColors.Primary.copy(alpha = 0.12f),
+        ) {
+            Text(
+                text = group.conversationCountBadge.coerceAtLeast(0).toString(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = FashColors.Primary,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

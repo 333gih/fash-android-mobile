@@ -57,12 +57,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -209,6 +213,13 @@ fun ChatDetailScreen(
                 val d = detail!!
                 val hasPendingOfferFromMe = d.pendingOffer?.proposedByMe == true
                 val hasOrder = orderId != null
+                val composerReadOnly =
+                    d.isClosed || d.product?.listingStatus == "sold"
+                val offerBlocked =
+                    d.isClosed ||
+                        d.product?.listingStatus == "sold" ||
+                        d.product?.listingStatus == "reserved"
+                val offerLimitReached = d.offerCount >= 3
                 val sortedMessages = messages.sortedBy { it.timestamp }
 
                 // The amount from the most-recently accepted offer (used for Pay Now)
@@ -366,16 +377,22 @@ fun ChatDetailScreen(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-                    // Chat input bar
-                    ChatInputBar(
-                        text = inputText,
-                        onTextChange = viewModel::onInputChange,
-                        onSend = { viewModel.sendMessage() },
-                        isSending = isSending,
-                        showOfferButton = d.isBuyer && !hasOrder,
-                        offerButtonEnabled = !hasPendingOfferFromMe,
-                        onOfferClick = { viewModel.onSetPriceClick() },
-                    )
+                    if (composerReadOnly) {
+                        ClosedConversationComposerBar(
+                            soldOnly = d.product?.listingStatus == "sold",
+                        )
+                    } else {
+                        ChatInputBar(
+                            text = inputText,
+                            onTextChange = viewModel::onInputChange,
+                            onSend = { viewModel.sendMessage() },
+                            isSending = isSending,
+                            showOfferButton = d.isBuyer && !hasOrder,
+                            offerButtonEnabled = !hasPendingOfferFromMe && !offerLimitReached && !offerBlocked,
+                            offerShowLimitTooltip = d.isBuyer && !hasOrder && offerLimitReached && !offerBlocked,
+                            onOfferClick = { viewModel.onSetPriceClick() },
+                        )
+                    }
                 }
             }
         }
@@ -898,9 +915,39 @@ private fun ChatDetailHeader(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Read-only composer (reservation / sold)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ClosedConversationComposerBar(
+    soldOnly: Boolean,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val text = if (soldOnly) {
+        stringResource(R.string.chat_conversation_sold_readonly)
+    } else {
+        stringResource(R.string.chat_conversation_ended_readonly)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(scheme.surface)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant.copy(alpha = 0.65f),
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Chat input bar
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatInputBar(
     text: String,
@@ -909,11 +956,14 @@ private fun ChatInputBar(
     isSending: Boolean,
     /** True when current user is buyer AND no order exists yet. */
     showOfferButton: Boolean,
-    /** Disables the offer button when the buyer already has a pending offer. */
+    /** Disables the offer button (pending offer, limit, closed listing, etc.). */
     offerButtonEnabled: Boolean,
+    /** When true, offer button stays disabled and shows a plain tooltip (offer limit). */
+    offerShowLimitTooltip: Boolean = false,
     onOfferClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val tooltipState = rememberTooltipState()
 
     Row(
         modifier = Modifier
@@ -925,32 +975,71 @@ private fun ChatInputBar(
     ) {
         // Offer button (STATE A, buyer only)
         if (showOfferButton) {
-            OutlinedButton(
-                onClick = onOfferClick,
-                enabled = offerButtonEnabled,
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.height(40.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (offerButtonEnabled) FashColors.Primary else scheme.outline.copy(alpha = 0.4f),
-                ),
-            ) {
-                Icon(
-                    Icons.Filled.LocalOffer,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = if (offerButtonEnabled) {
-                        stringResource(R.string.chat_set_price)
-                    } else {
-                        stringResource(R.string.chat_pending_offer_button_waiting)
+            if (offerShowLimitTooltip) {
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = {
+                        PlainTooltip {
+                            Text(stringResource(R.string.chat_offer_limit_tooltip))
+                        }
                     },
-                    style = MaterialTheme.typography.labelSmall,
-                )
+                    state = tooltipState,
+                ) {
+                    OutlinedButton(
+                        onClick = { },
+                        enabled = false,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(40.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = scheme.outline.copy(alpha = 0.5f),
+                            disabledContentColor = scheme.outline.copy(alpha = 0.5f),
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            scheme.outline.copy(alpha = 0.4f),
+                        ),
+                    ) {
+                        Icon(
+                            Icons.Filled.LocalOffer,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.chat_set_price),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onOfferClick,
+                    enabled = offerButtonEnabled,
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(40.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (offerButtonEnabled) FashColors.Primary else scheme.outline.copy(alpha = 0.4f),
+                    ),
+                ) {
+                    Icon(
+                        Icons.Filled.LocalOffer,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (offerButtonEnabled) {
+                            stringResource(R.string.chat_set_price)
+                        } else {
+                            stringResource(R.string.chat_pending_offer_button_waiting)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
 

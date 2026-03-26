@@ -43,4 +43,6 @@ data class ListingDetail(
     val sellerDisplayName: String?,
     val isLiked: Boolean = false,
     val isSaved: Boolean = false,
+    /** `active` | `reserved` | `sold` — from listing API / realtime. */
+    val status: String = "active",
 )

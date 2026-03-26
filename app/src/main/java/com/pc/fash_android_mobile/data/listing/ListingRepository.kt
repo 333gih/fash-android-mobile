@@ -375,6 +375,7 @@ class ListingRepository(
                 ?: seller?.optString("DisplayName", "")?.ifBlank { null },
             isLiked = o.optBoolean("is_liked", false),
             isSaved = o.optBoolean("is_saved", false),
+            status = o.optString("status", o.optString("Status", "active")).lowercase().ifBlank { "active" },
         )
     }
 

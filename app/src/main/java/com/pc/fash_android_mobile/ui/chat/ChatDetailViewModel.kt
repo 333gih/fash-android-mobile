@@ -18,6 +18,8 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -135,7 +137,16 @@ class ChatDetailViewModel(
             realtimeManager.events.collect { event ->
                 when (event) {
                     is RealtimeEvent.MessageNew -> {
-                        if (messageNewShouldRefreshChat(event, conversationId)) {
+                        if (sameConversation(event.conversationId, conversationId)) {
+                            when {
+                                event.systemSubtype.equals("conversation.closed", ignoreCase = true) ->
+                                    applyConversationClosedFromRealtime(conversationId)
+                                event.systemSubtype.equals("conversation.reopened", ignoreCase = true) ->
+                                    applyConversationReopenedFromRealtime(conversationId)
+                                messageNewShouldRefreshChat(event, conversationId) ->
+                                    scheduleDebouncedSilentPoll(conversationId)
+                            }
+                        } else if (messageNewShouldRefreshChat(event, conversationId)) {
                             scheduleDebouncedSilentPoll(conversationId)
                         }
                     }
@@ -176,6 +187,61 @@ class ChatDetailViewModel(
                                 _orderStatus.value = event.newStatus
                             sameConversation(event.conversationId, conversationId) && knownOrderId == null ->
                                 viewModelScope.launch { checkForOrderId(conversationId) }
+                        }
+                    }
+                    is RealtimeEvent.OfferLimitReset -> {
+                        if (sameConversation(event.conversationId, conversationId)) {
+                            val d = _detail.value ?: return@collect
+                            _detail.value = d.copy(
+                                offerCount = 0,
+                                product = d.product?.copy(priceVnd = event.newPriceVnd) ?: d.product,
+                            )
+                            _events.tryEmit(
+                                getApplication<Application>().getString(
+                                    R.string.chat_offer_limit_reset_banner,
+                                    formatVnd(event.newPriceVnd),
+                                ),
+                            )
+                        }
+                    }
+                    is RealtimeEvent.ListingReserved -> {
+                        if (listingIdMatches(event.listingId)) {
+                            _detail.value = _detail.value?.copy(
+                                isClosed = true,
+                                product = _detail.value?.product?.copy(listingStatus = "reserved"),
+                            )
+                            discardDraftAndStopTyping(conversationId)
+                        }
+                    }
+                    is RealtimeEvent.ListingAvailable -> {
+                        if (listingIdMatches(event.listingId)) {
+                            val d = _detail.value
+                            _detail.value = d?.copy(
+                                isClosed = false,
+                                offerCount = 0,
+                                product = d.product?.copy(listingStatus = "active"),
+                            )
+                            _events.tryEmit(
+                                getApplication<Application>().getString(R.string.chat_reopened_snackbar),
+                            )
+                        }
+                    }
+                    is RealtimeEvent.ListingSold -> {
+                        if (listingIdMatches(event.listingId)) {
+                            _detail.value = _detail.value?.copy(
+                                product = _detail.value?.product?.copy(listingStatus = "sold"),
+                            )
+                            discardDraftAndStopTyping(conversationId)
+                        }
+                    }
+                    is RealtimeEvent.ConversationClosed -> {
+                        if (sameConversation(event.conversationId, conversationId)) {
+                            applyConversationClosedFromRealtime(conversationId)
+                        }
+                    }
+                    is RealtimeEvent.ConversationReopened -> {
+                        if (sameConversation(event.conversationId, conversationId)) {
+                            applyConversationReopenedFromRealtime(conversationId)
                         }
                     }
                     else -> Unit
@@ -248,12 +314,17 @@ class ChatDetailViewModel(
     }
 
     private suspend fun silentPoll(conversationId: String) {
-        val msgResult = withContext(Dispatchers.IO) { chatRepository.getMessages(conversationId) }
-        msgResult.getOrNull()?.let { newMsgs ->
-            val merged = mergeServerWithPendingLocal(newMsgs, _messages.value)
-            if (merged != _messages.value) {
-                _messages.value = merged
-                syncPendingOfferFromMessages(merged, conversationId)
+        coroutineScope {
+            val detailDeferred = async(Dispatchers.IO) { chatRepository.getConversationDetail(conversationId) }
+            val msgDeferred = async(Dispatchers.IO) { chatRepository.getMessages(conversationId) }
+            detailDeferred.await().getOrNull()?.let { applyConversationDetail(it) }
+            msgDeferred.await().getOrNull()?.let { newMsgs ->
+                val merged = mergeServerWithPendingLocal(newMsgs, _messages.value)
+                if (merged != _messages.value) {
+                    _messages.value = merged
+                    syncPendingOfferFromMessages(merged, conversationId)
+                    syncDetailClosedStateFromMessages(merged)
+                }
             }
         }
     }
@@ -286,6 +357,61 @@ class ChatDetailViewModel(
         val forMe = event.recipientId.isBlank() ||
             event.recipientId.equals(myId, ignoreCase = true)
         return fromOther && forMe
+    }
+
+    private fun listingIdMatches(listingId: String): Boolean {
+        val lid = _detail.value?.product?.listingId?.trim().orEmpty()
+        return lid.isNotBlank() && lid.equals(listingId.trim(), ignoreCase = true)
+    }
+
+    private fun discardDraftAndStopTyping(conversationId: String) {
+        _inputText.value = ""
+        _showOfferDialog.value = false
+        realtimeManager.sendTypingStop(conversationId)
+    }
+
+    private fun applyConversationClosedFromRealtime(conversationId: String) {
+        _detail.value = _detail.value?.copy(isClosed = true)
+        discardDraftAndStopTyping(conversationId)
+    }
+
+    private fun applyConversationReopenedFromRealtime(conversationId: String) {
+        _detail.value = _detail.value?.copy(isClosed = false, offerCount = 0)
+        _events.tryEmit(getApplication<Application>().getString(R.string.chat_reopened_snackbar))
+    }
+
+    private fun isComposerReadOnly(): Boolean {
+        val d = _detail.value ?: return true
+        if (d.isClosed) return true
+        if (d.product?.listingStatus == "sold") return true
+        return false
+    }
+
+    /**
+     * Derives read-only state from persisted system rows (polling), without snackbars
+     * (those are only fired from explicit realtime frames).
+     */
+    private fun syncDetailClosedStateFromMessages(messages: List<ChatMessage>) {
+        val d = _detail.value ?: return
+        val closedTs = messages.filter { it.systemSubtype.equals("conversation.closed", ignoreCase = true) }
+            .maxOfOrNull { it.timestamp }.orEmpty()
+        val reopenTs = messages.filter { it.systemSubtype.equals("conversation.reopened", ignoreCase = true) }
+            .maxOfOrNull { it.timestamp }.orEmpty()
+        if (closedTs.isBlank() && reopenTs.isBlank()) return
+        val shouldClose = when {
+            reopenTs.isNotBlank() && closedTs.isNotBlank() -> closedTs > reopenTs
+            reopenTs.isNotBlank() -> false
+            else -> true
+        }
+        if (d.isClosed != shouldClose) {
+            _detail.value = d.copy(isClosed = shouldClose)
+            if (shouldClose) discardDraftAndStopTyping(d.conversationId)
+        }
+    }
+
+    private fun formatVnd(amount: Long): String {
+        val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale("vi", "VN"))
+        return "₫${formatter.format(amount)}"
     }
 
     // ── Entry points ──────────────────────────────────────────────────────
@@ -343,6 +469,7 @@ class ChatDetailViewModel(
                 result.getOrNull()?.let { msgs ->
                     _messages.value = msgs
                     syncPendingOfferFromMessages(msgs, item.conversationId)
+                    syncDetailClosedStateFromMessages(msgs)
                 }
                 withContext(Dispatchers.IO) {
                     runCatching { chatRepository.markConversationRead(item.conversationId) }
@@ -380,6 +507,7 @@ class ChatDetailViewModel(
                 msgResult.getOrNull()?.let { msgs ->
                     _messages.value = msgs
                     syncPendingOfferFromMessages(msgs, conversationId)
+                    syncDetailClosedStateFromMessages(msgs)
                 }
             }
             return
@@ -404,6 +532,7 @@ class ChatDetailViewModel(
                     msgResult.getOrNull()?.let { msgs ->
                         _messages.value = msgs
                         syncPendingOfferFromMessages(msgs, conversationId)
+                        syncDetailClosedStateFromMessages(msgs)
                     }
                     withContext(Dispatchers.IO) {
                         runCatching { chatRepository.markConversationRead(conversationId) }
@@ -424,6 +553,7 @@ class ChatDetailViewModel(
     // ── Messaging ─────────────────────────────────────────────────────────
 
     fun onInputChange(text: String) {
+        if (isComposerReadOnly()) return
         _inputText.value = text
         // Send typing indicators via WebSocket
         val convId = _detail.value?.conversationId ?: return
@@ -435,6 +565,7 @@ class ChatDetailViewModel(
     }
 
     fun sendMessage() {
+        if (isComposerReadOnly()) return
         val convId = _detail.value?.conversationId ?: return
         val text = _inputText.value.trim()
         if (text.isBlank() || _isSending.value) return
@@ -498,7 +629,10 @@ class ChatDetailViewModel(
             }
             result.fold(
                 onSuccess = { offer ->
-                    _detail.value = d.copy(pendingOffer = offer.copy(proposedByMe = true))
+                    _detail.value = d.copy(
+                        pendingOffer = offer.copy(proposedByMe = true),
+                        offerCount = d.offerCount + 1,
+                    )
                     refreshMessages(d.conversationId)
                 },
                 onFailure = { e ->
@@ -591,6 +725,8 @@ class ChatDetailViewModel(
                 product = d.product ?: current.product,
                 isBuyer = d.isBuyer,
                 orderId = d.orderId ?: current.orderId,
+                offerCount = d.offerCount,
+                isClosed = d.isClosed,
             )
         } else {
             d
@@ -643,6 +779,7 @@ class ChatDetailViewModel(
             val merged = mergeServerWithPendingLocal(msgs, _messages.value)
             _messages.value = merged
             syncPendingOfferFromMessages(merged, conversationId)
+            syncDetailClosedStateFromMessages(merged)
         }
     }
 
@@ -695,6 +832,8 @@ class ChatDetailViewModel(
     private fun mapOfferError(e: Throwable): String {
         val msg = e.message.orEmpty()
         return when {
+            msg.contains("409") && msg.contains("OFFER_LIMIT_REACHED", ignoreCase = true) ->
+                getApplication<Application>().getString(R.string.chat_error_offer_limit)
             msg.contains("409") && msg.contains("PENDING_OFFER", ignoreCase = true) ->
                 getApplication<Application>().getString(R.string.chat_error_pending_offer)
             msg.contains("409") && msg.contains("pending offer", ignoreCase = true) ->

@@ -104,6 +104,10 @@ class RealtimeManager(
     private val subscribedConversations: MutableSet<String> =
         Collections.synchronizedSet(mutableSetOf())
 
+    /** Tracked listing rooms (`subscribe.listing`) — re-sent after reconnect. */
+    private val subscribedListings: MutableSet<String> =
+        Collections.synchronizedSet(mutableSetOf())
+
     private val client: OkHttpClient = OkHttpClient.Builder()
         // Transport-level keep-alive (OkHttp answers server ping frames automatically)
         .pingInterval(25, TimeUnit.SECONDS)
@@ -132,6 +136,7 @@ class RealtimeManager(
         webSocket = null
         _state.value = State.DISCONNECTED
         subscribedConversations.clear()
+        subscribedListings.clear()
     }
 
     /**
@@ -158,6 +163,27 @@ class RealtimeManager(
         send(JSONObject().apply {
             put("type", "unsubscribe.conversation")
             put("conversation_id", conversationId)
+        })
+    }
+
+    /** Sends `subscribe.listing` and tracks the room for reconnect (INTEGRATION.md §2.5). */
+    fun subscribeToListing(listingId: String) {
+        if (listingId.isBlank()) return
+        subscribedListings.add(listingId)
+        if (_state.value == State.CONNECTED) {
+            send(JSONObject().apply {
+                put("type", "subscribe.listing")
+                put("listing_id", listingId)
+            })
+        }
+    }
+
+    fun unsubscribeFromListing(listingId: String) {
+        if (listingId.isBlank()) return
+        subscribedListings.remove(listingId)
+        send(JSONObject().apply {
+            put("type", "unsubscribe.listing")
+            put("listing_id", listingId)
         })
     }
 
@@ -270,6 +296,14 @@ class RealtimeManager(
                 })
             }
         }
+        synchronized(subscribedListings) {
+            subscribedListings.forEach { listingId ->
+                send(JSONObject().apply {
+                    put("type", "subscribe.listing")
+                    put("listing_id", listingId)
+                })
+            }
+        }
     }
 
     private fun send(json: JSONObject) {
@@ -307,29 +341,37 @@ class RealtimeManager(
             val payload = json.optJSONObject("payload") ?: JSONObject()
 
             when (type) {
-                "message.new" -> RealtimeEvent.MessageNew(
-                    conversationId = firstNonBlankPayload(
-                        payload, json,
-                        "conversation_id", "ConversationID", "conversationId",
-                    ),
-                    messageId = firstNonBlankPayload(
-                        payload, json,
-                        "message_id", "MessageID", "messageId", "ID", "Id",
-                    ),
-                    senderId = firstNonBlankPayload(
-                        payload, json,
-                        "sender_id", "SenderID", "senderId",
-                    ),
-                    recipientId = firstNonBlankPayload(
-                        payload, json,
-                        "recipient_id", "RecipientID", "recipientId",
-                    ),
-                    preview = firstNonBlankPayload(payload, json, "preview", "Preview"),
-                    messageType = firstNonBlankPayload(
+                "message.new" -> {
+                    val msgType = firstNonBlankPayload(
                         payload, json,
                         "message_type", "MessageType",
-                    ).ifBlank { "text" },
-                )
+                    ).ifBlank { "text" }
+                    val sysSub = firstNonBlankPayload(
+                        payload, json,
+                        "system_subtype", "system_type", "SystemSubtype", "subtype", "SubType",
+                    ).takeIf { it.isNotBlank() }
+                    RealtimeEvent.MessageNew(
+                        conversationId = firstNonBlankPayload(
+                            payload, json,
+                            "conversation_id", "ConversationID", "conversationId",
+                        ),
+                        messageId = firstNonBlankPayload(
+                            payload, json,
+                            "message_id", "MessageID", "messageId", "ID", "Id",
+                        ),
+                        senderId = firstNonBlankPayload(
+                            payload, json,
+                            "sender_id", "SenderID", "senderId",
+                        ),
+                        recipientId = firstNonBlankPayload(
+                            payload, json,
+                            "recipient_id", "RecipientID", "recipientId",
+                        ),
+                        preview = firstNonBlankPayload(payload, json, "preview", "Preview"),
+                        messageType = msgType,
+                        systemSubtype = sysSub,
+                    )
+                }
                 "read.receipts" -> RealtimeEvent.ReadReceipts(
                     conversationId = firstNonBlankPayload(
                         payload, json,
@@ -337,7 +379,7 @@ class RealtimeManager(
                     ),
                     readerId = firstNonBlankPayload(
                         payload, json,
-                        "recipient_id", "RecipientID", "reader_id", "ReaderID",
+                        "read_by", "ReadBy", "recipient_id", "RecipientID", "reader_id", "ReaderID",
                     ),
                     notifyUserId = firstNonBlankPayload(
                         payload, json,
@@ -382,6 +424,35 @@ class RealtimeManager(
                         payload, json,
                         "status", "Status", "new_status", "NewStatus",
                     ),
+                )
+                "offer.limit_reset" -> RealtimeEvent.OfferLimitReset(
+                    listingId = firstNonBlankPayload(
+                        payload, json,
+                        "listing_id", "ListingID", "listingId",
+                    ),
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    newPriceVnd = run {
+                        val p = payload.optLong("new_price", payload.optLong("NewPrice", -1L))
+                        if (p >= 0) p else json.optLong("new_price", json.optLong("NewPrice", 0L))
+                    },
+                )
+                "listing.reserved" -> RealtimeEvent.ListingReserved(
+                    firstNonBlankPayload(payload, json, "listing_id", "ListingID", "listingId"),
+                )
+                "listing.available" -> RealtimeEvent.ListingAvailable(
+                    firstNonBlankPayload(payload, json, "listing_id", "ListingID", "listingId"),
+                )
+                "listing.sold" -> RealtimeEvent.ListingSold(
+                    firstNonBlankPayload(payload, json, "listing_id", "ListingID", "listingId"),
+                )
+                "conversation.closed" -> RealtimeEvent.ConversationClosed(
+                    firstNonBlankPayload(payload, json, "conversation_id", "ConversationID", "conversationId"),
+                )
+                "conversation.reopened" -> RealtimeEvent.ConversationReopened(
+                    firstNonBlankPayload(payload, json, "conversation_id", "ConversationID", "conversationId"),
                 )
                 "feed.refresh" -> RealtimeEvent.FeedRefresh
                 "pong" -> RealtimeEvent.Pong

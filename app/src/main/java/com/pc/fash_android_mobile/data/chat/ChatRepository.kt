@@ -30,13 +30,29 @@ class ChatRepository(
 
     // ── Conversations list ────────────────────────────────────────────────
 
-    /** API: GET /chat/conversations?limit=&offset= — only these two params are supported. */
+    /** API: GET /chat/conversations?limit=&offset= (& group_by=listing for seller grouped inbox). */
     fun getConversations(
         limit: Int = 50,
         offset: Int = 0,
     ): Result<List<ConversationItem>> = runCatching {
         val url = "${AppEnvironment.apiPath("api/v1/chat/conversations")}?limit=$limit&offset=$offset"
-        val body = securedClient.newCall(
+        val body = executeConversationsGet(url)
+        parseConversations(body)
+    }
+
+    /** GET /chat/conversations?group_by=listing — grouped rows for seller inbox. */
+    fun getConversationsGroupedByListing(
+        limit: Int = 50,
+        offset: Int = 0,
+    ): Result<List<ConversationListingGroup>> = runCatching {
+        val base = AppEnvironment.apiPath("api/v1/chat/conversations")
+        val url = "$base?limit=$limit&offset=$offset&group_by=listing"
+        val body = executeConversationsGet(url)
+        parseConversationGroups(body)
+    }
+
+    private fun executeConversationsGet(url: String): String {
+        return securedClient.newCall(
             Request.Builder()
                 .url(url)
                 .get()
@@ -51,7 +67,6 @@ class ChatRepository(
             }
             response.body?.string().orEmpty()
         }
-        parseConversations(body)
     }
 
     // ── Start / create conversation ───────────────────────────────────────
@@ -270,74 +285,116 @@ class ChatRepository(
                 if (obj.has("data")) obj.getJSONArray("data") else JSONArray("[]")
             } catch (_: Exception) { JSONArray("[]") }
         }
-        val myId = currentUserId
-        return (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i)
+        return (0 until arr.length()).map { i -> parseConversationItem(arr.getJSONObject(i)) }
+    }
 
-            // Conversation ID
-            val convId = o.optString("ID", o.optString("id", o.optString("conversation_id", "")))
-
-            // Determine "other user" by comparing BuyerID/SellerID with current user
-            val buyerId = o.optString("BuyerID", o.optString("buyer_id", ""))
-            val sellerId = o.optString("SellerID", o.optString("seller_id", ""))
-            val buyerObj = o.optJSONObject("Buyer") ?: o.optJSONObject("buyer")
-            val sellerObj = o.optJSONObject("Seller") ?: o.optJSONObject("seller")
-            // If current user is the buyer → show seller as "other", and vice versa
-            val otherProfile: JSONObject? = when {
-                myId.isNotBlank() && myId == buyerId -> sellerObj
-                myId.isNotBlank() && myId == sellerId -> buyerObj
-                // Fallback: prefer seller profile (most common case: buyer browsing)
-                sellerObj != null -> sellerObj
-                else -> buyerObj
-            }
-
-            // Listing / product (Listing object may be null — fall back to root ListingID)
-            val listingObj = o.optJSONObject("Listing") ?: o.optJSONObject("listing") ?: o.optJSONObject("product")
-
-            // LastMessage is a plain string field on the root
-            val lastMsgText = o.optString("LastMessage", o.optString("last_message", ""))
-
-            // Timestamp: prefer LastMessageAt (null-safe), fall back to UpdatedAt
-            val lastMsgAt = o.optString("LastMessageAt", "").takeIf { it.isNotBlank() && it != "null" }
-            val timestamp = lastMsgAt ?: o.optString("UpdatedAt", o.optString("updated_at", o.optString("CreatedAt", "")))
-
-            // Product thumbnail: CoverImageURL first, then first element of ImageURLs array
-            val productThumb: String = listingObj?.let { listing ->
-                listing.optString("CoverImageURL", listing.optString("cover_image_url", ""))
-                    .takeIf { it.isNotBlank() }
-                    ?: listing.optJSONArray("ImageURLs")?.optString(0, "")?.takeIf { it.isNotBlank() }
-                    ?: listing.optJSONArray("image_urls")?.optString(0, "")?.takeIf { it.isNotBlank() }
-                    ?: ""
-            } ?: ""
-
-            // Product ID: prefer Listing.ID, then root ListingID as fallback
-            val productId: String = listingObj?.optString("ID", listingObj.optString("id", ""))
-                ?.takeIf { it.isNotBlank() }
-                ?: o.optString("ListingID", o.optString("listing_id", ""))
-
-            // isUnread: the API does not expose this field directly.
-            // We derive it: if there IS a last message and the current user is NOT the sender,
-            // treat it as potentially unread. Since we don't have LastMessageSenderID here we
-            // fall back to the explicit field if the backend ever adds it.
-            val isUnread = o.optBoolean("IsUnread", o.optBoolean("is_unread", o.optBoolean("unread", false)))
-
-            ConversationItem(
-                conversationId = convId,
-                otherUserId = otherProfile?.optString("UserID", otherProfile.optString("user_id", otherProfile.optString("ID", ""))) ?: "",
-                username = otherProfile?.optString("Username", otherProfile.optString("username", "")) ?: "",
-                displayName = otherProfile?.optString("DisplayName", otherProfile.optString("display_name", "")) ?: "",
-                avatarUrl = otherProfile?.optString("AvatarURL", otherProfile.optString("avatar_url", "")) ?: "",
-                lastMessageText = lastMsgText,
-                timestamp = timestamp,
-                productThumbnailUrl = productThumb,
-                productTitle = listingObj?.optString("Title", listingObj.optString("title", "")) ?: "",
-                productId = productId,
-                productPrice = listingObj?.optLong("Price", listingObj.optLong("price", 0L)) ?: 0L,
-                isUnread = isUnread,
-                buyerUserId = buyerId,
-                sellerUserId = sellerId,
-            )
+    /**
+     * Parses `group_by=listing` payloads: array of { listing, conversations[] } or falls back to
+     * client-side grouping of a flat conversation list.
+     */
+    private fun parseConversationGroups(json: String): List<ConversationListingGroup> {
+        val raw = json.trim()
+        val arr = when {
+            raw.startsWith("[") -> JSONArray(raw)
+            else -> try {
+                val obj = JSONObject(raw)
+                when {
+                    obj.has("data") -> obj.getJSONArray("data")
+                    obj.has("groups") -> obj.getJSONArray("groups")
+                    else -> JSONArray("[]")
+                }
+            } catch (_: Exception) { JSONArray("[]") }
         }
+        if (arr.length() == 0) return emptyList()
+        val sample = arr.optJSONObject(0) ?: return emptyList()
+        val groupedShape = sample.has("conversations") || sample.has("Conversations") ||
+            sample.has("listing") || sample.has("Listing")
+        if (groupedShape) {
+            return (0 until arr.length()).mapNotNull { i ->
+                val g = arr.optJSONObject(i) ?: return@mapNotNull null
+                val listingObj = g.optJSONObject("listing") ?: g.optJSONObject("Listing")
+                val convArr = g.optJSONArray("conversations")
+                    ?: g.optJSONArray("Conversations")
+                    ?: JSONArray()
+                val listingId = listingObj?.optString("ID", listingObj.optString("id", ""))?.takeIf { it.isNotBlank() }
+                    ?: g.optString("listing_id", g.optString("ListingID", ""))
+                if (listingId.isBlank()) return@mapNotNull null
+                val card = listingObj?.let { parseProductCard(it) }
+                val conversations = (0 until convArr.length()).map { j ->
+                    parseConversationItem(convArr.getJSONObject(j))
+                }
+                val count = g.optInt("conversation_count", g.optInt("ConversationCount", conversations.size))
+                ConversationListingGroup(
+                    listingId = listingId,
+                    coverImageUrl = card?.imageUrl ?: conversations.firstOrNull()?.productThumbnailUrl.orEmpty(),
+                    title = card?.title ?: conversations.firstOrNull()?.productTitle.orEmpty(),
+                    priceVnd = card?.priceVnd ?: conversations.firstOrNull()?.productPrice ?: 0L,
+                    conversations = conversations,
+                    conversationCountBadge = if (count > 0) count else conversations.size,
+                )
+            }
+        }
+        val flat = parseConversations(json)
+        return flat.filter { it.productId.isNotBlank() }
+            .groupBy { it.productId }
+            .map { (pid, rows) ->
+                val first = rows.first()
+                ConversationListingGroup(
+                    listingId = pid,
+                    coverImageUrl = first.productThumbnailUrl,
+                    title = first.productTitle,
+                    priceVnd = first.productPrice,
+                    conversations = rows.sortedByDescending { it.timestamp },
+                    conversationCountBadge = rows.size,
+                )
+            }
+            .sortedByDescending { g -> g.conversations.maxOfOrNull { it.timestamp }.orEmpty() }
+    }
+
+    private fun parseConversationItem(o: JSONObject): ConversationItem {
+        val myId = currentUserId
+        val convId = o.optString("ID", o.optString("id", o.optString("conversation_id", "")))
+        val buyerId = o.optString("BuyerID", o.optString("buyer_id", ""))
+        val sellerId = o.optString("SellerID", o.optString("seller_id", ""))
+        val buyerObj = o.optJSONObject("Buyer") ?: o.optJSONObject("buyer")
+        val sellerObj = o.optJSONObject("Seller") ?: o.optJSONObject("seller")
+        val otherProfile: JSONObject? = when {
+            myId.isNotBlank() && myId == buyerId -> sellerObj
+            myId.isNotBlank() && myId == sellerId -> buyerObj
+            sellerObj != null -> sellerObj
+            else -> buyerObj
+        }
+        val listingObj = o.optJSONObject("Listing") ?: o.optJSONObject("listing") ?: o.optJSONObject("product")
+        val lastMsgText = o.optString("LastMessage", o.optString("last_message", ""))
+        val lastMsgAt = o.optString("LastMessageAt", "").takeIf { it.isNotBlank() && it != "null" }
+        val timestamp = lastMsgAt ?: o.optString("UpdatedAt", o.optString("updated_at", o.optString("CreatedAt", "")))
+        val productThumb: String = listingObj?.let { listing ->
+            listing.optString("CoverImageURL", listing.optString("cover_image_url", ""))
+                .takeIf { it.isNotBlank() }
+                ?: listing.optJSONArray("ImageURLs")?.optString(0, "")?.takeIf { it.isNotBlank() }
+                ?: listing.optJSONArray("image_urls")?.optString(0, "")?.takeIf { it.isNotBlank() }
+                ?: ""
+        } ?: ""
+        val productId: String = listingObj?.optString("ID", listingObj.optString("id", ""))
+            ?.takeIf { it.isNotBlank() }
+            ?: o.optString("ListingID", o.optString("listing_id", ""))
+        val isUnread = o.optBoolean("IsUnread", o.optBoolean("is_unread", o.optBoolean("unread", false)))
+        return ConversationItem(
+            conversationId = convId,
+            otherUserId = otherProfile?.optString("UserID", otherProfile.optString("user_id", otherProfile.optString("ID", ""))) ?: "",
+            username = otherProfile?.optString("Username", otherProfile.optString("username", "")) ?: "",
+            displayName = otherProfile?.optString("DisplayName", otherProfile.optString("display_name", "")) ?: "",
+            avatarUrl = otherProfile?.optString("AvatarURL", otherProfile.optString("avatar_url", "")) ?: "",
+            lastMessageText = lastMsgText,
+            timestamp = timestamp,
+            productThumbnailUrl = productThumb,
+            productTitle = listingObj?.optString("Title", listingObj.optString("title", "")) ?: "",
+            productId = productId,
+            productPrice = listingObj?.optLong("Price", listingObj.optLong("price", 0L)) ?: 0L,
+            isUnread = isUnread,
+            buyerUserId = buyerId,
+            sellerUserId = sellerId,
+        )
     }
 
     /**
@@ -388,6 +445,9 @@ class ChatRepository(
         val orderId = data.optString("order_id", data.optString("OrderID", ""))
             .takeIf { it.isNotBlank() && it != "null" }
 
+        val offerCount = data.optInt("offer_count", data.optInt("OfferCount", 0))
+        val isClosed = data.optBoolean("is_closed", data.optBoolean("IsClosed", false))
+
         return ConversationDetail(
             conversationId = convId,
             otherUser = otherUser,
@@ -396,6 +456,8 @@ class ChatRepository(
             pendingOffer = pendingOffer,
             isBuyer = isBuyer,
             orderId = orderId,
+            offerCount = offerCount,
+            isClosed = isClosed,
         )
     }
 
@@ -451,6 +513,8 @@ class ChatRepository(
         // API field is "MessageType" (PascalCase), not "Type"
         val rawType = m.optString("MessageType", m.optString("message_type", m.optString("Type", m.optString("type", "text"))))
             .ifBlank { "text" }
+        val systemSubtype = m.optString("system_subtype", m.optString("system_type", m.optString("SystemSubtype", "")))
+            .ifBlank { null }
 
         // Offer data is flat on the message object: OfferAmountVND, OfferStatus (NOT nested)
         val offerAmount = m.optLong("OfferAmountVND", m.optLong("offer_amount_vnd", 0L))
@@ -476,6 +540,7 @@ class ChatRepository(
             offerAmountVnd = offerAmount,
             offerStatus = offerStatus,
             outboundState = OutboundSendState.NONE,
+            systemSubtype = systemSubtype,
         )
     }
 
@@ -542,6 +607,20 @@ data class ConversationDetail(
     val isBuyer: Boolean = true,
     /** Non-null when the seller has accepted an offer and the backend created an order. */
     val orderId: String? = null,
+    /** Server offer counter; buyer offer button disabled when >= 3. */
+    val offerCount: Int = 0,
+    /** Listing reserved / chat read-only. */
+    val isClosed: Boolean = false,
+)
+
+/** Seller inbox: conversations grouped under one listing. */
+data class ConversationListingGroup(
+    val listingId: String,
+    val coverImageUrl: String,
+    val title: String,
+    val priceVnd: Long,
+    val conversations: List<ConversationItem>,
+    val conversationCountBadge: Int,
 )
 
 data class OtherUser(
@@ -585,6 +664,8 @@ data class ChatMessage(
     val offerStatus: String = "",
     /** Only for optimistic sends; cleared when the server row is merged in. */
     val outboundState: OutboundSendState = OutboundSendState.NONE,
+    /** For system rows: e.g. `conversation.closed`, `conversation.reopened`. */
+    val systemSubtype: String? = null,
 )
 
 data class PriceOffer(

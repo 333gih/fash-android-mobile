@@ -1,234 +1,654 @@
-# Connecting to Fash Realtime Service
+# Realtime Service — Complete Integration Contract
 
-This document explains **how clients (including Android) and other services work with the realtime service**, in plain language. Another developer (or an AI assistant) can use it to integrate without reading all the Go code.
-
-**What this service does in one sentence:** It keeps long-lived **WebSocket** connections from mobile or web apps, validates the same **login tokens** as your main API, consumes **Redis** events from **core-service** (via **Redis Streams** or legacy **Pub/Sub**), and pushes matching messages down to the right users.
-
-**Default port:** `8080` (change with environment variable `HTTP_PORT`).
-
----
-
-## 0. What changed (integration changelog)
-
-| Topic | Behaviour |
-|-------|-----------|
-| **Redis ingestion** | By default the service consumes **Redis Streams** with a **consumer group** (`realtime-group`), matching how core-service publishes with `XADD` to named streams. This aligns realtime with stream-based core publishers. |
-| **Legacy Pub/Sub** | Set **`REDIS_USE_STREAMS=false`** to use only **Redis Pub/Sub** (`SUBSCRIBE` on channel names like `chat:message:new`). Use this if core still publishes only with `PUBLISH` and you must not consume streams. |
-| **Dispatcher** | Unchanged logical channels (`chat:message:new`, etc.): stream entries are mapped to the same internal routing as Pub/Sub. |
-| **Health** | **`GET /health`** returns **HTTP 200** when OK or when Redis is not configured; **HTTP 503** with `status: "degraded"` if Redis is configured but the ping fails. |
+> **Audience:** This document is the single source of truth for three teams:
+> 1. **Core-service** (already implemented — confirms what it publishes)
+> 2. **Realtime-service** (what to consume and forward)
+> 3. **Android app** (what WebSocket frames to expect and how to react)
 
 ---
 
-## 1. HTTP APIs — full list (for Android and backends)
+## Architecture Overview
 
-All paths are on the realtime host (example: `https://realtime.example.com` behind a reverse proxy, or `http://localhost:8080` locally). **There is no REST JSON API for business data** — only operational endpoints plus **WebSocket**.
+```
+Android App
+    │  WebSocket  (wss://{host}/ws?token=...&platform=android)
+    ▼
+Realtime Service
+    │  Redis Streams (XREADGROUP)   │  Redis Presence (SET/DEL)
+    ▼                               ▼
+Core Service ──── PostgreSQL       Redis
+  (REST API)
+```
 
-| Method | Path | Purpose | Who uses it |
-|--------|------|---------|-------------|
-| **GET** | `/health` | Liveness / readiness JSON (process up, optional Redis ping, WebSocket connection count). | Load balancers, K8s probes, ops. Apps *may* call it but usually do not. |
-| **GET** | `/metrics` | **Prometheus** metrics (plain text, not JSON). | Operators / monitoring only — **not** for mobile apps. |
-| **GET** | `/ws` | **WebSocket upgrade** — main API for realtime events (see §1.3). | **Android, iOS, web clients.** |
-| **GET** | `/swagger/*` | **Swagger UI** (OpenAPI) for this service’s documented HTTP surface. | Developers in browser; **not** required for app integration. |
+- **Core-service** writes to PostgreSQL and publishes events to Redis Streams.
+- **Realtime-service** consumes streams, maintains WebSocket connections, and manages presence keys.
+- **Android** connects via WebSocket (JWT in query string), subscribes to rooms, and receives push frames.
 
-There are **no** `POST` / `PUT` / `DELETE` HTTP routes for app features — chat and orders stay on **core-service REST APIs**.
+---
 
-### 1.1 Health check
+## Part 1 — Core-Service: What It Publishes
 
-| | |
+### 1.1 Redis Streams Reference
+
+All events use the XADD format with two required string fields:
+
+| Field | Value |
 |---|---|
-| **Purpose** | Check that the process is alive and (if configured) that **Redis** is reachable. |
-| **Request** | `GET /health` |
-| **Query / body** | None. |
-| **HTTP 200** | JSON: `status: "ok"`, `service.name` / `service.version`, `websocket.active_connections`, and either `redis: "not_configured"` or `redis: { "ok": true }`. |
-| **HTTP 503** | Redis is configured but ping failed: `status: "degraded"`, `redis: { "ok": false, "error": "..." }`. |
+| `type` | Event type string (see table below) |
+| `payload` | JSON-encoded payload object |
 
-Use this for load balancers and Kubernetes liveness/readiness probes.
+| Stream Key | `type` value | Published by | When |
+|---|---|---|---|
+| `stream:chat:messages` | `message.new` | SendMessage / SendOffer usecases | Any user sends a text or offer |
+| `stream:chat:read` | `read.receipts` | MarkRead usecase | User opens conversation and marks read |
+| `stream:feed:listings:created` | `listing.created` | CreateListing usecase | Seller publishes new listing |
+| `stream:listing:offer` | `offer.limit_reset` | UpdateListing usecase (price change) | Seller changes listing price |
+| `stream:listing:status` | `listing.status_changed` | OrderPaymentConfirm / OrderConfirm / OrderAutoRelease / OrderPaymentExpiry | Listing transitions reserved ↔ active ↔ sold |
+| `stream:payment:orders:created` | `order.created` | CreateOrder usecase | Buyer initiates checkout |
+| `stream:payment:orders:confirmed` | `order.confirmed` | ConfirmOrder / OrderAutoRelease usecases | Delivery confirmed |
 
-### 1.2 Metrics (operators / Prometheus)
+---
 
-| | |
-|---|---|
-| **Purpose** | Prometheus scraping (connection counts, message routing, Redis handler latency, etc.). |
-| **Request** | `GET /metrics` |
-| **Response** | `Content-Type`: Prometheus text exposition format (not JSON). |
+### 1.2 Payload Schemas
 
-Mobile apps and most backends **do not** call this in normal use.
-
-### 1.3 WebSocket — main API for apps (`GET /ws`)
-
-| | |
-|---|---|
-| **Purpose** | Receive realtime events (chat, typing, orders, feed hints) after the user is logged in. |
-| **Request** | `GET /ws` with **query parameters** (WebSocket upgrade). **Not** a normal REST JSON body. |
-| **Required query** | **`token`** — the user’s **access JWT** (same token type as your REST API). URL-encode the value. |
-| **Optional query** | **`platform`** — e.g. `android`, `ios`, `web` (used for Prometheus labels). |
-
-**HTTP responses before upgrade (not WebSocket):**
-
-| HTTP | When |
-|------|------|
-| **401** | Missing `token`, invalid JWT, wrong issuer/secret, or **revoked** token (`jti` on blacklist). Response body: JSON `{"error":"..."}` (e.g. `token required`, `invalid token`, `token revoked`). |
-| **503** | JWT was valid but **blacklist / Redis** check failed (e.g. Redis down). JSON `{"error":"token check failed"}`. |
-
-**101 Switching Protocols** — connection becomes WebSocket; the app then reads **text frames** (JSON).
-
-**Important:** Many clients cannot set custom headers on the first WebSocket request like REST. That is why the token is passed as **`?token=...`**. Treat this URL as **sensitive** (session). Always use **WSS** in production.
-
-**First message from server after connect** — JSON **without** the `ts` envelope used later:
+#### `message.new` → `stream:chat:messages`
 
 ```json
 {
-  "type": "connected",
-  "user_id": "<user id from JWT>",
-  "conn_id": "<this connection id>"
+  "conversation_id": "uuid",
+  "message_id":      "uuid",
+  "sender_id":       "uuid",
+  "recipient_id":    "uuid",
+  "preview":         "Is this still available?",
+  "message_type":    "text | offer | system",
+  "is_closed":       false
 }
 ```
 
-**After that**, most server → client messages use the **envelope**:
-
-- **`type`** — event name (string)
-- **`payload`** — JSON object (varies by event)
-- **`ts`** — Unix time in **milliseconds**
-
-**Client → server** — send **text frames** with JSON objects (see §5.1).
+> **`is_closed: true`** — the conversation is in read-only state. Realtime **must not** deliver this event via WebSocket or offline push. State change is handled by `listing.status_changed`.
 
 ---
 
-## 2. How Android (or any app) connects
+#### `read.receipts` → `stream:chat:read`
 
-### 2.1 Steps for the mobile app
-
-1. **Log in through core-service** (or your auth API) and obtain an **access token** (JWT) exactly as you do for REST calls.
-2. Open a **WebSocket** to:  
-   `wss://<your-realtime-host>/ws?token=<URL_ENCODED_ACCESS_TOKEN>&platform=android`  
-   Use your HTTP client’s WebSocket support (e.g. OkHttp `WebSocket` on Android).
-3. Wait for the first JSON message (`type: connected`). Then handle incoming text frames as JSON (envelope with `type`, `payload`, `ts` where applicable).
-4. **Keep the connection alive:** the server sends WebSocket **ping** frames on a schedule; the client library usually answers with **pong** automatically. The app can also send `{"type":"ping"}` and receive a JSON **`pong`** envelope.
-5. **Subscribe to chat threads** the user opens: send **`subscribe.conversation`** with **`conversation_id`** so **typing** and **room-scoped** events reach this connection.
-6. **Mark read in the backend:** when the user reads messages, call the **core-service HTTP API** for “mark read”. The realtime service can send a lightweight **`read.ack`** over WebSocket for UX, but **persistent read state lives in core-service**.
-
-### 2.2 How this ties to **core-service** (Redis)
-
-Think of two paths:
-
-| Direction | How it works |
-|-----------|----------------|
-| **App → core-service** | Send chat messages, offers, mark read, etc. using the **normal REST APIs**. Core writes to the database and **publishes events to Redis** (typically **Redis Streams** in current core; some setups may still use **Pub/Sub**). |
-| **Redis → realtime service → app** | Realtime **does not** read your database. It consumes Redis (**Streams** with a consumer group when `REDIS_USE_STREAMS=true`, or **Pub/Sub** when `REDIS_USE_STREAMS=false`), maps events to the same internal routing as before, and pushes **WebSocket** messages to the app. |
-
-So: **write path = REST to core-service**; **read path for live updates = WebSocket to realtime service**, using the **same Redis** and **compatible JWT settings** as core.
-
-**Chat alignment:** New messages are delivered to the **recipient** by user id (no room subscription needed for **`message.new`**). Core should publish **`notify_user_id`** on read-receipt events so realtime delivers **`read.receipts`** to the **other participant** directly. **`subscribe.conversation`** is still needed for **typing** and any events that use **conversation rooms**; legacy payloads without **`notify_user_id`** fall back to room broadcast.
-
-**Must match between core-service and realtime service:**
-
-- Same **Redis** instance (host, password, DB if used) for events, presence, and token blacklist.
-- Same **`ACCESS_TOKEN_SECRET`** and JWT **`iss`** expectation: **`JWT_ISSUER`**, **`JWT_ALLOWED_ISSUERS`**, or **`APP_NAME`** (defaults to **`core-service`**) for **HS256** — or **RS256** via **`JWT_PUBLIC_KEY_PEM`** / **`JWT_PUBLIC_KEY_PATH`** on realtime if core signs that way.
-- Revoked tokens: core stores revoked JWT ids in Redis (e.g. **`blacklist:jwt:<jti>`**); realtime checks the same so a logged-out session cannot open **`/ws`**.
-
-**Operator note:** **`REDIS_USE_STREAMS`** (default **`true`**) must align with how core publishes. If core only uses **Streams**, realtime should consume Streams; if you temporarily rely on **Pub/Sub** only, set **`REDIS_USE_STREAMS=false`**.
-
----
-
-## 3. What to watch out for (notices)
-
-1. **Token lifetime** — When the access token expires, the WebSocket does not refresh automatically. Refresh the token with your existing flow, then **reconnect** `/ws` with the new token.
-2. **One user, several devices** — The same user can have multiple connections. Events targeted at that user may be delivered to **each** active device.
-3. **Chat rooms** — Send **`subscribe.conversation`** for **typing** and room-scoped behaviour. **`message.new`** and **`read.receipts`** (with current core payloads) can target users by id and may not require a room join for delivery.
-4. **No duplicate push assumption** — Push notifications (FCM) are expected mainly from **core-service** when offline. Realtime focuses on **online** WebSocket delivery.
-5. **Scaling** — You can run **multiple** realtime instances behind a load balancer. **WebSockets** are tied to the instance that accepted the connection (use appropriate proxy timeouts; idle timeout should exceed the server’s WebSocket **ping** interval). **Redis Pub/Sub** delivers each message to **every** instance (each instance forwards only to its own clients). **Redis Streams** with a **shared consumer group** delivers each stream message to **one** consumer in the group (work is split across instances; scale consumers with care for ordering per stream).
-6. **Security** — Never log full `/ws` URLs in production (they contain the token). Use **WSS** in production.
-
----
-
-## 4. How to run the service
-
-### 4.1 Minimum configuration
-
-- **`ACCESS_TOKEN_SECRET`** and **`JWT_ISSUER`** / **`APP_NAME`** / **`JWT_ALLOWED_ISSUERS`** (defaults align with **`core-service`**) — must match token issuance for **HS256**.
-- **`REDIS_HOST`** (and password if needed) — required for events, presence, and blacklist in real deployments.
-- **`REDIS_USE_STREAMS`** — default **`true`** (Streams + consumer group). Set **`false`** for Pub/Sub-only consumption.
-
-See **`.env.example`** for variable names.
-
-### 4.2 Local (developer machine)
-
-```text
-go run ./cmd
+```json
+{
+  "conversation_id": "uuid",
+  "recipient_id":    "uuid",
+  "notify_user_id":  "uuid"
+}
 ```
 
-Or build from `./cmd` and run. Ensure Redis is reachable for full behaviour.
-
-### 4.3 Docker
-
-Build the image from the **`Dockerfile`**, pass the same environment variables, publish port **8080** (or your **`HTTP_PORT`**).
-
-### 4.4 Docker Compose
-
-The repo includes **`docker-compose.yml`**. Set **`ACCESS_TOKEN_SECRET`** (and JWT-related vars if not default) in **`.env`** before `docker compose up`.
-
-### 4.5 Behind Traefik / reverse proxy
-
-Expose **`/ws`** (and optionally **`/health`**, **`/metrics`**) to this service. Use **HTTPS** so clients use **WSS**.
+`notify_user_id` is the peer to deliver the `read.receipts` WebSocket frame to.
 
 ---
 
-## 5. Quick reference — WebSocket messages
+#### `listing.created` → `stream:feed:listings:created`
 
-### 5.1 Client → server (JSON text frames)
-
-| `type` | Other fields | Effect |
-|--------|----------------|--------|
-| `ping` | — | Server replies with envelope **`pong`**. Refreshes presence if configured. |
-| `subscribe.conversation` | `conversation_id` | Joins the conversation room on this connection (typing, room broadcasts). |
-| `unsubscribe.conversation` | `conversation_id` | Leaves the conversation room. |
-| `typing.start` | `conversation_id` | Broadcasts **`typing.start`** to others in that conversation room. |
-| `typing.stop` | `conversation_id` | Broadcasts **`typing.stop`** to others in that conversation room. |
-| `read.messages` | `conversation_id` | Server sends **`read.ack`** to this client only (UX hint); **persist read state via core REST API**. |
-
-Malformed JSON is ignored. Unknown `type` values are ignored.
-
-### 5.2 Server → client
-
-**Envelope** (`type`, `payload`, `ts`) unless noted.
-
-| `type` | Meaning (short) |
-|--------|-----------------|
-| `connected` | First message only; not in envelope form; includes `user_id`, `conn_id`. |
-| `message.new` | New chat message for the recipient (`payload` includes `conversation_id`, `message_id`, `sender_id`, `preview`, `message_type`). |
-| `read.receipts` | Read receipt for the peer (`payload` includes `conversation_id`, **`reader_id`** — the user who read). |
-| `read.ack` | Server acknowledged `read.messages` (`payload` includes `conversation_id`, reminder to use REST for persistence). |
-| `typing.start` / `typing.stop` | Someone is typing in a conversation (`payload` includes `conversation_id`, `user_id`). |
-| `order.status_changed` | Order update from payment-related events (`payload` includes `order_id`, `status`, `amount_vnd`, etc., depending on event). |
-| `feed.refresh` | Listing hint for the seller (`listing_id`, `seller_id`). |
-| `pong` | Response to client `ping`. |
-
-Core may extend Redis payloads over time; realtime forwards what it subscribes to and maps in its dispatcher.
+```json
+{
+  "listing_id": "uuid",
+  "seller_id":  "uuid"
+}
+```
 
 ---
 
-## 6. If something does not work
+#### `offer.limit_reset` → `stream:listing:offer`
 
-- **`401` on `/ws`** — Missing token, invalid token, wrong issuer/secret, or token revoked (blacklist).
-- **`503` on `/ws`** — Blacklist check failed (often Redis unavailable).
-- **No chat events** — Check Redis connectivity; that core **publishes** events (Streams vs Pub/Sub must match **`REDIS_USE_STREAMS`**); JWT and **`notify_user_id`** / subscription expectations for typing and read receipts.
-- **Health degraded** — Often Redis connection failure or wrong host/port/password.
+Published when the seller updates the listing price. Resets all buyer offer counters.
 
-For deployment details, see **`DEPLOY.md`**.
+```json
+{
+  "listing_id":   "uuid",
+  "new_price":    130000,
+  "affected_conversations": [
+    {
+      "conversation_id": "uuid",
+      "buyer_id":        "uuid",
+      "seller_id":       "uuid"
+    }
+  ]
+}
+```
 
 ---
 
-## 7. How to test chat integration (manual)
+#### `listing.status_changed` → `stream:listing:status`
 
-1. **Shared Redis** — Run core-service and realtime-service against the **same** Redis (same DB index if you use one).
-2. **Matching JWT** — Set **`ACCESS_TOKEN_SECRET`** and issuer settings on realtime to match core (or RS256 public key).
-3. **WebSocket** — Connect:  
-   `ws://localhost:8080/ws?token=<JWT>&platform=web`  
-   (use **WSS** in staging/production). Expect `{"type":"connected",...}`.
-4. **New message** — Via core REST, send a chat message so the **other** user is the recipient. That user should receive **`message.new`** without subscribing to the conversation.
-5. **Read receipt** — Call core’s **mark read** API. The **sender’s** session should receive **`read.receipts`** with **`reader_id`** set appropriately when core publishes **`notify_user_id`**.
-6. **Redis-only smoke test (Pub/Sub mode)** — If realtime runs with **`REDIS_USE_STREAMS=false`**, from `redis-cli`:  
-   `PUBLISH chat:message:new '{"conversation_id":"c1","message_id":"m1","sender_id":"s","recipient_id":"u1","preview":"x","message_type":"text"}'`  
-   User `u1` should get **`message.new`**. Read receipts:  
-   `PUBLISH chat:read:receipts '{"conversation_id":"c1","recipient_id":"reader","notify_user_id":"u1"}'`  
-7. **Redis Streams (default)** — With **`REDIS_USE_STREAMS=true`**, core should **`XADD`** to the expected streams; realtime consumes via the consumer group. Testing without core is possible with **`XADD`** matching core’s field names (`type`, `payload`); prefer end-to-end tests with core for accuracy.
+Published on every listing status transition (reserved / active / sold).
+
+```json
+{
+  "listing_id":        "uuid",
+  "status":            "reserved | active | sold",
+  "online_user_ids":   ["uuid-buyer1", "uuid-buyer2", "uuid-seller"],
+  "conversation_ids":  ["uuid-conv1", "uuid-conv2"]
+}
+```
+
+> `online_user_ids` contains **all** buyer + seller IDs from affected conversations. Realtime intersects with its own presence set to find who is actually online before delivery.
+
+**Status lifecycle:**
+
+| Trigger | Status published | Side effects (already done by core-service) |
+|---|---|---|
+| Payment confirmed (`payment_held`) | `reserved` | Other conversations closed; system msg inserted |
+| Buyer confirms receipt / auto-release | `sold` | System msg "Sản phẩm đã được bán thành công." inserted |
+| Payment expiry (15 min timer) | `active` | Conversations reopened; system msg "Sản phẩm này hiện đã có thể mua lại." inserted |
+
+---
+
+#### `order.created` → `stream:payment:orders:created`
+
+```json
+{
+  "order_id":          "uuid",
+  "buyer_id":          "uuid",
+  "seller_id":         "uuid",
+  "listing_id":        "uuid",
+  "amount_vnd":        130000,
+  "platform_fee_vnd":  13000,
+  "seller_payout_vnd": 117000
+}
+```
+
+---
+
+#### `order.confirmed` → `stream:payment:orders:confirmed`
+
+```json
+{
+  "order_id":     "uuid",
+  "buyer_id":     "uuid",
+  "seller_id":    "uuid",
+  "amount_vnd":   130000,
+  "auto_release": false
+}
+```
+
+---
+
+## Part 2 — Realtime Service: Contract & Requirements
+
+### 2.1 WebSocket Endpoint
+
+```
+GET wss://{host}/ws?token={access_token}&platform={android|ios|web}
+```
+
+- Validate JWT: same `ACCESS_TOKEN_SECRET`, `JWT_ISSUER`, and algorithm (HS256 or RS256) as core-service.
+- Check JWT blacklist in Redis (key: `blacklist:{jti}`) — reject if key exists.
+- On success: send `connected` frame immediately.
+- Set presence key: `SET presence:user:{user_id} 1 EX 300` (refresh on each ping).
+
+---
+
+### 2.2 Redis Consumer Group Setup
+
+Run once on startup per stream. Use `MKSTREAM` so the stream is created if it does not exist:
+
+```bash
+XGROUP CREATE stream:chat:messages       realtime-group $ MKSTREAM
+XGROUP CREATE stream:chat:read           realtime-group $ MKSTREAM
+XGROUP CREATE stream:feed:listings:created realtime-group $ MKSTREAM
+XGROUP CREATE stream:listing:offer       realtime-group $ MKSTREAM
+XGROUP CREATE stream:listing:status      realtime-group $ MKSTREAM
+XGROUP CREATE stream:payment:orders:created  realtime-group $ MKSTREAM
+XGROUP CREATE stream:payment:orders:confirmed realtime-group $ MKSTREAM
+```
+
+Use `XREADGROUP GROUP realtime-group {consumer-id} COUNT 100 BLOCK 2000 STREAMS ...` in a loop.  
+ACK each message with `XACK` after successful delivery or confirmed non-delivery.
+
+---
+
+### 2.3 Stream Dispatch Table
+
+| Stream | `type` | Action |
+|---|---|---|
+| `stream:chat:messages` | `message.new` | If `is_closed == true` → skip. Otherwise forward `message.new` WS frame to `recipient_id` |
+| `stream:chat:read` | `read.receipts` | Forward `read.receipts` WS frame to `notify_user_id` |
+| `stream:feed:listings:created` | `listing.created` | Forward `feed.refresh` WS frame to all followers of `seller_id` (query follower list from Redis cache or accept from payload extension) |
+| `stream:listing:offer` | `offer.limit_reset` | For each entry in `affected_conversations`: send `offer.limit_reset` WS frame to `buyer_id` and `seller_id` |
+| `stream:listing:status` | `listing.status_changed` | Map status → WS type (see §2.4). Deliver to: each user in `online_user_ids` (intersect presence), each room `conv:{id}` in `conversation_ids`, and listing room `listing:{listing_id}` |
+| `stream:payment:orders:created` | `order.created` | Send `order.status_changed` WS frame to `buyer_id` and `seller_id` |
+| `stream:payment:orders:confirmed` | `order.confirmed` | Send `order.status_changed` WS frame to `buyer_id` and `seller_id` |
+
+---
+
+### 2.4 Listing Status → WebSocket Type Mapping
+
+| `status` value (case-insensitive) | WS `type` sent to client |
+|---|---|
+| `reserved` | `listing.reserved` |
+| `active` | `listing.available` |
+| `sold` | `listing.sold` |
+
+---
+
+### 2.5 Client → Server WebSocket Frames
+
+All frames are JSON text.
+
+| Client `type` | Required fields | Description |
+|---|---|---|
+| `ping` | — | Heartbeat. Server responds `pong` and refreshes presence TTL |
+| `subscribe.conversation` | `conversation_id` | Join room `conv:{id}` for message delivery |
+| `unsubscribe.conversation` | `conversation_id` | Leave room |
+| `subscribe.listing` | `listing_id` | Join listing room `listing:{id}` for status updates |
+| `unsubscribe.listing` | `listing_id` | Leave listing room |
+| `typing.start` | `conversation_id` | Broadcast `typing.start` to other participant |
+| `typing.stop` | `conversation_id` | Broadcast `typing.stop` to other participant |
+| `read.messages` | `conversation_id` | Mark messages read (realtime signals core via REST or internal call) |
+
+---
+
+### 2.6 Server → Client WebSocket Frames
+
+All frames (except `connected`) use the envelope:
+
+```json
+{ "type": "...", "payload": { ... }, "ts": 1700000000000 }
+```
+
+#### `connected` (first frame on open, no envelope)
+
+```json
+{ "type": "connected", "user_id": "uuid" }
+```
+
+#### `message.new`
+
+```json
+{
+  "type": "message.new",
+  "payload": {
+    "conversation_id": "uuid",
+    "message_id":      "uuid",
+    "sender_id":       "uuid",
+    "preview":         "string",
+    "message_type":    "text | offer | system"
+  },
+  "ts": 1700000000000
+}
+```
+
+#### `read.receipts`
+
+```json
+{
+  "type": "read.receipts",
+  "payload": { "conversation_id": "uuid", "read_by": "uuid" },
+  "ts": 1700000000000
+}
+```
+
+#### `offer.limit_reset`
+
+```json
+{
+  "type": "offer.limit_reset",
+  "payload": {
+    "listing_id":      "uuid",
+    "new_price":       130000,
+    "conversation_id": "uuid"
+  },
+  "ts": 1700000000000
+}
+```
+
+#### `listing.reserved`
+
+```json
+{
+  "type": "listing.reserved",
+  "payload": { "listing_id": "uuid", "status": "reserved" },
+  "ts": 1700000000000
+}
+```
+
+#### `listing.available`
+
+```json
+{
+  "type": "listing.available",
+  "payload": { "listing_id": "uuid", "status": "active" },
+  "ts": 1700000000000
+}
+```
+
+#### `listing.sold`
+
+```json
+{
+  "type": "listing.sold",
+  "payload": { "listing_id": "uuid", "status": "sold" },
+  "ts": 1700000000000
+}
+```
+
+#### `order.status_changed`
+
+```json
+{
+  "type": "order.status_changed",
+  "payload": {
+    "order_id":  "uuid",
+    "status":    "payment_pending | payment_held | in_transit | delivered_confirmed | cancelled",
+    "amount_vnd": 130000
+  },
+  "ts": 1700000000000
+}
+```
+
+#### `feed.refresh`
+
+```json
+{
+  "type": "feed.refresh",
+  "payload": { "seller_id": "uuid", "listing_id": "uuid" },
+  "ts": 1700000000000
+}
+```
+
+#### `typing.start` / `typing.stop`
+
+```json
+{
+  "type": "typing.start",
+  "payload": { "conversation_id": "uuid", "user_id": "uuid" },
+  "ts": 1700000000000
+}
+```
+
+#### `pong`
+
+```json
+{ "type": "pong" }
+```
+
+---
+
+### 2.7 Presence Protocol
+
+| Key pattern | Set by | Expires |
+|---|---|---|
+| `presence:user:{user_id}` | Realtime service | 300 seconds (refreshed on each `ping` frame) |
+
+Core-service reads this key in `SendMessageUsecase` to skip FCM if the recipient has an active WebSocket.
+
+---
+
+### 2.8 Environment Variables (Realtime Service)
+
+```env
+# Redis — must match core-service
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=your_redis_password
+REDIS_DB=0
+REDIS_USE_STREAMS=true           # default true; false = legacy Pub/Sub mode
+
+# JWT — must match core-service token issuer
+ACCESS_TOKEN_SECRET=your_jwt_secret   # for HS256
+JWT_ISSUER=fash-app                   # must match APP_NAME in core-service
+JWT_ALLOWED_ISSUERS=fash-app          # comma-separated if multiple
+
+# WebSocket
+WS_PORT=8080
+WS_PING_INTERVAL=30s
+WS_PRESENCE_TTL=300
+
+# Consumer group
+STREAM_CONSUMER_GROUP=realtime-group
+STREAM_CONSUMER_ID=realtime-1         # unique per pod/replica
+```
+
+> **Docker warning:** If `JWT_ISSUER` contains `${APP_ENV}`, Docker Compose will NOT expand it automatically. Set the final resolved value or add `$$` escaping. Example:
+> ```yaml
+> environment:
+>   JWT_ISSUER: "fash-app"   # NOT "${APP_ENV}-app"
+> ```
+
+---
+
+## Part 3 — Android App: Integration Guide
+
+### 3.1 WebSocket Connection
+
+```kotlin
+val wsUrl = "wss://${host}/ws?token=${accessToken}&platform=android"
+val request = Request.Builder().url(wsUrl).build()
+val ws = okHttpClient.newWebSocket(request, listener)
+```
+
+**On `connected` frame:** store `user_id`, update connection state.  
+**On close / error:** reconnect with exponential backoff (500ms → 1s → 2s → 4s → 8s, max 30s).  
+**Send `ping` every 30 seconds** to maintain presence and prevent proxy timeouts.
+
+---
+
+### 3.2 Subscribe / Unsubscribe Rooms
+
+```kotlin
+// When entering a chat conversation screen
+ws.send("""{"type":"subscribe.conversation","conversation_id":"$convId"}""")
+
+// When entering a listing detail screen
+ws.send("""{"type":"subscribe.listing","listing_id":"$listingId"}""")
+
+// When leaving
+ws.send("""{"type":"unsubscribe.conversation","conversation_id":"$convId"}""")
+ws.send("""{"type":"unsubscribe.listing","listing_id":"$listingId"}""")
+```
+
+---
+
+### 3.3 Incoming Frame Dispatcher
+
+```kotlin
+override fun onMessage(webSocket: WebSocket, text: String) {
+    val frame = gson.fromJson(text, WsFrame::class.java)
+    when (frame.type) {
+        "message.new"       -> handleNewMessage(frame.payload)
+        "read.receipts"     -> handleReadReceipts(frame.payload)
+        "offer.limit_reset" -> handleOfferLimitReset(frame.payload)
+        "listing.reserved"  -> handleListingStatusChange(frame.payload, "reserved")
+        "listing.available" -> handleListingStatusChange(frame.payload, "active")
+        "listing.sold"      -> handleListingStatusChange(frame.payload, "sold")
+        "order.status_changed" -> handleOrderStatusChanged(frame.payload)
+        "feed.refresh"      -> handleFeedRefresh(frame.payload)
+        "typing.start"      -> handleTypingIndicator(frame.payload, typing = true)
+        "typing.stop"       -> handleTypingIndicator(frame.payload, typing = false)
+        "pong"              -> { /* heartbeat ack — no action needed */ }
+    }
+}
+```
+
+---
+
+### 3.4 Handler: `message.new`
+
+```kotlin
+fun handleNewMessage(payload: MessageNewPayload) {
+    // Append to the local message list for this conversation
+    messageViewModel.appendMessage(payload.conversationId, payload)
+    // Update conversation list preview
+    conversationViewModel.updatePreview(payload.conversationId, payload.preview)
+    // Increment unread badge if the screen is not currently open
+    if (!isConversationScreenOpen(payload.conversationId)) {
+        badgeViewModel.incrementUnread()
+    }
+}
+```
+
+---
+
+### 3.5 Handler: `offer.limit_reset`
+
+```kotlin
+fun handleOfferLimitReset(payload: OfferLimitResetPayload) {
+    // Re-enable the offer button and reset the local counter
+    chatViewModel.onOfferLimitReset(payload.conversationId, payload.newPrice)
+    // Show a snackbar/banner in the chat screen
+    showBanner("Giá sản phẩm đã thay đổi — ${formatVND(payload.newPrice)}")
+}
+```
+
+---
+
+### 3.6 Handler: `listing.reserved` / `listing.available` / `listing.sold`
+
+> These frames are idempotent on (`listing_id`, `status`). Process them even if you receive duplicates (the client may be in multiple delivery audiences simultaneously).
+
+```kotlin
+fun handleListingStatusChange(payload: ListingStatusPayload, status: String) {
+    when (status) {
+        "reserved" -> {
+            // Disable chat input and offer button for ALL open conversations about this listing
+            chatViewModel.markConversationClosed(payload.listingId)
+            showBanner("Sản phẩm này đã được đặt mua bởi người khác")
+            // Refresh listing detail if the user is viewing it
+            listingDetailViewModel.refreshStatus(payload.listingId, "reserved")
+        }
+        "active" -> {
+            // Re-enable chat input and offer button
+            chatViewModel.markConversationOpen(payload.listingId)
+            showBanner("Sản phẩm này hiện đã có thể mua lại")
+            listingDetailViewModel.refreshStatus(payload.listingId, "active")
+        }
+        "sold" -> {
+            // Keep input disabled; update the final state label
+            chatViewModel.markListingSold(payload.listingId)
+            listingDetailViewModel.refreshStatus(payload.listingId, "sold")
+        }
+    }
+}
+```
+
+---
+
+### 3.7 Chat Screen State Machine (full)
+
+```
+WebSocket state machine per conversation screen:
+
+OPEN STATE (conversation.is_closed == false)
+│
+├── offer_count < 3 AND no pending offer  →  Offer button ENABLED
+├── offer_count < 3 AND pending offer     →  Offer button DISABLED ("Waiting for seller")
+├── offer_count >= 3                      →  Offer button DISABLED ("Offer limit reached")
+│       └── on WS frame offer.limit_reset →  Reset to 0, re-enable
+│
+├── conversation.order_id == null         →  Normal chat UI
+└── conversation.order_id != null         →  Show Pay banner
+        BUYER:  "Deal agreed → Pay ₫130.000" (navigate to /orders/{order_id})
+        SELLER: "Waiting for buyer payment" / "In transit" / "Completed"
+
+CLOSED STATE (conversation.is_closed == true)
+│   Triggered by: WS frame listing.reserved
+│
+├── Chat input:   DISABLED
+├── Offer button: HIDDEN
+├── Banner:       "Sản phẩm này đã được đặt mua bởi người khác"
+│
+├── on WS frame listing.sold     →  Banner: "Sản phẩm đã được bán thành công"
+└── on WS frame listing.available →
+        Remove CLOSED STATE → OPEN STATE
+        Banner: "Sản phẩm này hiện đã có thể mua lại"
+        Reset offer_count = 0, re-enable offer button
+```
+
+---
+
+### 3.8 Offer Count Tracking
+
+The server is the source of truth (`conversation.offer_count`). The Android app should:
+
+1. Read `offer_count` from `GET /api/v1/chat/conversations/{id}` on screen open.
+2. Increment local counter optimistically when the buyer sends an offer (before server response).
+3. On `offer.limit_reset` WS frame: reset local counter to 0, re-enable button, show price-changed banner.
+4. On HTTP 409 `OFFER_LIMIT_REACHED`: show error toast (should be prevented by UI, but handle defensively).
+
+---
+
+### 3.9 Polling Fallback (when WebSocket is disconnected)
+
+```
+Inbox screen:     GET /chat/conversations          every 10s
+                  GET /chat/unread                  every 10s
+
+Chat screen:      GET /chat/conversations/{id}      every 3s  (detect order_id + is_closed)
+                  GET /chat/conversations/{id}/messages  every 3s
+```
+
+Stop all polling when WebSocket reconnects successfully.
+
+---
+
+### 3.10 REST API Quick Reference (Chat)
+
+| Method | URL | Who | Description |
+|---|---|---|---|
+| POST | `/chat/conversations` | Buyer | Start or resume conversation |
+| GET | `/chat/conversations` | Both | Inbox (flat list) |
+| GET | `/chat/conversations?group_by=listing` | Seller | Grouped by listing |
+| GET | `/chat/conversations/{id}` | Both | Single conversation (check `order_id`, `is_closed`, `offer_count`) |
+| GET | `/chat/conversations/{id}/messages` | Both | Message history (newest first) |
+| POST | `/chat/conversations/{id}/read` | Both | Mark as read |
+| POST | `/chat/messages` | Both | Send text message |
+| DELETE | `/chat/messages/{id}` | Sender | Delete own message (5 min window) |
+| POST | `/chat/offers` | Buyer | Send price offer |
+| POST | `/chat/offers/accept` | Seller | Accept offer → creates order |
+| POST | `/chat/offers/decline` | Seller | Decline offer |
+| GET | `/chat/unread` | Both | Unread badge count |
+
+---
+
+### 3.11 New / Changed Error Codes
+
+| HTTP | Code | When | Action |
+|---|---|---|---|
+| 409 | `OFFER_LIMIT_REACHED` | Buyer sent 4th offer | Disable offer button, show toast |
+| 409 | `CONVERSATION_CLOSED` | Message/offer sent to closed conversation | Show closed banner, disable input |
+| 409 | `LISTING_RESERVED` | New conversation started on reserved/sold listing | Show "item unavailable" dialog |
+| 409 | `CONVERSATION_ORDER_EXISTS` | Second order attempt on same conversation | Navigate to existing order |
+| 409 | `PENDING_OFFER_EXISTS` | Offer sent while one is pending | Keep offer button disabled |
+
+---
+
+### 3.12 VND Formatting
+
+```kotlin
+fun formatVND(amount: Long): String {
+    val formatter = NumberFormat.getNumberInstance(Locale("vi", "VN"))
+    return "₫${formatter.format(amount)}"
+}
+// 80000    → "₫80.000"
+// 1500000  → "₫1.500.000"
+```
+
+---
+
+## Part 4 — Deployment Checklist
+
+### Core-service
+- [ ] `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` set on container
+- [ ] `APP_NAME` / `JWT_ISSUER` set without unexpanded shell variables
+- [ ] S3 env vars set (`S3_PUBLIC_BASE_URL` for presigned URL signing)
+- [ ] Database migration run — new columns `offer_count`, `is_closed` on `conversations` table
+
+### Realtime-service
+- [ ] Same Redis credentials as core-service
+- [ ] `ACCESS_TOKEN_SECRET` + `JWT_ISSUER` match core-service
+- [ ] Consumer groups created (use `MKSTREAM` flag) on startup
+- [ ] `STREAM_CONSUMER_ID` unique per replica (use pod name or hostname)
+- [ ] `REDIS_USE_STREAMS=true` (default)
+
+### Android
+- [ ] WebSocket client with auto-reconnect and exponential backoff
+- [ ] All 8 `message_type` handler cases implemented
+- [ ] `offer_count` / `is_closed` read from `GET /conversations/{id}` on screen enter
+- [ ] `subscribe.listing` sent when entering listing detail screen
+- [ ] Polling fallback active when WebSocket is not connected

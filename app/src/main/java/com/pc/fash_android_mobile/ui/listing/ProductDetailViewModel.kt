@@ -8,9 +8,13 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.order.OrderRepository
+import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
+import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,12 +24,29 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Sticky bottom CTAs on product detail (realtime-aware). */
+enum class ProductBottomBarMode {
+    Normal,
+    /** Another buyer reserved; amber copy. */
+    ReservedOther,
+    /** Current user has the active order; green copy. */
+    ReservedBuyer,
+    /** Terminal sold state. */
+    Sold,
+}
+
 class ProductDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     private val listingRepository: ListingRepository =
         (application as FashApplication).listingRepository
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val orderRepository: OrderRepository =
+        (application as FashApplication).orderRepository
+    private val realtimeManager: RealtimeManager =
+        (application as FashApplication).realtimeManager
+    private val sessionStore =
+        (application as FashApplication).authManager.sessionStore
 
     private val _detail = MutableStateFlow<ListingDetail?>(null)
     val detail: StateFlow<ListingDetail?> = _detail.asStateFlow()
@@ -45,8 +66,22 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _isFollowing = MutableStateFlow(false)
     val isFollowing: StateFlow<Boolean> = _isFollowing.asStateFlow()
 
+    private val _bottomBarMode = MutableStateFlow(ProductBottomBarMode.Normal)
+    val bottomBarMode: StateFlow<ProductBottomBarMode> = _bottomBarMode.asStateFlow()
+
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
+
+    private var activeListingId: String = ""
+    private var listingEventsJob: Job? = null
+
+    override fun onCleared() {
+        super.onCleared()
+        listingEventsJob?.cancel()
+        if (activeListingId.isNotBlank()) {
+            realtimeManager.unsubscribeFromListing(activeListingId)
+        }
+    }
 
     fun loadDetail(listingId: String) {
         if (listingId.isBlank()) {
@@ -54,10 +89,15 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _isLoading.value = false
             return
         }
+        listingEventsJob?.cancel()
+        if (activeListingId.isNotBlank() && !activeListingId.equals(listingId, ignoreCase = true)) {
+            realtimeManager.unsubscribeFromListing(activeListingId)
+        }
         viewModelScope.launch {
             _detail.value = null
             _sellerProfile.value = null
             _moreFromSeller.value = emptyList()
+            _bottomBarMode.value = ProductBottomBarMode.Normal
             _isLoading.value = true
             _loadError.value = null
             withContext(Dispatchers.IO) {
@@ -77,6 +117,77 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 )
             }
             _isLoading.value = false
+            _detail.value?.let { d ->
+                applyBottomModeFromDetail(d, listingId)
+                startListingRealtime(listingId)
+            }
+        }
+    }
+
+    private fun applyBottomModeFromDetail(d: ListingDetail, listingId: String) {
+        when (d.status.lowercase()) {
+            "sold" -> _bottomBarMode.value = ProductBottomBarMode.Sold
+            "reserved" -> {
+                _bottomBarMode.value = ProductBottomBarMode.ReservedOther
+                viewModelScope.launch {
+                    if (resolveBuyerForListing(listingId)) {
+                        _bottomBarMode.value = ProductBottomBarMode.ReservedBuyer
+                    }
+                }
+            }
+            else -> _bottomBarMode.value = ProductBottomBarMode.Normal
+        }
+    }
+
+    private fun startListingRealtime(listingId: String) {
+        activeListingId = listingId
+        realtimeManager.subscribeToListing(listingId)
+        listingEventsJob?.cancel()
+        listingEventsJob = viewModelScope.launch {
+            realtimeManager.events.collect { event ->
+                when (event) {
+                    is RealtimeEvent.ListingReserved -> if (listingIdMatches(event.listingId)) {
+                        _detail.update { it?.copy(status = "reserved") }
+                        _bottomBarMode.value = ProductBottomBarMode.ReservedOther
+                        val lid = activeListingId
+                        viewModelScope.launch {
+                            if (resolveBuyerForListing(lid)) {
+                                _bottomBarMode.value = ProductBottomBarMode.ReservedBuyer
+                            }
+                        }
+                    }
+                    is RealtimeEvent.ListingAvailable -> if (listingIdMatches(event.listingId)) {
+                        _detail.update { it?.copy(status = "active") }
+                        _bottomBarMode.value = ProductBottomBarMode.Normal
+                        _events.tryEmit(
+                            getApplication<Application>().getString(R.string.product_listing_available_snackbar),
+                        )
+                    }
+                    is RealtimeEvent.ListingSold -> if (listingIdMatches(event.listingId)) {
+                        _detail.update { it?.copy(status = "sold") }
+                        _bottomBarMode.value = ProductBottomBarMode.Sold
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    private fun listingIdMatches(id: String): Boolean =
+        id.isNotBlank() && activeListingId.equals(id.trim(), ignoreCase = true)
+
+    private suspend fun resolveBuyerForListing(listingId: String): Boolean {
+        val myId = sessionStore.read()?.userId?.trim().orEmpty()
+        if (myId.isBlank()) return false
+        val orders = withContext(Dispatchers.IO) {
+            orderRepository.getBuyingOrders(50, 0)
+        }.getOrNull() ?: return false
+        val active = setOf(
+            "payment_pending", "payment_held", "in_transit", "pending",
+        )
+        return orders.any { o ->
+            o.listingId.equals(listingId, ignoreCase = true) &&
+                o.status.lowercase() in active
         }
     }
 
@@ -100,7 +211,6 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         )
     }
 
-    /** Resolves seller id or username from current listing detail. */
     private fun followTargetOrNull(): String? {
         val d = _detail.value ?: return null
         return d.sellerId?.takeIf { it.isNotBlank() }

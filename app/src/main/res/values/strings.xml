@@ -271,6 +271,18 @@
     <string name="chat_error_order_exists">Giao dịch đã được thực hiện cho sản phẩm này</string>
     <string name="chat_error_forbidden">Bạn không có quyền truy cập</string>
     <string name="chat_error_not_found">Không tìm thấy cuộc trò chuyện</string>
+    <string name="chat_error_offer_limit">Đã đạt giới hạn đặt giá.</string>
+    <string name="chat_offer_limit_tooltip">Đã đạt giới hạn đặt giá</string>
+    <string name="chat_offer_limit_reset_banner">Giá sản phẩm đã thay đổi — %1$s</string>
+    <string name="chat_reopened_snackbar">Sản phẩm này hiện đã có thể mua lại — bạn có thể tiếp tục nhắn tin.</string>
+    <string name="chat_conversation_ended_readonly">Cuộc trò chuyện đã kết thúc</string>
+    <string name="chat_conversation_sold_readonly">Sản phẩm đã được bán</string>
+    <string name="chat_inbox_by_product">Theo sản phẩm</string>
+
+    <string name="product_reserved_other">Đã có người đặt mua</string>
+    <string name="product_reserved_buyer">Đơn hàng của bạn đang được xử lý</string>
+    <string name="product_listing_sold_bar">Đã bán</string>
+    <string name="product_listing_available_snackbar">Sản phẩm này đã có thể mua lại</string>
 
     <string name="checkout_title">Thanh toán</string>
     <string name="checkout_address_label">Địa chỉ nhận hàng</string>

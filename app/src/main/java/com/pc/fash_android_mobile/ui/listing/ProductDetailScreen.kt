@@ -43,6 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -131,6 +134,7 @@ fun ProductDetailScreen(
         }
         detail != null -> {
             val d: ListingDetail = requireNotNull(detail)
+            val bottomBarMode by viewModel.bottomBarMode.collectAsState()
             Box(modifier = modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(
@@ -166,7 +170,8 @@ fun ProductDetailScreen(
                             Spacer(modifier = Modifier.height(100.dp))
                         }
                     }
-                    BottomActionBar(
+                    BottomActionBarCrossfade(
+                        mode = bottomBarMode,
                         priceVnd = d.priceVnd,
                         onChat = { onChat(d.id) },
                         onBuyNow = { onBuyNow(d.id) },
@@ -610,6 +615,69 @@ private fun MoreFromSellerCard(
             text = formatPrice(item.priceVnd),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = FashColors.Primary,
+        )
+    }
+}
+
+@Composable
+private fun BottomActionBarCrossfade(
+    mode: ProductBottomBarMode,
+    priceVnd: Long,
+    onChat: () -> Unit,
+    onBuyNow: () -> Unit,
+) {
+    Crossfade(
+        targetState = mode,
+        animationSpec = tween(280),
+        label = "productBottomBar",
+    ) { m ->
+        when (m) {
+            ProductBottomBarMode.Normal -> BottomActionBar(
+                priceVnd = priceVnd,
+                onChat = onChat,
+                onBuyNow = onBuyNow,
+            )
+            ProductBottomBarMode.ReservedOther -> ListingStatusPillBar(
+                text = stringResource(R.string.product_reserved_other),
+                containerColor = Color(0xFFFFF8E1),
+                contentColor = Color(0xFFF57C00),
+            )
+            ProductBottomBarMode.ReservedBuyer -> ListingStatusPillBar(
+                text = stringResource(R.string.product_reserved_buyer),
+                containerColor = Color(0xFFE8F5E9),
+                contentColor = Color(0xFF2E7D32),
+            )
+            ProductBottomBarMode.Sold -> ListingStatusPillBar(
+                text = stringResource(R.string.product_listing_sold_bar),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ListingStatusPillBar(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .navigationBarsPadding()
+            .padding(FashTheme.spacing.spacing4),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = contentColor,
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(containerColor)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
         )
     }
 }
