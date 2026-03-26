@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -105,6 +106,7 @@ import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
+import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import kotlinx.coroutines.launch
 
@@ -299,18 +301,11 @@ fun ChatDetailScreen(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (sortedMessages.isEmpty() && !isMessagesLoading) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.chat_empty_messages),
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    ),
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
+                            FashEmptyState(
+                                icon = Icons.Outlined.ChatBubbleOutline,
+                                title = stringResource(R.string.chat_empty_messages_title),
+                                subtitle = stringResource(R.string.chat_empty_messages_subtitle),
+                            )
                         } else {
                             LazyColumn(
                                 state = listState,

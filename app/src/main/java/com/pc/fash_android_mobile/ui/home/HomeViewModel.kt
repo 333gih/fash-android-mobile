@@ -11,6 +11,7 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,8 +57,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             realtimeManager.events.collect { event ->
                 if (event is RealtimeEvent.FeedRefresh) {
-                    withContext(Dispatchers.IO) { fetchFeedWithFallback() }
-                        .getOrNull()?.let { _items.value = it }
+                    withContext(Dispatchers.IO) {
+                        fetchFeedWithFallback()
+                    }.getOrNull()?.let { _items.value = it }
                 }
             }
         }
@@ -89,15 +91,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Home feed from followed sellers; if empty, fallback to Explore feed.
-     * Covers: no follows, no listings from follows, no listings in explore.
+     * One automatic retry on failure to smooth transient network errors.
      */
-    private fun fetchFeedWithFallback(): Result<List<ListingFeedItem>> {
-        val home = listingRepository.getHomeFeed(limit = 20, offset = 0)
-        return if (home.isSuccess && home.getOrNull()?.isNotEmpty() == true) {
-            home
-        } else {
-            listingRepository.getExploreFeed(limit = 20, offset = 0)
+    private suspend fun fetchFeedWithFallback(): Result<List<ListingFeedItem>> {
+        suspend fun once(): Result<List<ListingFeedItem>> {
+            val home = listingRepository.getHomeFeed(limit = 20, offset = 0)
+            if (home.isSuccess && home.getOrNull()?.isNotEmpty() == true) return home
+            return listingRepository.getExploreFeed(limit = 20, offset = 0)
         }
+        var result = once()
+        if (result.isFailure) {
+            delay(400)
+            result = once()
+        }
+        return result
     }
 
     fun retryLoad() {

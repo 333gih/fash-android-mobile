@@ -77,7 +77,8 @@ fun MainNavScreen(
     chatViewModel: com.pc.fash_android_mobile.ui.chat.ChatViewModel,
     /** Total unread messages for chat tab badge ([ChatRepository.getUnreadCount]). */
     chatUnreadCount: Int = 0,
-    onListingClick: (String) -> Unit = {},
+    /** [sellerId] when known — used to open seller edit vs public detail. */
+    onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onEditProfile: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},

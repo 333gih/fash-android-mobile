@@ -8,18 +8,34 @@ internal object ListingFeedJsonParser {
 
     fun parseFeedArray(json: String): List<ListingFeedItem> {
         val raw = json.trim()
-        val arr = when {
-            raw.startsWith("[") -> JSONArray(raw)
+        if (raw.isEmpty() || raw == "null") return emptyList()
+        val arr: JSONArray = when {
+            raw.startsWith("[") -> try {
+                JSONArray(raw)
+            } catch (_: Exception) {
+                JSONArray("[]")
+            }
             else -> try {
                 val obj = JSONObject(raw)
-                if (obj.has("data")) obj.getJSONArray("data") else JSONArray("[]")
+                when {
+                    !obj.has("data") -> JSONArray("[]")
+                    else -> when (val d = obj.get("data")) {
+                        is JSONArray -> d
+                        is JSONObject -> extractListingsArray(d)
+                        else -> JSONArray("[]")
+                    }
+                }
             } catch (_: Exception) {
                 JSONArray("[]")
             }
         }
         val list = mutableListOf<ListingFeedItem>()
         for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
+            val o = try {
+                arr.optJSONObject(i) ?: continue
+            } catch (_: Exception) {
+                continue
+            }
             // Backend returns PascalCase ("Seller") for Go structs; snake_case for older endpoints
             val seller = o.optJSONObject("seller") ?: o.optJSONObject("Seller")
             val tagsNode = seller?.optJSONArray("aesthetic_tags") ?: seller?.optJSONArray("AestheticTags")
@@ -59,6 +75,22 @@ internal object ListingFeedJsonParser {
             )
         }
         return list
+    }
+
+    /** When `data` is an object, find the first JSONArray of listing-like objects. */
+    private fun extractListingsArray(data: JSONObject): JSONArray {
+        val keys = listOf(
+            "listings", "Listings", "items", "Items", "results", "Results", "rows", "Rows",
+        )
+        for (k in keys) {
+            if (data.has(k)) {
+                when (val v = data.opt(k)) {
+                    is JSONArray -> if (v.length() > 0) return v
+                    else -> Unit
+                }
+            }
+        }
+        return JSONArray("[]")
     }
 
     private fun parseStringArray(arr: JSONArray?): List<String> {

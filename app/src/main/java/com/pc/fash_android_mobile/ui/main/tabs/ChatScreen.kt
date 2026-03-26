@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,12 +54,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.data.chat.ConversationItem
@@ -176,6 +178,7 @@ fun ChatScreen(
                             ConversationRow(
                                 item = item,
                                 formatTimestamp = viewModel::formatTimestamp,
+                                previewLine = viewModel.conversationPreviewLine(item),
                                 onClick = { onConversationClick(item) },
                             )
                         }
@@ -193,6 +196,7 @@ fun ChatScreen(
                     ConversationRow(
                         item = item,
                         formatTimestamp = viewModel::formatTimestamp,
+                        previewLine = viewModel.conversationPreviewLine(item),
                         onClick = { onConversationClick(item) },
                     )
                 }
@@ -242,43 +246,11 @@ fun ChatTopBar(
 
 @Composable
 private fun EmptyInboxHint() {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(horizontal = 40.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .background(FashColors.Primary.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
-                    tint = FashColors.Primary,
-                )
-            }
-            Text(
-                text = stringResource(R.string.chat_empty),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = scheme.onSurface,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            Text(
-                text = stringResource(R.string.chat_empty_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-        }
-    }
+    FashEmptyState(
+        icon = Icons.Outlined.ChatBubbleOutline,
+        title = stringResource(R.string.chat_empty),
+        subtitle = stringResource(R.string.chat_empty_subtitle),
+    )
 }
 
 /**
@@ -424,12 +396,14 @@ private fun ListingGroupHeader(
 private fun ConversationRow(
     item: ConversationItem,
     formatTimestamp: (String) -> String,
+    previewLine: String,
     onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val context = LocalContext.current
     val avatarUrl = item.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val thumbUrl = item.productThumbnailUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
+    val initial = item.displayName.firstOrNull()?.takeIf { it.isLetter() }
+        ?: item.username.firstOrNull()?.takeIf { it.isLetter() }
 
     Row(
         modifier = Modifier
@@ -439,21 +413,13 @@ private fun ConversationRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(AvatarSize)) {
-            Box(
-                modifier = Modifier
-                    .size(AvatarSize)
-                    .clip(CircleShape)
-                    .background(scheme.surfaceContainerHigh),
-            ) {
-                if (avatarUrl != null) {
-                    FashAsyncImage(
-                        model = avatarUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-                }
-            }
+            FashAvatarCircle(
+                imageUrl = avatarUrl,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.Center),
+                size = AvatarSize,
+                fallbackInitial = initial,
+            )
             if (item.isUnread) {
                 Box(
                     modifier = Modifier
@@ -495,12 +461,12 @@ private fun ConversationRow(
                 )
             }
             Text(
-                text = item.lastMessageText.ifBlank { " " },
+                text = previewLine,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = if (item.isUnread) FontWeight.SemiBold else FontWeight.Normal,
                 ),
                 color = if (item.isUnread) scheme.onSurface else scheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

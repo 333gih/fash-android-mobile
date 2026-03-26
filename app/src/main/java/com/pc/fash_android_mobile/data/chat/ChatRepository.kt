@@ -396,7 +396,49 @@ class ChatRepository(
             else -> buyerObj
         }
         val listingObj = o.optJSONObject("Listing") ?: o.optJSONObject("listing") ?: o.optJSONObject("product")
-        val lastMsgText = o.optString("LastMessage", o.optString("last_message", ""))
+        var lastMsgText = ""
+        var lastMsgType = "text"
+        var lastOfferAmountVnd = 0L
+        var lastOfferStatus = ""
+        var lastOfferFromBuyer = true
+        when {
+            o.has("LastMessage") && o.get("LastMessage") is org.json.JSONObject -> {
+                val lm = o.getJSONObject("LastMessage")
+                lastMsgText = lm.optString("Content", lm.optString("content", lm.optString("Text", "")))
+                lastMsgType = lm.optString("MessageType", lm.optString("message_type", "text")).ifBlank { "text" }
+                lastOfferAmountVnd = lm.optLong("OfferAmountVND", lm.optLong("offer_amount_vnd", 0L))
+                lastOfferStatus = lm.optString("OfferStatus", lm.optString("offer_status", ""))
+                val senderId = lm.optString("SenderID", lm.optString("sender_id", ""))
+                lastOfferFromBuyer = when {
+                    senderId.isNotBlank() && buyerId.isNotBlank() -> senderId == buyerId
+                    else -> true
+                }
+            }
+            o.has("last_message") && o.get("last_message") is org.json.JSONObject -> {
+                val lm = o.getJSONObject("last_message")
+                lastMsgText = lm.optString("content", lm.optString("Content", ""))
+                lastMsgType = lm.optString("message_type", lm.optString("MessageType", "text")).ifBlank { "text" }
+                lastOfferAmountVnd = lm.optLong("offer_amount_vnd", lm.optLong("OfferAmountVND", 0L))
+                lastOfferStatus = lm.optString("offer_status", lm.optString("OfferStatus", ""))
+                val senderId = lm.optString("sender_id", lm.optString("SenderID", ""))
+                lastOfferFromBuyer = when {
+                    senderId.isNotBlank() && buyerId.isNotBlank() -> senderId == buyerId
+                    else -> true
+                }
+            }
+            else -> {
+                lastMsgText = o.optString("LastMessage", o.optString("last_message", ""))
+            }
+        }
+        lastMsgType = o.optString("LastMessageType", o.optString("last_message_type", lastMsgType)).ifBlank { lastMsgType }
+        if (lastOfferAmountVnd == 0L) {
+            lastOfferAmountVnd = o.optLong("LastOfferAmountVND", o.optLong("last_offer_amount_vnd", 0L))
+        }
+        if (lastOfferAmountVnd > 0L) lastMsgType = "offer"
+        val pendingOfferObj = o.optJSONObject("pending_offer") ?: o.optJSONObject("PendingOffer")
+        val pendingOfferAmountVnd = pendingOfferObj?.let { po ->
+            po.optLong("AmountVND", po.optLong("amount_vnd", po.optLong("Amount", 0L)))
+        } ?: o.optLong("PendingOfferAmountVND", o.optLong("pending_offer_amount_vnd", 0L))
         val lastMsgAt = o.optString("LastMessageAt", "").takeIf { it.isNotBlank() && it != "null" }
         val timestamp = lastMsgAt ?: o.optString("UpdatedAt", o.optString("updated_at", o.optString("CreatedAt", "")))
         val productThumb: String = listingObj?.let { listing ->
@@ -417,6 +459,11 @@ class ChatRepository(
             displayName = otherProfile?.optString("DisplayName", otherProfile.optString("display_name", "")) ?: "",
             avatarUrl = otherProfile?.optString("AvatarURL", otherProfile.optString("avatar_url", "")) ?: "",
             lastMessageText = lastMsgText,
+            lastMessageType = lastMsgType,
+            lastOfferAmountVnd = lastOfferAmountVnd,
+            lastOfferStatus = lastOfferStatus,
+            lastOfferFromBuyer = lastOfferFromBuyer,
+            pendingOfferAmountVnd = pendingOfferAmountVnd,
             timestamp = timestamp,
             productThumbnailUrl = productThumb,
             productTitle = listingObj?.optString("Title", listingObj.optString("title", "")) ?: "",
@@ -717,6 +764,14 @@ data class ConversationItem(
     val displayName: String,
     val avatarUrl: String,
     val lastMessageText: String,
+    /** "text" | "offer" | "system" — from API or parsed [LastMessage] object. */
+    val lastMessageType: String = "text",
+    val lastOfferAmountVnd: Long = 0L,
+    val lastOfferStatus: String = "",
+    /** When last row is an offer, true if the buyer proposed (typical). */
+    val lastOfferFromBuyer: Boolean = true,
+    /** Buyer’s pending offer amount (seller inbox preview). */
+    val pendingOfferAmountVnd: Long = 0L,
     val timestamp: String,
     val productThumbnailUrl: String,
     val productTitle: String,

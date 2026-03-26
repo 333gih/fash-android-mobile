@@ -13,6 +13,7 @@ import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,13 +106,21 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun loadListings() {
         val selectedTag = if (_selectedTagIndex.value <= 0) null else _tags.value.getOrNull(_selectedTagIndex.value - 1)
-        val result = listingRepository.getExploreFeed(
+        suspend fun fetch(): Result<List<ListingFeedItem>> = listingRepository.getExploreFeed(
             limit = 20,
             offset = 0,
             tags = selectedTag,
         )
+        var result = fetch()
+        if (result.isFailure) {
+            delay(400)
+            result = fetch()
+        }
         result.fold(
-            onSuccess = { _listings.value = it },
+            onSuccess = {
+                _listings.value = it
+                _loadError.value = false
+            },
             onFailure = {
                 _loadError.value = true
                 _events.tryEmit(
@@ -128,9 +137,25 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isLoading.value = true
             val tag = if (index <= 0) null else _tags.value.getOrNull(index - 1)
-            listingRepository.getExploreFeed(limit = 20, offset = 0, tags = tag).fold(
-                onSuccess = { _listings.value = it },
-                onFailure = { _loadError.value = true },
+            suspend fun fetch(): Result<List<ListingFeedItem>> =
+                listingRepository.getExploreFeed(limit = 20, offset = 0, tags = tag)
+            var result = fetch()
+            if (result.isFailure) {
+                delay(400)
+                result = fetch()
+            }
+            result.fold(
+                onSuccess = {
+                    _listings.value = it
+                    _loadError.value = false
+                },
+                onFailure = {
+                    _loadError.value = true
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_load_error),
+                    )
+                },
             )
             _isLoading.value = false
         }

@@ -170,6 +170,29 @@
     <string name="create_listing_location_default">Hà Nội</string>
     <string name="create_listing_just_now">Vừa xong</string>
 
+    <!-- Edit / delete listing (seller, active listing) -->
+    <string name="edit_listing_screen_title">Chỉnh sửa tin đăng</string>
+    <string name="edit_listing_load_error">Không tải được tin đăng. Thử lại.</string>
+    <string name="edit_listing_saved">Đã lưu thay đổi.</string>
+    <string name="edit_listing_no_changes">Chưa có thay đổi nào để lưu.</string>
+    <string name="edit_listing_deleted">Đã xóa tin đăng.</string>
+    <string name="edit_listing_save_error">Không lưu được. Kiểm tra dữ liệu và thử lại.</string>
+    <string name="edit_listing_delete_error">Không xóa được. Có thể đơn hàng đang xử lý.</string>
+    <string name="edit_listing_not_editable">Chỉ có thể sửa tin đang hiển thị (đang bán).</string>
+    <string name="edit_listing_title_invalid">Tiêu đề cần 3–60 ký tự.</string>
+    <string name="edit_listing_price_invalid">Giá từ 1.000 đến 100.000.000 đ.</string>
+    <string name="edit_listing_readonly_hint">Tin không còn ở trạng thái đang bán — chỉ xem thông tin. Bạn vẫn có thể thử xóa nếu hệ thống cho phép.</string>
+    <string name="edit_listing_category_locked">Danh mục (không đổi sau khi đăng)</string>
+    <string name="edit_listing_style_tags">Phong cách (tối đa 5)</string>
+    <string name="edit_listing_tags_hint">Bỏ chọn hết và lưu để xóa thẻ phong cách.</string>
+    <string name="edit_listing_tags_cleared_note">Thẻ phong cách sẽ được xóa khi bạn lưu.</string>
+    <string name="edit_listing_save">Lưu thay đổi</string>
+    <string name="edit_listing_delete">Xóa tin đăng</string>
+    <string name="edit_listing_delete_title">Xóa tin này?</string>
+    <string name="edit_listing_delete_body">Tin sẽ ẩn khỏi bảng tin. Không thể xóa nếu đã có đơn hàng hoặc đã có hội thoại với người mua.</string>
+    <string name="edit_listing_delete_confirm">Xóa</string>
+    <string name="edit_listing_description_label">Mô tả</string>
+
     <string name="profile_screen_title">Trang cá nhân</string>
     <string name="profile_edit">Chỉnh sửa hồ sơ</string>
     <string name="profile_followers">Người theo dõi</string>
@@ -180,6 +203,10 @@
     <string name="profile_fast_delivery">Giao nhanh</string>
     <string name="profile_tab_selling">Đang bán</string>
     <string name="profile_tab_sold">Đã bán</string>
+    <string name="profile_empty_selling_title">Chưa có sản phẩm đang bán</string>
+    <string name="profile_empty_selling_subtitle">Nhấn Đăng bài ở thanh dưới để đăng tin đầu tiên.</string>
+    <string name="profile_empty_sold_title">Chưa có sản phẩm đã bán</string>
+    <string name="profile_empty_sold_subtitle">Sản phẩm đã bán sẽ hiển thị khi giao dịch hoàn tất.</string>
     <string name="profile_load_error">Không tải được hồ sơ.</string>
 
     <string name="edit_profile_title">Chỉnh sửa hồ sơ</string>
@@ -204,6 +231,11 @@
     <string name="chat_load_error">Không tải được tin nhắn.</string>
     <string name="chat_empty">Chưa có tin nhắn nào</string>
     <string name="chat_empty_subtitle">Bắt đầu trò chuyện từ sản phẩm yêu thích</string>
+    <string name="chat_inbox_preview_offer_pending_seller">Đề xuất chờ xử lý · %1$s</string>
+    <string name="chat_inbox_preview_offer_you">Bạn · đề xuất %1$s</string>
+    <string name="chat_inbox_preview_offer_from_seller">Người bán · %1$s</string>
+    <string name="chat_inbox_preview_offer_from_buyer">Người mua đề xuất %1$s</string>
+    <string name="chat_inbox_preview_offer_generic">Đề xuất giá · %1$s</string>
     <string name="chat_retry">Thử lại</string>
     <string name="chat_just_now">Vừa xong</string>
     <string name="chat_mins_ago">%d phút trước</string>
@@ -242,7 +274,8 @@
     <string name="chat_set_price">Đề xuất giá</string>
     <string name="chat_input_hint">Nhập tin nhắn…</string>
     <string name="chat_send">Gửi</string>
-    <string name="chat_empty_messages">Chưa có tin nhắn nào.\nHãy bắt đầu cuộc trò chuyện!</string>
+    <string name="chat_empty_messages_title">Chưa có tin nhắn</string>
+    <string name="chat_empty_messages_subtitle">Gửi tin nhắn để bắt đầu cuộc trò chuyện.</string>
     <string name="chat_offer_label">Đề xuất giá</string>
     <string name="chat_offer_accept">Chấp nhận</string>
     <string name="chat_offer_decline">Từ chối</string>
@@ -337,6 +370,11 @@
     <string name="orders_confirm_success">Đã xác nhận nhận hàng.</string>
     <string name="orders_confirm_error">Xác nhận thất bại. Thử lại.</string>
     <string name="orders_icon_cd">Đơn hàng của tôi</string>
+    <string name="orders_empty_buying">Chưa có đơn mua</string>
+    <string name="orders_empty_buying_sub">Đơn hàng sẽ hiển thị khi bạn mua sản phẩm</string>
+    <string name="orders_empty_selling">Chưa có đơn bán</string>
+    <string name="orders_empty_selling_sub">Đơn hàng sẽ hiển thị khi có người mua</string>
+    <string name="avatar_default_cd">Ảnh đại diện</string>
 
     <!-- Order detail -->
     <string name="order_detail_loading">Đang tải đơn hàng…</string>

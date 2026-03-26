@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
@@ -49,13 +48,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -64,7 +63,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 fun ExploreScreen(
     modifier: Modifier = Modifier,
     viewModel: ExploreViewModel,
-    onListingClick: (String) -> Unit = {},
+    onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
 ) {
     val tags by viewModel.tags.collectAsState()
     val selectedTagIndex by viewModel.selectedTagIndex.collectAsState()
@@ -223,7 +222,7 @@ fun ExploreScreen(
                         listings,
                         key = { index, item -> stableLazyKey(item.id, index, "exp") },
                     ) { _, item ->
-                        ExploreGridCard(item = item, onClick = { onListingClick(item.id) })
+                        ExploreGridCard(item = item, onClick = { onListingClick(item.id, item.sellerId) })
                     }
                 }
             }
@@ -243,34 +242,13 @@ private fun FeaturedSellerItem(
         modifier = Modifier.width(96.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(68.dp)
-                .clip(CircleShape)
-                .background(FashColors.Primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (seller.avatarUrl.isNotBlank()) {
-                FashAsyncImage(
-                    model = resolveImageUrl(seller.avatarUrl),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                // Letter avatar placeholder
-                Text(
-                    text = (seller.displayName.firstOrNull() ?: seller.username.firstOrNull() ?: '?')
-                        .uppercaseChar().toString(),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 26.sp,
-                    ),
-                    color = FashColors.Primary,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+        FashAvatarCircle(
+            imageUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) },
+            contentDescription = null,
+            size = 68.dp,
+            fallbackInitial = (seller.displayName.firstOrNull() ?: seller.username.firstOrNull())
+                ?.takeIf { it.isLetter() },
+        )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = seller.displayName.ifBlank { "@${seller.username}" },

@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.data.auth
 
 import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -175,15 +176,8 @@ class AuthRepository(
         )
     }
 
-    private fun formatHttpError(code: Int, body: String): String {
-        val raw = body.trim().ifBlank { "(empty body)" }
-        val message = try {
-            JSONObject(raw).optString("error").takeIf { it.isNotBlank() }
-        } catch (_: Exception) {
-            null
-        }
-        return "HTTP $code: ${message ?: raw}"
-    }
+    private fun formatHttpError(code: Int, body: String): String =
+        CoreServiceErrors.parseErrorMessage(code, body)
 
     companion object {
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()

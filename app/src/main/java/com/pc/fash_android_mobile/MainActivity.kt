@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.pc.fash_android_mobile.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import com.facebook.CallbackManager
@@ -49,6 +51,8 @@ import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
+import com.pc.fash_android_mobile.ui.listing.EditListingScreen
+import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
 import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
@@ -117,6 +121,7 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels()
     private val exploreViewModel: ExploreViewModel by viewModels()
     private val productDetailViewModel: ProductDetailViewModel by viewModels()
+    private val editListingViewModel: EditListingViewModel by viewModels()
     private val postViewModel: PostViewModel by viewModels()
     private val profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel by viewModels()
     private val editProfileViewModel: EditProfileViewModel by viewModels()
@@ -343,6 +348,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 isAuthenticated -> {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedConversationItem by remember { mutableStateOf<ConversationItem?>(null) }
@@ -354,6 +360,19 @@ class MainActivity : ComponentActivity() {
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
                                     val context = LocalContext.current
+                                    LaunchedEffect(Unit) {
+                                        editListingViewModel.events.collect { msg ->
+                                            snackbarHostState.showSnackbar(msg)
+                                            if (msg == context.getString(R.string.edit_listing_saved) ||
+                                                msg == context.getString(R.string.edit_listing_deleted)
+                                            ) {
+                                                editListingId = null
+                                                homeViewModel.loadFeed()
+                                                exploreViewModel.loadAll()
+                                                profileViewModel.loadProfile()
+                                            }
+                                        }
+                                    }
                                     val orderRepository = remember {
                                         (context.applicationContext as FashApplication).orderRepository
                                     }
@@ -370,7 +389,15 @@ class MainActivity : ComponentActivity() {
                                             profileViewModel = profileViewModel,
                                             chatViewModel = chatViewModel,
                                             chatUnreadCount = chatUnreadCount,
-                                            onListingClick = { selectedListingId = it },
+                                            onListingClick = { lid, sellerId ->
+                                                val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                if (!sellerId.isNullOrBlank() && sellerId == myId) {
+                                                    selectedListingId = null
+                                                    editListingId = lid
+                                                } else {
+                                                    selectedListingId = lid
+                                                }
+                                            },
                                             onEditProfile = { showEditProfile = true },
                                             onOrdersClick = { showOrdersScreen = true },
                                             onConversationClick = { item ->
@@ -440,7 +467,26 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 },
                                                 onShare = { /* TODO: share */ },
-                                                onListingClick = { selectedListingId = it },
+                                                onListingClick = { lid, sellerId ->
+                                                    val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                    if (!sellerId.isNullOrBlank() && sellerId == myId) {
+                                                        selectedListingId = null
+                                                        editListingId = lid
+                                                    } else {
+                                                        selectedListingId = lid
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        if (editListingId != null) {
+                                            BackHandler { editListingId = null }
+                                            EditListingScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                listingId = editListingId!!,
+                                                viewModel = editListingViewModel,
+                                                onBack = { editListingId = null },
                                             )
                                         }
                                         if (showEditProfile) {

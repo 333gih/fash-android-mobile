@@ -2,6 +2,8 @@ package com.pc.fash_android_mobile.data.listing
 
 import android.net.Uri
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
+import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -22,6 +24,9 @@ class ListingRepository(
 
     private val userIdUuidRegex =
         Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+    private fun throwHttpError(httpCode: Int, body: String): Nothing =
+        throw CoreServiceHttpException(httpCode, CoreServiceErrors.parseErrorMessage(httpCode, body))
 
     private fun encodeUserPathSegment(segment: String): String =
         if (userIdUuidRegex.matches(segment)) segment else Uri.encode(segment, null)
@@ -125,8 +130,7 @@ class ListingRepository(
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 val b = response.body?.string().orEmpty()
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                throwHttpError(response.code, b)
             }
         }
     }
@@ -214,8 +218,7 @@ class ListingRepository(
         val bodyStr = securedClient.newCall(request).execute().use { response ->
             val b = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                throwHttpError(response.code, b)
             }
             b
         }
@@ -255,8 +258,7 @@ class ListingRepository(
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
-                error("HTTP ${response.code}: $msg")
+                throwHttpError(response.code, body)
             }
             body.ifBlank { "{}" }
         }
@@ -272,8 +274,7 @@ class ListingRepository(
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
-                error("HTTP ${response.code}: $msg")
+                throwHttpError(response.code, body)
             }
             body
         }
@@ -290,8 +291,7 @@ class ListingRepository(
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
-                error("HTTP ${response.code}: $msg")
+                throwHttpError(response.code, body)
             }
             body.ifBlank { "{}" }
         }
@@ -316,8 +316,7 @@ class ListingRepository(
         securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
-                error("HTTP ${response.code}: $msg")
+                throwHttpError(response.code, body)
             }
         }
     }

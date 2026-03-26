@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -53,6 +52,7 @@ import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -61,7 +61,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 fun HomeFeedContent(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel,
-    onListingClick: (String) -> Unit = {},
+    onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
 ) {
     val items by viewModel.items.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -128,7 +128,7 @@ fun HomeFeedContent(
                                 || followingIds.contains(item.sellerUsername),
                             onComment = { },
                             onShare = { },
-                            onItemClick = { onListingClick(item.id) },
+                            onItemClick = { onListingClick(item.id, item.sellerId) },
                         )
                     }
                 }
@@ -196,7 +196,7 @@ private fun FeedPostCard(
     onItemClick: () -> Unit = {},
 ) {
     val imageUrl = resolveImageUrl(item.coverImageUrl)
-    val avatarUrl = item.sellerAvatarUrl?.let { resolveImageUrl(it) }
+    val avatarUrl = item.sellerAvatarUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
 
     Card(
         modifier = Modifier
@@ -214,21 +214,12 @@ private fun FeedPostCard(
                     .padding(FashTheme.spacing.spacing3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                ) {
-                    if (!avatarUrl.isNullOrEmpty()) {
-                        FashAsyncImage(
-                            model = avatarUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                    }
-                }
+                FashAvatarCircle(
+                    imageUrl = avatarUrl,
+                    contentDescription = null,
+                    size = 40.dp,
+                    fallbackInitial = item.sellerUsername?.firstOrNull()?.takeIf { it.isLetter() },
+                )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

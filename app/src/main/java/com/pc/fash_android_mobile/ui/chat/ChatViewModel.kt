@@ -355,4 +355,38 @@ class ChatViewModel(
         val formatter = NumberFormat.getNumberInstance(Locale("vi", "VN"))
         return "₫${formatter.format(amount)}"
     }
+
+    /**
+     * Inbox subtitle: pending buyer offer (seller), last offer line, or last message text.
+     */
+    fun conversationPreviewLine(item: ConversationItem): String {
+        val app = getApplication<Application>()
+        val myId = sessionStore.read()?.userId?.trim().orEmpty()
+        val isSeller = myId.isNotBlank() && item.sellerUserId == myId
+        val isBuyer = myId.isNotBlank() && item.buyerUserId == myId
+        if (item.pendingOfferAmountVnd > 0L && isSeller) {
+            return app.getString(
+                R.string.chat_inbox_preview_offer_pending_seller,
+                formatPriceVnd(item.pendingOfferAmountVnd),
+            )
+        }
+        val isOfferRow = item.lastMessageType.equals("offer", ignoreCase = true) ||
+            item.lastOfferAmountVnd > 0L
+        if (isOfferRow) {
+            val amtStr = when {
+                item.lastOfferAmountVnd > 0L -> formatPriceVnd(item.lastOfferAmountVnd)
+                else -> item.lastMessageText.trim().ifBlank { formatPriceVnd(0L) }
+            }
+            return when {
+                isBuyer && item.lastOfferFromBuyer ->
+                    app.getString(R.string.chat_inbox_preview_offer_you, amtStr)
+                isBuyer && !item.lastOfferFromBuyer ->
+                    app.getString(R.string.chat_inbox_preview_offer_from_seller, amtStr)
+                isSeller && item.lastOfferFromBuyer ->
+                    app.getString(R.string.chat_inbox_preview_offer_from_buyer, amtStr)
+                else -> app.getString(R.string.chat_inbox_preview_offer_generic, amtStr)
+            }
+        }
+        return item.lastMessageText.ifBlank { " " }
+    }
 }

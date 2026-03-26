@@ -92,7 +92,7 @@ fun ProductDetailScreen(
     onChat: (String) -> Unit = {},
     onBuyNow: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
-    onListingClick: (String) -> Unit = {},
+    onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
 ) {
     val detail by viewModel.detail.collectAsState()
     val sellerProfile by viewModel.sellerProfile.collectAsState()
@@ -178,7 +178,7 @@ fun ProductDetailScreen(
                             MoreFromSellerSection(
                                 sellerUsername = d.sellerUsername,
                                 items = moreFromSeller,
-                                onItemClick = onListingClick,
+                                onItemClick = { id, sid -> onListingClick(id, sid) },
                                 excludeId = d.id,
                             )
                         }
@@ -570,7 +570,7 @@ private fun DescriptionAndTagsSection(detail: ListingDetail) {
 private fun MoreFromSellerSection(
     sellerUsername: String?,
     items: List<ListingFeedItem>,
-    onItemClick: (String) -> Unit,
+    onItemClick: (String, String?) -> Unit,
     excludeId: String,
 ) {
     val username = sellerUsername ?: "user"
@@ -607,7 +607,7 @@ private fun MoreFromSellerSection(
             items.filter { it.id != excludeId }.take(5).forEach { item ->
                 MoreFromSellerCard(
                     item = item,
-                    onClick = { onItemClick(item.id) },
+                    onClick = { onItemClick(item.id, item.sellerId) },
                 )
             }
         }

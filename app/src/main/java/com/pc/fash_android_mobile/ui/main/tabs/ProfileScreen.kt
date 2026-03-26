@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -52,6 +54,7 @@ import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -64,7 +67,7 @@ fun ProfileScreen(
     isLoggingOut: Boolean = false,
     onEditProfile: () -> Unit = { },
     onOrdersClick: () -> Unit = { },
-    onListingClick: (String) -> Unit = { },
+    onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
@@ -126,8 +129,9 @@ fun ProfileScreen(
                     val items = if (selectedTab == 0) sellingListings else soldListings
                     ProfileProductGrid(
                         items = items,
-                        onItemClick = onListingClick,
+                        onItemClick = { id -> onListingClick(id, profile?.userId) },
                         modifier = Modifier.weight(1f),
+                        isSellingTab = selectedTab == 0,
                     )
                 }
             }
@@ -404,7 +408,29 @@ private fun ProfileProductGrid(
     items: List<ListingFeedItem>,
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    isSellingTab: Boolean = true,
 ) {
+    if (items.isEmpty()) {
+        FashEmptyState(
+            icon = if (isSellingTab) Icons.Outlined.Storefront else Icons.Outlined.CheckCircle,
+            title = stringResource(
+                if (isSellingTab) {
+                    R.string.profile_empty_selling_title
+                } else {
+                    R.string.profile_empty_sold_title
+                },
+            ),
+            subtitle = stringResource(
+                if (isSellingTab) {
+                    R.string.profile_empty_selling_subtitle
+                } else {
+                    R.string.profile_empty_sold_subtitle
+                },
+            ),
+            modifier = modifier,
+        )
+        return
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = modifier.fillMaxWidth(),

@@ -173,6 +173,10 @@
     <string name="profile_fast_delivery">Fast delivery</string>
     <string name="profile_tab_selling">Selling</string>
     <string name="profile_tab_sold">Sold</string>
+    <string name="profile_empty_selling_title">No items for sale</string>
+    <string name="profile_empty_selling_subtitle">Tap Post in the bottom bar to list your first item.</string>
+    <string name="profile_empty_sold_title">No sold items yet</string>
+    <string name="profile_empty_sold_subtitle">Sold listings will appear here when you complete a sale.</string>
     <string name="profile_load_error">Could not load profile.</string>
 
     <string name="edit_profile_title">Edit profile</string>
@@ -197,6 +201,8 @@
     <string name="chat_load_error">Could not load messages.</string>
     <string name="chat_empty">No messages yet</string>
     <string name="chat_empty_subtitle">Start a conversation from your favorite item</string>
+    <string name="chat_empty_messages_title">No messages yet</string>
+    <string name="chat_empty_messages_subtitle">Send a message to start the conversation.</string>
     <string name="chat_retry">Retry</string>
     <string name="chat_just_now">Just now</string>
     <string name="chat_mins_ago">%d min ago</string>
@@ -255,4 +261,26 @@
     <string name="orders_confirm_success">Order received confirmed.</string>
     <string name="orders_confirm_error">Confirmation failed. Try again.</string>
     <string name="orders_icon_cd">My orders</string>
+
+    <string name="edit_listing_screen_title">Edit listing</string>
+    <string name="edit_listing_load_error">Could not load listing. Try again.</string>
+    <string name="edit_listing_saved">Changes saved.</string>
+    <string name="edit_listing_no_changes">No changes to save.</string>
+    <string name="edit_listing_deleted">Listing removed.</string>
+    <string name="edit_listing_save_error">Could not save. Check your input and try again.</string>
+    <string name="edit_listing_delete_error">Could not delete. There may be orders or buyer conversations.</string>
+    <string name="edit_listing_not_editable">You can only edit active listings.</string>
+    <string name="edit_listing_title_invalid">Title must be 3–60 characters.</string>
+    <string name="edit_listing_price_invalid">Price must be between 1,000 and 100,000,000 VND.</string>
+    <string name="edit_listing_readonly_hint">This listing is no longer active — view only. You can still try to delete if allowed.</string>
+    <string name="edit_listing_category_locked">Category (cannot change after posting)</string>
+    <string name="edit_listing_style_tags">Style tags (max 5)</string>
+    <string name="edit_listing_tags_hint">Unselect all and save to clear style tags.</string>
+    <string name="edit_listing_tags_cleared_note">Style tags will be cleared when you save.</string>
+    <string name="edit_listing_save">Save changes</string>
+    <string name="edit_listing_delete">Delete listing</string>
+    <string name="edit_listing_delete_title">Delete this listing?</string>
+    <string name="edit_listing_delete_body">The listing will be hidden from feeds. You cannot delete if there are any orders or buyer chat threads.</string>
+    <string name="edit_listing_delete_confirm">Delete</string>
+    <string name="edit_listing_description_label">Description</string>
 </resources>

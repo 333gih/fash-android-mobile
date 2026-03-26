@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
@@ -145,28 +148,77 @@ fun OrdersScreen(
             }
             else -> {
                 val items = if (selectedTab == 0) buyingOrders else sellingOrders
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        horizontal = FashTheme.spacing.editorialStart,
-                        vertical = 16.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    itemsIndexed(
-                        items,
-                        key = { index, order -> stableLazyKey(order.orderId, index, "ord") },
-                    ) { _, order ->
-                        OrderCard(
-                            order = order,
-                            isConfirming = confirmingOrderId == order.orderId,
-                            onConfirmReceipt = { viewModel.confirmReceipt(order.orderId) },
-                            onReview = { /* TODO: open review screen */ },
-                            onClick = { onOrderClick(order) },
-                        )
+                if (items.isEmpty()) {
+                    OrdersEmptyHint(isBuying = selectedTab == 0)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = FashTheme.spacing.editorialStart,
+                            vertical = 16.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        itemsIndexed(
+                            items,
+                            key = { index, order -> stableLazyKey(order.orderId, index, "ord") },
+                        ) { _, order ->
+                            OrderCard(
+                                order = order,
+                                isConfirming = confirmingOrderId == order.orderId,
+                                onConfirmReceipt = { viewModel.confirmReceipt(order.orderId) },
+                                onReview = { /* TODO: open review screen */ },
+                                onClick = { onOrderClick(order) },
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun OrdersEmptyHint(isBuying: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 40.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .background(FashColors.Primary.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocalMall,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = FashColors.Primary,
+                )
+            }
+            Text(
+                text = stringResource(
+                    if (isBuying) R.string.orders_empty_buying else R.string.orders_empty_selling,
+                ),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(
+                    if (isBuying) R.string.orders_empty_buying_sub else R.string.orders_empty_selling_sub,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
