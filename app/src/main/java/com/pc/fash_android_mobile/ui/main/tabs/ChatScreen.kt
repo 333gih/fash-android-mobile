@@ -168,7 +168,9 @@ fun ChatScreen(
                     if (group.listingId in expandedGroupIds) {
                         items(
                             count = group.conversations.size,
-                            key = { idx -> "${group.listingId}-${group.conversations[idx].conversationId}" },
+                            key = { idx ->
+                                "${group.listingId}-${group.conversations[idx].conversationId}-$idx"
+                            },
                         ) { idx ->
                             val item = group.conversations[idx]
                             ConversationRow(

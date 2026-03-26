@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -323,7 +324,9 @@ fun ChatDetailScreen(
                                 }
                                 itemsIndexed(
                                     items = sortedMessages.reversed(),
-                                    key = { _, msg -> msg.messageId },
+                                    key = { index, msg ->
+                                        stableLazyKey(msg.messageId, index, "msg")
+                                    },
                                 ) { _, msg ->
                                     when (msg.messageType) {
                                         "offer" -> OfferMessageBubble(
