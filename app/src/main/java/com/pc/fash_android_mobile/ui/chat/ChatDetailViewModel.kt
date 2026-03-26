@@ -709,13 +709,18 @@ class ChatDetailViewModel(
     /**
      * Merges fresh [ConversationDetail] into current state and triggers order fetching
      * when a new non-null [orderId] is discovered.
+     *
+     * Presigned avatar/product URLs often get new query params on every GET; we keep the
+     * previous URL when the path matches so [StateFlow] does not emit and Coil does not reload.
      */
     private fun applyConversationDetail(d: ConversationDetail) {
         val current = _detail.value
-        _detail.value = if (current != null) {
+        val merged: ConversationDetail = if (current != null) {
+            val mergedOther = mergeOtherUserStable(current.otherUser, d.otherUser)
+            val mergedProduct = mergeProductStable(current.product, d.product ?: current.product)
             current.copy(
-                otherUser = d.otherUser,
-                product = d.product ?: current.product,
+                otherUser = mergedOther,
+                product = mergedProduct,
                 isBuyer = d.isBuyer,
                 orderId = d.orderId ?: current.orderId,
                 offerCount = d.offerCount,
@@ -724,11 +729,43 @@ class ChatDetailViewModel(
         } else {
             d
         }
+        if (current != null && merged == current) {
+            // Skip emission — same logical content (avoids image flicker from URL rotation).
+        } else {
+            _detail.value = merged
+        }
         val newOrderId = d.orderId
         if (newOrderId != null && _orderId.value == null) {
             _orderId.value = newOrderId
             viewModelScope.launch { fetchOrderStatus(newOrderId) }
         }
+    }
+
+    /** Same file path as [preferred] when query tokens rotate (e.g. presigned URLs). */
+    private fun stableImageUrl(preferred: String, candidate: String): String {
+        when {
+            candidate.isBlank() -> return preferred
+            preferred.isBlank() -> return candidate
+            preferred == candidate -> return preferred
+            else -> {
+                val p = preferred.substringBefore('?')
+                val c = candidate.substringBefore('?')
+                if (p.isNotBlank() && p == c) return preferred
+                return candidate
+            }
+        }
+    }
+
+    private fun mergeOtherUserStable(current: OtherUser, fresh: OtherUser): OtherUser {
+        val avatar = stableImageUrl(current.avatarUrl, fresh.avatarUrl)
+        return fresh.copy(avatarUrl = avatar)
+    }
+
+    private fun mergeProductStable(current: ProductCard?, fresh: ProductCard?): ProductCard? {
+        if (fresh == null) return current
+        if (current == null) return fresh
+        if (!current.listingId.equals(fresh.listingId, ignoreCase = true)) return fresh
+        return fresh.copy(imageUrl = stableImageUrl(current.imageUrl, fresh.imageUrl))
     }
 
     /**

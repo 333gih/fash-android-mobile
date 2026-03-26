@@ -43,9 +43,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,9 +81,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -94,6 +98,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
@@ -409,12 +414,19 @@ private fun DealBanner(
     onTap: () -> Unit,
     onPayNow: () -> Unit = {},
 ) {
-    val buyerNeedsToPay = isBuyer && orderStatus == "payment_pending"
+    val s = orderStatus?.trim()?.lowercase().orEmpty()
+    val buyerNeedsToPay = isBuyer && s == "payment_pending"
+
+    val appearance = dealBannerAppearance(
+        isBuyer = isBuyer,
+        statusNorm = s,
+        buyerNeedsToPay = buyerNeedsToPay,
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFE8F5E9)),
+            .background(appearance.background),
     ) {
         // Status row — always visible
         Row(
@@ -426,30 +438,39 @@ private fun DealBanner(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(
-                imageVector = if (buyerNeedsToPay) Icons.Filled.ShoppingBag else Icons.Filled.CheckCircle,
+                imageVector = appearance.leadingIcon,
                 contentDescription = null,
-                tint = Color(0xFF388E3C),
+                tint = appearance.accent,
                 modifier = Modifier.size(20.dp),
             )
             Text(
                 text = when {
                     buyerNeedsToPay ->
                         stringResource(R.string.chat_deal_banner_buyer_pending)
-                    !isBuyer && orderStatus == "payment_pending" ->
+                    !isBuyer && s == "payment_pending" ->
                         stringResource(R.string.chat_deal_banner_seller_pending)
-                    orderStatus in listOf("payment_held", "in_transit") ->
+                    s == "cancelled" ->
+                        stringResource(R.string.chat_deal_banner_cancelled)
+                    s == "disputed" ->
+                        stringResource(R.string.chat_deal_banner_disputed)
+                    s == "delivered_confirmed" ->
+                        stringResource(R.string.chat_deal_banner_delivered)
+                    s in listOf("payment_held", "in_transit") ->
                         stringResource(R.string.chat_deal_banner_in_progress)
-                    else -> stringResource(R.string.chat_deal_banner_done)
+                    s.isBlank() ->
+                        stringResource(R.string.chat_deal_banner_status_pending)
+                    else ->
+                        stringResource(R.string.chat_deal_banner_done)
                 },
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                color = Color(0xFF1B5E20),
+                color = appearance.primaryText,
                 modifier = Modifier.weight(1f),
             )
             if (!buyerNeedsToPay) {
                 Text(
                     text = stringResource(R.string.chat_deal_banner_view_order),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF388E3C),
+                    color = appearance.accent,
                 )
             }
         }
@@ -482,6 +503,98 @@ private fun DealBanner(
     }
 }
 
+private data class DealBannerAppearance(
+    val background: Color,
+    val primaryText: Color,
+    val accent: Color,
+    val leadingIcon: ImageVector,
+)
+
+private fun dealBannerAppearance(
+    isBuyer: Boolean,
+    statusNorm: String,
+    buyerNeedsToPay: Boolean,
+): DealBannerAppearance = when {
+    buyerNeedsToPay || (!isBuyer && statusNorm == "payment_pending") ->
+        DealBannerAppearance(
+            background = Color(0xFFE8F5E9),
+            primaryText = Color(0xFF1B5E20),
+            accent = Color(0xFF388E3C),
+            leadingIcon = if (buyerNeedsToPay) Icons.Filled.ShoppingBag else Icons.Filled.CheckCircle,
+        )
+    statusNorm == "cancelled" ->
+        DealBannerAppearance(
+            background = Color(0xFFFFEBEE),
+            primaryText = Color(0xFFB71C1C),
+            accent = Color(0xFFC62828),
+            leadingIcon = Icons.Filled.Cancel,
+        )
+    statusNorm == "disputed" ->
+        DealBannerAppearance(
+            background = Color(0xFFFFF8E1),
+            primaryText = Color(0xFFBF360C),
+            accent = Color(0xFFE65100),
+            leadingIcon = Icons.Filled.Warning,
+        )
+    statusNorm in listOf("payment_held", "in_transit") ->
+        DealBannerAppearance(
+            background = Color(0xFFE3F2FD),
+            primaryText = Color(0xFF0D47A1),
+            accent = Color(0xFF1565C0),
+            leadingIcon = Icons.Filled.ShoppingBag,
+        )
+    statusNorm == "delivered_confirmed" ->
+        DealBannerAppearance(
+            background = Color(0xFFE8F5E9),
+            primaryText = Color(0xFF1B5E20),
+            accent = Color(0xFF2E7D32),
+            leadingIcon = Icons.Filled.CheckCircle,
+        )
+    statusNorm.isBlank() ->
+        DealBannerAppearance(
+            background = Color(0xFFF5F5F5),
+            primaryText = Color(0xFF424242),
+            accent = Color(0xFF616161),
+            leadingIcon = Icons.Filled.ErrorOutline,
+        )
+    else ->
+        DealBannerAppearance(
+            background = Color(0xFFE8F5E9),
+            primaryText = Color(0xFF1B5E20),
+            accent = Color(0xFF388E3C),
+            leadingIcon = Icons.Filled.CheckCircle,
+        )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Coil: same image path with rotating presigned query params — stable cache keys + no crossfade
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun StableChatImage(
+    imageUrl: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
+    if (imageUrl.isBlank()) return
+    val context = LocalContext.current
+    val request = remember(imageUrl) {
+        val key = imageUrl.substringBefore('?').ifBlank { imageUrl }
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .memoryCacheKey(key)
+            .diskCacheKey(key)
+            .crossfade(false)
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = null,
+        contentScale = contentScale,
+        modifier = modifier,
+    )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Product reference card (with SOLD badge)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,9 +621,8 @@ private fun ProductReferenceCard(
                 .size(56.dp)
                 .clip(RoundedCornerShape(8.dp)),
         ) {
-            AsyncImage(
-                model = product.imageUrl,
-                contentDescription = null,
+            StableChatImage(
+                imageUrl = product.imageUrl,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -889,9 +1001,8 @@ private fun ChatDetailHeader(
             contentAlignment = Alignment.Center,
         ) {
             if (avatarUrl.isNotBlank()) {
-                AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
+                StableChatImage(
+                    imageUrl = avatarUrl,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )

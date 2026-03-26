@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "598587496348",
+    "project_id": "fash-3526e",
+    "storage_bucket": "fash-3526e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:598587496348:android:ea5c44b324163d9a6b5a59",
+        "android_client_info": {
+          "package_name": "com.pc.fash_android_mobile.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAr7mC8zgxIxCgRv_yopA88clrYuZHO4eo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

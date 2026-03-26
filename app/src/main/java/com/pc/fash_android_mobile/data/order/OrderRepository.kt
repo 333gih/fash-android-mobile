@@ -42,10 +42,16 @@ class OrderRepository(
         }
     }
 
-    /** `GET /orders/{order_id}` */
+    /** `GET /orders/{order_id}` — list card shape. */
     fun getOrder(orderId: String): Result<OrderItem> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}")
         parseOrder(executeGet(url))
+    }
+
+    /** `GET /orders/{order_id}` — full detail for order screen. */
+    fun getOrderDetail(orderId: String): Result<OrderDetail> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}")
+        parseOrderDetail(executeGet(url))
     }
 
     /**
@@ -60,10 +66,11 @@ class OrderRepository(
         val body = executePostJson(url, json)
         val o = JSONObject(body.trim())
         val root = if (o.has("data")) o.getJSONObject("data") else o
-        // Handle both snake_case and PascalCase responses from the backend
-        root.optString("ID", root.optString("id", root.optString("order_id", ""))).ifBlank {
-            o.optString("ID", o.optString("id", o.optString("order_id", "")))
-        }.ifBlank { error("No order id in response") }
+        val primary = root.optString("ID", root.optString("id", root.optString("order_id", "")))
+        val fallback = o.optString("ID", o.optString("id", o.optString("order_id", "")))
+        val id = primary.ifBlank { fallback }
+        if (id.isBlank()) error("No order id in response")
+        id
     }
 
     /**
@@ -144,6 +151,57 @@ class OrderRepository(
             }
             response.body?.string().orEmpty()
         }
+    }
+
+    private fun parseOrderDetail(json: String): OrderDetail {
+        val raw = json.trim()
+        val o = when {
+            raw.startsWith("{") -> try {
+                val obj = JSONObject(raw)
+                if (obj.has("data")) obj.getJSONObject("data") else obj
+            } catch (_: Exception) {
+                JSONObject(raw)
+            }
+            else -> JSONObject("{}")
+        }
+        val listing = o.optJSONObject("Listing") ?: o.optJSONObject("listing") ?: JSONObject()
+        val buyer = o.optJSONObject("Buyer") ?: o.optJSONObject("buyer") ?: JSONObject()
+        val seller = o.optJSONObject("Seller") ?: o.optJSONObject("seller") ?: JSONObject()
+        val imageUrlsArr = listing.optJSONArray("ImageURLs") ?: listing.optJSONArray("image_urls")
+        val coverUrl = listing.optString("CoverImageURL", "")
+            .ifBlank { listing.optString("cover_image_url", "") }
+            .ifBlank { imageUrlsArr?.optString(0) ?: "" }
+        val rawStatus = o.optString("status", o.optString("Status", "payment_pending")).lowercase()
+        val canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit")
+        val canReview = o.optBoolean("can_review", rawStatus == "delivered_confirmed")
+        return OrderDetail(
+            orderId = o.optString("id", o.optString("ID", o.optString("order_id", ""))),
+            listingId = o.optString("listing_id", o.optString("ListingID", listing.optString("ID", listing.optString("id", "")))),
+            buyerUserId = o.optString("buyer_id", o.optString("BuyerID", "")).ifBlank {
+                buyer.optString("UserID", buyer.optString("user_id", buyer.optString("ID", buyer.optString("id", ""))))
+            },
+            sellerUserId = o.optString("seller_id", o.optString("SellerID", "")).ifBlank {
+                seller.optString("UserID", seller.optString("user_id", seller.optString("ID", seller.optString("id", ""))))
+            },
+            amountVnd = o.optLong("amount_vnd", o.optLong("AmountVND", 0L)),
+            platformFeeVnd = o.optLong("platform_fee_vnd", o.optLong("PlatformFeeVND", 0L)),
+            sellerPayoutVnd = o.optLong("seller_payout_vnd", o.optLong("SellerPayoutVND", 0L)),
+            status = rawStatus,
+            trackingNumber = o.optString("tracking_number", o.optString("TrackingNumber", "")),
+            carrier = o.optString("carrier", o.optString("Carrier", "")),
+            listingTitle = listing.optString("Title", listing.optString("title", "")),
+            listingImageUrl = coverUrl,
+            listingPriceVnd = listing.optLong("Price", listing.optLong("price", 0L)),
+            listingStatus = listing.optString("Status", listing.optString("status", "active")).lowercase().ifBlank { "active" },
+            buyerUsername = buyer.optString("Username", buyer.optString("username", "")),
+            buyerDisplayName = buyer.optString("DisplayName", buyer.optString("display_name", "")),
+            buyerAvatarUrl = buyer.optString("AvatarURL", buyer.optString("avatar_url", "")),
+            sellerUsername = seller.optString("Username", seller.optString("username", "")),
+            sellerDisplayName = seller.optString("DisplayName", seller.optString("display_name", "")),
+            sellerAvatarUrl = seller.optString("AvatarURL", seller.optString("avatar_url", "")),
+            canConfirm = canConfirm,
+            canReview = canReview,
+        )
     }
 
     private fun parseOrder(json: String): OrderItem {

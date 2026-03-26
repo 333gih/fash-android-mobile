@@ -31,3 +31,7 @@
 # OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**
+
+# Firebase Cloud Messaging
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**

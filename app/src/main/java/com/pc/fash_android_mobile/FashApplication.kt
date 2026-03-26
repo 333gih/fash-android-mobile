@@ -11,6 +11,8 @@ import com.pc.fash_android_mobile.data.payment.PaymentService
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.notifications.FashNotificationChannels
+import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
 
 /**
  * Application-scoped auth and network dependencies.
@@ -19,6 +21,11 @@ import com.pc.fash_android_mobile.data.user.UserRepository
  * force-expired (e.g. refresh token expired).
  */
 class FashApplication : android.app.Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        FashNotificationChannels.ensureChannels(this)
+    }
 
     val authManager: AppAuthManager by lazy {
         AppAuthManager(
@@ -101,6 +108,14 @@ class FashApplication : android.app.Application() {
                     }
                     ?.accessToken
             },
+        )
+    }
+
+    /** Registers FCM device token with core-service after login ([AuthRepository.registerFcm]). */
+    val fcmTokenRegistrar: FcmTokenRegistrar by lazy {
+        FcmTokenRegistrar(
+            authRepository = authManager.authRepository,
+            sessionStore = authManager.sessionStore,
         )
     }
 }

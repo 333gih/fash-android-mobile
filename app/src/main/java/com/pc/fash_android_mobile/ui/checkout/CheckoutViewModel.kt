@@ -7,11 +7,14 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.payment.CheckoutAddress
 import com.pc.fash_android_mobile.data.payment.PaymentRequest
 import com.pc.fash_android_mobile.data.payment.PaymentService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -74,6 +77,14 @@ class CheckoutViewModel(
     private val _overridePriceVnd = MutableStateFlow(0L)
     val overridePriceVnd: StateFlow<Long> = _overridePriceVnd.asStateFlow()
 
+    /** When set, [submitPayment] skips `POST /orders` (order already exists — e.g. from order detail). */
+    private val _existingOrderId = MutableStateFlow<String?>(null)
+    val existingOrderId: StateFlow<String?> = _existingOrderId.asStateFlow()
+
+    /** Populated when [existingOrderId] is set — full order row for checkout UI. */
+    private val _orderDetail = MutableStateFlow<OrderDetail?>(null)
+    val orderDetail: StateFlow<OrderDetail?> = _orderDetail.asStateFlow()
+
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
@@ -83,8 +94,10 @@ class CheckoutViewModel(
         PaymentMethodOption("vnpay", "VNPay"),
     )
 
-    fun loadListing(listingId: String, overridePriceVnd: Long = 0L) {
+    fun loadListing(listingId: String, overridePriceVnd: Long = 0L, existingOrderId: String? = null) {
         _overridePriceVnd.value = overridePriceVnd
+        val oid = existingOrderId?.takeIf { it.isNotBlank() }
+        _existingOrderId.value = oid
         if (listingId.isBlank()) {
             _loadError.value = getApplication<Application>().getString(R.string.checkout_load_error)
             _isLoading.value = false
@@ -94,17 +107,25 @@ class CheckoutViewModel(
             _isLoading.value = true
             _loadError.value = null
             _detail.value = null
-            val result = withContext(Dispatchers.IO) {
-                listingRepository.getListingDetail(listingId)
+            _orderDetail.value = null
+            coroutineScope {
+                val listingAsync = async(Dispatchers.IO) { listingRepository.getListingDetail(listingId) }
+                val orderAsync = oid?.let { id ->
+                    async(Dispatchers.IO) { orderRepository.getOrderDetail(id) }
+                }
+                val listingResult = listingAsync.await()
+                val orderResult = orderAsync?.await()
+                _isLoading.value = false
+                listingResult.fold(
+                    onSuccess = { _detail.value = it },
+                    onFailure = {
+                        _loadError.value = it.message
+                            ?: getApplication<Application>().getString(R.string.checkout_load_error)
+                        _events.tryEmit(_loadError.value!!)
+                    },
+                )
+                orderResult?.getOrNull()?.let { _orderDetail.value = it }
             }
-            _isLoading.value = false
-            result.fold(
-                onSuccess = { _detail.value = it },
-                onFailure = {
-                    _loadError.value = it.message ?: getApplication<Application>().getString(R.string.checkout_load_error)
-                    _events.tryEmit(_loadError.value!!)
-                },
-            )
         }
     }
 
@@ -116,10 +137,25 @@ class CheckoutViewModel(
     fun selectPaymentMethod(index: Int) { _selectedPaymentIndex.value = index }
 
     val productPriceVnd: Long
-        get() = _overridePriceVnd.value.takeIf { it > 0 } ?: (_detail.value?.priceVnd ?: 0L)
+        get() {
+            val od = _orderDetail.value
+            if (od != null && od.amountVnd > 0L) return od.amountVnd
+            return _overridePriceVnd.value.takeIf { it > 0 } ?: (_detail.value?.priceVnd ?: 0L)
+        }
 
     val platformFeeVnd: Long
-        get() = (productPriceVnd * PLATFORM_FEE_PERCENT).toLong()
+        get() {
+            val od = _orderDetail.value
+            if (od != null && od.platformFeeVnd > 0L) return od.platformFeeVnd
+            return (productPriceVnd * PLATFORM_FEE_PERCENT).toLong()
+        }
+
+    /** True when platform fee comes from the order API (not the 10%% estimate). */
+    val platformFeeFromOrder: Boolean
+        get() = _orderDetail.value?.platformFeeVnd?.let { it > 0L } == true
+
+    val sellerPayoutVnd: Long
+        get() = _orderDetail.value?.sellerPayoutVnd?.takeIf { it > 0L } ?: 0L
 
     val totalAmountVnd: Long
         get() = productPriceVnd + platformFeeVnd
@@ -139,12 +175,16 @@ class CheckoutViewModel(
         val d = _detail.value ?: return
         viewModelScope.launch {
             _isSubmitting.value = true
-            // Step 1: Create the order via POST /orders (sets status = payment_pending)
-            val orderResult = withContext(Dispatchers.IO) {
-                orderRepository.createOrder(d.id, productPriceVnd)
+            val existing = _existingOrderId.value
+            val orderIdResult: Result<String> = if (existing != null) {
+                Result.success(existing)
+            } else {
+                withContext(Dispatchers.IO) {
+                    orderRepository.createOrder(d.id, productPriceVnd)
+                }
             }
             _isSubmitting.value = false
-            orderResult.fold(
+            orderIdResult.fold(
                 onSuccess = {
                     _events.tryEmit(getApplication<Application>().getString(R.string.checkout_success))
                     onSuccess()
