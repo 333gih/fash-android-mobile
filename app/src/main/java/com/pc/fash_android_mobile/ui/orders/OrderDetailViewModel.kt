@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,8 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     private val orderRepository: OrderRepository =
         (application as FashApplication).orderRepository
+    private val listingRepository: ListingRepository =
+        (application as FashApplication).listingRepository
     private val sessionStore = (application as FashApplication).authManager.sessionStore
 
     /**
@@ -63,6 +66,50 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         if (buyerId.isNotBlank() && my.equals(buyerId, ignoreCase = true)) return true
         if (buyerName.isNotBlank() && my.equals(buyerName, ignoreCase = true)) return true
         return false
+    }
+
+    /** True when the logged-in user is the seller (matches id or username). */
+    fun isCurrentUserSeller(): Boolean {
+        val my = sessionStore.read()?.userId?.trim().orEmpty()
+        if (my.isBlank()) return false
+        val d = _detail.value ?: return false
+        val sellerId = d.sellerUserId.trim()
+        val sellerName = d.sellerUsername.trim()
+        if (sellerId.isNotBlank() && my.equals(sellerId, ignoreCase = true)) return true
+        if (sellerName.isNotBlank() && my.equals(sellerName, ignoreCase = true)) return true
+        return false
+    }
+
+    /**
+     * Marks the order as shipped (seller). Refreshes detail on success.
+     */
+    fun shipOrder(orderId: String, trackingNumber: String, carrier: String) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        val tn = trackingNumber.trim()
+        val c = carrier.trim().ifBlank { "—" }
+        if (tn.isBlank()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_ship_tracking_required))
+            return
+        }
+        viewModelScope.launch {
+            _isWorking.value = true
+            val result = withContext(Dispatchers.IO) {
+                orderRepository.shipOrder(oid, tn, c)
+            }
+            _isWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_ship_success))
+                    load(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: getApplication<Application>().getString(R.string.order_detail_ship_error),
+                    )
+                },
+            )
+        }
     }
 
     /**
@@ -151,6 +198,79 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                 onFailure = {
                     _events.tryEmit(
                         it.message ?: getApplication<Application>().getString(R.string.order_detail_review_error),
+                    )
+                },
+            )
+        }
+    }
+
+    /** Upload a photo for dispute / evidence (uses listing image endpoint → signed URL). */
+    fun uploadDisputePhoto(
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+        onResult: (Result<String>) -> Unit,
+    ) {
+        if (bytes.isEmpty()) {
+            onResult(Result.failure(IllegalArgumentException("empty image")))
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.uploadListingImage(bytes, fileName, mimeType)
+            }
+            onResult(result)
+        }
+    }
+
+    fun openDispute(orderId: String, description: String, photoUrls: List<String>) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        if (description.trim().isEmpty()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_description_required))
+            return
+        }
+        viewModelScope.launch {
+            _isWorking.value = true
+            val result = withContext(Dispatchers.IO) {
+                orderRepository.openDispute(oid, description, photoUrls)
+            }
+            _isWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_open_success))
+                    load(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: getApplication<Application>().getString(R.string.order_detail_dispute_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun submitDisputeEvidence(orderId: String, description: String, photoUrls: List<String>) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        if (description.trim().isEmpty()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_description_required))
+            return
+        }
+        viewModelScope.launch {
+            _isWorking.value = true
+            val result = withContext(Dispatchers.IO) {
+                orderRepository.submitDisputeEvidence(oid, description, photoUrls)
+            }
+            _isWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_evidence_success))
+                    load(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: getApplication<Application>().getString(R.string.order_detail_dispute_error),
                     )
                 },
             )

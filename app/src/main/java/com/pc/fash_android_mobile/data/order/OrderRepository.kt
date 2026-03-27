@@ -116,6 +116,49 @@ class OrderRepository(
         executePostJson(url, json.toString())
     }
 
+    /**
+     * `POST /orders/dispute` — buyer or seller opens a dispute (order must be `in_transit` or `delivered_confirmed`).
+     */
+    fun openDispute(orderId: String, description: String, photoUrls: List<String> = emptyList()): Result<Unit> =
+        runCatching {
+            val url = AppEnvironment.apiPath("api/v1/orders/dispute")
+            val desc = description.trim().take(2000)
+            if (desc.isEmpty()) error("description required")
+            val arr = JSONArray()
+            photoUrls.take(10).forEach { u ->
+                val t = u.trim()
+                if (t.isNotEmpty()) arr.put(t)
+            }
+            val json = JSONObject()
+                .put("order_id", orderId.trim())
+                .put("description", desc)
+                .put("photo_urls", arr)
+            executePostJson(url, json.toString())
+        }
+
+    /**
+     * `POST /orders/dispute/evidence` — update buyer or seller evidence after dispute is open.
+     */
+    fun submitDisputeEvidence(
+        orderId: String,
+        description: String,
+        photoUrls: List<String> = emptyList(),
+    ): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/dispute/evidence")
+        val desc = description.trim().take(2000)
+        if (desc.isEmpty()) error("description required")
+        val arr = JSONArray()
+        photoUrls.take(10).forEach { u ->
+            val t = u.trim()
+            if (t.isNotEmpty()) arr.put(t)
+        }
+        val json = JSONObject()
+            .put("order_id", orderId.trim())
+            .put("description", desc)
+            .put("photo_urls", arr)
+        executePostJson(url, json.toString())
+    }
+
     private fun executePostJson(url: String, json: String): String {
         return securedClient.newCall(
             Request.Builder()
@@ -174,6 +217,25 @@ class OrderRepository(
         val rawStatus = o.optString("status", o.optString("Status", "payment_pending")).lowercase()
         val canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit")
         val canReview = o.optBoolean("can_review", rawStatus == "delivered_confirmed")
+        val trackingNumber = o.optString("tracking_number", o.optString("TrackingNumber", ""))
+        val shippingFee = o.optLong("shipping_fee_vnd", o.optLong("ShippingFeeVND", o.optLong("shipping_fee", 0L)))
+        val discountVnd = o.optLong("discount_vnd", o.optLong("DiscountVND", o.optLong("discount_amount_vnd", 0L)))
+        val buyerTotal = o.optLong("buyer_total_vnd", o.optLong("BuyerTotalVND", o.optLong("total_vnd", 0L)))
+        val shipAddr = o.optJSONObject("shipping_address")
+            ?: o.optJSONObject("ShippingAddress")
+            ?: o.optJSONObject("delivery_address")
+            ?: JSONObject()
+        val shippingFormatted = buildShippingAddressString(shipAddr, o)
+        val recipientName = shipAddr.optString("recipient_name", shipAddr.optString("name", shipAddr.optString("RecipientName", "")))
+            .ifBlank { o.optString("recipient_name", o.optString("RecipientName", "")) }
+        val recipientPhone = shipAddr.optString("phone", shipAddr.optString("Phone", ""))
+            .ifBlank { o.optString("recipient_phone", o.optString("RecipientPhone", "")) }
+        val trackingEmpty = trackingNumber.isBlank()
+        val canShip = o.optBoolean("can_ship", o.optBoolean("CanShip", false)) ||
+            (rawStatus == "payment_held" && trackingEmpty)
+        val variantLabel = buildListingVariantLabel(listing)
+        val convId = o.optString("conversation_id", o.optString("conversationId", o.optString("ConversationID", "")))
+        val trackingSummary = o.optString("tracking_status", o.optString("TrackingStatus", o.optString("last_tracking_event", "")))
         return OrderDetail(
             orderId = o.optString("id", o.optString("ID", o.optString("order_id", ""))),
             listingId = o.optString("listing_id", o.optString("ListingID", listing.optString("ID", listing.optString("id", "")))),
@@ -187,7 +249,7 @@ class OrderRepository(
             platformFeeVnd = o.optLong("platform_fee_vnd", o.optLong("PlatformFeeVND", 0L)),
             sellerPayoutVnd = o.optLong("seller_payout_vnd", o.optLong("SellerPayoutVND", 0L)),
             status = rawStatus,
-            trackingNumber = o.optString("tracking_number", o.optString("TrackingNumber", "")),
+            trackingNumber = trackingNumber,
             carrier = o.optString("carrier", o.optString("Carrier", "")),
             listingTitle = listing.optString("Title", listing.optString("title", "")),
             listingImageUrl = coverUrl,
@@ -201,7 +263,61 @@ class OrderRepository(
             sellerAvatarUrl = seller.optString("AvatarURL", seller.optString("avatar_url", "")),
             canConfirm = canConfirm,
             canReview = canReview,
+            shippingFeeVnd = shippingFee,
+            discountVnd = discountVnd,
+            buyerTotalVnd = buyerTotal,
+            recipientName = recipientName,
+            recipientPhone = recipientPhone,
+            shippingAddressFormatted = shippingFormatted,
+            createdAt = o.optIsoFirst("created_at", "CreatedAt", "createdAt"),
+            paidAt = o.optIsoFirst("paid_at", "PaidAt", "payment_completed_at"),
+            shippedAt = o.optIsoFirst("shipped_at", "ShippedAt", "ship_date"),
+            deliveredAt = o.optIsoFirst("delivered_at", "DeliveredAt", "buyer_confirmed_at"),
+            cancelledAt = o.optIsoFirst("cancelled_at", "CancelledAt", "canceled_at"),
+            expectedDeliveryAt = o.optIsoFirst("expected_delivery_at", "ExpectedDelivery", "estimated_delivery"),
+            shipByAt = o.optIsoFirst("ship_by", "ship_by_at", "ShipBy", "must_ship_before"),
+            escrowReleaseAt = o.optIsoFirst("escrow_release_at", "EscrowReleaseAt", "auto_release_at"),
+            disputeSummary = o.optString("dispute_summary", o.optString("dispute_reason", o.optString("DisputeSummary", ""))),
+            listingVariantLabel = variantLabel,
+            conversationId = convId,
+            trackingStatusSummary = trackingSummary,
+            canShip = canShip,
         )
+    }
+
+    private fun JSONObject.optIsoFirst(vararg keys: String): String {
+        for (k in keys) {
+            val v = optString(k, "").trim()
+            if (v.isNotBlank()) return v
+        }
+        return ""
+    }
+
+    private fun buildShippingAddressString(ship: JSONObject, order: JSONObject): String {
+        val direct = ship.optString("formatted", ship.optString("full_address", ship.optString("address", ""))).trim()
+        if (direct.isNotBlank()) return direct
+        val line1 = ship.optString("line1", ship.optString("address_line_1", "")).trim()
+        val line2 = ship.optString("line2", ship.optString("address_line_2", "")).trim()
+        val ward = ship.optString("ward", "").trim()
+        val district = ship.optString("district", ship.optString("county", "")).trim()
+        val city = ship.optString("city", ship.optString("province", "")).trim()
+        val parts = listOf(line1, line2, ward, district, city).filter { it.isNotBlank() }
+        if (parts.isNotEmpty()) return parts.joinToString(", ")
+        return order.optString("shipping_address_text", order.optString("delivery_address", "")).trim()
+    }
+
+    private fun buildListingVariantLabel(listing: JSONObject): String {
+        val direct = listing.optString("variant_label", listing.optString("VariantLabel", listing.optString("sku", ""))).trim()
+        if (direct.isNotBlank()) return direct
+        val attrs = listing.optJSONArray("attributes") ?: listing.optJSONArray("Attributes") ?: return ""
+        val bits = mutableListOf<String>()
+        for (i in 0 until attrs.length()) {
+            val a = attrs.optJSONObject(i) ?: continue
+            val name = a.optString("name", a.optString("key", "")).trim()
+            val value = a.optString("value", "").trim()
+            if (value.isNotBlank()) bits.add(if (name.isNotBlank()) "$name: $value" else value)
+        }
+        return bits.joinToString(" · ").trim()
     }
 
     private fun parseOrder(json: String): OrderItem {

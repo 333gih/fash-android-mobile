@@ -5,7 +5,9 @@ import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.address.AddressLocalStore
 import com.pc.fash_android_mobile.data.order.OrderRepository
+import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
 import com.pc.fash_android_mobile.data.payment.MockPaymentService
 import com.pc.fash_android_mobile.data.payment.PaymentService
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -76,7 +78,21 @@ class FashApplication : android.app.Application() {
         )
     }
 
-    /** Replace with real implementation when payment API is available. */
+    /** Local shipping address book + per-order selection (sync with core when API is available). */
+    val addressLocalStore: AddressLocalStore by lazy { AddressLocalStore(this) }
+
+    /**
+     * Core-proxied payment initiation (returns gateway URL). Never calls payment-service internal APIs.
+     */
+    val corePaymentRepository: CorePaymentRepository by lazy {
+        CorePaymentRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
+
+    /** Legacy mock — reserved for tests / offline demos. */
     val paymentService: PaymentService by lazy { MockPaymentService() }
 
     /**

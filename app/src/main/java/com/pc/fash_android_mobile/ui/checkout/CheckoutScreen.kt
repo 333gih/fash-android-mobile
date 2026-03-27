@@ -1,5 +1,7 @@
 package com.pc.fash_android_mobile.ui.checkout
 
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -25,8 +27,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +48,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -75,8 +79,10 @@ fun CheckoutScreen(
     existingOrderId: String? = null,
     viewModel: CheckoutViewModel,
     onBack: () -> Unit,
-    onSuccess: () -> Unit,
+    /** Invoked with the paid order id after core reports **payment_held** (or equivalent). */
+    onSuccess: (orderId: String) -> Unit,
 ) {
+    val context = LocalContext.current
     val detail by viewModel.detail.collectAsState()
     val fullName by viewModel.fullName.collectAsState()
     val phone by viewModel.phone.collectAsState()
@@ -88,10 +94,24 @@ fun CheckoutScreen(
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val orderDetail by viewModel.orderDetail.collectAsState()
+    val awaitingGateway by viewModel.awaitingGatewayReturn.collectAsState()
     val scheme = MaterialTheme.colorScheme
 
     LaunchedEffect(listingId, overridePriceVnd, existingOrderId) {
         viewModel.loadListing(listingId, overridePriceVnd, existingOrderId)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.paymentUiEvents.collect { event ->
+            when (event) {
+                is PaymentUiEvent.OpenPaymentUrl -> runCatching {
+                    CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .build()
+                        .launchUrl(context, Uri.parse(event.url))
+                }
+            }
+        }
     }
 
     BackHandler { onBack() }
@@ -124,18 +144,11 @@ fun CheckoutScreen(
                 topBar = {
                     TopAppBar(
                         title = {
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.checkout_title),
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = scheme.onSurface,
-                                )
-                                Text(
-                                    text = stringResource(R.string.checkout_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = scheme.onSurfaceVariant,
-                                )
-                            }
+                            Text(
+                                text = stringResource(R.string.checkout_title),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = scheme.onSurface,
+                            )
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
@@ -197,27 +210,59 @@ fun CheckoutScreen(
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         OrderSummarySection(
-                            order = orderDetail,
                             productPriceVnd = viewModel.productPriceVnd,
-                            platformFeeVnd = viewModel.platformFeeVnd,
-                            totalAmountVnd = viewModel.totalAmountVnd,
-                            platformFeeFromOrder = viewModel.platformFeeFromOrder,
+                            shippingFeeVnd = viewModel.shippingFeeVnd,
+                            discountVnd = viewModel.discountVnd,
+                            grandTotalVnd = viewModel.grandTotalVnd,
                             sellerPayoutVnd = viewModel.sellerPayoutVnd,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        CheckoutTrustSection()
                     }
-                    Box(
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
                     ) {
+                        if (awaitingGateway) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = scheme.primaryContainer.copy(alpha = 0.35f),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.checkout_awaiting_gateway),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = scheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
+                                )
+                            }
+                        }
                         CheckoutButton(
-                            totalAmountVnd = viewModel.totalAmountVnd,
-                        isSubmitting = isSubmitting,
-                        enabled = viewModel.canSubmit(),
+                            grandTotalVnd = viewModel.grandTotalVnd,
+                            isSubmitting = isSubmitting,
+                            enabled = viewModel.canSubmit() && !awaitingGateway,
                             onClick = { viewModel.submitPayment(onSuccess) },
                         )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = scheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.checkout_secured_fash_pay),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -251,7 +296,7 @@ private fun ProductCheckoutCard(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = stringResource(R.string.checkout_section_product),
+                text = stringResource(R.string.checkout_order_overview),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = scheme.onSurfaceVariant,
             )
@@ -597,34 +642,69 @@ private fun PaymentMethodSection(
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = scheme.onSurface,
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Surface(
-            shape = SectionCorner,
-            color = scheme.surfaceContainerLow,
+            shape = RoundedCornerShape(6.dp),
+            color = scheme.surfaceContainerHighest.copy(alpha = 0.6f),
         ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-                methods.forEachIndexed { index, method ->
+            Text(
+                text = stringResource(R.string.checkout_editorial_badge),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            methods.forEachIndexed { index, method ->
+                val selected = index == selectedIndex
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(index) },
+                    shape = SectionCorner,
+                    color = scheme.surface,
+                    border = BorderStroke(
+                        width = if (selected) 2.dp else 1.dp,
+                        color = if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.4f),
+                    ),
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSelect(index) }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = paymentMethodChipColor(method.id).copy(alpha = 0.2f),
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = paymentMethodInitial(method.id),
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = paymentMethodChipColor(method.id),
+                                    )
+                                }
+                            }
+                            Text(
+                                text = method.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = scheme.onSurface,
+                            )
+                        }
                         Icon(
-                            imageVector = if (index == selectedIndex) Icons.Default.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked,
+                            imageVector = if (selected) Icons.Default.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked,
                             contentDescription = null,
-                            tint = if (index == selectedIndex) FashColors.Primary else scheme.onSurfaceVariant,
+                            tint = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = method.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = scheme.onSurface,
                         )
                     }
                 }
@@ -633,32 +713,39 @@ private fun PaymentMethodSection(
     }
 }
 
+private fun paymentMethodInitial(id: String): String = when (id.lowercase()) {
+    "momo" -> "M"
+    "zalopay" -> "Z"
+    "shopeepay" -> "S"
+    "tpbank" -> "B"
+    else -> id.take(1).uppercase()
+}
+
+@Composable
+private fun paymentMethodChipColor(id: String): Color = when (id.lowercase()) {
+    "momo" -> Color(0xFFE91E8C)
+    "zalopay" -> Color(0xFF0068FF)
+    "shopeepay" -> Color(0xFFEE4D2D)
+    "tpbank" -> Color(0xFF757575)
+    else -> FashColors.Primary
+}
+
 @Composable
 private fun OrderSummarySection(
-    order: OrderDetail?,
     productPriceVnd: Long,
-    platformFeeVnd: Long,
-    totalAmountVnd: Long,
-    platformFeeFromOrder: Boolean,
+    shippingFeeVnd: Long,
+    discountVnd: Long,
+    grandTotalVnd: Long,
     sellerPayoutVnd: Long,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val productLabel = if (order != null) {
-        stringResource(R.string.checkout_price_deal)
-    } else {
-        stringResource(R.string.checkout_product_price)
-    }
-    val feeLabel = if (platformFeeFromOrder) {
-        stringResource(R.string.checkout_platform_fee_from_order)
-    } else {
-        stringResource(R.string.checkout_platform_fee_estimate)
-    }
+    val discountColor = Color(0xFF2E7D32)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart),
         shape = SectionCorner,
-        color = scheme.surfaceContainerLow,
+        color = Color(0xFFFFF5F0),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -675,7 +762,7 @@ private fun OrderSummarySection(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = productLabel,
+                    text = stringResource(R.string.checkout_product_price),
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
@@ -690,15 +777,32 @@ private fun OrderSummarySection(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = feeLabel,
+                    text = stringResource(R.string.checkout_shipping_fee),
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
                 Text(
-                    text = formatPrice(platformFeeVnd),
+                    text = formatPrice(shippingFeeVnd),
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurface,
                 )
+            }
+            if (discountVnd > 0L) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.checkout_discount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "-${formatPrice(discountVnd)}",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = discountColor,
+                    )
+                }
             }
             if (sellerPayoutVnd > 0L) {
                 Row(
@@ -723,13 +827,13 @@ private fun OrderSummarySection(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = stringResource(R.string.checkout_total),
+                    text = stringResource(R.string.checkout_total_payment),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = scheme.onSurface,
                 )
                 Text(
-                    text = formatPrice(totalAmountVnd),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    text = formatPrice(grandTotalVnd),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = FashColors.Primary,
                 )
             }
@@ -738,70 +842,14 @@ private fun OrderSummarySection(
 }
 
 @Composable
-private fun CheckoutTrustSection() {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .border(
-                BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.35f)),
-                SectionCorner,
-            ),
-        shape = SectionCorner,
-        color = scheme.surface,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null,
-                    tint = FashColors.Primary,
-                    modifier = Modifier.size(22.dp),
-                )
-                Text(
-                    text = stringResource(R.string.checkout_value_title),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
-                )
-            }
-            Text(
-                text = "• ${stringResource(R.string.checkout_value_escrow)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-            )
-            Text(
-                text = "• ${stringResource(R.string.checkout_value_support)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-            )
-            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
-            Text(
-                text = stringResource(R.string.checkout_security_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = androidx.compose.ui.graphics.Color(0xFF2E7D32),
-            )
-        }
-    }
-}
-
-@Composable
 private fun CheckoutButton(
-    totalAmountVnd: Long,
+    grandTotalVnd: Long,
     isSubmitting: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding(),
+        modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 8.dp,
     ) {
@@ -824,22 +872,30 @@ private fun CheckoutButton(
                     strokeWidth = 2.dp,
                 )
             } else {
-                Icon(
-                    imageVector = Icons.Default.LocalMall,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = FashColors.OnPrimary,
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.checkout_confirm_pay),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = FashColors.OnPrimary,
+                        )
+                    }
                     Text(
-                        text = stringResource(R.string.checkout_confirm_pay),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
-                    Text(
-                        text = "• ${formatPrice(totalAmountVnd)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = FashColors.OnPrimary.copy(alpha = 0.9f),
+                        text = formatPrice(grandTotalVnd),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = FashColors.OnPrimary.copy(alpha = 0.95f),
                     )
                 }
             }
@@ -854,4 +910,4 @@ private fun resolveImageUrl(path: String): String {
 }
 
 private fun formatPrice(vnd: Long): String =
-    "đ ${"%,d".format(vnd).replace(',', '.')}"
+    "₫ ${"%,d".format(vnd).replace(',', '.')}"

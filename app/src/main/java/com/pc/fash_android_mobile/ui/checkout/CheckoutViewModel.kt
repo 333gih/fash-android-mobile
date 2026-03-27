@@ -3,18 +3,22 @@ package com.pc.fash_android_mobile.ui.checkout
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.FashApplication
+import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderRepository
+import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
 import com.pc.fash_android_mobile.data.payment.CheckoutAddress
-import com.pc.fash_android_mobile.data.payment.PaymentRequest
-import com.pc.fash_android_mobile.data.payment.PaymentService
+import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -24,12 +28,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val PLATFORM_FEE_PERCENT = 0.10
+/** One-shot UI actions (e.g. open gateway URL in Custom Tabs). */
+sealed interface PaymentUiEvent {
+    data class OpenPaymentUrl(val url: String) : PaymentUiEvent
+}
 
 data class PaymentMethodOption(
     val id: String,
     val name: String,
-    val logoRes: Int? = null,
 )
 
 class CheckoutViewModel(
@@ -40,8 +46,8 @@ class CheckoutViewModel(
         (application as FashApplication).listingRepository
     private val orderRepository: OrderRepository =
         (application as FashApplication).orderRepository
-    private val paymentService: PaymentService =
-        (application as FashApplication).paymentService
+    private val corePaymentRepository: CorePaymentRepository =
+        (application as FashApplication).corePaymentRepository
 
     private val _detail = MutableStateFlow<ListingDetail?>(null)
     val detail: StateFlow<ListingDetail?> = _detail.asStateFlow()
@@ -70,6 +76,10 @@ class CheckoutViewModel(
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
+    /** True after gateway URL opened until paid, cancelled, or poll timeout. */
+    private val _awaitingGatewayReturn = MutableStateFlow(false)
+    val awaitingGatewayReturn: StateFlow<Boolean> = _awaitingGatewayReturn.asStateFlow()
+
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
 
@@ -88,10 +98,21 @@ class CheckoutViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    private val _paymentUiEvents = MutableSharedFlow<PaymentUiEvent>(extraBufferCapacity = 4)
+    val paymentUiEvents: SharedFlow<PaymentUiEvent> = _paymentUiEvents.asSharedFlow()
+
+    private var pollingJob: Job? = null
+    private var pendingSuccess: ((String) -> Unit)? = null
+
+    /**
+     * Channel ids must match backend / payment-service enabled gateways (lowercase).
+     * See ADDING_PAYMENT_PROVIDER.md — e.g. momo, zalopay, shopeepay, tpbank.
+     */
     val paymentMethods = listOf(
         PaymentMethodOption("momo", "Ví MoMo"),
         PaymentMethodOption("zalopay", "ZaloPay"),
-        PaymentMethodOption("vnpay", "VNPay"),
+        PaymentMethodOption("shopeepay", "ShopeePay"),
+        PaymentMethodOption("tpbank", "Chuyển khoản ngân hàng"),
     )
 
     fun loadListing(listingId: String, overridePriceVnd: Long = 0L, existingOrderId: String? = null) {
@@ -124,9 +145,39 @@ class CheckoutViewModel(
                         _events.tryEmit(_loadError.value!!)
                     },
                 )
-                orderResult?.getOrNull()?.let { _orderDetail.value = it }
+                orderResult?.getOrNull()?.let { od ->
+                    _orderDetail.value = od
+                    if (od.recipientName.isNotBlank()) _fullName.value = od.recipientName
+                    if (od.recipientPhone.isNotBlank()) _phone.value = od.recipientPhone
+                    if (od.shippingAddressFormatted.isNotBlank()) {
+                        _address.value = od.shippingAddressFormatted
+                    }
+                }
+                applySavedAddressPrefill()
             }
         }
+    }
+
+    /** Fills empty checkout fields from the local address book (order-linked or default). */
+    private fun applySavedAddressPrefill() {
+        val app = getApplication<Application>() as FashApplication
+        val uid = app.authManager.sessionStore.read()?.userId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return
+        val store = app.addressLocalStore
+        val orderId = _existingOrderId.value?.trim()?.takeIf { it.isNotEmpty() }
+        val list = store.listAddresses(uid)
+        val picked: ShippingAddress? = if (orderId != null) {
+            val mapped = store.getOrderAddressId(uid, orderId)?.let { id -> list.find { it.id == id } }
+            mapped ?: list.firstOrNull { it.isDefault } ?: list.firstOrNull()
+        } else {
+            store.getDefaultOrFirst(uid)
+        }
+        val c = picked?.toCheckoutAddress() ?: return
+        if (_fullName.value.isBlank()) _fullName.value = c.fullName
+        if (_phone.value.isBlank()) _phone.value = c.phone
+        if (_address.value.isBlank()) _address.value = c.address
+        if (_district.value.isBlank()) _district.value = c.district
+        if (_city.value.isBlank()) _city.value = c.city
     }
 
     fun onFullNameChange(value: String) { _fullName.value = value }
@@ -136,6 +187,7 @@ class CheckoutViewModel(
     fun onCityChange(value: String) { _city.value = value }
     fun selectPaymentMethod(index: Int) { _selectedPaymentIndex.value = index }
 
+    /** Product line (before shipping/discount). */
     val productPriceVnd: Long
         get() {
             val od = _orderDetail.value
@@ -143,6 +195,28 @@ class CheckoutViewModel(
             return _overridePriceVnd.value.takeIf { it > 0 } ?: (_detail.value?.priceVnd ?: 0L)
         }
 
+    val shippingFeeVnd: Long
+        get() {
+            val od = _orderDetail.value
+            if (od != null && od.shippingFeeVnd > 0L) return od.shippingFeeVnd
+            return DEFAULT_SHIPPING_FEE_VND
+        }
+
+    val discountVnd: Long
+        get() = _orderDetail.value?.discountVnd?.takeIf { it > 0L } ?: 0L
+
+    /** Total the buyer pays (matches POST /orders amount_vnd for new orders). */
+    val grandTotalVnd: Long
+        get() {
+            val od = _orderDetail.value
+            if (od != null) {
+                val t = od.effectiveBuyerTotal()
+                if (t > 0L) return t
+            }
+            return (productPriceVnd + shippingFeeVnd - discountVnd).coerceAtLeast(1000L)
+        }
+
+    /** Legacy: platform fee for transparency (not added to buyer total in summary). */
     val platformFeeVnd: Long
         get() {
             val od = _orderDetail.value
@@ -150,15 +224,11 @@ class CheckoutViewModel(
             return (productPriceVnd * PLATFORM_FEE_PERCENT).toLong()
         }
 
-    /** True when platform fee comes from the order API (not the 10%% estimate). */
     val platformFeeFromOrder: Boolean
         get() = _orderDetail.value?.platformFeeVnd?.let { it > 0L } == true
 
     val sellerPayoutVnd: Long
         get() = _orderDetail.value?.sellerPayoutVnd?.takeIf { it > 0L } ?: 0L
-
-    val totalAmountVnd: Long
-        get() = productPriceVnd + platformFeeVnd
 
     fun canSubmit(): Boolean {
         if (_detail.value == null) return false
@@ -170,9 +240,14 @@ class CheckoutViewModel(
         return true
     }
 
-    fun submitPayment(onSuccess: () -> Unit) {
+    /**
+     * Creates or reuses order, calls core **proxied** payment initiate (returns gateway URL), opens URL in UI,
+     * then polls order status until **payment_held** or terminal state.
+     */
+    fun submitPayment(onSuccess: (orderId: String) -> Unit) {
         if (!canSubmit() || _isSubmitting.value) return
         val d = _detail.value ?: return
+        pendingSuccess = onSuccess
         viewModelScope.launch {
             _isSubmitting.value = true
             val existing = _existingOrderId.value
@@ -180,21 +255,120 @@ class CheckoutViewModel(
                 Result.success(existing)
             } else {
                 withContext(Dispatchers.IO) {
-                    orderRepository.createOrder(d.id, productPriceVnd)
+                    orderRepository.createOrder(d.id, grandTotalVnd)
                 }
             }
-            _isSubmitting.value = false
-            orderIdResult.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.checkout_success))
-                    onSuccess()
+            val orderId = orderIdResult.getOrElse { e ->
+                _isSubmitting.value = false
+                pendingSuccess = null
+                _events.tryEmit(
+                    e.message ?: getApplication<Application>().getString(R.string.checkout_payment_error),
+                )
+                return@launch
+            }
+            withContext(Dispatchers.IO) { orderRepository.getOrderDetail(orderId) }.getOrNull()?.let {
+                _orderDetail.value = it
+            }
+            val idx = _selectedPaymentIndex.value.coerceIn(0, paymentMethods.lastIndex)
+            val method = paymentMethods[idx]
+            val initResult = withContext(Dispatchers.IO) {
+                corePaymentRepository.initiatePayment(
+                    orderId = orderId,
+                    paymentMethod = method.id,
+                    redirectUrl = BuildConfig.PAYMENT_REDIRECT_URL,
+                    shipping = CheckoutAddress(
+                        fullName = _fullName.value,
+                        phone = _phone.value,
+                        address = _address.value,
+                        district = _district.value,
+                        city = _city.value,
+                    ),
+                )
+            }
+            initResult.fold(
+                onSuccess = { result ->
+                    _isSubmitting.value = false
+                    _awaitingGatewayReturn.value = true
+                    _paymentUiEvents.tryEmit(PaymentUiEvent.OpenPaymentUrl(result.paymentUrl))
+                    startPollingForPaid(orderId)
                 },
                 onFailure = { e ->
+                    _isSubmitting.value = false
+                    pendingSuccess = null
                     _events.tryEmit(
-                        e.message ?: getApplication<Application>().getString(R.string.checkout_payment_error),
+                        e.message
+                            ?: getApplication<Application>().getString(R.string.checkout_payment_init_failed),
                     )
                 },
             )
         }
+    }
+
+    private fun startPollingForPaid(orderId: String) {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            repeat(POLL_ATTEMPTS) { attempt ->
+                if (attempt > 0) delay(POLL_INTERVAL_MS)
+                val od = withContext(Dispatchers.IO) {
+                    orderRepository.getOrderDetail(orderId).getOrNull()
+                }
+                if (od != null) {
+                    _orderDetail.value = od
+                    when (od.status.lowercase()) {
+                        "payment_held", "in_transit", "delivered_confirmed" -> {
+                            finishPaidFlow(orderId)
+                            return@launch
+                        }
+                        "cancelled", "disputed" -> {
+                            _awaitingGatewayReturn.value = false
+                            pendingSuccess = null
+                            _events.tryEmit(
+                                getApplication<Application>().getString(R.string.checkout_payment_cancelled_or_dispute),
+                            )
+                            return@launch
+                        }
+                    }
+                }
+                val paySt = withContext(Dispatchers.IO) {
+                    corePaymentRepository.getPaymentStatus(orderId).getOrNull()
+                }
+                if (paySt != null) {
+                    val esc = paySt.escrowStatus.lowercase()
+                    val looksPaid = paySt.paidAt.isNotBlank() ||
+                        esc.contains("held") || esc.contains("paid") ||
+                        esc.contains("complete") || esc.contains("success")
+                    if (looksPaid && !esc.contains("cancel")) {
+                        val refreshed = withContext(Dispatchers.IO) {
+                            orderRepository.getOrderDetail(orderId).getOrNull()
+                        }
+                        refreshed?.let { _orderDetail.value = it }
+                        finishPaidFlow(orderId)
+                        return@launch
+                    }
+                }
+            }
+            _awaitingGatewayReturn.value = false
+            pendingSuccess = null
+            _events.tryEmit(getApplication<Application>().getString(R.string.checkout_payment_poll_timeout))
+        }
+    }
+
+    private fun finishPaidFlow(orderId: String) {
+        _awaitingGatewayReturn.value = false
+        _events.tryEmit(getApplication<Application>().getString(R.string.checkout_success))
+        pendingSuccess?.invoke(orderId)
+        pendingSuccess = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        pollingJob?.cancel()
+    }
+
+    private companion object {
+        const val PLATFORM_FEE_PERCENT = 0.10
+        const val DEFAULT_SHIPPING_FEE_VND = 30_000L
+        const val POLL_INTERVAL_MS = 3_000L
+        const val POLL_ATTEMPTS = 60
     }
 }

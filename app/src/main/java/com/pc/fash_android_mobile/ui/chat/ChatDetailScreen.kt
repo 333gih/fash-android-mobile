@@ -558,6 +558,8 @@ private fun DealBanner(
 ) {
     val s = orderStatus?.trim()?.lowercase().orEmpty()
     val buyerNeedsToPay = isBuyer && s == "payment_pending"
+    val sellerWaitingForPayment = !isBuyer && s == "payment_pending"
+    val showPaymentDeadlineWarning = buyerNeedsToPay || sellerWaitingForPayment
 
     val appearance = dealBannerAppearance(
         isBuyer = isBuyer,
@@ -614,6 +616,47 @@ private fun DealBanner(
                     style = MaterialTheme.typography.labelSmall,
                     color = appearance.accent,
                 )
+            }
+        }
+
+        // Urgent: pay soon or order may be cancelled (buyer + seller while payment_pending)
+        if (showPaymentDeadlineWarning) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = if (buyerNeedsToPay) 10.dp else 12.dp),
+                color = Color(0xFFFFF5E6),
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color(0xFFFFB74D).copy(alpha = 0.65f),
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFE65100),
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Text(
+                        text = if (buyerNeedsToPay) {
+                            stringResource(R.string.chat_deal_payment_deadline_warning_buyer)
+                        } else {
+                            stringResource(R.string.chat_deal_payment_deadline_warning_seller)
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp,
+                        ),
+                        color = Color(0xFFBF360C),
+                    )
+                }
             }
         }
 

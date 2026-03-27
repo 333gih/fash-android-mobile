@@ -101,6 +101,22 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         "CHAT_MAX_OFFERS_PER_CONVERSATION must be >= 1 for flavor '$flavorName'"
     }
     buildConfigField("int", "CHAT_MAX_OFFERS_PER_CONVERSATION", maxOffersPerConversation.toString())
+
+    /**
+     * Return URL for wallet apps after payment (must be HTTPS for most gateways).
+     * Core-service should proxy [CorePaymentRepository] initiate and pass this to payment-service.
+     */
+    val paymentRedirectUrl = envVal("PAYMENT_REDIRECT_URL")
+        ?: "https://fash.app/payment/callback"
+    buildConfigField("String", "PAYMENT_REDIRECT_URL", buildConfigStringLiteral(paymentRedirectUrl))
+    /**
+     * Core API path template for initiating gateway payment (single %s = order_id).
+     * Example: api/v1/orders/%s/payments/initiate
+     */
+    val corePaymentInitiatePath = envOrEmpty("CORE_PAYMENT_INITIATE_PATH").ifBlank {
+        "api/v1/orders/%s/payments/initiate"
+    }
+    buildConfigField("String", "CORE_PAYMENT_INITIATE_PATH", buildConfigStringLiteral(corePaymentInitiatePath))
 }
 
 android {
@@ -190,6 +206,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.coil.compose)
+    implementation("androidx.browser:browser:1.8.0")
     // Explicit coordinates — ensures IDE/Kotlin resolve `com.facebook.*` (Catalog `libs.fb.login` can fail indexing in some setups).
     implementation("com.facebook.android:facebook-login:17.0.2")
     implementation(libs.play.services.auth)

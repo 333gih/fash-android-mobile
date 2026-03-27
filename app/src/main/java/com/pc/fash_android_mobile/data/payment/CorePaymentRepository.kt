@@ -1,0 +1,157 @@
+package com.pc.fash_android_mobile.data.payment
+
+import com.pc.fash_android_mobile.BuildConfig
+import com.pc.fash_android_mobile.config.AppEnvironment
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+
+private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+
+/**
+ * **core-service only** — initiates payment for an existing order so the backend can call
+ * payment-service `internal/payments/initiate` with secrets. The app never calls payment-service
+ * internal routes directly (see ANDROID_CORE_REALTIME_INTEGRATION.md, payment section).
+ *
+ * Expected: `POST {API_BASE}/{CORE_PAYMENT_INITIATE_PATH}` with `%s` → order id.
+ * Response: `payment_url`, optional `transaction_id`, `expires_at`.
+ */
+class CorePaymentRepository(
+    private val securedClient: OkHttpClient,
+) {
+
+    fun initiatePayment(
+        orderId: String,
+        paymentMethod: String,
+        redirectUrl: String,
+        shipping: CheckoutAddress?,
+    ): Result<PaymentInitiateResult> = runCatching {
+        val oid = orderId.trim()
+        if (oid.isBlank()) error("order_id required")
+        val pathTemplate = BuildConfig.CORE_PAYMENT_INITIATE_PATH.trim()
+        val path = String.format(pathTemplate, oid)
+        val url = AppEnvironment.apiPath(path.trimStart('/'))
+        val json = JSONObject()
+            .put("payment_method", paymentMethod.trim().lowercase())
+            .put("redirect_url", redirectUrl.trim())
+        shipping?.let { s ->
+            json.put(
+                "shipping_address",
+                JSONObject()
+                    .put("recipient_name", s.fullName.trim())
+                    .put("phone", s.phone.trim())
+                    .put("line1", s.address.trim())
+                    .put("district", s.district.trim())
+                    .put("city", s.city.trim()),
+            )
+        }
+        val body = executePostJson(url, json.toString())
+        parseInitiateResponse(body)
+    }
+
+    /**
+     * Optional: core may expose payment status for polling. If 404, returns failure.
+     */
+    fun getPaymentStatus(orderId: String): Result<PaymentStatusResult> = runCatching {
+        val oid = orderId.trim()
+        val url = AppEnvironment.apiPath("api/v1/orders/$oid/payments/status")
+        val body = executeGet(url)
+        parseStatusResponse(body)
+    }
+
+    private fun executePostJson(url: String, json: String): String {
+        return securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val respBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(respBody).optString("error", respBody).ifBlank { respBody }
+                } catch (_: Exception) {
+                    respBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            respBody.ifBlank { "{}" }
+        }
+    }
+
+    private fun executeGet(url: String): String {
+        return securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(body).optString("error", body).ifBlank { body }
+                } catch (_: Exception) {
+                    body
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            body
+        }
+    }
+
+    private fun parseInitiateResponse(raw: String): PaymentInitiateResult {
+        val o = when {
+            raw.trim().startsWith("{") -> try {
+                val obj = JSONObject(raw)
+                if (obj.has("data")) obj.getJSONObject("data") else obj
+            } catch (_: Exception) {
+                JSONObject(raw)
+            }
+            else -> JSONObject("{}")
+        }
+        val paymentUrl = o.optString("payment_url", o.optString("paymentUrl", o.optString("PaymentURL", "")))
+            .ifBlank { o.optString("checkout_url", "") }
+        if (paymentUrl.isBlank()) error("No payment_url in response")
+        return PaymentInitiateResult(
+            paymentUrl = paymentUrl,
+            transactionId = o.optString("transaction_id", o.optString("transactionId", "")).takeIf { it.isNotBlank() },
+            expiresAt = o.optString("expires_at", o.optString("expiresAt", "")).takeIf { it.isNotBlank() },
+        )
+    }
+
+    private fun parseStatusResponse(raw: String): PaymentStatusResult {
+        val o = when {
+            raw.trim().startsWith("{") -> try {
+                val obj = JSONObject(raw)
+                if (obj.has("data")) obj.getJSONObject("data") else obj
+            } catch (_: Exception) {
+                JSONObject(raw)
+            }
+            else -> JSONObject("{}")
+        }
+        return PaymentStatusResult(
+            escrowStatus = o.optString("escrow_status", o.optString("status", "")),
+            paidAt = o.optString("paid_at", o.optString("paidAt", "")),
+            amountVnd = o.optLong("amount_vnd", o.optLong("AmountVND", 0L)),
+        )
+    }
+}
+
+data class PaymentInitiateResult(
+    val paymentUrl: String,
+    val transactionId: String?,
+    val expiresAt: String?,
+)
+
+data class PaymentStatusResult(
+    val escrowStatus: String,
+    val paidAt: String,
+    val amountVnd: Long,
+)

@@ -76,6 +76,9 @@ import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.address.AddEditAddressScreen
+import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
+import com.pc.fash_android_mobile.ui.address.ShippingAddressListScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -130,6 +133,7 @@ class MainActivity : ComponentActivity() {
     private val checkoutViewModel: CheckoutViewModel by viewModels()
     private val ordersViewModel: com.pc.fash_android_mobile.ui.orders.OrdersViewModel by viewModels()
     private val orderDetailViewModel: OrderDetailViewModel by viewModels()
+    private val addressBookViewModel: AddressBookViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
 
     private val googleSignInLauncher = registerForActivityResult(
@@ -180,6 +184,7 @@ class MainActivity : ComponentActivity() {
                 launch { checkoutViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
                 launch { ordersViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
                 launch { orderDetailViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
+                launch { addressBookViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
             }
 
             val email by loginViewModel.email.collectAsState()
@@ -356,6 +361,10 @@ class MainActivity : ComponentActivity() {
                                     var selectedCheckoutOfferPrice by rememberSaveable { mutableStateOf(0L) }
                                     var checkoutExistingOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var addressFlowOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
+                                    var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
+                                    var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
@@ -549,6 +558,84 @@ class MainActivity : ComponentActivity() {
                                                     selectedCheckoutOfferPrice = amountVnd
                                                     checkoutExistingOrderId = existingOid
                                                 },
+                                                onNavigateToChat = { conversationId ->
+                                                    selectedOrderId = null
+                                                    selectedConversationId = conversationId
+                                                },
+                                                addressBookViewModel = addressBookViewModel,
+                                                onOpenShippingAddressList = {
+                                                    addressFlowOrderId = selectedOrderId
+                                                    showShippingAddressList = true
+                                                },
+                                                onOpenAddShippingAddress = {
+                                                    addressFlowOrderId = selectedOrderId
+                                                    showAddAddressScreen = true
+                                                    addAddressOpenedFromList = false
+                                                },
+                                            )
+                                        }
+                                        if (showShippingAddressList && addressFlowOrderId != null && !showAddAddressScreen) {
+                                            BackHandler {
+                                                showShippingAddressList = false
+                                                addressFlowOrderId = null
+                                            }
+                                            ShippingAddressListScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                orderId = addressFlowOrderId!!,
+                                                viewModel = addressBookViewModel,
+                                                onBack = {
+                                                    showShippingAddressList = false
+                                                    addressFlowOrderId = null
+                                                },
+                                                onAddNew = {
+                                                    addAddressOpenedFromList = true
+                                                    showAddAddressScreen = true
+                                                },
+                                                onConfirmed = {
+                                                    showShippingAddressList = false
+                                                    addressFlowOrderId = null
+                                                },
+                                            )
+                                        }
+                                        if (showAddAddressScreen) {
+                                            BackHandler {
+                                                val fromList = addAddressOpenedFromList
+                                                showAddAddressScreen = false
+                                                if (fromList) {
+                                                    addAddressOpenedFromList = false
+                                                } else {
+                                                    addressFlowOrderId = null
+                                                }
+                                            }
+                                            AddEditAddressScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                viewModel = addressBookViewModel,
+                                                onBack = {
+                                                    val fromList = addAddressOpenedFromList
+                                                    showAddAddressScreen = false
+                                                    if (fromList) {
+                                                        addAddressOpenedFromList = false
+                                                    } else {
+                                                        addressFlowOrderId = null
+                                                    }
+                                                },
+                                                onSaved = { newId ->
+                                                    val oid = addressFlowOrderId
+                                                    val addr = addressBookViewModel.addressById(newId)
+                                                    if (oid != null && addr != null) {
+                                                        addressBookViewModel.setOrderShipping(oid, addr)
+                                                    }
+                                                    showAddAddressScreen = false
+                                                    if (addAddressOpenedFromList) {
+                                                        addAddressOpenedFromList = false
+                                                    } else {
+                                                        addressFlowOrderId = null
+                                                    }
+                                                },
                                             )
                                         }
                                         if (selectedCheckoutListingId != null) {
@@ -565,14 +652,11 @@ class MainActivity : ComponentActivity() {
                                                     selectedCheckoutOfferPrice = 0L
                                                     checkoutExistingOrderId = null
                                                 },
-                                                onSuccess = {
-                                                    val oid = checkoutExistingOrderId
+                                                onSuccess = { paidOrderId ->
                                                     selectedCheckoutListingId = null
                                                     selectedCheckoutOfferPrice = 0L
                                                     checkoutExistingOrderId = null
-                                                    if (oid != null) {
-                                                        orderDetailViewModel.load(oid)
-                                                    }
+                                                    orderDetailViewModel.load(paidOrderId)
                                                 },
                                             )
                                         }
