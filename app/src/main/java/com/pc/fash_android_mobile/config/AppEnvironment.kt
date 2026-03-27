@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.config
 
 import com.pc.fash_android_mobile.BuildConfig
+import com.pc.fash_android_mobile.data.locale.AppLocale
 
 /**
  * Typed access to values loaded from [env/dev.env] or [env/prod.env] at build time (via [BuildConfig]).
@@ -83,9 +84,18 @@ object AppEnvironment {
         return "$base/$rel"
     }
 
+    /**
+     * Core-service API (same host as [apiBaseUrl]). When [BuildConfig.CORE_API_USE_LANGUAGE_PREFIX] is true
+     * (from `CORE_API_USE_LANGUAGE_PREFIX=true` in env), paths are `{base}/{vi|en}/{relativePath}` e.g. `.../vi/api/v1/...`.
+     * Auth endpoints use [authServicePath] and are not prefixed.
+     */
     fun apiPath(relativePath: String): String {
         val base = apiBaseUrl.trimEnd('/')
         val rel = relativePath.trimStart('/')
-        return "$base/$rel"
+        if (!BuildConfig.CORE_API_USE_LANGUAGE_PREFIX) {
+            return "$base/$rel"
+        }
+        val lang = AppLocale.coreApiPathSegment()
+        return "$base/$lang/$rel"
     }
 }

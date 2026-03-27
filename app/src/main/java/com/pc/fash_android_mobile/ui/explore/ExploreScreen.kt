@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -61,6 +62,7 @@ import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.FeedSectionHeader
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
+import com.pc.fash_android_mobile.ui.home.HomeBrandFooterStrip
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -212,8 +214,10 @@ fun ExploreScreen(
                             .fillMaxWidth()
                             .weight(1f),
                         contentPadding = PaddingValues(
-                            horizontal = FashTheme.spacing.editorialStart,
-                            vertical = 8.dp,
+                            start = FashTheme.spacing.editorialStart,
+                            end = FashTheme.spacing.editorialEnd,
+                            top = 8.dp,
+                            bottom = FashTheme.spacing.spacing6,
                         ),
                         horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                         verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing4),
@@ -230,6 +234,9 @@ fun ExploreScreen(
                                 onClick = { onListingClick(item.id, item.sellerId) },
                                 imageAspectRatio = ExploreListingTileAspectRatio,
                             )
+                        }
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
                         }
                     }
                 }

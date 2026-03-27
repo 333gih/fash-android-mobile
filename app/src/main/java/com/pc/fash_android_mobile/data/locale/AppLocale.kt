@@ -3,18 +3,48 @@ package com.pc.fash_android_mobile.data.locale
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Vietnamese uses `res/values/`; English uses `res/values-en/`.
  * Persists the in-app language choice and applies it via [AppCompatDelegate.setApplicationLocales].
+ * Compose must use [com.pc.fash_android_mobile.ui.locale.ProvideAppLocale] so [stringResource]
+ * matches the chosen locale on [androidx.activity.ComponentActivity].
  */
 object AppLocale {
+
+    private val localeRevisionState = MutableStateFlow(0)
+
+    /** Compose [com.pc.fash_android_mobile.ui.locale.ProvideAppLocale] collects this to recompose on [setLocale]. */
+    internal val localeRevisionFlow: StateFlow<Int> = localeRevisionState.asStateFlow()
 
     private const val PREFS_NAME = "fash_app_prefs"
     private const val KEY_LANGUAGE_TAG = "app_language_tag"
 
     const val TAG_VI = "vi"
     const val TAG_EN = "en"
+
+    @Volatile
+    private var applicationContext: Context? = null
+
+    /**
+     * Call from [android.app.Application.onCreate] before [applyPersistedOrDefault] so
+     * [coreApiPathSegment] can resolve language without passing [Context] into repositories.
+     */
+    fun installApplicationContext(context: Context) {
+        applicationContext = context.applicationContext
+    }
+
+    /**
+     * `vi` or `en` for core-service path prefix when Gradle `CORE_API_USE_LANGUAGE_PREFIX=true`.
+     * Falls back to [TAG_VI] if [installApplicationContext] has not run yet.
+     */
+    fun coreApiPathSegment(): String {
+        val ctx = applicationContext ?: return TAG_VI
+        return currentTag(ctx)
+    }
 
     /**
      * Reflects the locale AppCompat is actually applying (fixes UI stuck out of sync with [stringResource]).
@@ -38,6 +68,7 @@ object AppLocale {
             .putString(KEY_LANGUAGE_TAG, tag)
             .commit()
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+        localeRevisionState.value += 1
     }
 
     /**

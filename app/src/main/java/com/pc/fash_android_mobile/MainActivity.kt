@@ -78,6 +78,7 @@ import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
+import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.address.AddEditAddressScreen
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
@@ -221,6 +222,7 @@ class MainActivity : ComponentActivity() {
             val facebookOk = LoginViewModel.isFacebookConfigured()
             val googleOk = LoginViewModel.isGoogleConfigured()
 
+            ProvideAppLocale {
             FashTheme {
                 var splashFinished by rememberSaveable { mutableStateOf(false) }
                 var splashStartMs by rememberSaveable { mutableStateOf(0L) }
@@ -778,6 +780,7 @@ class MainActivity : ComponentActivity() {
                     message = dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
                 )
+            }
             }
         }
     }

@@ -17,8 +17,10 @@ import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
 import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Application-scoped auth and network dependencies.
@@ -31,13 +33,19 @@ class FashApplication : android.app.Application() {
     /** Global success/error/info dialogs; observe from [com.pc.fash_android_mobile.MainActivity]. */
     val uiDialog: UiDialogController by lazy { UiDialogController() }
 
+    /**
+     * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until
+     * the coroutine finishes, which defeats IO dispatchers and causes "failed to complete startup"
+     * ANRs when EncryptedSharedPreferences / keystore is slow under memory pressure.
+     */
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun onCreate() {
         super.onCreate()
+        AppLocale.installApplicationContext(this)
         AppLocale.applyPersistedOrDefault(this)
         FashNotificationChannels.ensureChannels(this)
-        // Open EncryptedSharedPreferences + MasterKey on IO before any Activity so startup
-        // does not block the main thread (avoids ANR: "failed to complete startup").
-        runBlocking(Dispatchers.IO) {
+        applicationScope.launch(Dispatchers.IO) {
             val hasSession = runCatching { authManager.sessionStore.read() != null }.getOrDefault(false)
             authManager.hydrateInitialAuthFromStore(hasSession)
         }

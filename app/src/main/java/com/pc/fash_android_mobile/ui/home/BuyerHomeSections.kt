@@ -179,13 +179,22 @@ fun HomeHeroBanner(
 }
 
 @Composable
-fun HomeBrandFooterStrip(modifier: Modifier = Modifier) {
+fun HomeBrandFooterStrip(
+    modifier: Modifier = Modifier,
+    /** When false, only vertical padding is applied (e.g. parent already uses editorial horizontal inset). */
+    includeHorizontalEdgePadding: Boolean = true,
+) {
+    val horizontal = if (includeHorizontalEdgePadding) {
+        FashTheme.spacing.editorialStart to FashTheme.spacing.editorialEnd
+    } else {
+        0.dp to 0.dp
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(
-                start = FashTheme.spacing.editorialStart,
-                end = FashTheme.spacing.editorialEnd,
+                start = horizontal.first,
+                end = horizontal.second,
                 top = 28.dp,
                 bottom = 24.dp,
             ),

@@ -117,6 +117,14 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         "api/v1/orders/%s/payments/initiate"
     }
     buildConfigField("String", "CORE_PAYMENT_INITIATE_PATH", buildConfigStringLiteral(corePaymentInitiatePath))
+
+    /**
+     * When true, [com.pc.fash_android_mobile.config.AppEnvironment.apiPath] becomes
+     * `{API_BASE_URL}/{vi|en}/api/...` (current app language). Auth URLs use [authServicePath] and are unchanged.
+     */
+    val coreApiUseLanguagePrefix =
+        envVal("CORE_API_USE_LANGUAGE_PREFIX")?.equals("true", ignoreCase = true) == true
+    buildConfigField("boolean", "CORE_API_USE_LANGUAGE_PREFIX", coreApiUseLanguagePrefix.toString())
 }
 
 android {

@@ -8,7 +8,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,8 +97,7 @@ fun ExploreTopBar(
                         onValueChange = viewModel::setSearchQuery,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                            .heightIn(max = 44.dp)
+                            .padding(horizontal = 4.dp, vertical = 4.dp)
                             .focusRequester(focusRequester),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(

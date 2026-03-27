@@ -20,8 +20,9 @@ class AppAuthManager(
 ) {
 
     /**
-     * Starts false; [hydrateInitialAuthFromStore] is invoked from a background thread during
-     * application startup so EncryptedSharedPreferences never opens on the main thread.
+     * Starts false; [hydrateInitialAuthFromStore] runs on a background thread shortly after
+     * process start (non-blocking `Application.onCreate`) so EncryptedSharedPreferences never
+     * opens on the main thread.
      */
     private val _isAuthenticated = MutableStateFlow(false)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()

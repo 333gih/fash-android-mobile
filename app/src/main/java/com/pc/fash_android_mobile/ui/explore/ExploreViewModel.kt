@@ -26,6 +26,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
+private const val ExploreFeedPageSize = 20
+
 class ExploreViewModel(application: Application) : AndroidViewModel(application) {
 
     private val listingRepository: ListingRepository =
@@ -155,7 +157,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 q = q,
                 categoryId = categoryId,
                 tags = tag,
-                limit = 20,
+                limit = ExploreFeedPageSize,
                 offset = 0,
             )
         }
@@ -254,7 +256,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     ): Result<List<ListingFeedItem>> {
         suspend fun once(): Result<List<ListingFeedItem>> =
             listingRepository.getExploreFeed(
-                limit = 20,
+                limit = ExploreFeedPageSize,
                 offset = 0,
                 tags = tags,
                 categoryId = categoryId?.takeIf { it.isNotBlank() },
