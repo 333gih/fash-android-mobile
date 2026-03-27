@@ -6,7 +6,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -145,7 +144,6 @@ private fun ExplorePromoCard(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
-    val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -158,10 +156,7 @@ private fun ExplorePromoCard(
             .then(
                 slide.border?.let { b -> Modifier.border(1.dp, b, shape) } ?: Modifier,
             )
-            .clickable(
-                interactionSource = interaction,
-                onClick = onClick,
-            )
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Text(
