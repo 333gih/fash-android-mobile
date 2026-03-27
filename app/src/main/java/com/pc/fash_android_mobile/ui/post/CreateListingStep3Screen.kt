@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,18 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,7 +42,6 @@ import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.user.ProfileInfo
-import com.pc.fash_android_mobile.ui.onboarding.OnboardingProgressBar
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.text.NumberFormat
@@ -58,7 +51,7 @@ import java.util.Locale
 fun CreateListingStep3Screen(
     modifier: Modifier = Modifier,
     viewModel: PostViewModel,
-    onClose: () -> Unit,
+    onCloseRequest: () -> Unit,
     onSubmitSuccess: () -> Unit,
 ) {
     val draft by viewModel.draft.collectAsState()
@@ -77,8 +70,23 @@ fun CreateListingStep3Screen(
         viewModel.loadStep3Data()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Step3Header(onBack = { viewModel.prevStep() }, onClose = onClose)
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 3,
+            totalSteps = 3,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_post_for_sale,
+            onPrimaryClick = {
+                viewModel.submitListing(uriResolver) { onSubmitSuccess() }
+            },
+            primaryEnabled = !isSubmitting,
+            primaryLoading = isSubmitting,
+        )
 
         Column(
             modifier = Modifier
@@ -101,57 +109,7 @@ fun CreateListingStep3Screen(
             )
         }
 
-        Step3Footer(
-            onCancel = onClose,
-            onSubmit = {
-                viewModel.submitListing(uriResolver) { onSubmitSuccess() }
-            },
-            isSubmitting = isSubmitting,
-        )
-    }
-}
-
-@Composable
-private fun Step3Header(onBack: () -> Unit, onClose: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    tint = FashColors.Primary,
-                )
-            }
-            Text(
-                text = stringResource(R.string.create_listing_step3_title),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-            )
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null,
-                    tint = scheme.onSurface,
-                )
-            }
-        }
-        OnboardingProgressBar(currentStep = 3, totalSteps = 3)
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.create_listing_step, 3, 3),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
+        Step3LegalFooter()
     }
 }
 
@@ -342,61 +300,17 @@ private fun ListingPreviewCard(
 }
 
 @Composable
-private fun Step3Footer(
-    onCancel: () -> Unit,
-    onSubmit: () -> Unit,
-    isSubmitting: Boolean,
-) {
+private fun Step3LegalFooter() {
     val scheme = MaterialTheme.colorScheme
-    Column(
+    Text(
+        text = stringResource(R.string.create_listing_legal_disclaimer),
+        style = MaterialTheme.typography.bodySmall,
+        color = scheme.onSurfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
-            .background(scheme.surface)
-            .padding(16.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.create_listing_legal_disclaimer),
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(FashColors.Primary.copy(alpha = 0.3f))
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = onSubmit,
-            enabled = !isSubmitting,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = FashColors.Primary,
-                contentColor = FashColors.OnPrimary,
-            ),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 14.dp),
-        ) {
-            if (isSubmitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    color = FashColors.OnPrimary,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.create_listing_post_for_sale),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 8.dp, bottom = FashTheme.spacing.spacing4),
+    )
 }
 
 private fun formatConditionDisplay(condition: String): String = when (condition.lowercase()) {

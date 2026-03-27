@@ -24,19 +24,34 @@ import androidx.security.crypto.MasterKey
  *    session as missing and redirect the user to the login screen
  *
  * Never log or expose stored token values.
+ *
+ * ### Startup / ANR
+ * [EncryptedSharedPreferences] + [MasterKey] creation can take 100–500ms+ on the
+ * main thread and contribute to "failed to complete startup" ANRs under memory
+ * pressure. The backing [SharedPreferences] is opened **lazily** on first [prefs]
+ * access so [Application] / first frame can defer opening to a background thread.
  */
 class AuthSessionStore(private val context: Context) {
 
-    // `var` because recovery may replace the prefs instance
-    private var prefs: SharedPreferences = createPrefsOrRecover()
+    private val prefsLock = Any()
+    @Volatile
+    private var prefsInstance: SharedPreferences? = null
 
-    // ── Public API ────────────────────────────────────────────────────────────
+    private fun prefs(): SharedPreferences {
+        prefsInstance?.let { return it }
+        return synchronized(prefsLock) {
+            prefsInstance?.let { return it }
+            createPrefsOrRecover().also { prefsInstance = it }
+        }
+    }
+
+    // ── Public API ───────────────────────────────────────────────────────────
 
     fun save(session: AuthSession) {
         try {
             // Use commit() (synchronous) so tokens are on disk before the process can be killed
             // (e.g. user swipes the app away immediately after login). apply() is async and can lose data.
-            val ok = prefs.edit()
+            val ok = prefs().edit()
                 .putString(KEY_ACCESS, session.accessToken)
                 .putString(KEY_REFRESH, session.refreshToken)
                 .putString(KEY_TYPE, session.tokenType)
@@ -62,17 +77,18 @@ class AuthSessionStore(private val context: Context) {
      */
     fun read(): AuthSession? {
         return try {
-            val access = prefs.getString(KEY_ACCESS, null)?.trim().orEmpty()
-            val refresh = prefs.getString(KEY_REFRESH, null)?.trim().orEmpty()
+            val p = prefs()
+            val access = p.getString(KEY_ACCESS, null)?.trim().orEmpty()
+            val refresh = p.getString(KEY_REFRESH, null)?.trim().orEmpty()
             if (access.isEmpty() || refresh.isEmpty()) return null
             AuthSession(
                 accessToken = access,
                 refreshToken = refresh,
-                tokenType = prefs.getString(KEY_TYPE, "Bearer") ?: "Bearer",
-                expiresInSeconds = prefs.getLong(KEY_EXPIRES, 0L),
-                isNewUser = prefs.getBoolean(KEY_IS_NEW_USER, false),
-                userId = prefs.getString(KEY_USER_ID, null)?.takeIf { it.isNotBlank() },
-                unreadCount = prefs.getLong(KEY_UNREAD_COUNT, 0L),
+                tokenType = p.getString(KEY_TYPE, "Bearer") ?: "Bearer",
+                expiresInSeconds = p.getLong(KEY_EXPIRES, 0L),
+                isNewUser = p.getBoolean(KEY_IS_NEW_USER, false),
+                userId = p.getString(KEY_USER_ID, null)?.takeIf { it.isNotBlank() },
+                unreadCount = p.getLong(KEY_UNREAD_COUNT, 0L),
             )
         } catch (e: Exception) {
             // KeyStoreException: Signature/MAC verification failed
@@ -85,7 +101,7 @@ class AuthSessionStore(private val context: Context) {
 
     fun getIssuedAtMillis(): Long {
         return try {
-            prefs.getLong(KEY_ISSUED_AT, 0L)
+            prefs().getLong(KEY_ISSUED_AT, 0L)
         } catch (e: Exception) {
             Log.w(TAG, "getIssuedAtMillis failed", e)
             recoverAndReset()
@@ -95,7 +111,7 @@ class AuthSessionStore(private val context: Context) {
 
     fun clear() {
         try {
-            if (!prefs.edit().clear().commit()) {
+            if (!prefs().edit().clear().commit()) {
                 Log.w(TAG, "clear: SharedPreferences.commit() returned false")
             }
         } catch (e: Exception) {
@@ -111,10 +127,14 @@ class AuthSessionStore(private val context: Context) {
      * After this call [prefs] points to an empty, freshly-keyed store.
      */
     private fun recoverAndReset() {
-        // Best-effort commit clear before deleting the file
-        runCatching { prefs.edit().clear().commit() }
+        runCatching { prefsInstance?.edit()?.clear()?.commit() }
+        synchronized(prefsLock) {
+            prefsInstance = null
+        }
         deletePrefsFile(context, PREFS_NAME)
-        prefs = createPrefsOrRecover(afterReset = true)
+        synchronized(prefsLock) {
+            prefsInstance = createPrefsOrRecover(afterReset = true)
+        }
     }
 
     // ── Creation helpers ──────────────────────────────────────────────────────

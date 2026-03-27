@@ -71,6 +71,13 @@ class LoginViewModel(
     private val _isPasswordLoading = MutableStateFlow(false)
     val isPasswordLoading: StateFlow<Boolean> = _isPasswordLoading.asStateFlow()
 
+    /**
+     * After [requestEmailOtp] succeeds (first send, not resend), mirrors API `is_new_user`.
+     * When false, OTP screen hides the onboarding progress bar (returning user with profile path).
+     */
+    private val _otpShowOnboardingProgress = MutableStateFlow(false)
+    val otpShowOnboardingProgress: StateFlow<Boolean> = _otpShowOnboardingProgress.asStateFlow()
+
     private var resendCooldownJob: Job? = null
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -101,6 +108,7 @@ class LoginViewModel(
         resendCooldownJob?.cancel()
         _resendCooldownSec.value = 0
         _otpCode.value = ""
+        _otpShowOnboardingProgress.value = false
         _loginStep.value = LoginStep.Email
     }
 
@@ -162,7 +170,10 @@ class LoginViewModel(
             }
             _isOtpLoading.value = false
             result.fold(
-                onSuccess = {
+                onSuccess = { isNewUser ->
+                    if (!resendOnly) {
+                        _otpShowOnboardingProgress.value = isNewUser
+                    }
                     if (resendOnly) {
                         _events.tryEmit(app.getString(R.string.login_otp_resent))
                     } else {

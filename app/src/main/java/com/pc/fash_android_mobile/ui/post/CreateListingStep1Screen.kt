@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,7 +56,6 @@ fun CreateListingStep1Screen(
     modifier: Modifier = Modifier,
     viewModel: PostViewModel,
     onClose: () -> Unit,
-    onNext: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -74,11 +74,28 @@ fun CreateListingStep1Screen(
         viewModel.setImageUris(uris)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Header(
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
             step = 1,
             totalSteps = 3,
-            onClose = onClose,
+            onBackClick = null,
+            onCloseClick = onClose,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = {
+                if (isUploading) return@CreateListingFlowHeader
+                scope.launch {
+                    val ok = viewModel.uploadImages(uriResolver)
+                    if (ok) {
+                        viewModel.nextStep()
+                    }
+                }
+            },
+            primaryEnabled = draft.canProceedFromStep1(),
+            primaryLoading = isUploading,
         )
 
         Column(
@@ -106,55 +123,22 @@ fun CreateListingStep1Screen(
                     onAddMore = { imagePicker.launch("image/*") },
                 )
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-            TipBox()
         }
 
-        BottomBar(
-            onNext = {
-                if (isUploading) return@BottomBar
-                // Upload photos while gallery URIs are still readable; step 3 submit then skips re-upload.
-                scope.launch {
-                    val ok = viewModel.uploadImages(uriResolver)
-                    if (ok) {
-                        viewModel.nextStep()
-                        onNext()
-                    }
-                }
-            },
-            nextEnabled = draft.canProceedFromStep1() && !isUploading,
-            isLoading = isUploading,
-        )
+        Step1AdvertisingPanel()
     }
 }
 
 @Composable
-private fun Header(
-    step: Int,
-    totalSteps: Int,
-    onClose: () -> Unit,
-) {
+private fun Step1AdvertisingPanel() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = FashTheme.spacing.spacing3),
     ) {
-        IconButton(onClick = onClose) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Text(
-            text = stringResource(R.string.create_listing_step, step, totalSteps),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.width(48.dp))
+        TipBox()
     }
 }
 
@@ -193,6 +177,7 @@ private fun AddPhotoBox(onClick: () -> Unit) {
                 text = stringResource(R.string.create_listing_photo_tip),
                 style = MaterialTheme.typography.bodySmall,
                 color = FashColors.Primary,
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -301,39 +286,6 @@ private fun TipBox() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
-}
-
-@Composable
-private fun BottomBar(
-    onNext: () -> Unit,
-    nextEnabled: Boolean,
-    isLoading: Boolean,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        androidx.compose.material3.Button(
-            onClick = onNext,
-            enabled = nextEnabled && !isLoading,
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = FashColors.Primary,
-                contentColor = FashColors.OnPrimary,
-            ),
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = FashColors.OnPrimary,
-                )
-            } else {
-                Text(stringResource(R.string.create_listing_next))
-            }
         }
     }
 }

@@ -234,6 +234,58 @@ class UserRepository(
         parseUserSearchResults(body)
     }
 
+    /**
+     * People the current user follows (core-service: `GET /api/v1/users/me/following`).
+     * Response may be a JSON array or an object with `data`, `users`, or `following`.
+     */
+    fun getMyFollowing(limit: Int = 100, offset: Int = 0): Result<List<UserSearchResult>> = runCatching {
+        getMyFollowList(pathSegment = "following", limit = limit, offset = offset)
+    }
+
+    /**
+     * Users who follow the current user (core-service: `GET /api/v1/users/me/followers`).
+     */
+    fun getMyFollowers(limit: Int = 100, offset: Int = 0): Result<List<UserSearchResult>> = runCatching {
+        getMyFollowList(pathSegment = "followers", limit = limit, offset = offset)
+    }
+
+    private fun getMyFollowList(pathSegment: String, limit: Int, offset: Int): List<UserSearchResult> {
+        val url = "${AppEnvironment.apiPath("api/v1/users/me/$pathSegment")}?limit=$limit&offset=$offset"
+        val body = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
+                error("HTTP ${response.code}: $msg")
+            }
+            response.body?.string().orEmpty()
+        }
+        return parseUserListResponse(body)
+    }
+
+    /** Parses a user list from home-feed-style wrappers or a raw array. */
+    private fun parseUserListResponse(body: String): List<UserSearchResult> {
+        val raw = body.trim()
+        if (raw.isEmpty()) return emptyList()
+        if (raw.startsWith("[")) return parseUserSearchResults(raw)
+        val obj = try {
+            JSONObject(raw)
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        for (k in listOf("data", "users", "following", "followers", "items")) {
+            val a = obj.optJSONArray(k)
+            if (a != null) return parseUserSearchResults(a.toString())
+        }
+        return emptyList()
+    }
+
     fun getProfile(userIdOrUsername: String): Result<ProfileInfo> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/users/${userIdOrUsername.trim()}")
         val body = publicClient.newCall(

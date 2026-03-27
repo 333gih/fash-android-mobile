@@ -9,6 +9,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -21,14 +23,22 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
+/**
+ * Full-screen overlay (covers main app bars). Back returns to the previous screen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        androidx.compose.material3.Scaffold(
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
@@ -42,7 +52,7 @@ fun NotificationScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.cd_back),
                                 tint = FashColors.Primary,
                             )
                         }

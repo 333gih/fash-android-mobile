@@ -31,14 +31,25 @@ class AuthRepository(
         parseLoginResponse(body)
     }
 
-    fun requestEmailOtp(email: String): Result<Unit> = runCatching {
+    /**
+     * Sends OTP to [email]. Returns [Result] of **is_new_user** from JSON when present:
+     * `true` → show onboarding progress on the OTP screen; `false` → returning user (hide bar).
+     * Empty body, parse errors, or missing key default to **false** so existing users are not
+     * shown the onboarding strip unless the API explicitly sets `is_new_user: true`.
+     */
+    fun requestEmailOtp(email: String): Result<Boolean> = runCatching {
         val path = AppEnvironment.authOtpRequestPath.trim().trimStart('/')
         val url = AppEnvironment.authServicePath(path)
         val json = JSONObject()
             .put("email", email.trim())
             .put("application_id", AppEnvironment.authApplicationId.trim())
             .toString()
-        postExpectSuccess(url, json)
+        val body = postJsonBody(url, json)
+        if (body.isBlank()) return@runCatching false
+        runCatching {
+            val o = JSONObject(body)
+            o.optBoolean("is_new_user", false)
+        }.getOrElse { false }
     }
 
     fun verifyEmailOtp(email: String, otp: String): Result<AuthSession> = runCatching {
@@ -122,23 +133,6 @@ class AuthRepository(
             .header("Authorization", "Bearer ${accessToken.trim()}")
             .build()
         client.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
-            }
-        }
-    }
-
-    private fun postExpectSuccess(url: String, json: String) {
-        client.newCall(
-            Request.Builder()
-                .url(url)
-                .post(json.toRequestBody(JSON_MEDIA))
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .header("User-Agent", "FashAndroid/1.0")
-                .build(),
-        ).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))

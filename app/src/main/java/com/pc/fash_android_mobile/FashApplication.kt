@@ -12,9 +12,13 @@ import com.pc.fash_android_mobile.data.payment.MockPaymentService
 import com.pc.fash_android_mobile.data.payment.PaymentService
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.search.SearchRepository
+import com.pc.fash_android_mobile.data.ui.UiDialogController
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
 import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 
 /**
  * Application-scoped auth and network dependencies.
@@ -24,9 +28,19 @@ import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
  */
 class FashApplication : android.app.Application() {
 
+    /** Global success/error/info dialogs; observe from [com.pc.fash_android_mobile.MainActivity]. */
+    val uiDialog: UiDialogController by lazy { UiDialogController() }
+
     override fun onCreate() {
         super.onCreate()
+        AppLocale.applyPersistedOrDefault(this)
         FashNotificationChannels.ensureChannels(this)
+        // Open EncryptedSharedPreferences + MasterKey on IO before any Activity so startup
+        // does not block the main thread (avoids ANR: "failed to complete startup").
+        runBlocking(Dispatchers.IO) {
+            val hasSession = runCatching { authManager.sessionStore.read() != null }.getOrDefault(false)
+            authManager.hydrateInitialAuthFromStore(hasSession)
+        }
     }
 
     val authManager: AppAuthManager by lazy {

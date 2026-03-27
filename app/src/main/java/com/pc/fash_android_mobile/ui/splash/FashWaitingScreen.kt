@@ -46,7 +46,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.theme.BeVietnamProFamily
+import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val SplashBg = Color(0xFFFAF9F9)
@@ -121,16 +123,9 @@ fun FashWaitingScreen(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
+            FashBrandMarkText(
                 text = stringResource(R.string.splash_wordmark),
-                style = TextStyle(
-                    fontFamily = BeVietnamProFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 52.sp,
-                    lineHeight = 56.sp,
-                    letterSpacing = (-0.5).sp,
-                ),
+                style = FashBrandTypography.markSplashCenter,
                 color = SplashAccent,
             )
             Spacer(modifier = Modifier.height(12.dp))

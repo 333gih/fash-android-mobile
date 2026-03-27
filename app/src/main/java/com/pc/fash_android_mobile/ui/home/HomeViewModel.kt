@@ -5,8 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -21,12 +23,31 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Buyer dashboard counts for the home journey row (orders in delivery, wishlist size, chat unread). */
+data class BuyerHomeStats(
+    val activeDeliveryOrders: Int = 0,
+    val savedListingsCount: Int = 0,
+    val unreadMessages: Int = 0,
+)
+
+private val BuyerDeliveringStatuses = setOf(
+    "payment_held",
+    "in_transit",
+    "delivering",
+    "shipped",
+    "shipping",
+)
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val listingRepository: ListingRepository =
         (application as FashApplication).listingRepository
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val orderRepository: OrderRepository =
+        (application as FashApplication).orderRepository
+    private val chatRepository: ChatRepository =
+        (application as FashApplication).chatRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
@@ -51,6 +72,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _followingIds = MutableStateFlow<Set<String>>(emptySet())
     val followingIds: kotlinx.coroutines.flow.StateFlow<Set<String>> = _followingIds.asStateFlow()
 
+    private val _buyerStats = MutableStateFlow(BuyerHomeStats())
+    val buyerStats: StateFlow<BuyerHomeStats> = _buyerStats.asStateFlow()
+
     init {
         loadFeed()
         // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
@@ -58,11 +82,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             realtimeManager.events.collect { event ->
                 if (event is RealtimeEvent.FeedRefresh) {
                     withContext(Dispatchers.IO) {
-                        fetchFeedWithFallback()
+                        loadBuyerHomeStats()
+                        fetchHomeFeedWithRetry()
                     }.getOrNull()?.let { _items.value = it }
                 }
             }
         }
+    }
+
+    private suspend fun loadBuyerHomeStats() {
+        val orders = orderRepository.getBuyingOrders(limit = 50, offset = 0).getOrElse { emptyList() }
+        val delivering = orders.count { it.status in BuyerDeliveringStatuses }
+        val saved = listingRepository.getWishlistListingIds(limit = 100, offset = 0)
+            .getOrElse { emptyList() }
+            .size
+        val unread = chatRepository.getUnreadCount().getOrElse { 0 }
+        _buyerStats.value = BuyerHomeStats(
+            activeDeliveryOrders = delivering,
+            savedListingsCount = saved,
+            unreadMessages = unread,
+        )
     }
 
     fun loadFeed() {
@@ -70,7 +109,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = true
             _loadError.value = false
             val result = withContext(Dispatchers.IO) {
-                fetchFeedWithFallback()
+                loadBuyerHomeStats()
+                fetchHomeFeedWithRetry()
             }
             _isLoading.value = false
             result.fold(
@@ -90,15 +130,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Home feed from followed sellers; if empty, fallback to Explore feed.
+     * `GET /api/v1/listings/home` only — from followed sellers (core-service).
+     * Empty list is valid when the user follows nobody; use Explore for discovery.
      * One automatic retry on failure to smooth transient network errors.
      */
-    private suspend fun fetchFeedWithFallback(): Result<List<ListingFeedItem>> {
-        suspend fun once(): Result<List<ListingFeedItem>> {
-            val home = listingRepository.getHomeFeed(limit = 20, offset = 0)
-            if (home.isSuccess && home.getOrNull()?.isNotEmpty() == true) return home
-            return listingRepository.getExploreFeed(limit = 20, offset = 0)
-        }
+    private suspend fun fetchHomeFeedWithRetry(): Result<List<ListingFeedItem>> {
+        suspend fun once(): Result<List<ListingFeedItem>> =
+            listingRepository.getHomeFeed(limit = 20, offset = 0)
         var result = once()
         if (result.isFailure) {
             delay(400)
@@ -116,7 +154,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _isRefreshing.value = true
             _loadError.value = false
             val result = withContext(Dispatchers.IO) {
-                fetchFeedWithFallback()
+                loadBuyerHomeStats()
+                fetchHomeFeedWithRetry()
             }
             _isRefreshing.value = false
             result.fold(
@@ -172,6 +211,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                             } else it
                         }
+                    }
+                    viewModelScope.launch {
+                        withContext(Dispatchers.IO) { loadBuyerHomeStats() }
                     }
                 },
                 onFailure = {

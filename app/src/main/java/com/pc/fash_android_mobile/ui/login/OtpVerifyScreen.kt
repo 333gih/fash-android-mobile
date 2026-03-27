@@ -1,5 +1,9 @@
 package com.pc.fash_android_mobile.ui.login
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,12 +21,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,10 +60,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingProgressBar
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import kotlinx.coroutines.delay
 
 private val OtpCanvas = Color(0xFFF9F9F9)
 private const val OTP_LENGTH = 6
@@ -81,9 +94,15 @@ fun OtpVerifyScreen(
     val focusRequester = remember { FocusRequester() }
     val masked = remember(email) { maskEmailForDisplay(email) }
     val otpComplete = otp.length == OTP_LENGTH
+    var showHelpCard by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(Unit) {
+        delay(140)
+        showHelpCard = true
     }
 
     Surface(
@@ -99,136 +118,216 @@ fun OtpVerifyScreen(
                 .padding(start = FashTheme.spacing.editorialStart, end = FashTheme.spacing.editorialEnd)
                 .padding(top = 8.dp, bottom = 32.dp),
         ) {
-            IconButton(
-                onClick = onBackClick,
-                modifier = Modifier.offset(x = (-8).dp),
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.otp_back_cd),
-                    tint = scheme.onSurface,
-                )
-            }
-
-            if (showOnboardingProgress) {
-                OnboardingProgressBar(
-                    currentStep = onboardingProgressStep,
-                    totalSteps = onboardingProgressTotal,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = stringResource(R.string.brand_wordmark),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = scheme.primary,
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Text(
-                text = stringResource(R.string.otp_title),
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = scheme.onSurface,
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = stringResource(R.string.otp_subtitle, masked, OTP_LENGTH),
-                style = MaterialTheme.typography.bodyLarge,
-                color = scheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            OtpSixCells(
-                otp = otp,
-                onOtpChange = { raw ->
-                    val digits = raw.filter { it.isDigit() }.take(OTP_LENGTH)
-                    onOtpChange(digits)
-                },
-                focusRequester = focusRequester,
-                // FIX: only trigger verify when otp is complete and not already loading
-                onImeDone = { if (otpComplete && !isVerifyLoading && !isSendOtpLoading) onVerifyClick() },
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            FashPrimaryButton(
-                onClick = onVerifyClick,
-                enabled = otpComplete && !isVerifyLoading && !isSendOtpLoading,
-                horizontalArrangement = Arrangement.Center,
-                cornerRadius = 24.dp,
-                solidFill = scheme.primary,
-                softShadowElevation = OTP_SHADOW_DP.dp,
-                // FIX: enforce a minimum height so the button does not collapse to spinner
-                // size when the label text is hidden during loading — important for
-                // long-text locales (e.g. Vietnamese) where the button normally is taller.
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
-                if (isVerifyLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = FashColors.OnPrimary,
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.otp_verify),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = FashColors.OnPrimary,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // FIX: pull canResend out so it is shared between enabled state and color logic
+            val scroll = rememberScrollState()
             val canResend = resendCooldownSec <= 0 && !isSendOtpLoading
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(scroll),
             ) {
-                // FIX: do not use `enabled` on TextButton to gate the color — Material3
-                // applies its own disabled alpha on top of any manually set color, causing
-                // a double-tint that makes the countdown text too faint.  Instead keep the
-                // button always technically enabled and handle the guard inside onClick.
-                TextButton(
-                    onClick = { if (canResend) onResendClick() },
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.offset(x = (-8).dp),
                 ) {
-                    if (isSendOtpLoading) {
-                        // FIX: show both spinner AND a label so the button area is never
-                        // just an unlabelled spinner — this matters especially for
-                        // Vietnamese and other translated locales where context is needed.
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.otp_back_cd),
+                        tint = scheme.onSurface,
+                    )
+                }
+
+                if (showOnboardingProgress) {
+                    OnboardingProgressBar(
+                        currentStep = onboardingProgressStep,
+                        totalSteps = onboardingProgressTotal,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                FashBrandMarkText(
+                    text = stringResource(R.string.brand_wordmark),
+                    style = FashBrandTypography.markBoldItalic,
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = stringResource(R.string.otp_title),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = scheme.onSurface,
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = stringResource(R.string.otp_subtitle, masked, OTP_LENGTH),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = scheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                OtpSixCells(
+                    otp = otp,
+                    onOtpChange = { raw ->
+                        val digits = raw.filter { it.isDigit() }.take(OTP_LENGTH)
+                        onOtpChange(digits)
+                    },
+                    focusRequester = focusRequester,
+                    onImeDone = { if (otpComplete && !isVerifyLoading && !isSendOtpLoading) onVerifyClick() },
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                FashPrimaryButton(
+                    onClick = onVerifyClick,
+                    enabled = otpComplete && !isVerifyLoading && !isSendOtpLoading,
+                    horizontalArrangement = Arrangement.Center,
+                    cornerRadius = 24.dp,
+                    solidFill = scheme.primary,
+                    softShadowElevation = OTP_SHADOW_DP.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                ) {
+                    if (isVerifyLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = FashColors.Primary,
+                            modifier = Modifier.size(24.dp),
+                            color = FashColors.OnPrimary,
                             strokeWidth = 2.dp,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.otp_resend_sending),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
                         )
                     } else {
                         Text(
-                            text = if (resendCooldownSec > 0) {
-                                stringResource(R.string.otp_resend_wait, resendCooldownSec)
-                            } else {
-                                stringResource(R.string.otp_resend)
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                            // FIX: colour is now driven solely by our own logic; no
-                            // Material3 disabled-alpha interference.
-                            color = if (canResend) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            text = stringResource(R.string.otp_verify),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = FashColors.OnPrimary,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { if (canResend) onResendClick() },
+                    ) {
+                        if (isSendOtpLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = FashColors.Primary,
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.otp_resend_sending),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        } else {
+                            Text(
+                                text = if (resendCooldownSec > 0) {
+                                    stringResource(R.string.otp_resend_wait, resendCooldownSec)
+                                } else {
+                                    stringResource(R.string.otp_resend)
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (canResend) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            AnimatedVisibility(
+                visible = showHelpCard,
+                enter = fadeIn(tween(380)) + slideInVertically(
+                    animationSpec = tween(380),
+                    initialOffsetY = { it / 5 },
+                ),
+            ) {
+                OtpHelpBottomCard()
+            }
+        }
+    }
+}
+
+@Composable
+private fun OtpHelpBottomCard(
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
+    val tips = listOf(
+        R.string.otp_help_line1,
+        R.string.otp_help_line2,
+        R.string.otp_help_line3,
+    )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = shape,
+        color = scheme.surfaceContainerHighest,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(FashTheme.spacing.spacing4),
+            horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing3),
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(68.dp)
+                    .background(
+                        FashColors.Primary.copy(alpha = 0.58f),
+                        RoundedCornerShape(2.dp),
+                    ),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = FashColors.Primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.otp_help_title),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                    )
+                }
+                tips.forEach { lineRes ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            text = "\u2022",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = FashColors.Primary.copy(alpha = 0.72f),
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                        Text(
+                            text = stringResource(lineRes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            lineHeight = 20.sp,
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }

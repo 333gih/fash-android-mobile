@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Fash.</string>
+    <string name="app_name">FASH.</string>
     <string name="notification_channel_chat_name">Tin nhắn</string>
     <string name="notification_channel_chat_desc">Thông báo chat</string>
     <string name="notification_channel_orders_name">Đơn hàng</string>
@@ -10,10 +10,25 @@
     <string name="add_to_cart">Thêm vào giỏ</string>
     <string name="search_label">Tìm kiếm</string>
     <string name="search_placeholder">Tìm kiếm phong cách của bạn…</string>
+    <string name="cd_back">Quay lại</string>
+    <string name="settings_language">Ngôn ngữ</string>
+    <string name="language_vietnamese">Tiếng Việt</string>
+    <string name="language_english">English</string>
 
-    <string name="splash_wordmark">Fash</string>
+    <string name="dialog_ok">Đồng ý</string>
+    <string name="dialog_title_success">Thành công</string>
+    <string name="dialog_title_error">Lỗi</string>
+    <string name="dialog_title_info">Thông tin</string>
+
+    <string name="splash_wordmark">FASH</string>
     <string name="splash_footer_gen_z">THẾ HỆ GEN Z</string>
-    <string name="brand_wordmark">Fash.</string>
+    <string name="brand_wordmark">FASH.</string>
+    <!-- Main top bar: second line after wordmark (same scale as Explore). -->
+    <string name="brand_header_suffix_home">Home</string>
+    <string name="brand_header_suffix_explore">Explore</string>
+    <string name="brand_header_suffix_post">Post</string>
+    <string name="brand_header_suffix_chat">Chat</string>
+    <string name="brand_header_suffix_profile">Profile</string>
     <string name="login_tagline">Mua bán đồ cũ, thể hiện phong cách</string>
     <string name="login_email_label">Email</string>
     <string name="login_email_placeholder">example@email.com</string>
@@ -23,6 +38,10 @@
     <string name="login_google">Đăng nhập với Google</string>
     <string name="login_facebook">Đăng nhập với Facebook</string>
     <string name="login_hero_cd">Minh họa thời trang</string>
+    <string name="login_hero_pager_cd">Minh họa thời trang, ảnh %1$d / %2$d</string>
+    <string name="login_hero_slide1_caption">Pre-loved được chọn lọc</string>
+    <string name="login_hero_slide2_caption">Gợi ý mới mỗi ngày</string>
+    <string name="login_hero_slide3_caption">Phong cách là của bạn</string>
     <string name="login_email_icon_cd">Email</string>
     <string name="login_email_invalid">Vui lòng nhập email hợp lệ.</string>
     <string name="login_otp_sent">Đã gửi mã OTP. Kiểm tra hộp thư của bạn.</string>
@@ -51,6 +70,10 @@
     <string name="otp_invalid_length">Mã phải gồm 6 chữ số.</string>
     <string name="otp_verify_failed">Mã không đúng hoặc đã hết hạn. Thử lại.</string>
     <string name="otp_verify_success">Xác minh thành công.</string>
+    <string name="otp_help_title">Mẹo nhận mã</string>
+    <string name="otp_help_line1">Kiểm tra thư mục spam hoặc khuyến mãi.</string>
+    <string name="otp_help_line2">Mã có thể đến chậm vài phút — đừng lo.</string>
+    <string name="otp_help_line3">Không thấy mã? Nhấn gửi lại sau khi hết thời gian chờ.</string>
 
     <string name="login_with_password">Đăng nhập bằng mật khẩu</string>
     <string name="login_use_otp_instead">Dùng mã OTP thay thế</string>
@@ -87,6 +110,8 @@
     <string name="nav_home">Trang chủ</string>
     <string name="nav_explore">Khám phá</string>
     <string name="nav_post">Đăng tin</string>
+    <string name="nav_post_fab_label">ĐĂNG TIN</string>
+    <string name="nav_post_fab_cd">Đăng tin mới</string>
     <string name="nav_inbox">Hộp thư</string>
     <string name="nav_chat">Chat</string>
     <string name="nav_profile">Cá nhân</string>
@@ -103,13 +128,52 @@
     <string name="feed_empty_subtitle">Theo dõi người bán hoặc khám phá để xem sản phẩm mới.</string>
     <string name="feed_retry">Thử lại</string>
     <string name="feed_action_error">Thao tác thất bại. Thử lại.</string>
+    <string name="home_journey_title">Hành trình của bạn</string>
+    <string name="home_journey_delivering">Đang giao</string>
+    <string name="home_journey_saved">Đã lưu</string>
+    <string name="home_journey_messages">Tin nhắn</string>
+    <string name="home_hero_title">Bộ sưu tập mới</string>
+    <string name="home_hero_subtitle">Khám phá đồ second-hand &amp; phụ kiện từ người bạn theo dõi</string>
+    <string name="home_hero_cta">Khám phá ngay</string>
+    <string name="home_top_section_title">Dành cho bạn</string>
+    <string name="home_top_section_subtitle">Từ feed theo dõi của bạn</string>
+    <string name="home_brand_marketplace">FASH MARKETPLACE</string>
+    <string name="home_brand_footer_sub">ĐỊNH HÌNH PHONG CÁCH VIỆT</string>
+    <string name="home_quick_actions_title">Mua &amp; bán nhanh</string>
+    <string name="home_quick_explore">Khám phá</string>
+    <string name="home_quick_sell">Đăng bán</string>
+    <string name="home_quick_orders">Đơn hàng</string>
+    <string name="home_feed_title">Dành cho bạn</string>
+    <string name="home_feed_subtitle">Đồ second-hand và phụ kiện từ người bạn theo dõi</string>
+    <string name="home_feed_empty_title">Chưa có món nào ở đây</string>
+    <string name="home_feed_empty_subtitle">Theo dõi người bán để thấy tin mới trên Trang chủ — hoặc sang Khám phá để lướt toàn sàn.</string>
+    <string name="home_empty_cta_explore">Đi tới Khám phá</string>
+    <string name="explore_feed_subtitle">Lướt đồ hot, lọc theo phong cách (aesthetic)</string>
+    <string name="explore_promo_badge">Mẹo</string>
+    <string name="explore_promo_pager_cd">Mẹo và gợi ý, trang %1$d / %2$d</string>
+    <string name="explore_promo_slide1_title">Theo dõi người bán yêu thích</string>
+    <string name="explore_promo_slide1_subtitle">Tin mới từ họ hiện trên Trang chủ — bạn không bỏ lỡ món hợp gu.</string>
+    <string name="explore_promo_slide2_title">Lọc theo aesthetic</string>
+    <string name="explore_promo_slide2_subtitle">Chọn tag phong cách: Minimal, Vintage, Y2K… đúng vibe bạn.</string>
+    <string name="explore_promo_slide3_title">Mua bán an toàn hơn</string>
+    <string name="explore_promo_slide3_subtitle">Thanh toán qua escrow; hỗ trợ khi đơn không khớp mô tả (theo chính sách).</string>
+    <string name="explore_grid_empty_subtitle">Thử đổi bộ lọc hoặc thử lại sau.</string>
     <string name="follow_success">Đã theo dõi.</string>
     <string name="notifications">Thông báo</string>
 
     <string name="explore_title">Khám phá</string>
     <string name="explore_featured_sellers">Người bán nổi bật</string>
     <string name="explore_see_all">Xem tất cả</string>
+    <string name="explore_see_all_cd">Xem tất cả người bán nổi bật</string>
+    <string name="explore_featured_seller_cd">Người bán %1$s</string>
     <string name="explore_all">Tất cả</string>
+    <string name="explore_category_section_title">Danh mục</string>
+    <string name="explore_category_all">Tất cả danh mục</string>
+    <string name="explore_style_section_title">Phong cách (aesthetic)</string>
+    <string name="explore_style_any">Mọi phong cách</string>
+    <string name="explore_filters_hide">Thu gọn bộ lọc</string>
+    <string name="explore_filters_show">Hiện bộ lọc</string>
+    <string name="explore_filters_toggle_cd">Thu gọn hoặc hiện danh mục, phong cách và người bán nổi bật</string>
     <string name="explore_followers">theo dõi</string>
 
     <string name="product_detail_error">Không tải được sản phẩm. Thử lại.</string>
@@ -131,6 +195,11 @@
     <string name="create_listing_cover_label">ẢNH BÌA</string>
     <string name="create_listing_tip_title">Chụp ảnh mặc đồ</string>
     <string name="create_listing_tip_text">Sản phẩm có người mẫu hoặc mặc thử bán nhanh hơn gấp 3 lần so với chỉ chụp treo móc áo.</string>
+    <string name="create_listing_close_cd">Đóng</string>
+    <string name="create_listing_discard_title">Hủy đăng tin?</string>
+    <string name="create_listing_discard_message">Bạn có chắc muốn thoát? Tiến trình sẽ không được lưu.</string>
+    <string name="create_listing_discard_confirm">Thoát</string>
+    <string name="create_listing_discard_cancel">Tiếp tục</string>
     <string name="create_listing_cancel">Hủy</string>
     <string name="create_listing_next">TIẾP THEO</string>
     <string name="create_listing_image_error">Không đọc được ảnh.</string>
@@ -197,6 +266,9 @@
     <string name="profile_edit">Chỉnh sửa hồ sơ</string>
     <string name="profile_followers">Người theo dõi</string>
     <string name="profile_following">Đang theo dõi</string>
+    <string name="follow_connections_title">Kết nối</string>
+    <string name="follow_list_empty_following">Bạn chưa theo dõi ai.</string>
+    <string name="follow_list_empty_followers">Chưa có ai theo dõi bạn.</string>
     <string name="profile_products">Sản phẩm</string>
     <string name="profile_sold">Đã bán</string>
     <string name="profile_rating_format">%1$.1f (%2$d đánh giá)</string>
@@ -231,6 +303,9 @@
     <string name="chat_load_error">Không tải được tin nhắn.</string>
     <string name="chat_empty">Chưa có tin nhắn nào</string>
     <string name="chat_empty_subtitle">Bắt đầu trò chuyện từ sản phẩm yêu thích</string>
+    <string name="chat_inbox_ad_title">Lướt thêm đồ second-hand</string>
+    <string name="chat_inbox_ad_subtitle">Khám phá tin mới trên toàn sàn.</string>
+    <string name="chat_inbox_ad_cta">Khám phá</string>
     <string name="chat_inbox_preview_offer_pending_seller">Đề xuất chờ xử lý · %1$s</string>
     <string name="chat_inbox_preview_offer_you">Bạn · đề xuất %1$s</string>
     <string name="chat_inbox_preview_offer_from_seller">Người bán · %1$s</string>

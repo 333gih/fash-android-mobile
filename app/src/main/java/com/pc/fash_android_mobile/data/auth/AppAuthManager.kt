@@ -19,8 +19,17 @@ class AppAuthManager(
     val authRepository: AuthRepository,
 ) {
 
-    private val _isAuthenticated = MutableStateFlow(sessionStore.read() != null)
+    /**
+     * Starts false; [hydrateInitialAuthFromStore] is invoked from a background thread during
+     * application startup so EncryptedSharedPreferences never opens on the main thread.
+     */
+    private val _isAuthenticated = MutableStateFlow(false)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
+
+    /** Cold start: set from background after [AuthSessionStore.read] on IO. */
+    fun hydrateInitialAuthFromStore(hasSession: Boolean) {
+        _isAuthenticated.value = hasSession
+    }
 
     private val _sessionExpiredMessage = MutableStateFlow<String?>(null)
     val sessionExpiredMessage: StateFlow<String?> = _sessionExpiredMessage.asStateFlow()

@@ -12,7 +12,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,12 +78,18 @@ private val AvatarSize = 48.dp
 private val ProductThumbSize = 56.dp
 private val ChipCorner = RoundedCornerShape(20.dp)
 
+/** Share of [BoxWithConstraints] height reserved for the bottom promo strip (below filter chips). */
+private const val ChatInboxAdHeightFraction = 0.2f
+
+private val ChatInboxAdMinHeight = 72.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     modifier: Modifier = Modifier,
     viewModel: ChatViewModel,
     onConversationClick: (ConversationItem) -> Unit = {},
+    onNavigateToExplore: () -> Unit = {},
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val displayGroups by viewModel.displayGroups.collectAsState()
@@ -116,21 +125,33 @@ fun ChatScreen(
             },
         )
 
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            state = pullState,
-            indicator = {
-                PullToRefreshDefaults.Indicator(
-                    state = pullState,
+        // ~20% bottom: fixed promo strip; top ~80%: scrollable inbox (messages never sit under the ad).
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            val adHeight = (maxHeight * ChatInboxAdHeightFraction).coerceAtLeast(ChatInboxAdMinHeight)
+            val listHeight = (maxHeight - adHeight).coerceAtLeast(0.dp)
+            Column(Modifier.fillMaxSize()) {
+                PullToRefreshBox(
                     isRefreshing = isRefreshing,
-                    color = FashColors.Primary,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.align(Alignment.TopCenter),
-                )
-            },
-        ) { when {
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier
+                        .height(listHeight)
+                        .fillMaxWidth(),
+                    state = pullState,
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullState,
+                            isRefreshing = isRefreshing,
+                            color = FashColors.Primary,
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
+                    },
+                ) {
+                    when {
             isLoading -> ConversationSkeletonList()
             loadError != null -> Box(
                 modifier = Modifier
@@ -201,7 +222,17 @@ fun ChatScreen(
                     )
                 }
             }
-        } }
+                    }
+                }
+
+                ChatInboxAdPanel(
+                    modifier = Modifier
+                        .height(adHeight)
+                        .fillMaxWidth(),
+                    onExploreClick = onNavigateToExplore,
+                )
+            }
+        }
     }
 }
 
@@ -251,6 +282,56 @@ private fun EmptyInboxHint() {
         title = stringResource(R.string.chat_empty),
         subtitle = stringResource(R.string.chat_empty_subtitle),
     )
+}
+
+@Composable
+private fun ChatInboxAdPanel(
+    modifier: Modifier = Modifier,
+    onExploreClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = FashColors.SurfaceVariantCream,
+        tonalElevation = 1.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.chat_inbox_ad_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.chat_inbox_ad_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = onExploreClick,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_inbox_ad_cta),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+        }
+    }
 }
 
 /**

@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.explore.ExploreUiPreferences
+import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 class ExploreViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -34,6 +37,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
+    private val exploreUiPreferences = ExploreUiPreferences(application)
+
+    private val _filtersExpanded = MutableStateFlow(exploreUiPreferences.readFiltersExpanded())
+    val filtersExpanded: StateFlow<Boolean> = _filtersExpanded.asStateFlow()
+
     private val _tags = MutableStateFlow<List<String>>(emptyList())
     val tags: StateFlow<List<String>> = _tags.asStateFlow()
 
@@ -42,6 +50,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     private val _featuredSellers = MutableStateFlow<List<UserSearchResult>>(emptyList())
     val featuredSellers: StateFlow<List<UserSearchResult>> = _featuredSellers.asStateFlow()
+
+    private val _categories = MutableStateFlow<List<Category>>(emptyList())
+    val categories: StateFlow<List<Category>> = _categories.asStateFlow()
+
+    /** `null` = all categories (no `category_id` filter). */
+    private val _selectedCategoryId = MutableStateFlow<String?>(null)
+    val selectedCategoryId: StateFlow<String?> = _selectedCategoryId.asStateFlow()
 
     private val _listings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val listings: StateFlow<List<ListingFeedItem>> = _listings.asStateFlow()
@@ -60,16 +75,104 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
 
+    /** Top bar: expanded search field (from any tab’s search icon or Explore’s search). */
+    private val _searchBarExpanded = MutableStateFlow(false)
+    val searchBarExpanded: StateFlow<Boolean> = _searchBarExpanded.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    /** True when grid shows `/search/listings` results (not explore feed). */
+    private val _isSearchMode = MutableStateFlow(false)
+    val isSearchMode: StateFlow<Boolean> = _isSearchMode.asStateFlow()
+
+    /**
+     * Bumps on each new explore-listings request. Completed responses with a stale
+     * generation are dropped so an in-flight [loadAll] cannot overwrite a newer tag filter.
+     */
+    private val listingsFetchGeneration = AtomicInteger(0)
+
+    fun setFiltersExpanded(expanded: Boolean) {
+        if (_filtersExpanded.value == expanded) return
+        _filtersExpanded.value = expanded
+        exploreUiPreferences.writeFiltersExpanded(expanded)
+    }
+
     init {
         loadAll()
-        // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
         viewModelScope.launch {
             realtimeManager.events.collect { event ->
-                if (event is RealtimeEvent.FeedRefresh) {
-                    withContext(Dispatchers.IO) { loadListings() }
+                if (event is RealtimeEvent.FeedRefresh && !_isSearchMode.value) {
+                    fetchExploreListingsForCurrentTag()
                 }
             }
         }
+    }
+
+    fun requestSearchBarExpanded() {
+        _searchBarExpanded.value = true
+    }
+
+    fun setSearchBarExpanded(expanded: Boolean) {
+        _searchBarExpanded.value = expanded
+        if (!expanded) {
+            _searchQuery.value = ""
+            if (_isSearchMode.value) {
+                _isSearchMode.value = false
+                viewModelScope.launch {
+                    _isLoading.value = true
+                    _loadError.value = false
+                    fetchExploreListingsForCurrentTag()
+                    _isLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    /** Runs `GET /search/listings` with current query + category + aesthetic tag. */
+    fun submitSearch() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            _isSearchMode.value = true
+            runSearchWithCurrentFilters()
+            _isLoading.value = false
+        }
+    }
+
+    private suspend fun runSearchWithCurrentFilters() {
+        val gen = listingsFetchGeneration.incrementAndGet()
+        val q = _searchQuery.value.trim()
+        val idx = _selectedTagIndex.value
+        val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
+        val categoryId = _selectedCategoryId.value
+        val result = withContext(Dispatchers.IO) {
+            searchRepository.searchListings(
+                q = q,
+                categoryId = categoryId,
+                tags = tag,
+                limit = 20,
+                offset = 0,
+            )
+        }
+        if (gen != listingsFetchGeneration.get()) return
+        result.fold(
+            onSuccess = {
+                _listings.value = it
+                _loadError.value = false
+            },
+            onFailure = {
+                _loadError.value = true
+                _events.tryEmit(
+                    it.message?.takeIf { m -> m.isNotBlank() }
+                        ?: getApplication<Application>().getString(R.string.feed_load_error),
+                )
+            },
+        )
     }
 
     fun loadAll() {
@@ -79,10 +182,23 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             withContext(Dispatchers.IO) {
                 loadTags()
                 loadFeaturedSellers()
-                loadListings()
+                loadCategories()
             }
+            fetchExploreListingsForCurrentTag()
             _isLoading.value = false
         }
+    }
+
+    private suspend fun loadCategories() {
+        listingRepository.getCategories().fold(
+            onSuccess = { list ->
+                _categories.value = list
+                    .filter { it.id.isNotBlank() }
+                    .distinctBy { it.id }
+                    .sortedBy { it.name.lowercase() }
+            },
+            onFailure = { _categories.value = emptyList() },
+        )
     }
 
     private suspend fun loadTags() {
@@ -104,18 +220,19 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    private suspend fun loadListings() {
-        val selectedTag = if (_selectedTagIndex.value <= 0) null else _tags.value.getOrNull(_selectedTagIndex.value - 1)
-        suspend fun fetch(): Result<List<ListingFeedItem>> = listingRepository.getExploreFeed(
-            limit = 20,
-            offset = 0,
-            tags = selectedTag,
-        )
-        var result = fetch()
-        if (result.isFailure) {
-            delay(400)
-            result = fetch()
+    /**
+     * Loads explore feed for the current [_selectedTagIndex] on [Dispatchers.IO] and
+     * applies results only if this request is still the latest (see [listingsFetchGeneration]).
+     */
+    private suspend fun fetchExploreListingsForCurrentTag() {
+        val gen = listingsFetchGeneration.incrementAndGet()
+        val idx = _selectedTagIndex.value
+        val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
+        val categoryId = _selectedCategoryId.value
+        val result = withContext(Dispatchers.IO) {
+            exploreFeedWithRetry(tags = tag, categoryId = categoryId)
         }
+        if (gen != listingsFetchGeneration.get()) return
         result.fold(
             onSuccess = {
                 _listings.value = it
@@ -131,33 +248,67 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
+    private suspend fun exploreFeedWithRetry(
+        tags: String?,
+        categoryId: String? = null,
+    ): Result<List<ListingFeedItem>> {
+        suspend fun once(): Result<List<ListingFeedItem>> =
+            listingRepository.getExploreFeed(
+                limit = 20,
+                offset = 0,
+                tags = tags,
+                categoryId = categoryId?.takeIf { it.isNotBlank() },
+            )
+        var result = once()
+        if (result.isFailure) {
+            delay(400)
+            result = once()
+        }
+        return result
+    }
+
     fun selectTag(index: Int) {
         if (index == _selectedTagIndex.value) return
         _selectedTagIndex.value = index
         viewModelScope.launch {
             _isLoading.value = true
-            val tag = if (index <= 0) null else _tags.value.getOrNull(index - 1)
-            suspend fun fetch(): Result<List<ListingFeedItem>> =
-                listingRepository.getExploreFeed(limit = 20, offset = 0, tags = tag)
-            var result = fetch()
-            if (result.isFailure) {
-                delay(400)
-                result = fetch()
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchExploreListingsForCurrentTag()
             }
-            result.fold(
-                onSuccess = {
-                    _listings.value = it
-                    _loadError.value = false
-                },
-                onFailure = {
-                    _loadError.value = true
-                    _events.tryEmit(
-                        it.message?.takeIf { m -> m.isNotBlank() }
-                            ?: getApplication<Application>().getString(R.string.feed_load_error),
-                    )
-                },
-            )
             _isLoading.value = false
+        }
+    }
+
+    fun selectCategory(categoryId: String?) {
+        val next = categoryId?.takeIf { it.isNotBlank() }
+        if (next == _selectedCategoryId.value) return
+        _selectedCategoryId.value = next
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchExploreListingsForCurrentTag()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    /**
+     * Call when the user switches to the Explore tab so the grid refreshes from the API
+     * (picks up realtime and other changes while they were on another tab).
+     */
+    fun onExploreTabSelected() {
+        viewModelScope.launch {
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchExploreListingsForCurrentTag()
+            }
         }
     }
 
@@ -172,7 +323,12 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             withContext(Dispatchers.IO) {
                 loadTags()
                 loadFeaturedSellers()
-                loadListings()
+                loadCategories()
+            }
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchExploreListingsForCurrentTag()
             }
             _isRefreshing.value = false
         }
@@ -201,4 +357,12 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun isFollowing(userId: String): Boolean = _followingIds.value.contains(userId)
+
+    fun recordView(item: ListingFeedItem) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                listingRepository.recordView(item.id)
+            }
+        }
+    }
 }

@@ -1,7 +1,17 @@
 package com.pc.fash_android_mobile.ui.main
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -17,21 +27,21 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,24 +53,51 @@ import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.text.font.FontWeight
 import com.pc.fash_android_mobile.ui.explore.ExploreScreen
+import com.pc.fash_android_mobile.ui.explore.ExploreTopBar
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
+import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+
+/** `FASH.` + screen suffix — same typography as Explore (medium mark + titleLarge). */
+@Composable
+private fun FashScreenTitle(
+    @StringRes suffixRes: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        FashBrandMarkText(
+            text = stringResource(R.string.brand_wordmark),
+            style = FashBrandTypography.markBoldItalicMedium,
+        )
+        Text(
+            text = stringResource(suffixRes),
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
 
 enum class MainTab(
     val labelRes: Int,
     val icon: ImageVector,
+    @StringRes val headerSuffixRes: Int,
 ) {
-    Home(R.string.nav_home, Icons.Default.Home),
-    Explore(R.string.nav_explore, Icons.Default.Explore),
-    Post(R.string.nav_post, Icons.Default.Add),
-    Chat(R.string.nav_chat, Icons.Default.ChatBubbleOutline),
-    Profile(R.string.nav_profile, Icons.Default.Person),
+    Home(R.string.nav_home, Icons.Default.Home, R.string.brand_header_suffix_home),
+    Explore(R.string.nav_explore, Icons.Default.Explore, R.string.brand_header_suffix_explore),
+    Post(R.string.nav_post, Icons.Default.Add, R.string.brand_header_suffix_post),
+    Chat(R.string.nav_chat, Icons.Default.ChatBubbleOutline, R.string.brand_header_suffix_chat),
+    Profile(R.string.nav_profile, Icons.Default.Person, R.string.brand_header_suffix_profile),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,91 +118,63 @@ fun MainNavScreen(
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onEditProfile: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
+    /** [initialTab] 0 = people you follow, 1 = followers (e.g. Explore featured sellers “See all”). */
+    onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
 ) {
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
     val tabs = MainTab.entries
+    val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
+    val openExploreSearch: () -> Unit = {
+        exploreViewModel.requestSearchBarExpanded()
+        onTabChange(MainTab.Explore.ordinal)
+    }
+    val isPostListingFlow = tabs.getOrNull(selectedTab) == MainTab.Post
 
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         topBar = {
-            when (tabs[selectedTab]) {
+            if (!isPostListingFlow) {
+                when (val tab = tabs.getOrNull(selectedTab)) {
                 MainTab.Explore -> ExploreTopBar(
-                    onSearchClick = { /* TODO */ },
-                    onCartClick = { /* TODO */ },
+                    viewModel = exploreViewModel,
+                    onOrdersClick = onOrdersClick,
                     onNotificationsClick = { showNotificationScreen = true },
                 )
                 MainTab.Profile -> ProfileTopBar(
-                    onSearchClick = { /* TODO */ },
+                    onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
                     onLogout = onLogout,
                     onLogoutAll = onLogoutAll,
                     isLoggingOut = isLoggingOut,
                 )
-                else -> MainTopBar(
-                    onSearchClick = { /* TODO */ },
+                MainTab.Home, MainTab.Post, MainTab.Chat -> MainTopBar(
+                    suffixRes = tab.headerSuffixRes,
+                    onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                 )
+                else -> MainTopBar(
+                    suffixRes = MainTab.Home.headerSuffixRes,
+                    onSearchClick = openExploreSearch,
+                    onNotificationsClick = { showNotificationScreen = true },
+                )
+                }
             }
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = FashColors.Primary,
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    val selected = selectedTab == index
-                    NavigationBarItem(
-                        icon = {
-                            if (tab == MainTab.Chat && chatUnreadCount > 0) {
-                                BadgedBox(
-                                    badge = {
-                                        androidx.compose.material3.Badge(
-                                            containerColor = FashColors.Primary,
-                                        ) {
-                                            androidx.compose.material3.Text(
-                                                text = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString(),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = FashColors.OnPrimary,
-                                            )
-                                        }
-                                    },
-                                ) {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = stringResource(tab.labelRes),
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = stringResource(tab.labelRes),
-                                )
-                            }
-                        },
-                        label = {
-                            Text(
-                                text = stringResource(tab.labelRes),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        },
-                        selected = selected,
-                        onClick = {
-                            showNotificationScreen = false
-                            onTabChange(index)
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = FashColors.Primary,
-                            selectedTextColor = FashColors.Primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            indicatorColor = FashColors.Primary.copy(alpha = 0.12f),
-                        ),
-                    )
-                }
+            if (!isPostListingFlow) {
+                MainNavBottomBar(
+                    selectedTab = selectedTab,
+                    chatUnreadCount = chatUnreadCount,
+                    onTabChange = { index ->
+                        showNotificationScreen = false
+                        onTabChange(index)
+                    },
+                )
             }
         },
     ) { paddingValues ->
@@ -174,36 +183,94 @@ fun MainNavScreen(
                 .fillMaxSize()
                 .padding(paddingValues),
         ) {
-            when (tabs[selectedTab]) {
-                MainTab.Home -> HomeFeedContent(viewModel = homeViewModel, onListingClick = onListingClick)
-                MainTab.Explore -> ExploreScreen(viewModel = exploreViewModel, onListingClick = onListingClick)
-                MainTab.Post -> CreateListingFlowScreen(
-                    viewModel = postViewModel,
-                    onClose = { /* stay on post tab with cleared draft */ postViewModel.cancel() },
-                )
-                MainTab.Chat -> ChatScreen(
-                    viewModel = chatViewModel,
-                    onConversationClick = onConversationClick,
-                )
-                MainTab.Profile -> ProfileScreen(
-                    viewModel = profileViewModel,
-                    onLogout = onLogout,
-                    onLogoutAll = onLogoutAll,
-                    isLoggingOut = isLoggingOut,
-                    onEditProfile = onEditProfile,
-                    onOrdersClick = onOrdersClick,
-                    onListingClick = onListingClick,
-                )
+            LaunchedEffect(selectedTab) {
+                if (selectedTab in tabs.indices && tabs[selectedTab] == MainTab.Explore) {
+                    exploreViewModel.onExploreTabSelected()
+                } else {
+                    exploreViewModel.setSearchBarExpanded(false)
+                }
+            }
+            if (!showNotificationScreen &&
+                selectedTab in tabs.indices &&
+                tabs[selectedTab] == MainTab.Explore &&
+                exploreSearchExpanded
+            ) {
+                BackHandler {
+                    exploreViewModel.setSearchBarExpanded(false)
+                }
+            }
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    val postOrd = MainTab.Post.ordinal
+                    when {
+                        targetState == postOrd && initialState != postOrd -> (
+                            fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)) +
+                                scaleIn(
+                                    initialScale = 0.92f,
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                                )
+                            ) togetherWith fadeOut(animationSpec = tween(160))
+                        initialState == postOrd && targetState != postOrd ->
+                            fadeIn(animationSpec = tween(220)) togetherWith (
+                                fadeOut(animationSpec = tween(180)) +
+                                    scaleOut(
+                                        targetScale = 0.96f,
+                                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                                    )
+                                )
+                        else -> fadeIn(tween(200)) togetherWith fadeOut(tween(180))
+                    }
+                },
+                label = "mainTabContent",
+            ) { tabIndex ->
+                when (tabs.getOrNull(tabIndex) ?: MainTab.Home) {
+                    MainTab.Home -> HomeFeedContent(
+                        viewModel = homeViewModel,
+                        onListingClick = onListingClick,
+                        onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
+                        onOrdersClick = onOrdersClick,
+                        onNavigateToChat = { onTabChange(MainTab.Chat.ordinal) },
+                        onNavigateToSaved = { onTabChange(MainTab.Profile.ordinal) },
+                        onNavigateToPost = { onTabChange(MainTab.Post.ordinal) },
+                    )
+                    MainTab.Explore -> ExploreScreen(
+                        viewModel = exploreViewModel,
+                        onListingClick = onListingClick,
+                        onSeeAllFeaturedSellersClick = { onOpenFollowConnections(0) },
+                    )
+                    MainTab.Post -> CreateListingFlowScreen(
+                        viewModel = postViewModel,
+                        onClose = {
+                            postViewModel.cancel()
+                            onTabChange(MainTab.Home.ordinal)
+                        },
+                    )
+                    MainTab.Chat -> ChatScreen(
+                        viewModel = chatViewModel,
+                        onConversationClick = onConversationClick,
+                        onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
+                    )
+                    MainTab.Profile -> ProfileScreen(
+                        viewModel = profileViewModel,
+                        onLogout = onLogout,
+                        onLogoutAll = onLogoutAll,
+                        isLoggingOut = isLoggingOut,
+                        onEditProfile = onEditProfile,
+                        onOrdersClick = onOrdersClick,
+                        onListingClick = onListingClick,
+                    )
+                }
             }
         }
-
-        if (showNotificationScreen) {
-            BackHandler { showNotificationScreen = false }
-            NotificationScreen(
-                modifier = Modifier.fillMaxSize(),
-                onBack = { showNotificationScreen = false },
-            )
-        }
+    }
+    if (showNotificationScreen) {
+        BackHandler { showNotificationScreen = false }
+        NotificationScreen(
+            modifier = Modifier.fillMaxSize(),
+            onBack = { showNotificationScreen = false },
+        )
+    }
     }
 }
 
@@ -219,13 +286,7 @@ private fun ProfileTopBar(
 ) {
     var menuExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
     TopAppBar(
-        title = {
-            Text(
-                text = stringResource(R.string.brand_wordmark),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = FashColors.Primary,
-            )
-        },
+        title = { FashScreenTitle(suffixRes = MainTab.Profile.headerSuffixRes) },
         actions = {
             IconButton(onClick = onSearchClick) {
                 Icon(
@@ -286,17 +347,12 @@ private fun ProfileTopBar(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainTopBar(
+    @StringRes suffixRes: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
 ) {
     androidx.compose.material3.TopAppBar(
-        title = {
-            Text(
-                text = stringResource(R.string.brand_wordmark),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = FashColors.Primary,
-            )
-        },
+        title = { FashScreenTitle(suffixRes = suffixRes) },
         actions = {
             IconButton(onClick = onSearchClick) {
                 Icon(
@@ -328,57 +384,3 @@ private fun MainTopBar(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ExploreTopBar(
-    onSearchClick: () -> Unit,
-    onCartClick: () -> Unit,
-    onNotificationsClick: () -> Unit,
-) {
-    androidx.compose.material3.TopAppBar(
-        title = {
-            Text(
-                text = stringResource(R.string.explore_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = onSearchClick) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = stringResource(R.string.search_label),
-                    tint = FashColors.Primary,
-                )
-            }
-        },
-        actions = {
-            BadgedBox(
-                badge = {
-                    if (true) {
-                        androidx.compose.material3.Badge(containerColor = FashColors.Primary)
-                    }
-                },
-            ) {
-                IconButton(onClick = onNotificationsClick) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = stringResource(R.string.notifications),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-            IconButton(onClick = onCartClick) {
-                Icon(
-                    imageVector = Icons.Default.LocalMall,
-                    contentDescription = stringResource(R.string.add_to_cart),
-                    tint = FashColors.Primary,
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-    )
-}

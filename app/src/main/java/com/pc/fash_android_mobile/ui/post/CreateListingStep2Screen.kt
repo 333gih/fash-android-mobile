@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.user.AestheticTag
-import com.pc.fash_android_mobile.ui.onboarding.OnboardingProgressBar
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -86,8 +85,7 @@ private val CONDITION_VALUES = listOf(
 fun CreateListingStep2Screen(
     modifier: Modifier = Modifier,
     viewModel: PostViewModel,
-    onClose: () -> Unit,
-    onNext: () -> Unit,
+    onCloseRequest: () -> Unit,
 ) {
     val draft by viewModel.draft.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -101,10 +99,23 @@ fun CreateListingStep2Screen(
         viewModel.loadStep2Data()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Step2Header(
-            onBack = { viewModel.prevStep() },
-            onClose = onClose,
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 2,
+            totalSteps = 3,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = {
+                if (draft.canProceedFromStep2()) {
+                    viewModel.nextStep()
+                }
+            },
+            primaryEnabled = draft.canProceedFromStep2(),
         )
 
         Column(
@@ -182,21 +193,12 @@ fun CreateListingStep2Screen(
                 },
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Step2IncompleteHint(keys = draft.step2MissingRequirementKeys())
+
             Spacer(modifier = Modifier.height(24.dp))
         }
-
-        Step2IncompleteHint(keys = draft.step2MissingRequirementKeys())
-
-        Step2BottomBar(
-            onCancel = onClose,
-            onNext = {
-                if (draft.canProceedFromStep2()) {
-                    viewModel.nextStep()
-                    onNext()
-                }
-            },
-            nextEnabled = draft.canProceedFromStep2(),
-        )
     }
 
     if (showCategorySheet) {
@@ -230,56 +232,6 @@ fun CreateListingStep2Screen(
             },
             onDismiss = { showBrandSheet = false },
         )
-    }
-}
-
-@Composable
-private fun Step2Header(
-    onBack: () -> Unit,
-    onClose: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    tint = FashColors.Primary,
-                )
-            }
-            Text(
-                text = stringResource(R.string.create_listing_title_dang_tin, 2, 3),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-            )
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null,
-                    tint = scheme.onSurface,
-                )
-            }
-        }
-        OnboardingProgressBar(currentStep = 2, totalSteps = 3)
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(R.string.create_listing_step, 2, 3),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
@@ -673,44 +625,6 @@ private fun Step2IncompleteHint(keys: List<String>) {
                     color = scheme.onSurfaceVariant,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun Step2BottomBar(
-    onCancel: () -> Unit,
-    onNext: () -> Unit,
-    nextEnabled: Boolean,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = onCancel) {
-            Text(
-                text = stringResource(R.string.create_listing_cancel),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Button(
-            onClick = onNext,
-            enabled = nextEnabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = FashColors.Primary,
-                contentColor = FashColors.OnPrimary,
-            ),
-        ) {
-            Text(stringResource(R.string.create_listing_next))
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
         }
     }
 }

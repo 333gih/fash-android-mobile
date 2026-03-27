@@ -1,15 +1,25 @@
 package com.pc.fash_android_mobile.ui.login
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,11 +29,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.outlined.Email
@@ -41,11 +51,16 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -53,7 +68,6 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,14 +75,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.locale.LoginLanguageToggle
+import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
+import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val LoginCanvas = Color(0xFFF9F9F9)
-private val HeroCornerDp = 40.dp
+private val HeroCornerDp = 28.dp
 private val FieldCornerDp = 16.dp
 private val SocialCornerDp = 16.dp
 private val PillCornerDp = 24.dp
@@ -99,9 +121,28 @@ fun LoginScreen(
     isPasswordLoading: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val scroll = rememberScrollState()
     val emailValid = isValidEmail(email)
     val passwordValid = password.isNotBlank()
+
+    val brandAnim = remember { Animatable(0f) }
+    val heroAnim = remember { Animatable(0f) }
+    val formAnim = remember { Animatable(0f) }
+    val bottomAnim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        launch { brandAnim.animateTo(1f, tween(450, easing = FastOutSlowInEasing)) }
+        launch {
+            delay(50)
+            heroAnim.animateTo(1f, tween(450, easing = FastOutSlowInEasing))
+        }
+        launch {
+            delay(100)
+            formAnim.animateTo(1f, tween(450, easing = FastOutSlowInEasing))
+        }
+        launch {
+            delay(150)
+            bottomAnim.animateTo(1f, tween(450, easing = FastOutSlowInEasing))
+        }
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -114,32 +155,60 @@ fun LoginScreen(
                     .statusBarsPadding()
                     .navigationBarsPadding()
                     .imePadding()
-                    .verticalScroll(scroll)
                     .padding(start = FashTheme.spacing.editorialStart, end = FashTheme.spacing.editorialEnd)
-                    .padding(top = 28.dp, bottom = 80.dp),
+                    .padding(top = 12.dp, bottom = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    text = stringResource(R.string.brand_wordmark),
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        fontStyle = FontStyle.Italic,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = scheme.primary,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LoginLanguageToggle()
+                }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = brandAnim.value
+                        translationY = (1f - brandAnim.value) * 20f
+                    },
+                ) {
+                    FashBrandMarkText(
+                        text = stringResource(R.string.brand_wordmark),
+                        style = FashBrandTypography.markBoldItalicLarge,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.login_tagline),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                LoginHeroCarouselSection(
+                    modifier = Modifier
+                        .weight(1f, fill = true)
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 120.dp)
+                        .graphicsLayer {
+                            alpha = heroAnim.value
+                            translationY = (1f - heroAnim.value) * 24f
+                        },
                 )
+
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.login_tagline),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = scheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(modifier = Modifier.height(28.dp))
 
-                HeroIllustrationCard()
-
-                Spacer(modifier = Modifier.height(24.dp))
-
+                Column(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = formAnim.value
+                        translationY = (1f - formAnim.value) * 22f
+                    },
+                ) {
                 EmailFieldWithRail(
                     email = email,
                     onEmailChange = onEmailChange,
@@ -153,7 +222,7 @@ fun LoginScreen(
                 )
 
                 if (usePasswordLogin) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     PasswordFieldWithRail(
                         password = password,
                         onPasswordChange = onPasswordChange,
@@ -162,7 +231,7 @@ fun LoginScreen(
                 }
 
                 if (onTogglePasswordLogin != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (usePasswordLogin) {
                             stringResource(R.string.login_use_otp_instead)
@@ -180,7 +249,7 @@ fun LoginScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 FashPrimaryButton(
                     onClick = when {
@@ -218,43 +287,51 @@ fun LoginScreen(
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                OrDivider()
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    SocialOutlineButton(
-                        modifier = Modifier.then(
-                            if (!isGoogleConfigured) Modifier.alpha(0.55f) else Modifier,
-                        ),
-                        iconRes = R.drawable.ic_brand_google,
-                        label = stringResource(R.string.login_google),
-                        enabled = !isSocialLoading,
-                        onClick = onGoogleClick,
-                    )
-                    SocialOutlineButton(
-                        modifier = Modifier.then(
-                            if (!isFacebookConfigured) Modifier.alpha(0.55f) else Modifier,
-                        ),
-                        iconRes = R.drawable.ic_brand_facebook,
-                        label = stringResource(R.string.login_facebook),
-                        enabled = !isSocialLoading,
-                        onClick = onFacebookClick,
-                    )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Column(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = bottomAnim.value
+                        translationY = (1f - bottomAnim.value) * 18f
+                    },
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                LoginLegalFooter(
-                    onTermsClick = onTermsClick,
-                    onPrivacyClick = onPrivacyClick,
-                )
+                    OrDivider()
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        SocialOutlineButton(
+                            modifier = Modifier.then(
+                                if (!isGoogleConfigured) Modifier.alpha(0.55f) else Modifier,
+                            ),
+                            iconRes = R.drawable.ic_brand_google,
+                            label = stringResource(R.string.login_google),
+                            enabled = !isSocialLoading,
+                            onClick = onGoogleClick,
+                        )
+                        SocialOutlineButton(
+                            modifier = Modifier.then(
+                                if (!isFacebookConfigured) Modifier.alpha(0.55f) else Modifier,
+                            ),
+                            iconRes = R.drawable.ic_brand_facebook,
+                            label = stringResource(R.string.login_facebook),
+                            enabled = !isSocialLoading,
+                            onClick = onFacebookClick,
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LoginLegalFooter(
+                        onTermsClick = onTermsClick,
+                        onPrivacyClick = onPrivacyClick,
+                    )
+                }
             }
 
             if (showSnackbarHost) {
@@ -270,24 +347,153 @@ fun LoginScreen(
     }
 }
 
+private data class LoginHeroSlide(
+    val captionRes: Int,
+    val scrim: Brush,
+)
+
+private const val LoginHeroAutoAdvanceMs = 5_500L
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HeroIllustrationCard() {
+private fun LoginHeroCarouselSection(
+    modifier: Modifier = Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(272.dp),
-        shape = RoundedCornerShape(HeroCornerDp),
-        color = scheme.surfaceContainer,
+    val slides = remember(scheme) {
+        listOf(
+            LoginHeroSlide(
+                captionRes = R.string.login_hero_slide1_caption,
+                scrim = Brush.verticalGradient(
+                    listOf(Color.Transparent, FashColors.Primary.copy(alpha = 0.09f)),
+                ),
+            ),
+            LoginHeroSlide(
+                captionRes = R.string.login_hero_slide2_caption,
+                scrim = Brush.verticalGradient(
+                    listOf(
+                        FashColors.TertiaryAccent.copy(alpha = 0.05f),
+                        Color.Transparent,
+                        FashColors.Primary.copy(alpha = 0.075f),
+                    ),
+                ),
+            ),
+            LoginHeroSlide(
+                captionRes = R.string.login_hero_slide3_caption,
+                scrim = Brush.verticalGradient(
+                    listOf(Color.Transparent, FashColors.SecondaryContainer.copy(alpha = 0.42f)),
+                ),
+            ),
+        )
+    }
+    val pagerState = rememberPagerState(pageCount = { slides.size })
+    val infiniteTransition = rememberInfiniteTransition(label = "loginHeroFloat")
+    val floatY = infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3_200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "heroFloatY",
+    )
+
+    LaunchedEffect(pagerState) {
+        while (isActive) {
+            delay(LoginHeroAutoAdvanceMs)
+            val next = (pagerState.currentPage + 1) % slides.size
+            runCatching { pagerState.animateScrollToPage(next) }
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Image(
-                painter = painterResource(R.drawable.login_hero_trench),
-                contentDescription = stringResource(R.string.login_hero_cd),
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(HeroCornerDp),
+            color = scheme.surfaceContainer,
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) { page ->
+                val slide = slides[page]
+                val slideContentDescription = stringResource(
+                    R.string.login_hero_pager_cd,
+                    page + 1,
+                    slides.size,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = slideContentDescription
+                        },
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(slide.scrim),
+                    )
+                    Image(
+                        painter = painterResource(R.drawable.login_hero_trench),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
+                            .graphicsLayer { translationY = floatY.value },
+                        contentScale = ContentScale.Fit,
+                    )
+                    Text(
+                        text = stringResource(slide.captionRes),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                        color = scheme.onSurface.copy(alpha = 0.82f),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                    )
+                }
+            }
+        }
+        LoginHeroPageIndicator(
+            pageCount = slides.size,
+            currentPage = pagerState.currentPage,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun LoginHeroPageIndicator(
+    pageCount: Int,
+    currentPage: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(pageCount) { index ->
+            val selected = index == currentPage
+            val width by animateDpAsState(
+                targetValue = if (selected) 18.dp else 6.dp,
+                animationSpec = tween(durationMillis = 220),
+                label = "loginHeroDot",
+            )
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                contentScale = ContentScale.Fit,
+                    .height(6.dp)
+                    .width(width)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(
+                        if (selected) FashColors.Primary else FashColors.OutlineVariant.copy(alpha = 0.7f),
+                    ),
             )
         }
     }

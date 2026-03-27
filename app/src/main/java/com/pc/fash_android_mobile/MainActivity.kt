@@ -64,6 +64,8 @@ import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.profile.EditProfileScreen
 import com.pc.fash_android_mobile.ui.profile.EditProfileViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
+import com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen
+import com.pc.fash_android_mobile.ui.follow.FollowConnectionsViewModel
 import com.pc.fash_android_mobile.ui.main.MainNavScreen
 import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.login.LoginScreen
@@ -75,6 +77,7 @@ import com.pc.fash_android_mobile.ui.login.LoginStep
 import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
+import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.address.AddEditAddressScreen
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
@@ -134,6 +137,7 @@ class MainActivity : ComponentActivity() {
     private val ordersViewModel: com.pc.fash_android_mobile.ui.orders.OrdersViewModel by viewModels()
     private val orderDetailViewModel: OrderDetailViewModel by viewModels()
     private val addressBookViewModel: AddressBookViewModel by viewModels()
+    private val followConnectionsViewModel: FollowConnectionsViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
 
     private val googleSignInLauncher = registerForActivityResult(
@@ -197,7 +201,8 @@ class MainActivity : ComponentActivity() {
             val password by loginViewModel.password.collectAsState()
             val usePasswordLogin by loginViewModel.usePasswordLogin.collectAsState()
             val isPasswordLoading by loginViewModel.isPasswordLoading.collectAsState()
-            val isAuthenticated by authManager.isAuthenticated.collectAsState(initial = authManager.sessionStore.read() != null)
+            val otpShowOnboardingProgress by loginViewModel.otpShowOnboardingProgress.collectAsState()
+            val isAuthenticated by authManager.isAuthenticated.collectAsState(initial = false)
             val sessionExpiredMessage by authManager.sessionExpiredMessage.collectAsState()
             // Show snackbar when the server force-expires the session, then navigate to login
             LaunchedEffect(sessionExpiredMessage) {
@@ -226,7 +231,10 @@ class MainActivity : ComponentActivity() {
                     if (splashStartMs == 0L) splashStartMs = start
                     val elapsed = now - start
                     delay((SPLASH_DISPLAY_MS - elapsed).coerceAtLeast(0L))
-                    if (authManager.sessionStore.read() != null) {
+                    val hasSession = withContext(Dispatchers.IO) {
+                        authManager.sessionStore.read() != null
+                    }
+                    if (hasSession) {
                         withContext(Dispatchers.IO) {
                             authManager.validateOrClearSession()
                         }
@@ -237,6 +245,7 @@ class MainActivity : ComponentActivity() {
                 // Connect / disconnect the realtime WebSocket on auth state changes
                 val realtimeManager = (application as FashApplication).realtimeManager
                 val fashApp = application as FashApplication
+                val dialogMessage by fashApp.uiDialog.current.collectAsState()
                 val notifPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
                 ) { }
@@ -366,6 +375,8 @@ class MainActivity : ComponentActivity() {
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
+                                    var showFollowConnections by rememberSaveable { mutableStateOf(false) }
+                                    var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
                                     val context = LocalContext.current
@@ -380,6 +391,11 @@ class MainActivity : ComponentActivity() {
                                                 exploreViewModel.loadAll()
                                                 profileViewModel.loadProfile()
                                             }
+                                        }
+                                    }
+                                    LaunchedEffect(showFollowConnections, followConnectionsInitialTab) {
+                                        if (showFollowConnections) {
+                                            followConnectionsViewModel.show(followConnectionsInitialTab)
                                         }
                                     }
                                     val orderRepository = remember {
@@ -409,6 +425,10 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onEditProfile = { showEditProfile = true },
                                             onOrdersClick = { showOrdersScreen = true },
+                                            onOpenFollowConnections = { tab ->
+                                                followConnectionsInitialTab = tab
+                                                showFollowConnections = true
+                                            },
                                             onConversationClick = { item ->
                                                 selectedConversationItem = item
                                                 chatDetailViewModel.loadFromItem(item)
@@ -673,6 +693,16 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
+                                        if (showFollowConnections) {
+                                            BackHandler { showFollowConnections = false }
+                                            FollowConnectionsScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                viewModel = followConnectionsViewModel,
+                                                onBack = { showFollowConnections = false },
+                                            )
+                                        }
                                     }
                                 }
                                 loginStep == LoginStep.Email -> LoginScreen(
@@ -726,7 +756,7 @@ class MainActivity : ComponentActivity() {
                                     onVerifyClick = loginViewModel::verifyOtpCode,
                                     onResendClick = loginViewModel::resendEmailOtp,
                                     onBackClick = loginViewModel::backFromOtp,
-                                    showOnboardingProgress = true,
+                                    showOnboardingProgress = otpShowOnboardingProgress,
                                     onboardingProgressStep = 1,
                                     onboardingProgressTotal = 3,
                                 )
@@ -743,6 +773,11 @@ class MainActivity : ComponentActivity() {
                         FashWaitingScreen()
                     }
                 }
+
+                FashGlobalDialogHost(
+                    message = dialogMessage,
+                    onDismiss = { fashApp.uiDialog.dismiss() },
+                )
             }
         }
     }

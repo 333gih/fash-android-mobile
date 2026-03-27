@@ -17,7 +17,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
+import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 @Composable
@@ -36,12 +38,9 @@ fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
+        FashBrandMarkText(
             text = stringResource(R.string.brand_wordmark),
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontWeight = FontWeight.Bold,
-            ),
-            color = scheme.primary,
+            style = FashBrandTypography.markBoldItalicLarge,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
