@@ -9,7 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 
 /**
  * Bottom bar with a raised circular Post action (FAB) in the center — matches editorial “ĐĂNG TIN” pattern.
@@ -49,7 +51,10 @@ fun MainNavBottomBar(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            // Edge-to-edge: lift entire bar above gesture / 3-button navigation
+            .navigationBarsPadding(),
         color = Color.White,
         tonalElevation = 0.dp,
         shadowElevation = 6.dp,
@@ -57,9 +62,10 @@ fun MainNavBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(76.dp)
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                // Fixed 76.dp was shorter than FAB + label, clipping the Post button
+                .heightIn(min = 88.dp)
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
             MainNavSideItem(
                 tab = MainTab.Home,
@@ -105,9 +111,9 @@ private fun RowScope.MainNavSideItem(
         modifier = Modifier
             .weight(1f)
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(bottom = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Bottom,
     ) {
         if (tab == MainTab.Chat && chatUnreadCount > 0) {
             BadgedBox(
@@ -116,7 +122,7 @@ private fun RowScope.MainNavSideItem(
                         Text(
                             text = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString(),
                             style = MaterialTheme.typography.labelSmall,
-                            color = FashColors.OnPrimary,
+                            color = FashColors.Primary.fashReadableOn(),
                         )
                     }
                 },
@@ -157,7 +163,7 @@ private fun RowScope.MainNavPostFab(
         label = "postFabScale",
     )
     val fabLift by animateDpAsState(
-        targetValue = if (selected) 10.dp else 8.dp,
+        targetValue = if (selected) 18.dp else 16.dp,
         label = "postFabLift",
     )
     val elevation by animateDpAsState(
@@ -168,9 +174,9 @@ private fun RowScope.MainNavPostFab(
     Column(
         modifier = Modifier
             .weight(1.2f)
-            .padding(top = 2.dp),
+            .padding(bottom = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top,
+        verticalArrangement = Arrangement.Bottom,
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -179,14 +185,14 @@ private fun RowScope.MainNavPostFab(
             FloatingActionButton(
                 onClick = onClick,
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(60.dp)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     },
                 shape = CircleShape,
                 containerColor = FashColors.Primary,
-                contentColor = FashColors.OnPrimary,
+                contentColor = FashColors.Primary.fashReadableOn(),
                 elevation = FloatingActionButtonDefaults.elevation(
                     defaultElevation = elevation,
                     pressedElevation = elevation + 3.dp,

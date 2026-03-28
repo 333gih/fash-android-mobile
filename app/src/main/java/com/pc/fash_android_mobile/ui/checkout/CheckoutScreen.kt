@@ -64,6 +64,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val InputCorner = RoundedCornerShape(12.dp)
@@ -861,14 +862,14 @@ private fun CheckoutButton(
                 .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 16.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                 containerColor = FashColors.Primary,
-                contentColor = FashColors.OnPrimary,
+                contentColor = FashColors.Primary.fashReadableOn(),
             ),
             shape = RoundedCornerShape(12.dp),
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    color = FashColors.OnPrimary,
+                    color = FashColors.Primary.fashReadableOn(),
                     strokeWidth = 2.dp,
                 )
             } else {
@@ -889,13 +890,13 @@ private fun CheckoutButton(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
                             modifier = Modifier.size(22.dp),
-                            tint = FashColors.OnPrimary,
+                            tint = FashColors.Primary.fashReadableOn(),
                         )
                     }
                     Text(
                         text = formatPrice(grandTotalVnd),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = FashColors.OnPrimary.copy(alpha = 0.95f),
+                        color = FashColors.Primary.fashReadableOn().copy(alpha = 0.95f),
                     )
                 }
             }

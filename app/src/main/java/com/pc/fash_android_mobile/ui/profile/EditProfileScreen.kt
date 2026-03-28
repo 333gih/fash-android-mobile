@@ -63,6 +63,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.AestheticTag
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val AvatarSize = 96.dp
@@ -279,7 +280,7 @@ fun EditProfileScreen(
                                     imageVector = Icons.Default.CameraAlt,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
-                                    tint = FashColors.OnPrimary,
+                                    tint = FashColors.Primary.fashReadableOn(),
                                 )
                             }
                         }
@@ -344,7 +345,7 @@ fun EditProfileScreen(
                 if (isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = FashColors.OnPrimary,
+                        color = FashColors.Primary.fashReadableOn(),
                         strokeWidth = 2.dp,
                     )
                 } else {
@@ -570,7 +571,7 @@ private fun StyleChipsSection(
                     Text(
                         text = tag.displayName.ifBlank { tag.name },
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) FashColors.OnPrimary else scheme.onSurfaceVariant,
+                        color = if (selected) FashColors.Primary.fashReadableOn() else scheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }

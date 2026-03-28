@@ -48,6 +48,7 @@ import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 internal enum class OrderViewerRole {
@@ -910,7 +911,7 @@ internal fun OrderStickyBottomBar(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = FashColors.Primary,
-                    contentColor = FashColors.OnPrimary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {
@@ -955,7 +956,7 @@ internal fun OrderStickyBottomBar(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = FashColors.Primary,
-                    contentColor = FashColors.OnPrimary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {
@@ -969,7 +970,7 @@ internal fun OrderStickyBottomBar(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = FashColors.Primary,
-                    contentColor = FashColors.OnPrimary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {

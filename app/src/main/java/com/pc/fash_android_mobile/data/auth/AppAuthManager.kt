@@ -67,12 +67,18 @@ class AppAuthManager(
     }
 
     /**
-     * Cold-start validation: refresh tokens. On **network / 5xx / 429** failures, keeps the
-     * session and returns true (retries a few times first). Only **clears** on definitive
-     * auth failures (invalid/expired refresh).
+     * Cold-start validation: refresh tokens if the access token is likely expired.
+     * When the access token is still within [AuthSession.expiresInSeconds] of [AuthSessionStore]
+     * issue time, skips the network call so a flaky refresh or misclassified 4xx cannot log
+     * the user out. On transient refresh failures, keeps the session (retries a few times).
+     * Only clears on definitive OAuth-style failures (400/401/403 from the auth service).
      */
     suspend fun validateOrClearSession(): Boolean {
         val session = sessionStore.read() ?: return false
+        if (isAccessTokenLikelyValid(session)) {
+            _isAuthenticated.value = true
+            return true
+        }
         for (attempt in 0 until REFRESH_ATTEMPTS) {
             val result = authRepository.refresh(session.refreshToken)
             result.getOrNull()?.let { newSession ->
@@ -96,8 +102,19 @@ class AppAuthManager(
         return true
     }
 
+    /** True when stored issue time + expiry suggests the access JWT is still valid. */
+    private fun isAccessTokenLikelyValid(session: AuthSession): Boolean {
+        if (session.expiresInSeconds <= 0L) return false
+        val issued = sessionStore.getIssuedAtMillis()
+        if (issued <= 0L) return false
+        val expMs = issued + session.expiresInSeconds * 1000L
+        return System.currentTimeMillis() < expMs - ACCESS_TOKEN_REFRESH_SKEW_MS
+    }
+
     private companion object {
         private const val REFRESH_ATTEMPTS = 3
+        /** Refresh slightly before real expiry so API calls are unlikely to see 401 first. */
+        private const val ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000L
     }
 
     fun logout(accessToken: String): Result<Unit> =

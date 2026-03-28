@@ -65,6 +65,7 @@ import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingProgressBar
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 
@@ -196,14 +197,14 @@ fun OtpVerifyScreen(
                     if (isVerifyLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = FashColors.OnPrimary,
+                            color = FashColors.Primary.fashReadableOn(),
                             strokeWidth = 2.dp,
                         )
                     } else {
                         Text(
                             text = stringResource(R.string.otp_verify),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = FashColors.OnPrimary,
+                            color = FashColors.Primary.fashReadableOn(),
                         )
                     }
                 }

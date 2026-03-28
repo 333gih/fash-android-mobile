@@ -59,6 +59,7 @@ import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import androidx.compose.foundation.text.KeyboardOptions
 
@@ -371,7 +372,7 @@ fun EditListingScreen(
                         if (isSaving) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(22.dp),
-                                color = FashColors.OnPrimary,
+                                color = FashColors.Primary.fashReadableOn(),
                                 strokeWidth = 2.dp,
                             )
                         } else {

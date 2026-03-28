@@ -25,7 +25,7 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
- * Shop-by-category chips (Depop-style) — filters [ExploreViewModel] explore feed via `category_id`.
+ * Shop-by-category chips (Depop-style) — filters [ExploreViewModel] `/search/listings` via `category_id`.
  */
 @Composable
 fun ExploreCategoryStrip(

@@ -115,7 +115,7 @@ Below: **path** is relative to `{APP_API_PREFIX}/v1` (e.g. `/api/v1`). **🔒** 
 | POST | `/listings/:listing_id/view` 🔒 | Debounced view |
 | GET | `/listings/:listing_id` | Public single listing |
 | GET | `/listings/home` 🔒 | Followed sellers feed |
-| GET | `/listings/explore` 🔒 | Explore + filters |
+| GET | `/search/listings` 🔒 | Explore tab (browse + search); Android uses this instead of `/listings/explore` |
 | GET | `/listings/wishlist` 🔒 | `{ "listing_ids": [...] }` |
 | GET | `/users/:id/listings` | Query `status`, `limit`, `offset` |
 | GET | `/categories` | Public |

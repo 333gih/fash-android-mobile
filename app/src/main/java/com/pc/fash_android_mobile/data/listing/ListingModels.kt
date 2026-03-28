@@ -1,7 +1,7 @@
 package com.pc.fash_android_mobile.data.listing
 
 /**
- * Parsed feed item from GET /api/v1/listings/home or /explore.
+ * Parsed feed item from GET /api/v1/listings/home or /search/listings.
  * Backend may include seller when preloaded; otherwise seller fields are null.
  */
 data class ListingFeedItem(

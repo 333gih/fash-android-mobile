@@ -87,6 +87,7 @@ import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val LoginCanvas = Color(0xFFF9F9F9)
@@ -268,7 +269,7 @@ fun LoginScreen(
                     if (isOtpLoading || isPasswordLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = FashColors.OnPrimary,
+                            color = FashColors.Primary.fashReadableOn(),
                             strokeWidth = 2.dp,
                         )
                     } else {

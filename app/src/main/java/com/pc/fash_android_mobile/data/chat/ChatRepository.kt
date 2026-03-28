@@ -451,7 +451,11 @@ class ChatRepository(
         val productId: String = listingObj?.optString("ID", listingObj.optString("id", ""))
             ?.takeIf { it.isNotBlank() }
             ?: o.optString("ListingID", o.optString("listing_id", ""))
-        val isUnread = o.optBoolean("IsUnread", o.optBoolean("is_unread", o.optBoolean("unread", false)))
+        val unreadCount = o.optInt("unread_count", o.optInt("UnreadCount", o.optInt("unreadCount", 0)))
+            .coerceAtLeast(0)
+        val hasUnreadFlag = o.optBoolean("has_unread", o.optBoolean("HasUnread", o.optBoolean("hasUnread", false)))
+        val legacyUnread = o.optBoolean("IsUnread", o.optBoolean("is_unread", o.optBoolean("unread", false)))
+        val hasUnread = hasUnreadFlag || unreadCount > 0 || legacyUnread
         return ConversationItem(
             conversationId = convId,
             otherUserId = otherProfile?.optString("UserID", otherProfile.optString("user_id", otherProfile.optString("ID", ""))) ?: "",
@@ -469,7 +473,8 @@ class ChatRepository(
             productTitle = listingObj?.optString("Title", listingObj.optString("title", "")) ?: "",
             productId = productId,
             productPrice = listingObj?.optLong("Price", listingObj.optLong("price", 0L)) ?: 0L,
-            isUnread = isUnread,
+            hasUnread = hasUnread,
+            unreadCount = unreadCount,
             buyerUserId = buyerId,
             sellerUserId = sellerId,
         )
@@ -777,7 +782,10 @@ data class ConversationItem(
     val productTitle: String,
     val productId: String,
     val productPrice: Long = 0L,
-    val isUnread: Boolean,
+    /** At least one unread inbound message (API: has_unread). */
+    val hasUnread: Boolean,
+    /** Count of unread inbound messages (API: unread_count). */
+    val unreadCount: Int = 0,
     val buyerUserId: String = "",
     val sellerUserId: String = "",
 )

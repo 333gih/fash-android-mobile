@@ -50,6 +50,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.AestheticTag
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -251,7 +252,7 @@ fun OnboardingScreen(
                     if (isSubmitting) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = FashColors.OnPrimary,
+                            color = FashColors.Primary.fashReadableOn(),
                             strokeWidth = 2.dp,
                         )
                     } else {

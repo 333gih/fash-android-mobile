@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingProgressBar
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 
 /**
  * Single top row: optional back, close (X), centered step label, primary action (NEXT / POST).
@@ -97,7 +98,7 @@ fun CreateListingFlowHeader(
                     contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = FashColors.Primary,
-                        contentColor = FashColors.OnPrimary,
+                        contentColor = FashColors.Primary.fashReadableOn(),
                         disabledContainerColor = scheme.surfaceContainerHighest,
                         disabledContentColor = scheme.onSurfaceVariant,
                     ),
@@ -105,7 +106,7 @@ fun CreateListingFlowHeader(
                     if (primaryLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            color = FashColors.OnPrimary,
+                            color = FashColors.Primary.fashReadableOn(),
                             strokeWidth = 2.dp,
                         )
                     } else {

@@ -36,36 +36,13 @@ class ListingRepository(
         parseFeedResponse(executeGet(url))
     }
 
-    fun getExploreFeed(
-        limit: Int = 20,
-        offset: Int = 0,
-        categoryId: String? = null,
-        tags: String? = null,
-        sellerId: String? = null,
-        minPrice: Long? = null,
-        maxPrice: Long? = null,
-        condition: String? = null,
-    ): Result<List<ListingFeedItem>> = runCatching {
-        val q = mutableListOf<String>()
-        q.add("limit=$limit")
-        q.add("offset=$offset")
-        categoryId?.let { q.add("category_id=$it") }
-        tags?.let { q.add("tags=${java.net.URLEncoder.encode(it, "UTF-8")}") }
-        sellerId?.let { q.add("seller_id=$it") }
-        minPrice?.let { q.add("min_price=$it") }
-        maxPrice?.let { q.add("max_price=$it") }
-        condition?.let { q.add("condition=$it") }
-        val url = AppEnvironment.apiPath("api/v1/listings/explore") + "?" + q.joinToString("&")
-        parseFeedResponse(executeGet(url))
-    }
-
     fun getListingDetail(listingId: String): Result<ListingDetail> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/listings/$listingId")
         parseListingDetail(executeGet(url))
     }
 
     /**
-     * Core-service: `GET /users/{id}/listings`. Falls back to explore `seller_id` if needed.
+     * Core-service: `GET /users/{id}/listings` (public seller storefront).
      */
     fun getListingsBySeller(
         sellerId: String,
@@ -79,17 +56,7 @@ class ListingRepository(
         q.add("offset=$offset")
         status?.takeIf { it.isNotBlank() }?.let { q.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
         val primary = AppEnvironment.apiPath("api/v1/users/$seg/listings") + "?" + q.joinToString("&")
-        try {
-            parseFeedResponse(executeGet(primary))
-        } catch (_: Exception) {
-            val fb = mutableListOf<String>()
-            fb.add("limit=$limit")
-            fb.add("offset=$offset")
-            fb.add("seller_id=$sellerId")
-            status?.takeIf { it.isNotBlank() }?.let { fb.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
-            val url = AppEnvironment.apiPath("api/v1/listings/explore") + "?" + fb.joinToString("&")
-            parseFeedResponse(executeGet(url))
-        }
+        parseFeedResponse(executeGet(primary))
     }
 
     /** `GET /listings/wishlist` → listing id list. */

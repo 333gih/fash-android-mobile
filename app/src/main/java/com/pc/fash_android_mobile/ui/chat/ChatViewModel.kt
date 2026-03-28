@@ -283,7 +283,7 @@ class ChatViewModel(
         val myId = sessionStore.read()?.userId.orEmpty()
         _conversations.value = when (filter) {
             ChatFilter.All -> all
-            ChatFilter.Unread -> all.filter { it.isUnread }
+            ChatFilter.Unread -> all.filter { it.hasUnread }
             ChatFilter.Seller -> if (myId.isBlank()) all else all.filter { it.sellerUserId == myId }
             ChatFilter.Buyer -> if (myId.isBlank()) all else all.filter { it.buyerUserId == myId }
         }
@@ -293,7 +293,7 @@ class ChatViewModel(
         val myId = sessionStore.read()?.userId.orEmpty()
         fun passItem(item: ConversationItem): Boolean = when (filter) {
             ChatFilter.All -> true
-            ChatFilter.Unread -> item.isUnread
+            ChatFilter.Unread -> item.hasUnread
             ChatFilter.Seller -> myId.isBlank() || item.sellerUserId == myId
             ChatFilter.Buyer -> myId.isBlank() || item.buyerUserId == myId
         }

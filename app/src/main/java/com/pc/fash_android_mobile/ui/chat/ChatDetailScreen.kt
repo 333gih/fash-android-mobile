@@ -117,6 +117,7 @@ import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1102,6 +1103,14 @@ private fun MessageBubble(
     }
 
     val isMe = message.isFromMe
+    val textOnPrimary = FashColors.Primary.fashReadableOn()
+    val bubbleShape = RoundedCornerShape(
+        topStart = 18.dp,
+        topEnd = 18.dp,
+        bottomStart = if (isMe) 18.dp else 4.dp,
+        bottomEnd = if (isMe) 4.dp else 18.dp,
+    )
+    val incomingUnread = !isMe && !message.isRead
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
@@ -1109,14 +1118,14 @@ private fun MessageBubble(
         Column(
             modifier = Modifier
                 .widthIn(max = 280.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 18.dp,
-                        topEnd = 18.dp,
-                        bottomStart = if (isMe) 18.dp else 4.dp,
-                        bottomEnd = if (isMe) 4.dp else 18.dp,
-                    ),
+                .then(
+                    if (incomingUnread) {
+                        Modifier.border(2.dp, FashColors.Primary.copy(alpha = 0.5f), bubbleShape)
+                    } else {
+                        Modifier
+                    },
                 )
+                .clip(bubbleShape)
                 .background(if (isMe) FashColors.Primary else scheme.surfaceContainerHigh)
                 .pointerInput(Unit) {
                     detectTapGestures(
@@ -1131,7 +1140,7 @@ private fun MessageBubble(
             Text(
                 text = message.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isMe) Color.White else scheme.onSurface,
+                color = if (isMe) textOnPrimary else scheme.onSurface,
             )
             Row(
                 modifier = Modifier.align(Alignment.End),
@@ -1142,14 +1151,14 @@ private fun MessageBubble(
                     when (message.outboundState) {
                         OutboundSendState.SENDING -> CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
-                            color = Color.White.copy(alpha = 0.75f),
+                            color = textOnPrimary.copy(alpha = 0.75f),
                             strokeWidth = 2.dp,
                         )
                         OutboundSendState.FAILED -> Icon(
                             imageVector = Icons.Filled.ErrorOutline,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = Color.White.copy(alpha = 0.85f),
+                            tint = textOnPrimary.copy(alpha = 0.85f),
                         )
                         OutboundSendState.NONE -> Unit
                     }
@@ -1157,7 +1166,7 @@ private fun MessageBubble(
                 Text(
                     text = formatTime(message.timestamp),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isMe) Color.White.copy(alpha = 0.65f) else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    color = if (isMe) textOnPrimary.copy(alpha = 0.65f) else scheme.onSurfaceVariant.copy(alpha = 0.55f),
                 )
             }
         }
@@ -1261,6 +1270,8 @@ private fun ChatInputBar(
 ) {
     val scheme = MaterialTheme.colorScheme
     val tooltipState = rememberTooltipState()
+    val onPrimaryText = FashColors.Primary.fashReadableOn()
+    val sendBgPrimary = text.isNotBlank() && !isSending
 
     Row(
         modifier = Modifier
@@ -1381,7 +1392,7 @@ private fun ChatInputBar(
                 .size(44.dp)
                 .clip(CircleShape)
                 .background(
-                    if (text.isNotBlank() && !isSending) FashColors.Primary
+                    if (sendBgPrimary) FashColors.Primary
                     else scheme.surfaceContainerHigh,
                 ),
         ) {
@@ -1389,13 +1400,13 @@ private fun ChatInputBar(
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    color = Color.White,
+                    color = if (sendBgPrimary) onPrimaryText else scheme.primary,
                 )
             } else {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
                     contentDescription = stringResource(R.string.chat_send),
-                    tint = if (text.isNotBlank()) Color.White else scheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    tint = if (text.isNotBlank()) onPrimaryText else scheme.onSurfaceVariant.copy(alpha = 0.4f),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -1482,13 +1493,16 @@ private fun OfferPriceBottomSheet(
                 enabled = parsedAmount > 0L && !isLoading,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FashColors.Primary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
+                ),
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
-                        color = Color.White,
+                        color = FashColors.Primary.fashReadableOn(),
                     )
                 } else {
                     Text(

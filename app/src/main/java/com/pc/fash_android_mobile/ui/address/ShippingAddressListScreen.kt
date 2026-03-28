@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -160,7 +161,7 @@ fun ShippingAddressListScreen(
                     .navigationBarsPadding(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = FashColors.Primary,
-                    contentColor = FashColors.OnPrimary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {

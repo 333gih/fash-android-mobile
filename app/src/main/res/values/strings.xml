@@ -297,6 +297,10 @@
 
     <string name="chat_title">Tin nhắn</string>
     <string name="chat_filter_all">Tất cả</string>
+    <string name="chat_inbox_unread_banner">Bạn có %d tin nhắn chưa đọc</string>
+    <string name="chat_unread_messages_cd">%d tin nhắn chưa đọc</string>
+    <string name="chat_has_unread_cd">Có tin nhắn chưa đọc</string>
+    <string name="chat_group_unread_cd">%d tin chưa đọc trong nhóm</string>
     <string name="chat_filter_unread">Chưa đọc</string>
     <string name="chat_filter_seller">Người bán</string>
     <string name="chat_filter_buyer">Người mua</string>

@@ -35,6 +35,7 @@ import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
 
 private fun formatJourneyCount(n: Int): String =
     when {
@@ -134,6 +135,8 @@ fun HomeHeroBanner(
     onExploreClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val heroTextColor = listOf(FashColors.PrimaryDeep, FashColors.Primary).fashReadableOnGradient()
+    val heroSubtitleColor = heroTextColor.copy(alpha = 0.95f)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
     Box(
         modifier = modifier
@@ -154,12 +157,12 @@ fun HomeHeroBanner(
             Text(
                 text = stringResource(R.string.home_hero_title),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = FashColors.OnPrimary,
+                color = heroTextColor,
             )
             Text(
                 text = stringResource(R.string.home_hero_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
-                color = FashColors.OnPrimary.copy(alpha = 0.95f),
+                color = heroSubtitleColor,
             )
             OutlinedButton(
                 onClick = onExploreClick,

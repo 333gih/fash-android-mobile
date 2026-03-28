@@ -55,6 +55,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.user.AestheticTag
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val TITLE_MAX_LENGTH = 60
@@ -368,7 +369,7 @@ private fun ConditionChips(
                 Text(
                     text = stringResource(resId),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isSelected) FashColors.OnPrimary else scheme.onSurface,
+                    color = if (isSelected) FashColors.Primary.fashReadableOn() else scheme.onSurface,
                 )
             }
         }

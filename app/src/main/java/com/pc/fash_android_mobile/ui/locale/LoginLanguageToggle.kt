@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -33,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 
 /**
  * Pill segmented control (VN | EN) for the login screen only.
@@ -90,7 +90,7 @@ fun LoginLanguageToggle(modifier: Modifier = Modifier) {
                 Text(
                     text = "VN",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (!isEnglish) Color.White else mutedLabel,
+                    color = if (!isEnglish) FashColors.Primary.fashReadableOn() else mutedLabel,
                 )
             }
             Box(
@@ -107,7 +107,7 @@ fun LoginLanguageToggle(modifier: Modifier = Modifier) {
                 Text(
                     text = "EN",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (isEnglish) Color.White else mutedLabel,
+                    color = if (isEnglish) FashColors.Primary.fashReadableOn() else mutedLabel,
                 )
             }
         }

@@ -278,6 +278,10 @@
     <string name="edit_profile_upload_error">Image upload failed.</string>
     <string name="chat_title">Messages</string>
     <string name="chat_filter_all">All</string>
+    <string name="chat_inbox_unread_banner">You have %d unread messages</string>
+    <string name="chat_unread_messages_cd">%d unread messages</string>
+    <string name="chat_has_unread_cd">Has unread messages</string>
+    <string name="chat_group_unread_cd">%d unread in this listing group</string>
     <string name="chat_filter_unread">Unread</string>
     <string name="chat_filter_seller">Sellers</string>
     <string name="chat_filter_buyer">Buyers</string>

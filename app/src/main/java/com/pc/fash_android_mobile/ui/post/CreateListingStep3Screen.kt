@@ -231,7 +231,7 @@ private fun ListingPreviewCard(
                         color = FashColors.Primary,
                         modifier = Modifier
                             .background(
-                                androidx.compose.ui.graphics.Color.White,
+                                MaterialTheme.colorScheme.surfaceContainerHighest,
                                 RoundedCornerShape(6.dp),
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp),

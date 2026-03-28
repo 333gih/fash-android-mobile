@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -48,8 +49,6 @@ private data class PromoSlide(
     val titleRes: Int,
     val subtitleRes: Int,
     val gradient: List<Color>,
-    val titleColor: Color,
-    val subtitleColor: Color,
     val border: Color? = null,
 )
 
@@ -66,22 +65,16 @@ fun ExplorePromoCarousel(
                 titleRes = R.string.explore_promo_slide1_title,
                 subtitleRes = R.string.explore_promo_slide1_subtitle,
                 gradient = listOf(FashColors.PrimaryDeep, FashColors.Primary),
-                titleColor = FashColors.OnPrimary,
-                subtitleColor = FashColors.OnPrimary.copy(alpha = 0.92f),
             ),
             PromoSlide(
                 titleRes = R.string.explore_promo_slide2_title,
                 subtitleRes = R.string.explore_promo_slide2_subtitle,
                 gradient = listOf(FashColors.SecondaryWarm, FashColors.TertiaryAccent),
-                titleColor = FashColors.OnSecondaryWarm,
-                subtitleColor = FashColors.OnSecondaryWarm.copy(alpha = 0.92f),
             ),
             PromoSlide(
                 titleRes = R.string.explore_promo_slide3_title,
                 subtitleRes = R.string.explore_promo_slide3_subtitle,
                 gradient = listOf(FashColors.SurfaceContainerLow, FashColors.SurfaceVariantCream),
-                titleColor = FashColors.OnSurface,
-                subtitleColor = FashColors.OnSurfaceVariant,
                 border = FashColors.OutlineVariant.copy(alpha = 0.65f),
             ),
         )
@@ -143,6 +136,8 @@ private fun ExplorePromoCard(
     contentDescription: String,
     onClick: () -> Unit,
 ) {
+    val titleColor = slide.gradient.fashReadableOnGradient()
+    val subtitleColor = titleColor.copy(alpha = 0.92f)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
     Box(
         modifier = Modifier
@@ -162,7 +157,7 @@ private fun ExplorePromoCard(
         Text(
             text = badge,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = slide.titleColor.copy(alpha = 0.85f),
+            color = titleColor.copy(alpha = 0.85f),
             modifier = Modifier.align(Alignment.TopEnd),
         )
         Column(
@@ -175,14 +170,14 @@ private fun ExplorePromoCard(
             Text(
                 text = stringResource(slide.titleRes),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = slide.titleColor,
+                color = titleColor,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = stringResource(slide.subtitleRes),
                 style = MaterialTheme.typography.bodySmall,
-                color = slide.subtitleColor,
+                color = subtitleColor,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )

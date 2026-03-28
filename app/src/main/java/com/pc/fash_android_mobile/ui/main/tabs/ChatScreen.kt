@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -54,10 +55,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,10 +72,14 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.data.chat.ConversationListingGroup
+import com.pc.fash_android_mobile.ui.chat.ChatConversationAvatarWithUnread
 import com.pc.fash_android_mobile.ui.chat.ChatFilter
+import com.pc.fash_android_mobile.ui.chat.ChatInboxUnreadBanner
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.chat.SellerInboxGroupMode
+import com.pc.fash_android_mobile.ui.chat.formatUnreadBadgeCount
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val AvatarSize = 48.dp
@@ -100,6 +108,7 @@ fun ChatScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val inboxUnreadTotal by viewModel.unreadBadgeCount.collectAsState()
     val scheme = MaterialTheme.colorScheme
     val pullState = rememberPullToRefreshState()
 
@@ -124,6 +133,16 @@ fun ChatScreen(
                 }
             },
         )
+
+        if (inboxUnreadTotal > 0) {
+            ChatInboxUnreadBanner(
+                unreadTotal = inboxUnreadTotal,
+                modifier = Modifier.padding(
+                    horizontal = FashTheme.spacing.editorialStart,
+                    vertical = 4.dp,
+                ),
+            )
+        }
 
         // ~20% bottom: fixed promo strip; top ~80%: scrollable inbox (messages never sit under the ad).
         BoxWithConstraints(
@@ -371,7 +390,7 @@ private fun InboxFilterBar(
                 Text(
                     text = stringResource(labelRes),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                    color = if (selected) FashColors.OnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (selected) FashColors.Primary.fashReadableOn() else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 )
             }
@@ -393,7 +412,7 @@ private fun InboxFilterBar(
                     text = stringResource(R.string.chat_inbox_by_product),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
                     color = if (groupByProductSelected) {
-                        FashColors.OnPrimary
+                        FashColors.Primary.fashReadableOn()
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
@@ -412,6 +431,8 @@ private fun ListingGroupHeader(
     onToggle: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val groupUnreadTotal = group.conversations.sumOf { it.unreadCount }
+    val groupUnreadCd = stringResource(R.string.chat_group_unread_cd, groupUnreadTotal)
     val thumb = group.coverImageUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     Row(
         modifier = Modifier
@@ -453,6 +474,21 @@ private fun ListingGroupHeader(
                 color = FashColors.Primary,
             )
         }
+        if (groupUnreadTotal > 0) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = FashColors.Primary,
+                modifier = Modifier.semantics { contentDescription = groupUnreadCd },
+            ) {
+                Text(
+                    text = formatUnreadBadgeCount(groupUnreadTotal),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = FashColors.Primary.fashReadableOn(),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = FashColors.Primary.copy(alpha = 0.12f),
@@ -485,31 +521,47 @@ private fun ConversationRow(
     val thumbUrl = item.productThumbnailUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val initial = item.displayName.firstOrNull()?.takeIf { it.isLetter() }
         ?: item.username.firstOrNull()?.takeIf { it.isLetter() }
+    val rowShape = RoundedCornerShape(14.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 4.dp)
+            .clip(rowShape)
+            .background(
+                if (item.hasUnread) scheme.surfaceContainerLow.copy(alpha = 0.65f) else Color.Transparent,
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
+            .then(
+                if (item.hasUnread) {
+                    Modifier.border(1.dp, FashColors.Primary.copy(alpha = 0.12f), rowShape)
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.size(AvatarSize)) {
+        if (item.hasUnread) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(52.dp)
+                    .background(FashColors.Primary, RoundedCornerShape(2.dp)),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+        ChatConversationAvatarWithUnread(
+            hasUnread = item.hasUnread,
+            unreadCount = item.unreadCount,
+        ) {
             FashAvatarCircle(
                 imageUrl = avatarUrl,
                 contentDescription = null,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier,
                 size = AvatarSize,
                 fallbackInitial = initial,
             )
-            if (item.isUnread) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(12.dp)
-                        .background(FashColors.Primary, CircleShape)
-                        .padding(2.dp),
-                )
-            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -526,9 +578,9 @@ private fun ConversationRow(
                 Text(
                     text = item.displayName.ifBlank { "@${item.username.ifBlank { "user" }}" },
                     style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = if (item.isUnread) FontWeight.ExtraBold else FontWeight.Bold,
+                        fontWeight = if (item.hasUnread) FontWeight.ExtraBold else FontWeight.Bold,
                     ),
-                    color = if (item.isUnread) scheme.onSurface else scheme.onSurface.copy(alpha = 0.85f),
+                    color = if (item.hasUnread) scheme.onSurface else scheme.onSurface.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -536,17 +588,17 @@ private fun ConversationRow(
                 Text(
                     text = formatTimestamp(item.timestamp),
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (item.isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                        fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
                     ),
-                    color = if (item.isUnread) FashColors.Primary else scheme.onSurfaceVariant,
+                    color = if (item.hasUnread) FashColors.Primary else scheme.onSurfaceVariant,
                 )
             }
             Text(
                 text = previewLine,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (item.isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color = if (item.isUnread) scheme.onSurface else scheme.onSurfaceVariant,
+                color = if (item.hasUnread) scheme.onSurface else scheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

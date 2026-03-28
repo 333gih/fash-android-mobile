@@ -78,6 +78,7 @@ import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private const val DESCRIPTION_PREVIEW_LINES = 3
@@ -762,7 +763,7 @@ private fun BottomActionBar(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = FashColors.Primary,
-                contentColor = FashColors.OnPrimary,
+                contentColor = FashColors.Primary.fashReadableOn(),
             ),
         ) {
             Icon(

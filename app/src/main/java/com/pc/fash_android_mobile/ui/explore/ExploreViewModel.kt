@@ -63,8 +63,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _listings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val listings: StateFlow<List<ListingFeedItem>> = _listings.asStateFlow()
 
+    /** More pages available (`GET /search/listings` returned a full page). */
+    private val _hasMore = MutableStateFlow(true)
+    val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -84,13 +91,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    /** True when grid shows `/search/listings` results (not explore feed). */
+    /** True when the user ran a text search (non-browse). */
     private val _isSearchMode = MutableStateFlow(false)
     val isSearchMode: StateFlow<Boolean> = _isSearchMode.asStateFlow()
 
     /**
-     * Bumps on each new explore-listings request. Completed responses with a stale
-     * generation are dropped so an in-flight [loadAll] cannot overwrite a newer tag filter.
+     * Bumps on each new first-page request so stale responses (filter change, tab refresh) are dropped.
+     * [loadMore] snapshots this at start and aborts if it changed mid-flight.
      */
     private val listingsFetchGeneration = AtomicInteger(0)
 
@@ -105,7 +112,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             realtimeManager.events.collect { event ->
                 if (event is RealtimeEvent.FeedRefresh && !_isSearchMode.value) {
-                    fetchExploreListingsForCurrentTag()
+                    fetchListingsFirstPage()
                 }
             }
         }
@@ -124,7 +131,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 viewModelScope.launch {
                     _isLoading.value = true
                     _loadError.value = false
-                    fetchExploreListingsForCurrentTag()
+                    fetchListingsFirstPage()
                     _isLoading.value = false
                 }
             }
@@ -135,7 +142,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _searchQuery.value = query
     }
 
-    /** Runs `GET /search/listings` with current query + category + aesthetic tag. */
+    /** Runs `GET /search/listings` with current query + category + aesthetic tag (first page). */
     fun submitSearch() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -146,35 +153,44 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private suspend fun runSearchWithCurrentFilters() {
-        val gen = listingsFetchGeneration.incrementAndGet()
-        val q = _searchQuery.value.trim()
-        val idx = _selectedTagIndex.value
-        val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
-        val categoryId = _selectedCategoryId.value
-        val result = withContext(Dispatchers.IO) {
-            searchRepository.searchListings(
-                q = q,
-                categoryId = categoryId,
-                tags = tag,
-                limit = ExploreFeedPageSize,
-                offset = 0,
-            )
-        }
-        if (gen != listingsFetchGeneration.get()) return
-        result.fold(
-            onSuccess = {
-                _listings.value = it
-                _loadError.value = false
-            },
-            onFailure = {
-                _loadError.value = true
-                _events.tryEmit(
-                    it.message?.takeIf { m -> m.isNotBlank() }
-                        ?: getApplication<Application>().getString(R.string.feed_load_error),
+    /**
+     * Loads the next page when the user scrolls near the end of the grid.
+     * Uses `offset = listings.size` and the same filters as the first page.
+     */
+    fun loadMore() {
+        if (!_hasMore.value || _isLoadingMore.value || _isLoading.value) return
+        if (_loadError.value && _listings.value.isEmpty()) return
+        val offset = _listings.value.size
+        val stableGen = listingsFetchGeneration.get()
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            try {
+                val isSearch = _isSearchMode.value
+                val result = withContext(Dispatchers.IO) {
+                    searchListingsPage(offset = offset, isSearch = isSearch)
+                }
+                if (stableGen != listingsFetchGeneration.get()) return@launch
+                result.fold(
+                    onSuccess = { page ->
+                        _listings.update { existing -> dedupeAppend(existing, page) }
+                        _hasMore.value = page.size >= ExploreFeedPageSize
+                        _loadError.value = false
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message?.takeIf { m -> m.isNotBlank() }
+                                ?: getApplication<Application>().getString(R.string.feed_load_error),
+                        )
+                    },
                 )
-            },
-        )
+            } finally {
+                _isLoadingMore.value = false
+            }
+        }
+    }
+
+    private suspend fun runSearchWithCurrentFilters() {
+        fetchListingsFirstPageInternal(isSearch = true)
     }
 
     fun loadAll() {
@@ -186,7 +202,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 loadFeaturedSellers()
                 loadCategories()
             }
-            fetchExploreListingsForCurrentTag()
+            fetchListingsFirstPage()
             _isLoading.value = false
         }
     }
@@ -222,26 +238,25 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    /**
-     * Loads explore feed for the current [_selectedTagIndex] on [Dispatchers.IO] and
-     * applies results only if this request is still the latest (see [listingsFetchGeneration]).
-     */
-    private suspend fun fetchExploreListingsForCurrentTag() {
+    private suspend fun fetchListingsFirstPage() {
+        fetchListingsFirstPageInternal(isSearch = _isSearchMode.value)
+    }
+
+    private suspend fun fetchListingsFirstPageInternal(isSearch: Boolean) {
         val gen = listingsFetchGeneration.incrementAndGet()
-        val idx = _selectedTagIndex.value
-        val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
-        val categoryId = _selectedCategoryId.value
         val result = withContext(Dispatchers.IO) {
-            exploreFeedWithRetry(tags = tag, categoryId = categoryId)
+            searchListingsWithRetry(offset = 0, isSearch = isSearch)
         }
         if (gen != listingsFetchGeneration.get()) return
         result.fold(
-            onSuccess = {
-                _listings.value = it
+            onSuccess = { page ->
+                _listings.value = page
+                _hasMore.value = page.size >= ExploreFeedPageSize
                 _loadError.value = false
             },
             onFailure = {
                 _loadError.value = true
+                _hasMore.value = false
                 _events.tryEmit(
                     it.message?.takeIf { m -> m.isNotBlank() }
                         ?: getApplication<Application>().getString(R.string.feed_load_error),
@@ -250,23 +265,49 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    private suspend fun exploreFeedWithRetry(
-        tags: String?,
-        categoryId: String? = null,
-    ): Result<List<ListingFeedItem>> {
-        suspend fun once(): Result<List<ListingFeedItem>> =
-            listingRepository.getExploreFeed(
-                limit = ExploreFeedPageSize,
-                offset = 0,
-                tags = tags,
-                categoryId = categoryId?.takeIf { it.isNotBlank() },
-            )
+    /**
+     * `GET /api/v1/search/listings` — browse uses empty `q` (per API); search mode uses trimmed query.
+     * Sort: `popular` for browse (heat-like), `recent` when the user is searching text.
+     */
+    private suspend fun searchListingsWithRetry(offset: Int, isSearch: Boolean): Result<List<ListingFeedItem>> {
+        suspend fun once(): Result<List<ListingFeedItem>> = searchListingsPage(offset = offset, isSearch = isSearch)
         var result = once()
         if (result.isFailure) {
             delay(400)
             result = once()
         }
         return result
+    }
+
+    private fun searchListingsPage(offset: Int, isSearch: Boolean): Result<List<ListingFeedItem>> {
+        val q = if (isSearch) _searchQuery.value.trim() else ""
+        val idx = _selectedTagIndex.value
+        val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
+        val categoryId = _selectedCategoryId.value
+        val sort = if (isSearch && q.isNotEmpty()) "recent" else "popular"
+        return searchRepository.searchListings(
+            q = q,
+            categoryId = categoryId,
+            tags = tag,
+            limit = ExploreFeedPageSize,
+            offset = offset,
+            sort = sort,
+        )
+    }
+
+    private fun dedupeAppend(
+        existing: List<ListingFeedItem>,
+        new: List<ListingFeedItem>,
+    ): List<ListingFeedItem> {
+        if (new.isEmpty()) return existing
+        val seen = existing.map { it.id }.toMutableSet()
+        val appended = new.filter { item ->
+            if (item.id in seen) false else {
+                seen.add(item.id)
+                true
+            }
+        }
+        return existing + appended
     }
 
     fun selectTag(index: Int) {
@@ -278,7 +319,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             if (_isSearchMode.value) {
                 runSearchWithCurrentFilters()
             } else {
-                fetchExploreListingsForCurrentTag()
+                fetchListingsFirstPage()
             }
             _isLoading.value = false
         }
@@ -294,22 +335,18 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             if (_isSearchMode.value) {
                 runSearchWithCurrentFilters()
             } else {
-                fetchExploreListingsForCurrentTag()
+                fetchListingsFirstPage()
             }
             _isLoading.value = false
         }
     }
 
-    /**
-     * Call when the user switches to the Explore tab so the grid refreshes from the API
-     * (picks up realtime and other changes while they were on another tab).
-     */
     fun onExploreTabSelected() {
         viewModelScope.launch {
             if (_isSearchMode.value) {
                 runSearchWithCurrentFilters()
             } else {
-                fetchExploreListingsForCurrentTag()
+                fetchListingsFirstPage()
             }
         }
     }
@@ -330,7 +367,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             if (_isSearchMode.value) {
                 runSearchWithCurrentFilters()
             } else {
-                fetchExploreListingsForCurrentTag()
+                fetchListingsFirstPage()
             }
             _isRefreshing.value = false
         }

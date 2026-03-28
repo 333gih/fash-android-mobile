@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,7 +57,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.UserSearchResult
-import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
@@ -65,6 +66,7 @@ import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.home.HomeBrandFooterStrip
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Taller tiles on Explore so listing art isn’t read as thin strips (3:5 portrait). */
 private val ExploreListingTileAspectRatio = 3f / 5f
@@ -91,7 +93,22 @@ fun ExploreScreen(
     val categories by viewModel.categories.collectAsState()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
     val filtersExpanded by viewModel.filtersExpanded.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val gridState = rememberLazyGridState()
     val pullState = rememberPullToRefreshState()
+
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible to listings.size
+        }
+            .distinctUntilChanged()
+            .collect { (lastVisible, n) ->
+                if (n <= 0 || lastVisible < n - 3) return@collect
+                viewModel.loadMore()
+            }
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -207,9 +224,10 @@ fun ExploreScreen(
                     )
                 }
                 else -> {
-                    // Adaptive min width + taller portrait tiles so previews read clearly (Depop-style grid).
+                    // Adaptive min width + taller portrait tiles; `/search/listings` with offset/limit pagination.
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 172.dp),
+                        state = gridState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
@@ -224,7 +242,7 @@ fun ExploreScreen(
                     ) {
                         itemsIndexed(
                             listings,
-                            key = { index, item -> stableLazyKey(item.id, index, "exp") },
+                            key = { _, item -> item.id },
                         ) { _, item ->
                             LaunchedEffect(item.id) {
                                 viewModel.recordView(item)
@@ -235,8 +253,27 @@ fun ExploreScreen(
                                 imageAspectRatio = ExploreListingTileAspectRatio,
                             )
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
+                        if (isLoadingMore) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp)
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(28.dp),
+                                        color = FashColors.Primary,
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                            }
+                        }
+                        if (!hasMore && listings.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
+                            }
                         }
                     }
                 }

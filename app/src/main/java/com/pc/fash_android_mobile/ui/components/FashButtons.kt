@@ -33,6 +33,8 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashGradients
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.theme.fashReadableOn
+import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
 
 private val DefaultPrimaryCorner = 12.dp
 
@@ -82,6 +84,12 @@ fun FashPrimaryButton(
             } else {
                 Modifier
             }
+        val labelColor = remember(solidFill) {
+            when {
+                solidFill != null -> solidFill.fashReadableOn()
+                else -> listOf(FashColors.Primary, FashColors.PrimaryDeep).fashReadableOnGradient()
+            }
+        }
         Button(
             onClick = onClick,
             enabled = enabled,
@@ -93,9 +101,9 @@ fun FashPrimaryButton(
             shape = shape,
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.Transparent,
-                contentColor = FashColors.OnPrimary,
+                contentColor = labelColor,
                 disabledContainerColor = Color.Transparent,
-                disabledContentColor = FashColors.OnPrimary.copy(alpha = 0.38f),
+                disabledContentColor = labelColor.copy(alpha = 0.38f),
             ),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
             contentPadding = PaddingValues(horizontal = FashTheme.spacing.spacing4),
