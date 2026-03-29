@@ -125,6 +125,15 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     val coreApiUseLanguagePrefix =
         envVal("CORE_API_USE_LANGUAGE_PREFIX")?.equals("true", ignoreCase = true) == true
     buildConfigField("boolean", "CORE_API_USE_LANGUAGE_PREFIX", coreApiUseLanguagePrefix.toString())
+
+    /**
+     * When true, create-listing steps 1→2 and 2→3 allow **Next** without meeting the usual
+     * draft checks (images, title, price, condition, category). Final submit still uses normal API validation.
+     * Omit or set `false` in env for production-style strict gating.
+     */
+    val postStepsRelaxValidation =
+        envVal("POST_STEPS_RELAX_VALIDATION")?.equals("true", ignoreCase = true) == true
+    buildConfigField("boolean", "POST_STEPS_RELAX_VALIDATION", postStepsRelaxValidation.toString())
 }
 
 android {

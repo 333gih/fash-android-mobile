@@ -46,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -61,6 +62,7 @@ fun CreateListingStep1Screen(
     val scope = rememberCoroutineScope()
     val draft by viewModel.draft.collectAsState()
     val isUploading by viewModel.isUploading.collectAsState()
+    val relaxPostSteps = BuildConfig.POST_STEPS_RELAX_VALIDATION
     val uriResolver: (Uri) -> Pair<ByteArray, String>? = { uri ->
         val mimeType = context.contentResolver.getType(uri)?.takeIf { !it.contains('*') } ?: "image/jpeg"
         context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -88,13 +90,14 @@ fun CreateListingStep1Screen(
             onPrimaryClick = {
                 if (isUploading) return@CreateListingFlowHeader
                 scope.launch {
-                    val ok = viewModel.uploadImages(uriResolver)
-                    if (ok) {
-                        viewModel.nextStep()
+                    val ok = when {
+                        relaxPostSteps && draft.imageUris.isEmpty() -> true
+                        else -> viewModel.uploadImages(uriResolver)
                     }
+                    if (ok) viewModel.nextStep()
                 }
             },
-            primaryEnabled = draft.canProceedFromStep1(),
+            primaryEnabled = draft.canProceedFromStep1() || relaxPostSteps,
             primaryLoading = isUploading,
         )
 

@@ -78,6 +78,13 @@ object AppEnvironment {
     val googleWebClientId: String
             get() = BuildConfig.GOOGLE_WEB_CLIENT_ID
 
+    /**
+     * From `POST_STEPS_RELAX_VALIDATION=true` in env — when true, listing flow **Next** ignores
+     * step 1/2 draft validation; when false (default), behavior matches strict checks in [com.pc.fash_android_mobile.ui.post.CreateListingDraft].
+     */
+    val postStepsRelaxValidation: Boolean
+        get() = BuildConfig.POST_STEPS_RELAX_VALIDATION
+
     fun authServicePath(relativePath: String): String {
         val base = authServiceBaseUrl.trimEnd('/')
         val rel = relativePath.trimStart('/')

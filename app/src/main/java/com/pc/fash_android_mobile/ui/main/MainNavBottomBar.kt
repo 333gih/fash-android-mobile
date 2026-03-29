@@ -56,6 +56,8 @@ fun MainNavBottomBar(
     selectedTab: Int,
     chatUnreadCount: Int,
     onTabChange: (Int) -> Unit,
+    /** Tap Explore while Explore is already selected (e.g. scroll Explore to top). */
+    onExploreReselected: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -89,7 +91,13 @@ fun MainNavBottomBar(
                     tab = MainTab.Explore,
                     selected = selectedTab == MainTab.Explore.ordinal,
                     chatUnreadCount = 0,
-                    onClick = { onTabChange(MainTab.Explore.ordinal) },
+                    onClick = {
+                        if (selectedTab == MainTab.Explore.ordinal) {
+                            onExploreReselected()
+                        } else {
+                            onTabChange(MainTab.Explore.ordinal)
+                        }
+                    },
                 )
                 MainNavPostFab(
                     selected = selectedTab == MainTab.Post.ordinal,

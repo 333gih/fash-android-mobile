@@ -174,6 +174,7 @@ fun MainNavScreen(
                         showNotificationScreen = false
                         onTabChange(index)
                     },
+                    onExploreReselected = { exploreViewModel.requestScrollExploreToTop() },
                 )
             }
         },

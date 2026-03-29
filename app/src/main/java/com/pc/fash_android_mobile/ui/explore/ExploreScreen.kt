@@ -81,7 +81,6 @@ import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
-import com.pc.fash_android_mobile.ui.feed.FeedSectionHeader
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.home.HomeBrandFooterStrip
@@ -91,10 +90,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Taller tiles on Explore so listing art isn’t read as thin strips (3:5 portrait). */
 private val ExploreListingTileAspectRatio = 3f / 5f
-
-/** Top chrome (header, promo, filters, featured sellers) vs product grid height ratio. */
-private const val ExploreTopSectionWeight = 0.2f
-private const val ExploreGridSectionWeight = 0.8f
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -134,12 +129,27 @@ fun ExploreScreen(
             maxPriceText.isNotEmpty() ||
             conditionFilter != null
     }
+    val filterSummaryLine = exploreFilterSummaryString(
+        categories = categories,
+        selectedCategoryId = selectedCategoryId,
+        tags = tags,
+        selectedTagIndex = selectedTagIndex,
+        minPriceText = minPriceText,
+        maxPriceText = maxPriceText,
+        conditionFilter = conditionFilter,
+    )
     val hasMore by viewModel.hasMore.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val searchBarExpanded by viewModel.searchBarExpanded.collectAsState()
     val isSearchMode by viewModel.isSearchMode.collectAsState()
     val gridState = rememberLazyGridState()
     val pullState = rememberPullToRefreshState()
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollExploreToTop.collect {
+            gridState.scrollToItem(0)
+        }
+    }
 
     if (searchBarExpanded && !isSearchMode) {
         ExploreSearchOverlay(
@@ -175,116 +185,115 @@ fun ExploreScreen(
                     )
                 },
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(ExploreTopSectionWeight),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState()),
-                        ) {
-                            FeedSectionHeader(subtitle = stringResource(R.string.explore_feed_subtitle))
-
-                            ExplorePromoCarousel()
-
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 172.dp),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = FashTheme.spacing.editorialStart,
+                        end = FashTheme.spacing.editorialEnd,
+                        top = 0.dp,
+                        bottom = FashTheme.spacing.spacing6,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
+                    verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing4),
+                ) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = stringResource(R.string.explore_feed_subtitle),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp, bottom = 8.dp),
+                            )
+                            ExplorePromoCarousel(
+                                pagerContentPadding = PaddingValues(0.dp),
+                            )
                             ExploreFiltersBar(
                                 hasActiveFilters = hasActiveFilters,
+                                filterSummaryLine = filterSummaryLine,
+                                includeEdgeHorizontalPadding = false,
                                 onOpenFilters = { showFilterSheet = true },
                             )
-
                             if (featuredSellers.isNotEmpty()) {
                                 FeaturedSellersStorySection(
                                     sellers = featuredSellers,
                                     followingIds = followingIds,
                                     onSellerClick = onFeaturedSellerClick,
                                     onSeeAllClick = onSeeAllFeaturedSellersClick,
-                                    compact = true,
+                                    compact = false,
+                                    includeEdgeHorizontalPadding = false,
                                 )
                             }
                         }
                     }
-
-                    if (isLoading && tags.isEmpty() && listings.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(ExploreGridSectionWeight),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(color = FashColors.Primary)
-                        }
-                        return@Column
-                    }
-
                     when {
+                        isLoading && tags.isEmpty() && listings.isEmpty() -> {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(color = FashColors.Primary)
+                                }
+                            }
+                        }
                         loadError && listings.isEmpty() -> {
-                            FeedErrorColumn(
-                                message = stringResource(R.string.feed_load_error),
-                                onRetry = { viewModel.retryLoad() },
-                                modifier = Modifier.weight(ExploreGridSectionWeight),
-                            )
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                FeedErrorColumn(
+                                    message = stringResource(R.string.feed_load_error),
+                                    onRetry = { viewModel.retryLoad() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                         listings.isEmpty() -> {
-                            FeedEmptyColumn(
-                                title = stringResource(R.string.feed_empty_title),
-                                subtitle = stringResource(R.string.explore_grid_empty_subtitle),
-                                modifier = Modifier.weight(ExploreGridSectionWeight),
-                            )
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                FeedEmptyColumn(
+                                    title = stringResource(R.string.feed_empty_title),
+                                    subtitle = stringResource(R.string.explore_grid_empty_subtitle),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                         else -> {
-                            // Adaptive min width + taller portrait tiles; `/search/listings` with offset/limit pagination.
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 172.dp),
-                                state = gridState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(ExploreGridSectionWeight),
-                                contentPadding = PaddingValues(
-                                    start = FashTheme.spacing.editorialStart,
-                                    end = FashTheme.spacing.editorialEnd,
-                                    top = 8.dp,
-                                    bottom = FashTheme.spacing.spacing6,
-                                ),
-                                horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
-                                verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing4),
-                            ) {
-                                itemsIndexed(
-                                    listings,
-                                    key = { _, item -> item.id },
-                                ) { _, item ->
-                                    LaunchedEffect(item.id) {
-                                        viewModel.recordView(item)
-                                    }
-                                    ListingGridCard(
-                                        item = item,
-                                        onClick = { onListingClick(item.id, item.sellerId) },
-                                        imageAspectRatio = ExploreListingTileAspectRatio,
-                                    )
+                            itemsIndexed(
+                                listings,
+                                key = { _, item -> item.id },
+                            ) { _, item ->
+                                LaunchedEffect(item.id) {
+                                    viewModel.recordView(item)
                                 }
-                                if (isLoadingMore) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(56.dp)
-                                                .padding(vertical = 8.dp),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(28.dp),
-                                                color = FashColors.Primary,
-                                                strokeWidth = 2.dp,
-                                            )
-                                        }
+                                ListingGridCard(
+                                    item = item,
+                                    onClick = { onListingClick(item.id, item.sellerId) },
+                                    imageAspectRatio = ExploreListingTileAspectRatio,
+                                )
+                            }
+                            if (isLoadingMore) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(28.dp),
+                                            color = FashColors.Primary,
+                                            strokeWidth = 2.dp,
+                                        )
                                     }
                                 }
-                                if (!hasMore && listings.isNotEmpty()) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
-                                    }
+                            }
+                            if (!hasMore && listings.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
                                 }
                             }
                         }
@@ -307,8 +316,49 @@ fun ExploreScreen(
 }
 
 @Composable
+private fun exploreFilterSummaryString(
+    categories: List<Category>,
+    selectedCategoryId: String?,
+    tags: List<String>,
+    selectedTagIndex: Int,
+    minPriceText: String,
+    maxPriceText: String,
+    conditionFilter: String?,
+): String {
+    val default = stringResource(R.string.explore_filter_summary_default)
+    val parts = mutableListOf<String>()
+    val categoryName =
+        selectedCategoryId?.let { id ->
+            categories.find { it.id == id }?.name?.trim()
+        }
+    if (!categoryName.isNullOrEmpty()) parts.add(categoryName)
+    if (selectedTagIndex > 0) {
+        val tag = tags.getOrNull(selectedTagIndex - 1)?.trim()
+        if (!tag.isNullOrEmpty()) parts.add(tag)
+    }
+    val min = minPriceText.trim()
+    val max = maxPriceText.trim()
+    when {
+        min.isNotEmpty() && max.isNotEmpty() ->
+            parts.add(stringResource(R.string.explore_filter_summary_price_range, min, max))
+        min.isNotEmpty() ->
+            parts.add(stringResource(R.string.explore_filter_summary_price_min, min))
+        max.isNotEmpty() ->
+            parts.add(stringResource(R.string.explore_filter_summary_price_max, max))
+    }
+    conditionFilter?.let { cond ->
+        val opt = exploreConditionChipOptions.find { it.apiValue == cond }
+        if (opt != null) parts.add(stringResource(opt.labelRes))
+    }
+    return if (parts.isEmpty()) default else parts.joinToString(separator = " · ")
+}
+
+@Composable
 private fun ExploreFiltersBar(
     hasActiveFilters: Boolean,
+    filterSummaryLine: String,
+    /** When false, horizontal padding is omitted (parent already applies grid `contentPadding`). */
+    includeEdgeHorizontalPadding: Boolean = true,
     onOpenFilters: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -317,12 +367,14 @@ private fun ExploreFiltersBar(
         if (hasActiveFilters) R.string.explore_filters_bar_subtitle_active
         else R.string.explore_filters_bar_subtitle_idle
     val cd = stringResource(R.string.explore_filters_toggle_cd)
+    val edgeStart = if (includeEdgeHorizontalPadding) spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeEdgeHorizontalPadding) spacing.editorialEnd else 0.dp
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = spacing.editorialStart,
-                end = spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 top = 4.dp,
                 bottom = 8.dp,
             )
@@ -355,6 +407,14 @@ private fun ExploreFiltersBar(
                     text = stringResource(R.string.explore_filters_bar_title),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = scheme.onSurface,
+                )
+                Text(
+                    text = filterSummaryLine,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    color = scheme.onSurface,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
                 Text(
                     text = stringResource(subtitleRes),
@@ -734,8 +794,12 @@ private fun FeaturedSellersStorySection(
     onSeeAllClick: () -> Unit,
     /** Tighter layout for Explore so the product grid can use most of the screen. */
     compact: Boolean = false,
+    /** When false, horizontal padding is omitted (parent already applies grid `contentPadding`). */
+    includeEdgeHorizontalPadding: Boolean = true,
 ) {
     val spacing = FashTheme.spacing
+    val edgeStart = if (includeEdgeHorizontalPadding) spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeEdgeHorizontalPadding) spacing.editorialEnd else 0.dp
     val headerStyle =
         if (compact) {
             MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
@@ -751,8 +815,8 @@ private fun FeaturedSellersStorySection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = spacing.editorialStart,
-                    end = spacing.editorialEnd,
+                    start = edgeStart,
+                    end = edgeEnd,
                     top = headerTop,
                     bottom = headerBottom,
                 ),
@@ -774,8 +838,8 @@ private fun FeaturedSellersStorySection(
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
-                start = spacing.editorialStart,
-                end = spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 bottom = rowBottomPad,
             ),
             horizontalArrangement = Arrangement.spacedBy(chipSpacing),

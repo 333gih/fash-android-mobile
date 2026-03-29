@@ -177,6 +177,10 @@
     <string name="explore_filters_bar_title">Bộ lọc</string>
     <string name="explore_filters_bar_subtitle_idle">Chạm để mở — chọn từng bước trong một màn hình</string>
     <string name="explore_filters_bar_subtitle_active">Đang lọc — chạm để chỉnh</string>
+    <string name="explore_filter_summary_default">Tất cả danh mục · Mọi phong cách</string>
+    <string name="explore_filter_summary_price_range">₫%1$s – ₫%2$s</string>
+    <string name="explore_filter_summary_price_min">Tối thiểu ₫%1$s</string>
+    <string name="explore_filter_summary_price_max">Tối đa ₫%1$s</string>
     <string name="explore_filter_sheet_done">Xong</string>
     <string name="explore_sort_disabled_hint">Cần tìm kiếm bằng từ khóa để dùng sắp xếp.</string>
     <string name="explore_filter_price_title">Giá (VND)</string>

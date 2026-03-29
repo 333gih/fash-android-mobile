@@ -20,6 +20,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,6 +81,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     val followingIds: StateFlow<Set<String>> = _followingIds.asStateFlow()
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
+
+    /** Bottom nav: tap Explore again while Explore is already selected — scroll feed to top. */
+    private val _scrollExploreToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollExploreToTop: SharedFlow<Unit> = _scrollExploreToTop.asSharedFlow()
 
     /** Top bar: expanded search field (from any tab’s search icon or Explore’s search). */
     private val _searchBarExpanded = MutableStateFlow(false)
@@ -536,6 +541,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 fetchListingsFirstPage()
             }
+        }
+    }
+
+    fun requestScrollExploreToTop() {
+        viewModelScope.launch {
+            if (_searchBarExpanded.value && !_isSearchMode.value) {
+                setSearchBarExpanded(false)
+                delay(48)
+            }
+            _scrollExploreToTop.emit(Unit)
         }
     }
 

@@ -166,6 +166,10 @@
     <string name="explore_filters_bar_title">Filters</string>
     <string name="explore_filters_bar_subtitle_idle">Tap to open — adjust filters in one place</string>
     <string name="explore_filters_bar_subtitle_active">Filtering — tap to adjust</string>
+    <string name="explore_filter_summary_default">All categories · Any style</string>
+    <string name="explore_filter_summary_price_range">₫%1$s – ₫%2$s</string>
+    <string name="explore_filter_summary_price_min">Min ₫%1$s</string>
+    <string name="explore_filter_summary_price_max">Max ₫%1$s</string>
     <string name="explore_filter_sheet_done">Done</string>
     <string name="explore_sort_disabled_hint">Search with a keyword to enable sort.</string>
     <string name="explore_filter_price_title">Price (VND)</string>

@@ -51,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.user.AestheticTag
@@ -89,6 +90,7 @@ fun CreateListingStep2Screen(
     onCloseRequest: () -> Unit,
 ) {
     val draft by viewModel.draft.collectAsState()
+    val relaxPostSteps = BuildConfig.POST_STEPS_RELAX_VALIDATION
     val categories by viewModel.categories.collectAsState()
     val aestheticTags by viewModel.aestheticTags.collectAsState()
 
@@ -112,11 +114,11 @@ fun CreateListingStep2Screen(
             onCloseClick = onCloseRequest,
             primaryLabelRes = R.string.create_listing_next,
             onPrimaryClick = {
-                if (draft.canProceedFromStep2()) {
+                if (relaxPostSteps || draft.canProceedFromStep2()) {
                     viewModel.nextStep()
                 }
             },
-            primaryEnabled = draft.canProceedFromStep2(),
+            primaryEnabled = draft.canProceedFromStep2() || relaxPostSteps,
         )
 
         Column(
@@ -196,7 +198,13 @@ fun CreateListingStep2Screen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Step2IncompleteHint(keys = draft.step2MissingRequirementKeys())
+            Step2IncompleteHint(
+                keys = if (relaxPostSteps) {
+                    emptyList()
+                } else {
+                    draft.step2MissingRequirementKeys()
+                },
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
         }

@@ -56,6 +56,11 @@ private data class PromoSlide(
 @Composable
 fun ExplorePromoCarousel(
     modifier: Modifier = Modifier,
+    /** When the parent already applies horizontal insets (e.g. grid `contentPadding`), use [PaddingValues(0.dp)] to avoid double padding. */
+    pagerContentPadding: PaddingValues = PaddingValues(
+        start = FashTheme.spacing.editorialStart,
+        end = FashTheme.spacing.editorialEnd,
+    ),
     /** Optional: analytics, deep link, or future in-app actions. */
     onSlideClick: (pageIndex: Int) -> Unit = {},
 ) {
@@ -98,10 +103,7 @@ fun ExplorePromoCarousel(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(
-                start = FashTheme.spacing.editorialStart,
-                end = FashTheme.spacing.editorialEnd,
-            ),
+            contentPadding = pagerContentPadding,
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.CenterVertically,
         ) { page ->

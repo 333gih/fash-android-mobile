@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.ui.post
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.Category
@@ -64,9 +65,10 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
 
     fun nextStep() {
         val s = _step.value
+        val relax = BuildConfig.POST_STEPS_RELAX_VALIDATION
         when (s) {
-            1 -> if (_draft.value.canProceedFromStep1()) _step.value = 2
-            2 -> if (_draft.value.canProceedFromStep2()) _step.value = 3
+            1 -> if (relax || _draft.value.canProceedFromStep1()) _step.value = 2
+            2 -> if (relax || _draft.value.canProceedFromStep2()) _step.value = 3
             else -> { }
         }
     }
