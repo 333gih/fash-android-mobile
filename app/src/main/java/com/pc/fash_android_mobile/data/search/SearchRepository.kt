@@ -8,8 +8,14 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** Global trending query row from `GET /search/trending-queries`. */
+data class TrendingQueryItem(
+    val query: String,
+    val count: Int,
+)
+
 /**
- * Search API (`/search/listings`, `/search/autocomplete`, `/search/trending-tags`).
+ * Search API (`/search/listings`, `/search/autocomplete`, `/search/trending-tags`, recent/trending queries).
  */
 class SearchRepository(
     private val securedClient: OkHttpClient,
@@ -19,6 +25,20 @@ class SearchRepository(
         val url = AppEnvironment.apiPath("api/v1/search/trending-tags")
         val body = executeGet(url)
         parseStringArray(body)
+    }
+
+    /** `GET /search/recent-queries` — this user’s recent normalized queries (up to 20). */
+    fun getRecentQueries(): Result<List<String>> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/search/recent-queries")
+        val body = executeGet(url)
+        parseStringArray(body)
+    }
+
+    /** `GET /search/trending-queries` — global top queries in the last 7 days. */
+    fun getTrendingQueries(): Result<List<TrendingQueryItem>> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/search/trending-queries")
+        val body = executeGet(url)
+        parseTrendingQueriesArray(body)
     }
 
     /**
@@ -74,6 +94,19 @@ class SearchRepository(
                 error("HTTP ${response.code}: $msg")
             }
             body
+        }
+    }
+
+    private fun parseTrendingQueriesArray(json: String): List<TrendingQueryItem> {
+        val raw = json.trim()
+        if (!raw.startsWith("[")) return emptyList()
+        val arr = JSONArray(raw)
+        return (0 until arr.length()).mapNotNull { i ->
+            val el = arr.optJSONObject(i) ?: return@mapNotNull null
+            val q = el.optString("query", el.optString("Query", "")).trim()
+            if (q.isBlank()) return@mapNotNull null
+            val c = el.optInt("count", el.optInt("Count", 0))
+            TrendingQueryItem(query = q, count = c.coerceAtLeast(0))
         }
     }
 

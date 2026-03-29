@@ -5,16 +5,18 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.explore.ExploreUiPreferences
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.search.SearchRepository
+import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,11 +40,6 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         (application as FashApplication).userRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
-
-    private val exploreUiPreferences = ExploreUiPreferences(application)
-
-    private val _filtersExpanded = MutableStateFlow(exploreUiPreferences.readFiltersExpanded())
-    val filtersExpanded: StateFlow<Boolean> = _filtersExpanded.asStateFlow()
 
     private val _tags = MutableStateFlow<List<String>>(emptyList())
     val tags: StateFlow<List<String>> = _tags.asStateFlow()
@@ -95,17 +92,49 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _isSearchMode = MutableStateFlow(false)
     val isSearchMode: StateFlow<Boolean> = _isSearchMode.asStateFlow()
 
+    /** Search hub (expanded bar, no submitted query yet): recent / trending / tags from search endpoints. */
+    private val _searchOverlayRecentQueries = MutableStateFlow<List<String>>(emptyList())
+    val searchOverlayRecentQueries: StateFlow<List<String>> = _searchOverlayRecentQueries.asStateFlow()
+
+    private val _searchOverlayTrendingQueries = MutableStateFlow<List<TrendingQueryItem>>(emptyList())
+    val searchOverlayTrendingQueries: StateFlow<List<TrendingQueryItem>> = _searchOverlayTrendingQueries.asStateFlow()
+
+    private val _searchOverlayTrendingTags = MutableStateFlow<List<String>>(emptyList())
+    val searchOverlayTrendingTags: StateFlow<List<String>> = _searchOverlayTrendingTags.asStateFlow()
+
+    private val _searchOverlayLoading = MutableStateFlow(false)
+    val searchOverlayLoading: StateFlow<Boolean> = _searchOverlayLoading.asStateFlow()
+
+    private val _autocompleteSuggestions = MutableStateFlow<List<String>>(emptyList())
+    val autocompleteSuggestions: StateFlow<List<String>> = _autocompleteSuggestions.asStateFlow()
+
+    private val _autocompleteLoading = MutableStateFlow(false)
+    val autocompleteLoading: StateFlow<Boolean> = _autocompleteLoading.asStateFlow()
+
+    private var autocompleteJob: Job? = null
+
     /**
      * Bumps on each new first-page request so stale responses (filter change, tab refresh) are dropped.
      * [loadMore] snapshots this at start and aborts if it changed mid-flight.
      */
     private val listingsFetchGeneration = AtomicInteger(0)
 
-    fun setFiltersExpanded(expanded: Boolean) {
-        if (_filtersExpanded.value == expanded) return
-        _filtersExpanded.value = expanded
-        exploreUiPreferences.writeFiltersExpanded(expanded)
-    }
+    /** Digits-only VND hints; empty = no bound. */
+    private val _minPriceText = MutableStateFlow("")
+    val minPriceText: StateFlow<String> = _minPriceText.asStateFlow()
+
+    private val _maxPriceText = MutableStateFlow("")
+    val maxPriceText: StateFlow<String> = _maxPriceText.asStateFlow()
+
+    /** `null` = any condition. API values: `new`, `like_new`, `good`, `fair`. */
+    private val _selectedConditionFilter = MutableStateFlow<String?>(null)
+    val selectedConditionFilter: StateFlow<String?> = _selectedConditionFilter.asStateFlow()
+
+    /** `recent`, `popular`, `price_asc`, `price_desc` — applied only when text search has non-empty `q`. */
+    private val _sortOption = MutableStateFlow("recent")
+    val sortOption: StateFlow<String> = _sortOption.asStateFlow()
+
+    private var priceFilterDebounceJob: Job? = null
 
     init {
         loadAll()
@@ -120,11 +149,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun requestSearchBarExpanded() {
         _searchBarExpanded.value = true
+        loadSearchOverlayData()
     }
 
     fun setSearchBarExpanded(expanded: Boolean) {
         _searchBarExpanded.value = expanded
         if (!expanded) {
+            autocompleteJob?.cancel()
+            _autocompleteSuggestions.value = emptyList()
+            _autocompleteLoading.value = false
             _searchQuery.value = ""
             if (_isSearchMode.value) {
                 _isSearchMode.value = false
@@ -140,6 +173,67 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+        autocompleteJob?.cancel()
+        if (query.isBlank()) {
+            _autocompleteSuggestions.value = emptyList()
+            _autocompleteLoading.value = false
+            return
+        }
+        _autocompleteLoading.value = true
+        val snapshot = query.trim()
+        autocompleteJob = viewModelScope.launch {
+            try {
+                delay(280)
+                val result = withContext(Dispatchers.IO) {
+                    searchRepository.autocompleteListingTitles(snapshot)
+                }
+                if (_searchQuery.value.trim() != snapshot) return@launch
+                _autocompleteSuggestions.value = result.getOrElse { emptyList() }
+            } finally {
+                if (isActive && _searchQuery.value.trim() == snapshot) {
+                    _autocompleteLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun loadSearchOverlayData() {
+        viewModelScope.launch {
+            _searchOverlayLoading.value = true
+            withContext(Dispatchers.IO) {
+                val recent = searchRepository.getRecentQueries().getOrElse { emptyList() }
+                val trending = searchRepository.getTrendingQueries().getOrElse { emptyList() }
+                val tagList = searchRepository.getTrendingTags().getOrElse { emptyList() }
+                _searchOverlayRecentQueries.value = recent
+                _searchOverlayTrendingQueries.value = trending
+                _searchOverlayTrendingTags.value = tagList
+            }
+            _searchOverlayLoading.value = false
+        }
+    }
+
+    /** Applies a title suggestion or recent/trending query and runs search. */
+    fun selectSearchSuggestionAndSubmit(text: String) {
+        val t = text.trim()
+        if (t.isBlank()) return
+        autocompleteJob?.cancel()
+        _searchQuery.value = t
+        _autocompleteSuggestions.value = emptyList()
+        _autocompleteLoading.value = false
+        submitSearch()
+    }
+
+    /** Trending tag chip: match filter tags when possible, else search by text. */
+    fun selectSearchOverlayTrendingTag(tag: String) {
+        val cleaned = tag.trim()
+        if (cleaned.isBlank()) return
+        val idx = _tags.value.indexOfFirst { it.equals(cleaned, ignoreCase = true) }
+        if (idx >= 0) {
+            selectTag(idx + 1)
+            setSearchBarExpanded(false)
+        } else {
+            selectSearchSuggestionAndSubmit(cleaned)
+        }
     }
 
     /** Runs `GET /search/listings` with current query + category + aesthetic tag (first page). */
@@ -284,15 +378,109 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val idx = _selectedTagIndex.value
         val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
         val categoryId = _selectedCategoryId.value
-        val sort = if (isSearch && q.isNotEmpty()) "recent" else "popular"
+        val sort = if (isSearch && q.isNotEmpty()) _sortOption.value else "popular"
+        val (minP, maxP) = normalizedPriceBounds()
         return searchRepository.searchListings(
             q = q,
             categoryId = categoryId,
             tags = tag,
+            minPrice = minP,
+            maxPrice = maxP,
+            condition = _selectedConditionFilter.value,
             limit = ExploreFeedPageSize,
             offset = offset,
             sort = sort,
         )
+    }
+
+    private fun parsePriceDigits(raw: String): Long? {
+        val digits = raw.filter { it.isDigit() }
+        if (digits.isEmpty()) return null
+        return digits.toLongOrNull()?.coerceAtLeast(0L)
+    }
+
+    /** Ensures min ≤ max when both set. */
+    private fun normalizedPriceBounds(): Pair<Long?, Long?> {
+        val min = parsePriceDigits(_minPriceText.value)
+        val max = parsePriceDigits(_maxPriceText.value)
+        return when {
+            min != null && max != null && min > max -> max to min
+            else -> min to max
+        }
+    }
+
+    fun setMinPriceText(text: String) {
+        val filtered = text.filter { it.isDigit() }.take(12)
+        if (filtered == _minPriceText.value) return
+        _minPriceText.value = filtered
+        scheduleDebouncedPriceFilterReload()
+    }
+
+    fun setMaxPriceText(text: String) {
+        val filtered = text.filter { it.isDigit() }.take(12)
+        if (filtered == _maxPriceText.value) return
+        _maxPriceText.value = filtered
+        scheduleDebouncedPriceFilterReload()
+    }
+
+    private fun scheduleDebouncedPriceFilterReload() {
+        priceFilterDebounceJob?.cancel()
+        priceFilterDebounceJob = viewModelScope.launch {
+            delay(450)
+            reloadAfterFilterChange()
+        }
+    }
+
+    private fun reloadAfterFilterChange() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun selectConditionFilter(conditionApiValue: String?) {
+        val next = conditionApiValue?.takeIf { it.isNotBlank() }
+        if (next == _selectedConditionFilter.value) return
+        _selectedConditionFilter.value = next
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun selectSortOption(sort: String) {
+        val valid = sort in setOf("recent", "popular", "price_asc", "price_desc")
+        if (!valid || sort == _sortOption.value) return
+        _sortOption.value = sort
+        if (!_isSearchMode.value) return
+        val q = _searchQuery.value.trim()
+        if (q.isEmpty()) return
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            runSearchWithCurrentFilters()
+            _isLoading.value = false
+        }
+    }
+
+    fun clearPriceFilters() {
+        priceFilterDebounceJob?.cancel()
+        if (_minPriceText.value.isEmpty() && _maxPriceText.value.isEmpty()) return
+        _minPriceText.value = ""
+        _maxPriceText.value = ""
+        reloadAfterFilterChange()
     }
 
     private fun dedupeAppend(
