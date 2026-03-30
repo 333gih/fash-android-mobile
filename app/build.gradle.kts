@@ -134,6 +134,12 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     val postStepsRelaxValidation =
         envVal("POST_STEPS_RELAX_VALIDATION")?.equals("true", ignoreCase = true) == true
     buildConfigField("boolean", "POST_STEPS_RELAX_VALIDATION", postStepsRelaxValidation.toString())
+
+    /** common-service base (GET catalog: addresses, brands, categories, tags, countries). Trailing slash optional. */
+    val commonServiceBase =
+        envVal("COMMON_SERVICE_BASE_URL")
+            ?: "http://76.13.211.193/common-service/"
+    buildConfigField("String", "COMMON_SERVICE_BASE_URL", buildConfigStringLiteral(commonServiceBase))
 }
 
 android {

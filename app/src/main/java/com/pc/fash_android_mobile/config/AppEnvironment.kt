@@ -85,6 +85,22 @@ object AppEnvironment {
     val postStepsRelaxValidation: Boolean
         get() = BuildConfig.POST_STEPS_RELAX_VALIDATION
 
+    /** common-service root (see ANDROID_API_INTEGRATION.md); no language prefix. */
+    val commonServiceBaseUrl: String
+        get() = BuildConfig.COMMON_SERVICE_BASE_URL.trimEnd('/')
+
+    /**
+     * Path under common-service: [relativeApiPath] is e.g. `api/v1/addresses/tree`.
+     */
+    fun commonServicePath(relativeApiPath: String): String {
+        val base = commonServiceBaseUrl
+        val rel = relativeApiPath.trimStart('/')
+        return "$base/$rel"
+    }
+
+    /** `GET /health` — unauthenticated; path is service root, not under `/api/v1`. */
+    fun commonServiceHealthUrl(): String = "$commonServiceBaseUrl/health"
+
     fun authServicePath(relativePath: String): String {
         val base = authServiceBaseUrl.trimEnd('/')
         val rel = relativePath.trimStart('/')

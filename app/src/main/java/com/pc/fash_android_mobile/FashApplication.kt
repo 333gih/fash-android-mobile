@@ -4,6 +4,7 @@ import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.chat.ChatRepository
+import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
 import com.pc.fash_android_mobile.data.order.OrderRepository
@@ -69,6 +70,15 @@ class FashApplication : android.app.Application() {
 
     val listingRepository: ListingRepository by lazy {
         ListingRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
+
+    /** common-service catalog GETs (addresses, brands, categories, aesthetic-tags, countries). */
+    val commonServiceRepository: CommonServiceRepository by lazy {
+        CommonServiceRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
