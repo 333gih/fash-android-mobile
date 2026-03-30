@@ -126,20 +126,25 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         envVal("CORE_API_USE_LANGUAGE_PREFIX")?.equals("true", ignoreCase = true) == true
     buildConfigField("boolean", "CORE_API_USE_LANGUAGE_PREFIX", coreApiUseLanguagePrefix.toString())
 
-    /**
-     * When true, create-listing steps 1→2 and 2→3 allow **Next** without meeting the usual
-     * draft checks (images, title, price, condition, category). Final submit still uses normal API validation.
-     * Omit or set `false` in env for production-style strict gating.
-     */
-    val postStepsRelaxValidation =
-        envVal("POST_STEPS_RELAX_VALIDATION")?.equals("true", ignoreCase = true) == true
-    buildConfigField("boolean", "POST_STEPS_RELAX_VALIDATION", postStepsRelaxValidation.toString())
-
     /** common-service base (GET catalog: addresses, brands, categories, tags, countries). Trailing slash optional. */
     val commonServiceBase =
         envVal("COMMON_SERVICE_BASE_URL")
             ?: "http://76.13.211.193/common-service/"
     buildConfigField("String", "COMMON_SERVICE_BASE_URL", buildConfigStringLiteral(commonServiceBase))
+
+    /**
+     * Optional server internal auth (ANDROID_API_INTEGRATION.md). **Do not** put real secrets in retail APKs;
+     * keep empty in prod or use CI-injected env. [SecuredApiClient] sends `X-Internal-Secret` when non-empty.
+     */
+    buildConfigField("String", "INTERNAL_SECRET", buildConfigStringLiteral(envOrEmpty("INTERNAL_SECRET")))
+    /**
+     * Optional long-lived Bearer for service calls when no user session; user JWT wins when logged in.
+     */
+    buildConfigField(
+        "String",
+        "INTERNAL_SERVICE_BEARER_TOKEN",
+        buildConfigStringLiteral(envOrEmpty("INTERNAL_SERVICE_BEARER_TOKEN")),
+    )
 }
 
 android {

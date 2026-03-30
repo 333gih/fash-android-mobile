@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.network
 
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSession
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
@@ -12,7 +13,9 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Provides a secured OkHttpClient that:
- * - Injects Bearer token into all requests
+ * - Injects `Accept`, `User-Agent`, optional [BuildConfig.INTERNAL_SECRET] as `X-Internal-Secret`,
+ *   user `Authorization` Bearer when logged in, or optional [BuildConfig.INTERNAL_SERVICE_BEARER_TOKEN]
+ *   when not logged in (see ANDROID_API_INTEGRATION.md — prefer one auth method server-side).
  * - On 401: refreshes the access token (synchronized — only one refresh at a time)
  *   and retries the original request with the new token
  * - On refresh failure (expired/invalid refresh token): clears session,
@@ -44,11 +47,20 @@ class SecuredApiClient(
             val base = chain.request().newBuilder()
                 .header("Accept", "application/json")
                 .header("User-Agent", USER_AGENT)
+            val internalSecret = BuildConfig.INTERNAL_SECRET.trim()
+            if (internalSecret.isNotEmpty()) {
+                base.header("X-Internal-Secret", internalSecret)
+            }
             if (session != null && session.accessToken.isNotBlank()) {
                 base.header(
                     "Authorization",
                     "${session.tokenType.ifBlank { "Bearer" }} ${session.accessToken}",
                 )
+            } else {
+                val serviceBearer = BuildConfig.INTERNAL_SERVICE_BEARER_TOKEN.trim()
+                if (serviceBearer.isNotEmpty()) {
+                    base.header("Authorization", "Bearer $serviceBearer")
+                }
             }
             return chain.proceed(base.build())
         }

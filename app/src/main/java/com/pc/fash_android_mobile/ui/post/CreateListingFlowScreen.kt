@@ -10,6 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.pc.fash_android_mobile.R
 
@@ -34,11 +37,9 @@ fun CreateListingFlowScreen(
             showDiscardDialog = false
             return@BackHandler
         }
-        when (step) {
-            1 -> onClose()
-            2 -> viewModel.prevStep()
-            3 -> viewModel.prevStep()
-            else -> onClose()
+        when {
+            step <= 1 -> onClose()
+            else -> viewModel.prevStep()
         }
     }
 
@@ -65,23 +66,23 @@ fun CreateListingFlowScreen(
         )
     }
 
-    when (step) {
-        1 -> CreateListingStep1Screen(
-            viewModel = viewModel,
-            onClose = onClose,
-        )
-        2 -> CreateListingStep2Screen(
-            viewModel = viewModel,
-            onCloseRequest = { handleCloseAttempt() },
-        )
-        3 -> CreateListingStep3Screen(
-            viewModel = viewModel,
-            onCloseRequest = { handleCloseAttempt() },
-            onSubmitSuccess = onClose,
-        )
-        else -> CreateListingStep1Screen(
-            viewModel = viewModel,
-            onClose = onClose,
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (step) {
+            1 -> CreateListingPostStep1(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            2 -> CreateListingPostStep2(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            3 -> CreateListingPostStep3(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            4 -> CreateListingPostStep4(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            5 -> CreateListingPostStep5(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            6 -> CreateListingPostStep6(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            7 -> CreateListingPostStep7(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            8 -> CreateListingPostStep8(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            9 -> CreateListingPostStep9(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            10 -> CreateListingPostStep10(
+                viewModel = viewModel,
+                onCloseRequest = { handleCloseAttempt() },
+                onSubmitSuccess = onClose,
+            )
+            else -> CreateListingPostStep1(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+        }
     }
 }

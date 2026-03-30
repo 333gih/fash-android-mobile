@@ -46,6 +46,8 @@ fun CreateListingFlowHeader(
     onPrimaryClick: () -> Unit,
     primaryEnabled: Boolean,
     primaryLoading: Boolean = false,
+    /** Shown under the progress bar when Next/Post is disabled (e.g. missing required fields). */
+    nextDisabledReasonRes: Int? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -119,6 +121,18 @@ fun CreateListingFlowHeader(
             }
         }
         OnboardingProgressBar(currentStep = step, totalSteps = totalSteps)
+        if (nextDisabledReasonRes != null && !primaryLoading) {
+            Text(
+                text = stringResource(nextDisabledReasonRes),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 6.dp, bottom = 2.dp),
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
     }
 }

@@ -1,61 +1,277 @@
 package com.pc.fash_android_mobile.ui.post
 
-import android.net.Uri
+import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.CommonBrandDto
+import com.pc.fash_android_mobile.data.common.CommonCountryDto
+import com.pc.fash_android_mobile.data.common.CategoryTreeNode
+import com.pc.fash_android_mobile.data.listing.CreateListingRequest
 
 /**
- * Draft state for the 3-step create listing flow.
- * Step 1: image Uris (local) → uploaded URLs after upload
- * Step 2: title, price, condition, category, description, size, brand, tags
- * Step 3: submit
+ * In-memory draft for the multi-step create listing flow.
+ * [imageUris] are content `Uri` strings; [imageUrls] are server URLs after upload.
  */
 data class CreateListingDraft(
-    /** Local URIs from image picker (Step 1). First = cover. */
-    val imageUris: List<Uri> = emptyList(),
-    /** Uploaded image URLs (populated when user proceeds from Step 1 or at submit). */
-    val imageUrls: List<String> = emptyList(),
-    val title: String = "",
-    val priceVnd: Long = 0L,
-    val condition: String = "",
     val categoryId: String = "",
-    val description: String = "",
+    val categoryName: String = "",
+    val parentCategoryId: String? = null,
+    val parentCategoryName: String? = null,
+    val selectedAestheticTagIds: Set<String> = emptySet(),
+    val condition: String = "",
     val size: String = "",
-    val brand: String = "",
-    val aestheticTags: List<String> = emptyList(),
-) {
-    fun withImageUris(uris: List<Uri>) = copy(imageUris = uris)
-    fun withImageUrls(urls: List<String>) = copy(imageUrls = urls)
-    fun withTitle(v: String) = copy(title = v)
-    fun withPriceVnd(v: Long) = copy(priceVnd = v)
-    fun withCondition(v: String) = copy(condition = v)
-    fun withCategoryId(v: String) = copy(categoryId = v)
-    fun withDescription(v: String) = copy(description = v)
-    fun withSize(v: String) = copy(size = v)
-    fun withBrand(v: String) = copy(brand = v)
-    fun withAestheticTags(v: List<String>) = copy(aestheticTags = v)
+    val brandId: String? = null,
+    val brandName: String = "",
+    val title: String = "",
+    val description: String = "",
+    val countryId: String? = null,
+    val countryIso2: String = "",
+    val countryName: String = "",
+    val measurementUnit: String = "cm",
+    val measurementHem: String = "",
+    val measurementChest: String = "",
+    val measurementLength: String = "",
+    val measurementShoulders: String = "",
+    val measurementSleeveLength: String = "",
+    val imageUris: List<String> = emptyList(),
+    val imageUrls: List<String> = emptyList(),
+    val priceVnd: String = "",
+    val acceptOffers: Boolean = true,
+    val autoPriceDropEnabled: Boolean = false,
+    val floorPriceVnd: String = "",
+    /** Digits only, max 2 chars — free typing; use [parsedPriceDropPercent] for API and validation. */
+    val priceDropPercentInput: String = "10",
+    val shippingAddressId: String? = null,
+    val shippingAddressLabel: String = "",
+)
 
-    fun removeImageAtIndex(index: Int): CreateListingDraft {
-        if (index !in imageUris.indices) return this
-        val newUris = imageUris.toMutableList().apply { removeAt(index) }
-        return copy(imageUris = newUris)
+fun CreateListingDraft.withImageUris(uris: List<String>): CreateListingDraft =
+    copy(imageUris = uris, imageUrls = emptyList())
+
+fun CreateListingDraft.removeImageAtIndex(index: Int): CreateListingDraft {
+    if (index !in imageUris.indices) return copy(imageUrls = emptyList())
+    val next = imageUris.toMutableList().also { it.removeAt(index) }
+    return copy(imageUris = next, imageUrls = emptyList())
+}
+
+fun CreateListingDraft.withImageUrls(urls: List<String>): CreateListingDraft =
+    copy(imageUrls = urls)
+
+private fun parsePositiveLong(s: String): Long? =
+    s.trim().replace(".", "").replace(",", "").toLongOrNull()?.takeIf { it > 0 }
+
+private fun parseDoubleOrNull(s: String): Double? =
+    s.trim().replace(",", ".").toDoubleOrNull()
+
+/** Parsed 1–50 for `price_drop_percent`, or null if incomplete or invalid. */
+fun CreateListingDraft.parsedPriceDropPercent(): Int? {
+    val d = priceDropPercentInput.filter { it.isDigit() }.take(2)
+    if (d.isEmpty()) return null
+    val n = d.toIntOrNull() ?: return null
+    return n.takeIf { it in 1..50 }
+}
+
+fun CreateListingDraft.toCreateListingRequest(
+    imageUrls: List<String>,
+    aestheticTagsById: Map<String, CommonAestheticTagDto>,
+): CreateListingRequest {
+    val tagIds = selectedAestheticTagIds.toList()
+    val tagNamesFromIds = tagIds.mapNotNull { id ->
+        aestheticTagsById[id]?.name?.trim()?.takeIf { it.isNotEmpty() }
     }
+    val price = parsePositiveLong(priceVnd) ?: 1_000L
+    val floor = floorPriceVnd.trim().let { if (it.isEmpty()) null else parsePositiveLong(it) }
+    return CreateListingRequest(
+        title = title.trim(),
+        imageUrls = imageUrls,
+        priceVnd = price,
+        condition = condition.trim(),
+        categoryId = categoryId.trim(),
+        description = description.trim(),
+        size = size.trim(),
+        parentCategoryId = parentCategoryId?.takeIf { !it.isNullOrBlank() },
+        parentCategoryName = parentCategoryName?.takeIf { !it.isNullOrBlank() },
+        categoryName = categoryName.takeIf { it.isNotBlank() },
+        brandId = brandId?.takeIf { !it.isNullOrBlank() },
+        brandName = brandName.takeIf { it.isNotBlank() },
+        aestheticTagIds = tagIds,
+        aestheticTagNames = if (tagIds.isEmpty()) tagNamesFromIds else emptyList(),
+        countryOfOrigin = countryIso2.takeIf { it.length == 2 },
+        countryId = countryId?.takeIf { !it.isNullOrBlank() },
+        countryName = countryName.takeIf { it.isNotBlank() },
+        measurementUnit = measurementUnit.takeIf { it.isNotBlank() },
+        measurementHem = parseDoubleOrNull(measurementHem),
+        measurementChest = parseDoubleOrNull(measurementChest),
+        measurementLength = parseDoubleOrNull(measurementLength),
+        measurementShoulders = parseDoubleOrNull(measurementShoulders),
+        measurementSleeveLength = parseDoubleOrNull(measurementSleeveLength),
+        acceptOffers = acceptOffers,
+        autoPriceDropEnabled = autoPriceDropEnabled,
+        floorPriceVnd = if (autoPriceDropEnabled) floor else null,
+        priceDropPercent = if (autoPriceDropEnabled) parsedPriceDropPercent() else null,
+        shippingAddressId = shippingAddressId?.takeIf { !it.isNullOrBlank() },
+    )
+}
 
-    fun canProceedFromStep1(): Boolean = imageUris.isNotEmpty()
+/** Max aesthetic tags per API. */
+const val MaxAestheticTags = 5
 
-    fun canProceedFromStep2(): Boolean =
-        title.length in 3..60 &&
-            priceVnd in 1_000..100_000_000 &&
-            condition.isNotBlank() &&
-            categoryId.isNotBlank()
+const val MinListingTitleLength = 3
+const val MaxListingTitleLength = 60
+const val MaxListingDescriptionLength = 500
+const val MinPriceVnd = 1_000L
+const val MaxPriceVnd = 100_000_000L
 
-    /**
-     * Human-readable reasons the Next button stays disabled (size/brand/tags are optional).
-     */
-    fun step2MissingRequirementKeys(): List<String> {
-        val keys = mutableListOf<String>()
-        if (title.length !in 3..60) keys.add("title")
-        if (priceVnd !in 1_000L..100_000_000L) keys.add("price")
-        if (condition.isBlank()) keys.add("condition")
-        if (categoryId.isBlank()) keys.add("category")
-        return keys
+const val TotalPostSteps = 10
+
+/** @return string resource name for [com.pc.fash_android_mobile.R.string], or null if valid. */
+fun CreateListingDraft.validationErrorKeyForSubmit(): String? {
+    if (categoryId.isBlank()) return "post_validation_category"
+    if (title.trim().length < MinListingTitleLength) return "post_validation_title_short"
+    if (title.trim().length > MaxListingTitleLength) return "post_validation_title_long"
+    if (description.length > MaxListingDescriptionLength) return "post_validation_description_long"
+    if (condition.isBlank()) return "post_validation_condition"
+    if (imageUris.isEmpty()) return "post_validation_photos"
+    val p = parsePositiveLong(priceVnd) ?: return "post_validation_price"
+    if (p < MinPriceVnd || p > MaxPriceVnd) return "post_validation_price_range"
+    if (selectedAestheticTagIds.size > MaxAestheticTags) return "post_validation_tags_max"
+    if (autoPriceDropEnabled) {
+        val floor = parsePositiveLong(floorPriceVnd)
+        if (floor == null || floor < MinPriceVnd || floor > MaxPriceVnd) return "post_validation_floor"
+        if (floor >= p) return "post_validation_floor_below_price"
+        if (parsedPriceDropPercent() == null) return "post_validation_drop_percent"
     }
+    return null
+}
+
+fun CategoryTreeNode.findLeaf(id: String): CategoryTreeNode? {
+    if (this.id == id) {
+        return if (children.isEmpty()) this else null
+    }
+    children.forEach { ch ->
+        val found = ch.findLeaf(id)
+        if (found != null) return found
+    }
+    return null
+}
+
+fun CategoryTreeNode.findNode(id: String): CategoryTreeNode? {
+    if (this.id == id) return this
+    children.forEach { ch ->
+        val found = ch.findNode(id)
+        if (found != null) return found
+    }
+    return null
+}
+
+fun CategoryTreeNode.findParentOf(childId: String): CategoryTreeNode? {
+    children.forEach { ch ->
+        if (ch.id == childId) return this
+        val inner = ch.findParentOf(childId)
+        if (inner != null) return inner
+    }
+    return null
+}
+
+fun List<CategoryTreeNode>.findParentOfLeaf(leafId: String): CategoryTreeNode? {
+    for (root in this) {
+        val p = root.findParentOf(leafId)
+        if (p != null) return p
+    }
+    return null
+}
+
+fun CreateListingDraft.withLeafCategory(
+    treeRoots: List<CategoryTreeNode>,
+    leaf: CategoryTreeNode,
+): CreateListingDraft {
+    val parent = treeRoots.findParentOfLeaf(leaf.id)
+    return copy(
+        categoryId = leaf.id,
+        categoryName = leaf.name,
+        parentCategoryId = parent?.id,
+        parentCategoryName = parent?.name,
+    )
+}
+
+fun CreateListingDraft.toggleAestheticTag(id: String): CreateListingDraft {
+    val next = selectedAestheticTagIds.toMutableSet()
+    when {
+        next.contains(id) -> next.remove(id)
+        next.size < MaxAestheticTags -> next.add(id)
+    }
+    return copy(selectedAestheticTagIds = next)
+}
+
+fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
+    1 -> categoryId.isNotBlank() && selectedAestheticTagIds.size <= MaxAestheticTags
+    2 -> condition.isNotBlank()
+    3 -> true
+    4 -> title.trim().length in MinListingTitleLength..MaxListingTitleLength &&
+        description.length <= MaxListingDescriptionLength
+    5 -> true
+    6 -> true
+    7 -> imageUris.isNotEmpty()
+    8 -> {
+        val p = parsePositiveLong(priceVnd)
+        p != null && p in MinPriceVnd..MaxPriceVnd &&
+            if (autoPriceDropEnabled) {
+                val f = parsePositiveLong(floorPriceVnd)
+                val pct = parsedPriceDropPercent()
+                f != null && f in MinPriceVnd..MaxPriceVnd && f < p && pct != null && pct in 1..50
+            } else {
+                true
+            }
+    }
+    9 -> true
+    10 -> true
+    else -> false
+}
+
+/**
+ * When [canProceedFromStep] is false, returns a string resource explaining why **Next** is disabled.
+ */
+fun CreateListingDraft.nextStepBlockedReasonRes(step: Int): Int? {
+    if (canProceedFromStep(step)) return null
+    return when (step) {
+        1 -> when {
+            categoryId.isBlank() -> R.string.post_next_blocked_category
+            selectedAestheticTagIds.size > MaxAestheticTags -> R.string.post_next_blocked_tags
+            else -> R.string.post_next_blocked_generic
+        }
+        2 -> R.string.post_next_blocked_condition
+        4 -> when {
+            title.trim().length < MinListingTitleLength -> R.string.post_next_blocked_title_short
+            title.trim().length > MaxListingTitleLength -> R.string.post_next_blocked_title_long
+            description.length > MaxListingDescriptionLength -> R.string.post_next_blocked_description_long
+            else -> R.string.post_next_blocked_generic
+        }
+        7 -> R.string.post_next_blocked_photos
+        8 -> step8NextBlockedReason()
+        else -> R.string.post_next_blocked_generic
+    }
+}
+
+private fun CreateListingDraft.step8NextBlockedReason(): Int {
+    val p = parsePositiveLong(priceVnd)
+    if (p == null) return R.string.post_next_blocked_price
+    if (p !in MinPriceVnd..MaxPriceVnd) return R.string.post_next_blocked_price_range
+    if (!autoPriceDropEnabled) return R.string.post_next_blocked_generic
+    val f = parsePositiveLong(floorPriceVnd)
+    if (f == null || f !in MinPriceVnd..MaxPriceVnd) return R.string.post_next_blocked_floor
+    if (f >= p) return R.string.post_next_blocked_floor_below
+    val pct = parsedPriceDropPercent()
+    if (pct == null || pct !in 1..50) return R.string.post_next_blocked_drop_percent
+    return R.string.post_next_blocked_generic
+}
+
+fun CommonBrandDto.matchesQuery(q: String): Boolean {
+    if (q.isBlank()) return true
+    val n = q.trim().lowercase()
+    return name.lowercase().contains(n)
+}
+
+fun CommonCountryDto.matchesQuery(q: String): Boolean {
+    if (q.isBlank()) return true
+    val n = q.trim().lowercase()
+    return name.lowercase().contains(n) || iso2.lowercase().contains(n)
 }

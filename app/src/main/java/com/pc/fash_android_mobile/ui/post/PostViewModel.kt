@@ -1,17 +1,21 @@
 package com.pc.fash_android_mobile.ui.post
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.listing.Category
-import com.pc.fash_android_mobile.data.listing.CreateListingRequest
+import com.pc.fash_android_mobile.data.address.ShippingAddress
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.CommonBrandDto
+import com.pc.fash_android_mobile.data.common.CommonCountryDto
+import com.pc.fash_android_mobile.data.common.CommonServiceRepository
+import com.pc.fash_android_mobile.data.common.CategoryTreeNode
 import com.pc.fash_android_mobile.data.listing.ListingRepository
-import com.pc.fash_android_mobile.data.user.AestheticTag
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,96 +23,155 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
-import android.net.Uri
 
 class PostViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val listingRepository: ListingRepository =
-        (application as FashApplication).listingRepository
-    private val userRepository: UserRepository =
-        (application as FashApplication).userRepository
+    private val app = application as FashApplication
+    private val listingRepository: ListingRepository = app.listingRepository
+    private val userRepository: UserRepository = app.userRepository
+    private val commonServiceRepository: CommonServiceRepository = app.commonServiceRepository
+    private val addressLocalStore = app.addressLocalStore
 
     private val _draft = MutableStateFlow(CreateListingDraft())
-    private val _categories = MutableStateFlow<List<Category>>(emptyList())
-    val categories: StateFlow<List<Category>> = _categories.asStateFlow()
-    private val _aestheticTags = MutableStateFlow<List<AestheticTag>>(emptyList())
-    val aestheticTags: StateFlow<List<AestheticTag>> = _aestheticTags.asStateFlow()
-    private val _meProfile = MutableStateFlow<ProfileInfo?>(null)
-    val meProfile: StateFlow<ProfileInfo?> = _meProfile.asStateFlow()
     val draft: StateFlow<CreateListingDraft> = _draft.asStateFlow()
 
     private val _step = MutableStateFlow(1)
     val step: StateFlow<Int> = _step.asStateFlow()
 
+    private val _categoryTree = MutableStateFlow<List<CategoryTreeNode>>(emptyList())
+    val categoryTree: StateFlow<List<CategoryTreeNode>> = _categoryTree.asStateFlow()
+
+    private val _aestheticTags = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
+    val aestheticTags: StateFlow<List<CommonAestheticTagDto>> = _aestheticTags.asStateFlow()
+
+    private val _aestheticTagsById = MutableStateFlow<Map<String, CommonAestheticTagDto>>(emptyMap())
+    val aestheticTagsById: StateFlow<Map<String, CommonAestheticTagDto>> = _aestheticTagsById.asStateFlow()
+
+    private val _brandsFeatured = MutableStateFlow<List<CommonBrandDto>>(emptyList())
+    val brandsFeatured: StateFlow<List<CommonBrandDto>> = _brandsFeatured.asStateFlow()
+
+    private val _brandsSearch = MutableStateFlow<List<CommonBrandDto>>(emptyList())
+    val brandsSearch: StateFlow<List<CommonBrandDto>> = _brandsSearch.asStateFlow()
+
+    private val _countries = MutableStateFlow<List<CommonCountryDto>>(emptyList())
+    val countries: StateFlow<List<CommonCountryDto>> = _countries.asStateFlow()
+
+    private val _catalogLoading = MutableStateFlow(false)
+    val catalogLoading: StateFlow<Boolean> = _catalogLoading.asStateFlow()
+
+    private val _catalogReady = MutableStateFlow(false)
+    val catalogReady: StateFlow<Boolean> = _catalogReady.asStateFlow()
+
+    private val _meProfile = MutableStateFlow<ProfileInfo?>(null)
+    val meProfile: StateFlow<ProfileInfo?> = _meProfile.asStateFlow()
+
+    private val _localAddresses = MutableStateFlow<List<ShippingAddress>>(emptyList())
+    val localAddresses: StateFlow<List<ShippingAddress>> = _localAddresses.asStateFlow()
+
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
+
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 32)
     val events = _events.asSharedFlow()
 
-    /** Emits on [viewModelScope] so messages are never dropped (unlike bare [tryEmit]). */
     private fun publishUi(message: String) {
         viewModelScope.launch { _events.emit(message) }
     }
 
-    fun setImageUris(uris: List<Uri>) {
-        // New picks invalidate any prior upload URLs — must re-upload when leaving step 1.
-        _draft.value = _draft.value.withImageUris(uris.take(6)).copy(imageUrls = emptyList())
-    }
-
-    fun removeImage(index: Int) {
-        _draft.value = _draft.value.removeImageAtIndex(index).copy(imageUrls = emptyList())
-    }
-
-    fun nextStep() {
-        val s = _step.value
-        val relax = BuildConfig.POST_STEPS_RELAX_VALIDATION
-        when (s) {
-            1 -> if (relax || _draft.value.canProceedFromStep1()) _step.value = 2
-            2 -> if (relax || _draft.value.canProceedFromStep2()) _step.value = 3
-            else -> { }
-        }
-    }
-
-    fun loadStep2Data() {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                listingRepository.getCategories().fold(
-                    onSuccess = { _categories.value = it },
-                    onFailure = { },
-                )
-                userRepository.getAestheticTags().fold(
-                    onSuccess = { _aestheticTags.value = it },
-                    onFailure = { },
-                )
+    fun loadCatalogIfNeeded() {
+        if (_catalogReady.value || _catalogLoading.value) return
+        _catalogLoading.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                commonServiceRepository.getCategoryTree().onSuccess { _categoryTree.value = it }
+                commonServiceRepository.getAestheticTags(all = true).onSuccess { tags ->
+                    _aestheticTags.value = tags
+                    _aestheticTagsById.value = tags.associateBy { it.id }
+                }
+                commonServiceRepository.getBrands(limit = 50).onSuccess { page ->
+                    _brandsFeatured.value = page.items
+                    _brandsSearch.value = page.items
+                }
+                commonServiceRepository.getCountries(all = true).onSuccess { _countries.value = it }
+            } finally {
+                _catalogLoading.value = false
+                _catalogReady.value = true
             }
         }
     }
 
-    fun loadStep3Data() {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                userRepository.getMeProfile().fold(
-                    onSuccess = { _meProfile.value = it },
-                    onFailure = { _meProfile.value = null },
-                )
+    fun searchBrands(query: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            commonServiceRepository.getBrands(q = query.takeIf { it.isNotBlank() }, limit = 50).onSuccess {
+                _brandsSearch.value = it.items
+            }
+        }
+    }
+
+    fun loadProfileForPreview() {
+        viewModelScope.launch(Dispatchers.IO) {
+            userRepository.getMeProfile().fold(
+                onSuccess = { _meProfile.value = it },
+                onFailure = { _meProfile.value = null },
+            )
+        }
+    }
+
+    fun loadLocalShippingAddresses() {
+        val uid = app.authManager.sessionStore.read()?.userId ?: return
+        _localAddresses.value = addressLocalStore.listAddresses(uid)
+    }
+
+    fun applyDefaultShippingIfNeeded() {
+        val uid = app.authManager.sessionStore.read()?.userId ?: return
+        val d = _draft.value
+        if (d.shippingAddressId != null) return
+        val def = addressLocalStore.getDefaultOrFirst(uid) ?: return
+        _draft.value = d.copy(
+            shippingAddressId = def.id,
+            shippingAddressLabel = formatAddressLabel(def),
+        )
+    }
+
+    private fun formatAddressLabel(a: ShippingAddress): String =
+        listOf(a.recipientName, a.line1, a.district, a.city).filter { it.isNotBlank() }.joinToString(" · ")
+
+    fun setImageUris(uris: List<Uri>) {
+        _draft.value = _draft.value.withImageUris(uris.take(6).map { it.toString() })
+    }
+
+    fun removeImage(index: Int) {
+        _draft.value = _draft.value.removeImageAtIndex(index)
+    }
+
+    fun nextStep() {
+        val s = _step.value
+        if (!_draft.value.canProceedFromStep(s)) return
+        if (s < TotalPostSteps) {
+            _step.value = s + 1
+            when (_step.value) {
+                9 -> {
+                    loadLocalShippingAddresses()
+                    applyDefaultShippingIfNeeded()
+                }
+                10 -> {
+                    loadProfileForPreview()
+                    loadLocalShippingAddresses()
+                }
+                else -> {}
             }
         }
     }
 
     fun prevStep() {
-        when (_step.value) {
-            2 -> _step.value = 1
-            3 -> _step.value = 2
-            else -> { }
-        }
+        if (_step.value > 1) _step.value = _step.value - 1
     }
 
     fun goToStep(stepNum: Int) {
-        if (stepNum in 1..3) _step.value = stepNum
+        if (stepNum in 1..TotalPostSteps) _step.value = stepNum
     }
 
     fun updateDraft(block: CreateListingDraft.() -> CreateListingDraft) {
@@ -116,16 +179,15 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Uploads images from draft and stores URLs.
-     * [uriResolver] must return (bytes, mimeType) for each URI.
-     * All network calls are dispatched to [Dispatchers.IO].
+     * Uploads images from draft and stores URLs in [CreateListingDraft.imageUrls].
      */
     suspend fun uploadImages(uriResolver: (Uri) -> Pair<ByteArray, String>?): Boolean {
         val uris = _draft.value.imageUris
         if (uris.isEmpty()) return true
         _isUploading.value = true
         val urls = mutableListOf<String>()
-        for ((i, uri) in uris.withIndex()) {
+        for ((i, uriStr) in uris.withIndex()) {
+            val uri = Uri.parse(uriStr)
             val data = withContext(Dispatchers.IO) { uriResolver(uri) }
             if (data == null || data.first.isEmpty()) {
                 publishUi(getApplication<Application>().getString(R.string.create_listing_image_error))
@@ -156,6 +218,12 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
             _isSubmitting.value = true
             try {
                 val d = _draft.value
+                val tagsMap = _aestheticTagsById.value
+                val errKey = d.validationErrorKeyForSubmit()
+                if (errKey != null) {
+                    publishUi(resolveValidationString(errKey))
+                    return@launch
+                }
                 val finalUrls = when {
                     d.imageUrls.size == d.imageUris.size && d.imageUrls.isNotEmpty() -> d.imageUrls
                     else -> {
@@ -167,21 +235,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     publishUi(getApplication<Application>().getString(R.string.create_listing_no_images))
                     return@launch
                 }
-                val aestheticTagNames = d.aestheticTags.mapNotNull { tagId ->
-                    _aestheticTags.value.find { it.id.equals(tagId, ignoreCase = true) }
-                        ?.name?.trim()
-                }.filter { it.isNotBlank() }
-                val req = CreateListingRequest(
-                    title = d.title,
-                    imageUrls = finalUrls,
-                    priceVnd = d.priceVnd,
-                    condition = d.condition,
-                    categoryId = d.categoryId,
-                    description = d.description,
-                    size = d.size,
-                    brand = d.brand,
-                    aestheticTags = aestheticTagNames,
-                )
+                val req = _draft.value.toCreateListingRequest(finalUrls, tagsMap)
                 val createResult = withContext(Dispatchers.IO) {
                     listingRepository.createListing(req)
                 }
@@ -198,6 +252,19 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _isSubmitting.value = false
             }
+        }
+    }
+
+    private fun resolveValidationString(key: String): String {
+        val resId = getApplication<Application>().resources.getIdentifier(
+            key,
+            "string",
+            getApplication<Application>().packageName,
+        )
+        return if (resId != 0) {
+            getApplication<Application>().getString(resId)
+        } else {
+            key
         }
     }
 

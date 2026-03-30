@@ -201,6 +201,7 @@ fun MainNavScreen(
                 }
             }
             AnimatedContent(
+                modifier = Modifier.fillMaxSize(),
                 targetState = selectedTab,
                 transitionSpec = {
                     val postOrd = MainTab.Post.ordinal

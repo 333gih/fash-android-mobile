@@ -78,12 +78,13 @@ object AppEnvironment {
     val googleWebClientId: String
             get() = BuildConfig.GOOGLE_WEB_CLIENT_ID
 
-    /**
-     * From `POST_STEPS_RELAX_VALIDATION=true` in env — when true, listing flow **Next** ignores
-     * step 1/2 draft validation; when false (default), behavior matches strict checks in [com.pc.fash_android_mobile.ui.post.CreateListingDraft].
-     */
-    val postStepsRelaxValidation: Boolean
-        get() = BuildConfig.POST_STEPS_RELAX_VALIDATION
+    /** From env `INTERNAL_SECRET` — sent as `X-Internal-Secret` when non-empty (dev or internal builds only). */
+    val internalSecretConfigured: Boolean
+        get() = BuildConfig.INTERNAL_SECRET.isNotBlank()
+
+    /** From env `INTERNAL_SERVICE_BEARER_TOKEN` — used as Bearer when no user session. */
+    val internalServiceBearerConfigured: Boolean
+        get() = BuildConfig.INTERNAL_SERVICE_BEARER_TOKEN.isNotBlank()
 
     /** common-service root (see ANDROID_API_INTEGRATION.md); no language prefix. */
     val commonServiceBaseUrl: String

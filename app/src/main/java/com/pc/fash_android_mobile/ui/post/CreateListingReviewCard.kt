@@ -1,6 +1,5 @@
 package com.pc.fash_android_mobile.ui.post
 
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,14 +9,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
@@ -27,105 +23,37 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.user.ProfileInfo
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
-fun CreateListingStep3Screen(
-    modifier: Modifier = Modifier,
-    viewModel: PostViewModel,
-    onCloseRequest: () -> Unit,
-    onSubmitSuccess: () -> Unit,
-) {
-    val draft by viewModel.draft.collectAsState()
-    val meProfile by viewModel.meProfile.collectAsState()
-    val aestheticTags by viewModel.aestheticTags.collectAsState()
-    val isSubmitting by viewModel.isSubmitting.collectAsState()
-    val context = LocalContext.current
-    val uriResolver: (Uri) -> Pair<ByteArray, String>? = { uri ->
-        val mimeType = context.contentResolver.getType(uri)?.takeIf { !it.contains('*') } ?: "image/jpeg"
-        context.contentResolver.openInputStream(uri)?.use { stream ->
-            Pair(stream.readBytes(), mimeType)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.loadStep3Data()
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
-    ) {
-        CreateListingFlowHeader(
-            step = 3,
-            totalSteps = 3,
-            onBackClick = { viewModel.prevStep() },
-            onCloseClick = onCloseRequest,
-            primaryLabelRes = R.string.create_listing_post_for_sale,
-            onPrimaryClick = {
-                viewModel.submitListing(uriResolver) { onSubmitSuccess() }
-            },
-            primaryEnabled = !isSubmitting,
-            primaryLoading = isSubmitting,
-        )
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = FashTheme.spacing.editorialStart),
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.create_listing_step3_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            ListingPreviewCard(
-                draft = draft,
-                meProfile = meProfile,
-                aestheticTags = aestheticTags,
-            )
-        }
-
-        Step3LegalFooter()
-    }
-}
-
-@Composable
-private fun ListingPreviewCard(
+fun CreateListingReviewCard(
     draft: CreateListingDraft,
     meProfile: ProfileInfo?,
-    aestheticTags: List<com.pc.fash_android_mobile.data.user.AestheticTag>,
+    aestheticTagsById: Map<String, CommonAestheticTagDto>,
 ) {
     val scheme = MaterialTheme.colorScheme
     val coverImageUrl = draft.imageUrls.firstOrNull()
     val coverImageUri = draft.imageUris.firstOrNull()
-    val firstTagDisplayName = draft.aestheticTags.firstOrNull()?.let { tagId ->
-        aestheticTags.find { it.id == tagId }?.let { tag ->
-            tag.displayName.ifBlank { tag.name }
-        } ?: tagId
+    val firstTagDisplay = draft.selectedAestheticTagIds.firstOrNull()?.let { id ->
+        aestheticTagsById[id]?.let { t ->
+            t.displayName.ifBlank { t.name }
+        }
     }
 
     Card(
@@ -148,7 +76,7 @@ private fun ListingPreviewCard(
                         .background(FashColors.Primary.copy(alpha = 0.2f)),
                 ) {
                     meProfile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { url ->
-                        val fullUrl = resolveImageUrl(url)
+                        val fullUrl = resolveListingImageUrl(url)
                         FashAsyncImage(
                             model = fullUrl,
                             contentDescription = null,
@@ -170,7 +98,7 @@ private fun ListingPreviewCard(
                         color = scheme.onSurfaceVariant,
                     )
                 }
-                firstTagDisplayName?.let { tag ->
+                firstTagDisplay?.let { tag ->
                     Text(
                         text = tag,
                         style = MaterialTheme.typography.labelSmall,
@@ -192,7 +120,7 @@ private fun ListingPreviewCard(
                     .padding(horizontal = FashTheme.spacing.spacing3),
             ) {
                 val imageModel = when {
-                    coverImageUrl?.isNotBlank() == true -> resolveImageUrl(coverImageUrl)
+                    coverImageUrl?.isNotBlank() == true -> resolveListingImageUrl(coverImageUrl)
                     coverImageUri != null -> coverImageUri
                     else -> null
                 }
@@ -223,7 +151,7 @@ private fun ListingPreviewCard(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(12.dp)
+                        .padding(12.dp),
                 ) {
                     Text(
                         text = formatConditionDisplay(draft.condition),
@@ -245,7 +173,7 @@ private fun ListingPreviewCard(
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                 ) {
                     Text(
-                        text = formatPrice(draft.priceVnd),
+                        text = formatDraftPriceVnd(draft.priceVnd),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = androidx.compose.ui.graphics.Color.White,
                     )
@@ -260,7 +188,37 @@ private fun ListingPreviewCard(
                     horizontal = FashTheme.spacing.spacing3,
                     vertical = FashTheme.spacing.spacing2,
                 ),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
+
+            if (draft.brandName.isNotBlank() || draft.size.isNotBlank()) {
+                Text(
+                    text = listOfNotNull(
+                        draft.brandName.takeIf { it.isNotBlank() },
+                        draft.size.takeIf { it.isNotBlank() }?.let { "${stringResource(R.string.create_listing_size_label)}: $it" },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = FashTheme.spacing.spacing3),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (draft.description.isNotBlank()) {
+                Text(
+                    text = draft.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        horizontal = FashTheme.spacing.spacing3,
+                        vertical = 4.dp,
+                    ),
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             Row(
                 modifier = Modifier
@@ -279,7 +237,7 @@ private fun ListingPreviewCard(
                     tint = scheme.onSurfaceVariant,
                 )
                 Text(
-                    text = stringResource(R.string.create_listing_location_default),
+                    text = draft.countryName.ifBlank { stringResource(R.string.create_listing_location_default) },
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
@@ -295,12 +253,25 @@ private fun ListingPreviewCard(
                     color = scheme.onSurfaceVariant,
                 )
             }
+
+            if (draft.shippingAddressLabel.isNotBlank()) {
+                Text(
+                    text = draft.shippingAddressLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.primary,
+                    modifier = Modifier
+                        .padding(horizontal = FashTheme.spacing.spacing3)
+                        .padding(bottom = FashTheme.spacing.spacing2),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun Step3LegalFooter() {
+fun CreateListingReviewFooter() {
     val scheme = MaterialTheme.colorScheme
     Text(
         text = stringResource(R.string.create_listing_legal_disclaimer),
@@ -321,10 +292,12 @@ private fun formatConditionDisplay(condition: String): String = when (condition.
     else -> condition.ifBlank { "—" }
 }
 
-private fun formatPrice(vnd: Long): String =
-    "₫ ${NumberFormat.getIntegerInstance(Locale.getDefault()).format(vnd).replace(',', '.')}"
+private fun formatDraftPriceVnd(raw: String): String {
+    val v = raw.trim().replace(".", "").replace(",", "").toLongOrNull() ?: 0L
+    return "₫ ${NumberFormat.getIntegerInstance(Locale.getDefault()).format(v).replace(',', '.')}"
+}
 
-private fun resolveImageUrl(path: String): String {
+private fun resolveListingImageUrl(path: String): String {
     if (path.startsWith("http")) return path
     val base = AppEnvironment.apiBaseUrl.trimEnd('/')
     return if (path.startsWith("/")) "$base$path" else "$base/$path".takeIf { path.isNotBlank() } ?: ""

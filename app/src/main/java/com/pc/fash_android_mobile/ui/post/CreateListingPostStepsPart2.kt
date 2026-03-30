@@ -1,0 +1,641 @@
+package com.pc.fash_android_mobile.ui.post
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.address.ShippingAddress
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.FashTheme
+
+@Composable
+fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
+    val draft by viewModel.draft.collectAsState()
+    val canNext = draft.canProceedFromStep(6)
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 6,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = { viewModel.nextStep() },
+            primaryEnabled = canNext,
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(6),
+        )
+        PostStepScrollWithBottomNotice(
+            modifier = Modifier.weight(1f),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+            bottomNotice = stringResource(R.string.post_hint_measure),
+            scrollState = scrollState,
+        ) {
+            Text(
+                text = stringResource(R.string.post_step_measure),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PostSelectablePill(
+                    text = stringResource(R.string.post_unit_cm),
+                    selected = draft.measurementUnit.equals("cm", ignoreCase = true),
+                    onClick = { viewModel.updateDraft { copy(measurementUnit = "cm") } },
+                )
+                PostSelectablePill(
+                    text = stringResource(R.string.post_unit_in),
+                    selected = draft.measurementUnit.equals("in", ignoreCase = true),
+                    onClick = { viewModel.updateDraft { copy(measurementUnit = "in") } },
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            MeasurementField(
+                label = stringResource(R.string.post_measurement_hem),
+                value = draft.measurementHem,
+                onChange = { viewModel.updateDraft { copy(measurementHem = it) } },
+            )
+            MeasurementField(
+                label = stringResource(R.string.post_measurement_chest),
+                value = draft.measurementChest,
+                onChange = { viewModel.updateDraft { copy(measurementChest = it) } },
+            )
+            MeasurementField(
+                label = stringResource(R.string.post_measurement_length),
+                value = draft.measurementLength,
+                onChange = { viewModel.updateDraft { copy(measurementLength = it) } },
+            )
+            MeasurementField(
+                label = stringResource(R.string.post_measurement_shoulders),
+                value = draft.measurementShoulders,
+                onChange = { viewModel.updateDraft { copy(measurementShoulders = it) } },
+            )
+            MeasurementField(
+                label = stringResource(R.string.post_measurement_sleeve),
+                value = draft.measurementSleeveLength,
+                onChange = { viewModel.updateDraft { copy(measurementSleeveLength = it) } },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun MeasurementField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+) {
+    PostListingOutlinedTextField(
+        value = value,
+        onValueChange = { onChange(it) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+    )
+}
+
+@Composable
+fun CreateListingPostStep7(
+    viewModel: PostViewModel,
+    onCloseRequest: () -> Unit,
+) {
+    val draft by viewModel.draft.collectAsState()
+    val canNext = draft.canProceedFromStep(7)
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents(),
+    ) { uris: List<Uri> ->
+        viewModel.setImageUris(uris)
+    }
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 7,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = { viewModel.nextStep() },
+            primaryEnabled = canNext,
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(7),
+        )
+        PostStepScrollWithBottomNotice(
+            modifier = Modifier.weight(1f),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+            bottomNotice = stringResource(R.string.post_hint_photos),
+            scrollState = scrollState,
+            bottomExtra = { PostPhotoTipPanel() },
+        ) {
+            Text(
+                text = stringResource(R.string.post_step_photos),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            PostAddPhotoBox(onClick = { imagePicker.launch("image/*") })
+            if (draft.imageUris.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                PostImagePreviewRow(
+                    imageUriStrings = draft.imageUris,
+                    onRemove = { viewModel.removeImage(it) },
+                    onAddMore = { imagePicker.launch("image/*") },
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun PostAddPhotoBox(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.5f)
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 2.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(16.dp),
+            )
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.CameraAlt,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(R.string.create_listing_add_photo),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.create_listing_photo_tip),
+                style = MaterialTheme.typography.bodySmall,
+                color = FashColors.Primary,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PostImagePreviewRow(
+    imageUriStrings: List<String>,
+    onRemove: (Int) -> Unit,
+    onAddMore: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        imageUriStrings.forEachIndexed { index, uriStr ->
+            val uri = Uri.parse(uriStr)
+            Box(
+                modifier = Modifier
+                    .width(80.dp)
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                FashAsyncImage(
+                    model = uri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                if (index == 0) {
+                    Text(
+                        text = stringResource(R.string.create_listing_cover_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .background(FashColors.Primary)
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                }
+                IconButton(
+                    onClick = { onRemove(index) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+        if (imageUriStrings.size < 6) {
+            Box(
+                modifier = Modifier
+                    .width(80.dp)
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 2.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .clickable(onClick = onAddMore),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PostPhotoTipPanel() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = FashTheme.spacing.spacing3),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = FashColors.Primary.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lightbulb,
+                contentDescription = null,
+                tint = FashColors.Primary,
+            )
+            Column {
+                Text(
+                    text = stringResource(R.string.create_listing_tip_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                )
+                Text(
+                    text = stringResource(R.string.create_listing_tip_text),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
+    val draft by viewModel.draft.collectAsState()
+    val canNext = draft.canProceedFromStep(8)
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 8,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = { viewModel.nextStep() },
+            primaryEnabled = canNext,
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(8),
+        )
+        PostStepScrollWithBottomNotice(
+            modifier = Modifier.weight(1f),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+            bottomNotice = stringResource(R.string.post_hint_price),
+            scrollState = scrollState,
+        ) {
+            Text(
+                text = stringResource(R.string.post_step_price),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            PostListingOutlinedTextField(
+                value = draft.priceVnd,
+                onValueChange = { viewModel.updateDraft { copy(priceVnd = it.filter { ch -> ch.isDigit() }.take(12)) } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.create_listing_price_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(stringResource(R.string.post_accept_offers))
+                Switch(
+                    checked = draft.acceptOffers,
+                    onCheckedChange = { viewModel.updateDraft { copy(acceptOffers = it) } },
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(stringResource(R.string.post_auto_price_drop))
+                Switch(
+                    checked = draft.autoPriceDropEnabled,
+                    onCheckedChange = { on ->
+                        viewModel.updateDraft {
+                            copy(
+                                autoPriceDropEnabled = on,
+                                priceDropPercentInput = if (on && priceDropPercentInput.filter { d -> d.isDigit() }.isEmpty()) {
+                                    "10"
+                                } else {
+                                    priceDropPercentInput
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            if (draft.autoPriceDropEnabled) {
+                PostListingOutlinedTextField(
+                    value = draft.floorPriceVnd,
+                    onValueChange = {
+                        viewModel.updateDraft { copy(floorPriceVnd = it.filter { ch -> ch.isDigit() }.take(12)) }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    label = { Text(stringResource(R.string.post_floor_price)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                PostListingOutlinedTextField(
+                    value = draft.priceDropPercentInput,
+                    onValueChange = { raw ->
+                        val digits = raw.filter { it.isDigit() }.take(2)
+                        viewModel.updateDraft { copy(priceDropPercentInput = digits) }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    label = { Text(stringResource(R.string.post_drop_percent)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun CreateListingPostStep9(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
+    val draft by viewModel.draft.collectAsState()
+    val addresses by viewModel.localAddresses.collectAsState()
+    val canNext = draft.canProceedFromStep(9)
+
+    LaunchedEffect(Unit) {
+        viewModel.loadLocalShippingAddresses()
+        viewModel.applyDefaultShippingIfNeeded()
+    }
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 9,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = { viewModel.nextStep() },
+            primaryEnabled = canNext,
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(9),
+        )
+        PostStepScrollWithBottomNotice(
+            modifier = Modifier.weight(1f),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+            bottomNotice = stringResource(R.string.post_hint_shipping),
+            scrollState = scrollState,
+        ) {
+            Text(
+                text = stringResource(R.string.post_step_shipping),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            if (addresses.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.post_no_saved_address),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                addresses.forEach { addr ->
+                    ShippingAddressRow(
+                        address = addr,
+                        selected = draft.shippingAddressId == addr.id,
+                        onSelect = {
+                            viewModel.updateDraft {
+                                copy(
+                                    shippingAddressId = addr.id,
+                                    shippingAddressLabel = formatShippingLine(addr),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+private fun formatShippingLine(a: ShippingAddress): String =
+    listOf(a.recipientName, a.line1, a.district, a.city).filter { it.isNotBlank() }.joinToString(" · ")
+
+@Composable
+private fun ShippingAddressRow(
+    address: ShippingAddress,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Column(modifier = Modifier.padding(start = 8.dp)) {
+            Text(
+                text = address.recipientName,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = listOf(address.line1, address.ward, address.district, address.city)
+                    .filter { it.isNotBlank() }
+                    .joinToString(", "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (address.isDefault) {
+                Text(
+                    text = stringResource(R.string.address_badge_default),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = FashColors.Primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateListingPostStep10(
+    viewModel: PostViewModel,
+    onCloseRequest: () -> Unit,
+    onSubmitSuccess: () -> Unit,
+) {
+    val draft by viewModel.draft.collectAsState()
+    val meProfile by viewModel.meProfile.collectAsState()
+    val tagsById by viewModel.aestheticTagsById.collectAsState()
+    val isSubmitting by viewModel.isSubmitting.collectAsState()
+    val context = LocalContext.current
+    val uriResolver: (Uri) -> Pair<ByteArray, String>? = { uri ->
+        val mimeType = context.contentResolver.getType(uri)?.takeIf { !it.contains('*') } ?: "image/jpeg"
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            Pair(stream.readBytes(), mimeType)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadProfileForPreview()
+        viewModel.loadLocalShippingAddresses()
+    }
+
+    val reviewScrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 10,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_post_for_sale,
+            onPrimaryClick = {
+                viewModel.submitListing(uriResolver) { onSubmitSuccess() }
+            },
+            primaryEnabled = !isSubmitting,
+            primaryLoading = isSubmitting,
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(reviewScrollState)
+                    .padding(horizontal = FashTheme.spacing.editorialStart),
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.create_listing_step3_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                CreateListingReviewCard(
+                    draft = draft,
+                    meProfile = meProfile,
+                    aestheticTagsById = tagsById,
+                )
+            }
+        }
+        CreateListingReviewFooter()
+    }
+}

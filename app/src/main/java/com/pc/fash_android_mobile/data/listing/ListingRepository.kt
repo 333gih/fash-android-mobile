@@ -195,17 +195,39 @@ class ListingRepository(
     fun createListing(request: CreateListingRequest): Result<CreateListingResponse> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/listings")
         val json = JSONObject()
-            .put("title", request.title)
-            .put("image_urls", JSONArray(request.imageUrls))
-            .put("price", request.priceVnd)
-            .put("condition", request.condition)
-            .put("category_id", request.categoryId)
-            .put("description", request.description.ifBlank { JSONObject.NULL })
-            .put("size", request.size.ifBlank { JSONObject.NULL })
-            .put("brand", request.brand.ifBlank { JSONObject.NULL })
-            .put("aesthetic_tags", JSONArray(request.aestheticTags))
-            .toString()
-        val body = executePostJson(url, json)
+        json.put("title", request.title)
+        json.put("image_urls", JSONArray(request.imageUrls))
+        json.put("price", request.priceVnd)
+        json.put("condition", request.condition)
+        json.put("category_id", request.categoryId)
+        if (request.description.isNotBlank()) json.put("description", request.description)
+        if (request.size.isNotBlank()) json.put("size", request.size)
+        request.parentCategoryId?.takeIf { it.isNotBlank() }?.let { json.put("parent_category_id", it) }
+        request.parentCategoryName?.takeIf { it.isNotBlank() }?.let { json.put("parent_category_name", it) }
+        request.categoryName?.takeIf { it.isNotBlank() }?.let { json.put("category_name", it) }
+        request.brandId?.takeIf { it.isNotBlank() }?.let { json.put("brand_id", it) }
+        request.brandName?.takeIf { it.isNotBlank() }?.let { json.put("brand_name", it) }
+        when {
+            request.aestheticTagIds.isNotEmpty() ->
+                json.put("aesthetic_tag_ids", JSONArray(request.aestheticTagIds))
+            request.aestheticTagNames.isNotEmpty() ->
+                json.put("aesthetic_tags", JSONArray(request.aestheticTagNames))
+        }
+        request.countryOfOrigin?.takeIf { it.isNotBlank() }?.let { json.put("country_of_origin", it) }
+        request.countryId?.takeIf { it.isNotBlank() }?.let { json.put("country_id", it) }
+        request.countryName?.takeIf { it.isNotBlank() }?.let { json.put("country_name", it) }
+        request.measurementUnit?.takeIf { it.isNotBlank() }?.let { json.put("measurement_unit", it) }
+        request.measurementHem?.let { json.put("measurement_hem", it) }
+        request.measurementChest?.let { json.put("measurement_chest", it) }
+        request.measurementLength?.let { json.put("measurement_length", it) }
+        request.measurementShoulders?.let { json.put("measurement_shoulders", it) }
+        request.measurementSleeveLength?.let { json.put("measurement_sleeve_length", it) }
+        request.acceptOffers?.let { json.put("accept_offers", it) }
+        request.autoPriceDropEnabled?.let { json.put("auto_price_drop_enabled", it) }
+        request.floorPriceVnd?.let { json.put("floor_price", it) }
+        request.priceDropPercent?.let { json.put("price_drop_percent", it) }
+        request.shippingAddressId?.takeIf { it.isNotBlank() }?.let { json.put("shipping_address_id", it) }
+        val body = executePostJson(url, json.toString())
         val o = JSONObject(body)
         val dataObj = if (o.has("data")) o.optJSONObject("data") else null
         val id = (dataObj ?: o).let { obj ->
@@ -350,6 +372,7 @@ class ListingRepository(
     }
 }
 
+/** `POST /api/v1/listings` body — align with listings API doc (`snake_case` on wire). */
 data class CreateListingRequest(
     val title: String,
     val imageUrls: List<String>,
@@ -358,9 +381,28 @@ data class CreateListingRequest(
     val categoryId: String,
     val description: String = "",
     val size: String = "",
-    val brand: String = "",
-    /** Aesthetic tag names from the catalog (not UUID ids). Serialized as `aesthetic_tags`. */
-    val aestheticTags: List<String> = emptyList(),
+    val parentCategoryId: String? = null,
+    val parentCategoryName: String? = null,
+    val categoryName: String? = null,
+    val brandId: String? = null,
+    val brandName: String? = null,
+    /** Preferred when non-empty; else [aestheticTagNames]. */
+    val aestheticTagIds: List<String> = emptyList(),
+    val aestheticTagNames: List<String> = emptyList(),
+    val countryOfOrigin: String? = null,
+    val countryId: String? = null,
+    val countryName: String? = null,
+    val measurementUnit: String? = null,
+    val measurementHem: Double? = null,
+    val measurementChest: Double? = null,
+    val measurementLength: Double? = null,
+    val measurementShoulders: Double? = null,
+    val measurementSleeveLength: Double? = null,
+    val acceptOffers: Boolean? = null,
+    val autoPriceDropEnabled: Boolean? = null,
+    val floorPriceVnd: Long? = null,
+    val priceDropPercent: Int? = null,
+    val shippingAddressId: String? = null,
 )
 
 /** Partial update for `PUT /listings/{id}`. */
