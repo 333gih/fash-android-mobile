@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.pc.fash_android_mobile.ui.post
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,14 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,7 +51,6 @@ fun CreateListingPostStep1(
 ) {
     val draft by viewModel.draft.collectAsState()
     val tree by viewModel.categoryTree.collectAsState()
-    val tags by viewModel.aestheticTags.collectAsState()
     val catalogLoading by viewModel.catalogLoading.collectAsState()
     val canNext = draft.canProceedFromStep(1)
 
@@ -60,6 +64,7 @@ fun CreateListingPostStep1(
     }
 
     val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -78,31 +83,51 @@ fun CreateListingPostStep1(
         PostStepScrollWithBottomNotice(
             modifier = Modifier.weight(1f),
             horizontalPadding = FashTheme.spacing.editorialStart,
-            bottomNotice = stringResource(R.string.post_hint_category_required),
+            bottomNotice = stringResource(R.string.post_hint_category_step),
             scrollState = scrollState,
         ) {
             Text(
-                text = stringResource(R.string.post_step_category),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                text = stringResource(R.string.post_step_category_only),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            if (catalogLoading && tree.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                PostListingSearchField(
-                    value = categoryQuery,
-                    onValueChange = { categoryQuery = it },
-                    label = { Text(stringResource(R.string.post_search_category)) },
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.post_step1_category_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            PostStep1SectionCard {
+                Text(
+                    text = stringResource(R.string.post_step1_category_section_title),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
+                Text(
+                    text = stringResource(R.string.post_step1_category_section_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!catalogLoading || tree.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PostListingSearchField(
+                        value = categoryQuery,
+                        onValueChange = { categoryQuery = it },
+                        label = { Text(stringResource(R.string.post_search_category)) },
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
-                if (categoryQuery.isBlank()) {
+                if (catalogLoading && tree.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (categoryQuery.isBlank()) {
                     CategoryTreeSection(
                         roots = tree,
                         selectedId = draft.categoryId,
@@ -138,23 +163,108 @@ fun CreateListingPostStep1(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun PostStep1SectionCard(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+fun CreateListingPostStep2(
+    viewModel: PostViewModel,
+    onCloseRequest: () -> Unit,
+) {
+    val draft by viewModel.draft.collectAsState()
+    val tags by viewModel.aestheticTags.collectAsState()
+    val canNext = draft.canProceedFromStep(2)
+
+    LaunchedEffect(Unit) {
+        viewModel.loadCatalogIfNeeded()
+    }
+
+    var tagQuery by remember { mutableStateOf("") }
+    val filteredTags = remember(tagQuery, tags) {
+        tags.filter { it.matchesTagQuery(tagQuery) }
+    }
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 2,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = { viewModel.nextStep() },
+            primaryEnabled = canNext,
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(2),
+        )
+        PostStepScrollWithBottomNotice(
+            modifier = Modifier.weight(1f),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+            bottomNotice = stringResource(R.string.post_hint_style_tags_step),
+            scrollState = scrollState,
+        ) {
             Text(
-                text = stringResource(R.string.create_listing_style_label),
-                style = MaterialTheme.typography.titleSmall,
+                text = stringResource(R.string.post_step_style_only),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                tags.forEach { tag ->
-                    val selected = draft.selectedAestheticTagIds.contains(tag.id)
-                    PostSelectablePill(
-                        text = tag.displayName.ifBlank { tag.name },
-                        selected = selected,
-                        onClick = { viewModel.updateDraft { toggleAestheticTag(tag.id) } },
-                    )
+            Text(
+                text = stringResource(R.string.post_step2_style_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            PostListingSearchField(
+                value = tagQuery,
+                onValueChange = { tagQuery = it },
+                label = { Text(stringResource(R.string.post_search_style_tags)) },
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            if (filteredTags.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.post_style_tags_no_matches),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    filteredTags.forEach { tag ->
+                        val selected = draft.selectedAestheticTagIds.contains(tag.id)
+                        PostSelectablePill(
+                            text = tag.displayName.ifBlank { tag.name },
+                            selected = selected,
+                            onClick = { viewModel.updateDraft { toggleAestheticTag(tag.id) } },
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
@@ -204,11 +314,23 @@ private fun CategoryTreeSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         roots.forEach { root ->
-            CategoryNodeBlock(
-                node = root,
-                selectedId = selectedId,
-                onSelectLeaf = onSelectLeaf,
-            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CategoryNodeBlock(
+                        node = root,
+                        selectedId = selectedId,
+                        onSelectLeaf = onSelectLeaf,
+                        depth = 0,
+                    )
+                }
+            }
         }
     }
 }
@@ -218,6 +340,7 @@ private fun CategoryNodeBlock(
     node: CategoryTreeNode,
     selectedId: String,
     onSelectLeaf: (CategoryTreeNode) -> Unit,
+    depth: Int = 0,
 ) {
     if (node.children.isEmpty()) {
         PostSelectablePill(
@@ -226,10 +349,18 @@ private fun CategoryNodeBlock(
             onClick = { onSelectLeaf(node) },
         )
     } else {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val indent = (depth * 10).coerceAtMost(28).dp
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(start = indent),
+        ) {
             Text(
                 text = node.name,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                style = if (depth == 0) {
+                    MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                } else {
+                    MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                },
                 color = MaterialTheme.colorScheme.onSurface,
             )
             FlowRow(
@@ -237,7 +368,7 @@ private fun CategoryNodeBlock(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 node.children.forEach { child ->
-                    CategoryNodeBlock(child, selectedId, onSelectLeaf)
+                    CategoryNodeBlock(child, selectedId, onSelectLeaf, depth + 1)
                 }
             }
         }
@@ -245,64 +376,6 @@ private fun CategoryNodeBlock(
 }
 
 private val conditionValues = listOf("New", "Like new", "Good", "Fair", "Worn")
-
-@Composable
-fun CreateListingPostStep2(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
-    val draft by viewModel.draft.collectAsState()
-    val canNext = draft.canProceedFromStep(2)
-
-    val scrollState = rememberScrollState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
-    ) {
-        CreateListingFlowHeader(
-            step = 2,
-            totalSteps = TotalPostSteps,
-            onBackClick = { viewModel.prevStep() },
-            onCloseClick = onCloseRequest,
-            primaryLabelRes = R.string.create_listing_next,
-            onPrimaryClick = { viewModel.nextStep() },
-            primaryEnabled = canNext,
-            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(2),
-        )
-        PostStepScrollWithBottomNotice(
-            modifier = Modifier.weight(1f),
-            horizontalPadding = FashTheme.spacing.editorialStart,
-            bottomNotice = stringResource(R.string.post_hint_condition_required),
-            scrollState = scrollState,
-        ) {
-            Text(
-                text = stringResource(R.string.post_step_condition),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                conditionValues.forEach { cond ->
-                    PostSelectablePill(
-                        text = cond,
-                        selected = draft.condition == cond,
-                        onClick = { viewModel.updateDraft { copy(condition = cond) } },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            PostListingOutlinedTextField(
-                value = draft.size,
-                onValueChange = { viewModel.updateDraft { copy(size = it.take(20)) } },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.create_listing_size_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
 
 @Composable
 fun CreateListingPostStep3(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
@@ -399,8 +472,13 @@ fun CreateListingPostStep3(viewModel: PostViewModel, onCloseRequest: () -> Unit)
 @Composable
 fun CreateListingPostStep4(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
     val draft by viewModel.draft.collectAsState()
+    val countries by viewModel.countries.collectAsState()
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(query, countries) {
+        countries.filter { it.matchesQuery(query) }
+    }
     val canNext = draft.canProceedFromStep(4)
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
 
     Column(
         modifier = Modifier
@@ -416,78 +494,6 @@ fun CreateListingPostStep4(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             onPrimaryClick = { viewModel.nextStep() },
             primaryEnabled = canNext,
             nextDisabledReasonRes = draft.nextStepBlockedReasonRes(4),
-        )
-        PostStepScrollWithBottomNotice(
-            modifier = Modifier.weight(1f),
-            horizontalPadding = FashTheme.spacing.editorialStart,
-            bottomNotice = stringResource(R.string.post_hint_title_desc),
-            scrollState = scrollState,
-        ) {
-            Text(
-                text = stringResource(R.string.post_step_text),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            PostListingOutlinedTextField(
-                value = draft.title,
-                onValueChange = { viewModel.updateDraft { copy(title = it.take(MaxListingTitleLength)) } },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.create_listing_title_label)) },
-                singleLine = true,
-            )
-            Text(
-                text = "${draft.title.length}/$MaxListingTitleLength",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            PostListingOutlinedTextField(
-                value = draft.description,
-                onValueChange = { viewModel.updateDraft { copy(description = it.take(MaxListingDescriptionLength)) } },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp),
-                label = { Text(stringResource(R.string.post_description_label)) },
-                singleLine = false,
-                minLines = 4,
-            )
-            Text(
-                text = "${draft.description.length}/$MaxListingDescriptionLength",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
-    val draft by viewModel.draft.collectAsState()
-    val countries by viewModel.countries.collectAsState()
-    var query by remember { mutableStateOf("") }
-    val filtered = remember(query, countries) {
-        countries.filter { it.matchesQuery(query) }
-    }
-    val canNext = draft.canProceedFromStep(5)
-    val listState = rememberLazyListState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
-    ) {
-        CreateListingFlowHeader(
-            step = 5,
-            totalSteps = TotalPostSteps,
-            onBackClick = { viewModel.prevStep() },
-            onCloseClick = onCloseRequest,
-            primaryLabelRes = R.string.create_listing_next,
-            onPrimaryClick = { viewModel.nextStep() },
-            primaryEnabled = canNext,
-            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(5),
         )
         PostStepLazyListWithBottomNotice(
             modifier = Modifier.weight(1f),
@@ -533,5 +539,99 @@ fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 }
             },
         )
+    }
+}
+
+@Composable
+fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
+    val draft by viewModel.draft.collectAsState()
+    val canNext = draft.canProceedFromStep(5)
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        CreateListingFlowHeader(
+            step = 5,
+            totalSteps = TotalPostSteps,
+            onBackClick = { viewModel.prevStep() },
+            onCloseClick = onCloseRequest,
+            primaryLabelRes = R.string.create_listing_next,
+            onPrimaryClick = { viewModel.nextStep() },
+            primaryEnabled = canNext,
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(5),
+        )
+        PostStepScrollWithBottomNotice(
+            modifier = Modifier.weight(1f),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+            bottomNotice = stringResource(R.string.post_hint_listing_details_step),
+            scrollState = scrollState,
+        ) {
+            Text(
+                text = stringResource(R.string.post_step_listing_details),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.post_listing_details_intro),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.post_step_condition_short),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                conditionValues.forEach { cond ->
+                    PostSelectablePill(
+                        text = cond,
+                        selected = draft.condition == cond,
+                        onClick = { viewModel.updateDraft { copy(condition = cond) } },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            PostListingOutlinedTextField(
+                value = draft.title,
+                onValueChange = { viewModel.updateDraft { copy(title = it.take(MaxListingTitleLength)) } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.create_listing_title_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            )
+            Text(
+                text = "${draft.title.length}/$MaxListingTitleLength",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            PostListingOutlinedTextField(
+                value = draft.description,
+                onValueChange = { viewModel.updateDraft { copy(description = it.take(MaxListingDescriptionLength)) } },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp),
+                label = { Text(stringResource(R.string.post_description_label)) },
+                singleLine = false,
+                minLines = 4,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            )
+            Text(
+                text = "${draft.description.length}/$MaxListingDescriptionLength",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }

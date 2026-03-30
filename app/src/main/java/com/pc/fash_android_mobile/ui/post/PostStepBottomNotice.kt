@@ -1,29 +1,136 @@
 package com.pc.fash_android_mobile.ui.post
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
- * Scrollable step body with an optional hint at the bottom. The hint is shown only when
- * the main content does not overflow vertically ([scrollState.maxValue] == 0), i.e. there is
- * free space and no scrolling is required.
+ * Bottom notice card aligned with [com.pc.fash_android_mobile.ui.login.OtpHelpBottomCard]:
+ * bordered surface, primary accent bar, info icon, title, and bullet lines (split on `\n`).
+ */
+@Composable
+fun PostFlowNoticeCard(
+    text: String,
+    horizontalPadding: Dp,
+    title: String? = null,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
+    val lines = remember(text) {
+        text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(text.trim()) }
+    }
+    val titleText = title ?: stringResource(R.string.post_notice_title)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding)
+            .padding(top = 8.dp, bottom = 12.dp),
+        shape = shape,
+        color = scheme.surfaceContainerHighest,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(FashTheme.spacing.spacing4),
+            horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing3),
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(68.dp)
+                    .background(
+                        FashColors.Primary.copy(alpha = 0.58f),
+                        RoundedCornerShape(2.dp),
+                    ),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = FashColors.Primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = titleText,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                    )
+                }
+                lines.forEach { line ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            text = "\u2022",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = FashColors.Primary.copy(alpha = 0.72f),
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            lineHeight = 20.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PostStepNoticeText(text: String, horizontalPadding: Dp) {
+    PostFlowNoticeCard(text = text, horizontalPadding = horizontalPadding)
+}
+
+/**
+ * Scrollable step body with an optional hint at the bottom (OTP-style card, always visible when set).
  */
 @Composable
 fun PostStepScrollWithBottomNotice(
@@ -35,16 +142,12 @@ fun PostStepScrollWithBottomNotice(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val hasBottomText = !bottomNotice.isNullOrBlank()
-    val hasExtra = bottomExtra != null
-    val showBottomSlot = scrollState.maxValue == 0 && (hasBottomText || hasExtra)
-    // Do not use fillMaxSize() on the same node as weight(1f) — it breaks max-height for verticalScroll.
     Column(modifier.fillMaxWidth()) {
         Box(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
-            // Scroll body must not use fillMaxSize — it prevents verticalScroll from getting a bounded viewport.
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -54,18 +157,15 @@ fun PostStepScrollWithBottomNotice(
                 content()
             }
         }
-        if (showBottomSlot) {
-            if (hasBottomText) {
-                PostStepNoticeText(text = bottomNotice!!, horizontalPadding = horizontalPadding)
-            }
-            bottomExtra?.invoke()
+        if (hasBottomText) {
+            PostStepNoticeText(text = bottomNotice!!, horizontalPadding = horizontalPadding)
         }
+        bottomExtra?.invoke()
     }
 }
 
 /**
- * Lazy list step body with an optional hint at the bottom. The hint is shown only when the
- * list does not scroll in either direction (all items fit in the viewport).
+ * Lazy list step body with an optional hint at the bottom (OTP-style card, always visible when set).
  */
 @Composable
 fun PostStepLazyListWithBottomNotice(
@@ -76,9 +176,7 @@ fun PostStepLazyListWithBottomNotice(
     header: @Composable ColumnScope.() -> Unit,
     lazyContent: LazyListScope.() -> Unit,
 ) {
-    val showNotice = !bottomNotice.isNullOrBlank() &&
-        !listState.canScrollForward &&
-        !listState.canScrollBackward
+    val hasBottomText = !bottomNotice.isNullOrBlank()
     Column(modifier.fillMaxWidth()) {
         Column(
             Modifier
@@ -95,27 +193,14 @@ fun PostStepLazyListWithBottomNotice(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                 contentPadding = PaddingValues(horizontal = horizontalPadding),
             ) {
                 lazyContent()
             }
         }
-        if (showNotice) {
+        if (hasBottomText) {
             PostStepNoticeText(text = bottomNotice!!, horizontalPadding = horizontalPadding)
         }
     }
-}
-
-@Composable
-fun PostStepNoticeText(text: String, horizontalPadding: Dp) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding)
-            .padding(top = 8.dp, bottom = 12.dp),
-    )
 }

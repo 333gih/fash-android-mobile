@@ -272,15 +272,10 @@ fun CreateListingReviewCard(
 
 @Composable
 fun CreateListingReviewFooter() {
-    val scheme = MaterialTheme.colorScheme
-    Text(
+    PostFlowNoticeCard(
         text = stringResource(R.string.create_listing_legal_disclaimer),
-        style = MaterialTheme.typography.bodySmall,
-        color = scheme.onSurfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 8.dp, bottom = FashTheme.spacing.spacing4),
+        horizontalPadding = FashTheme.spacing.editorialStart,
+        title = stringResource(R.string.post_review_notice_title),
     )
 }
 

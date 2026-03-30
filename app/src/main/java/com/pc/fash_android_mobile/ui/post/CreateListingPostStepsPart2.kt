@@ -3,12 +3,14 @@ package com.pc.fash_android_mobile.ui.post
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -27,11 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -78,72 +81,146 @@ fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit)
         PostStepScrollWithBottomNotice(
             modifier = Modifier.weight(1f),
             horizontalPadding = FashTheme.spacing.editorialStart,
-            bottomNotice = stringResource(R.string.post_hint_measure),
+            bottomNotice = stringResource(R.string.post_measure_notice_combined),
             scrollState = scrollState,
         ) {
+            val unitSuffix =
+                if (draft.measurementUnit.equals("cm", ignoreCase = true)) {
+                    stringResource(R.string.post_unit_cm)
+                } else {
+                    stringResource(R.string.post_unit_in)
+                }
             Text(
                 text = stringResource(R.string.post_step_measure),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PostSelectablePill(
-                    text = stringResource(R.string.post_unit_cm),
-                    selected = draft.measurementUnit.equals("cm", ignoreCase = true),
-                    onClick = { viewModel.updateDraft { copy(measurementUnit = "cm") } },
-                )
-                PostSelectablePill(
-                    text = stringResource(R.string.post_unit_in),
-                    selected = draft.measurementUnit.equals("in", ignoreCase = true),
-                    onClick = { viewModel.updateDraft { copy(measurementUnit = "in") } },
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.post_measure_step_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            PostMeasureSectionCard {
+                PostMeasureSectionLabel(stringResource(R.string.post_measure_section_size))
+                PostListingOutlinedTextField(
+                    value = draft.size,
+                    onValueChange = { viewModel.updateDraft { copy(size = it.take(20)) } },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.create_listing_size_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
-            MeasurementField(
-                label = stringResource(R.string.post_measurement_hem),
-                value = draft.measurementHem,
-                onChange = { viewModel.updateDraft { copy(measurementHem = it) } },
-            )
-            MeasurementField(
-                label = stringResource(R.string.post_measurement_chest),
-                value = draft.measurementChest,
-                onChange = { viewModel.updateDraft { copy(measurementChest = it) } },
-            )
-            MeasurementField(
-                label = stringResource(R.string.post_measurement_length),
-                value = draft.measurementLength,
-                onChange = { viewModel.updateDraft { copy(measurementLength = it) } },
-            )
-            MeasurementField(
-                label = stringResource(R.string.post_measurement_shoulders),
-                value = draft.measurementShoulders,
-                onChange = { viewModel.updateDraft { copy(measurementShoulders = it) } },
-            )
-            MeasurementField(
-                label = stringResource(R.string.post_measurement_sleeve),
-                value = draft.measurementSleeveLength,
-                onChange = { viewModel.updateDraft { copy(measurementSleeveLength = it) } },
-            )
+            PostMeasureSectionCard {
+                PostMeasureSectionLabel(stringResource(R.string.post_measure_section_unit))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PostSelectablePill(
+                        text = stringResource(R.string.post_unit_cm),
+                        selected = draft.measurementUnit.equals("cm", ignoreCase = true),
+                        onClick = { viewModel.updateDraft { copy(measurementUnit = "cm") } },
+                    )
+                    PostSelectablePill(
+                        text = stringResource(R.string.post_unit_in),
+                        selected = draft.measurementUnit.equals("in", ignoreCase = true),
+                        onClick = { viewModel.updateDraft { copy(measurementUnit = "in") } },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            PostMeasureSectionCard {
+                PostMeasureSectionLabel(stringResource(R.string.post_measure_section_details))
+                Column(verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing3)) {
+                    MeasurementField(
+                        label = stringResource(R.string.post_measurement_hem),
+                        value = draft.measurementHem,
+                        unitSuffix = unitSuffix,
+                        onChange = { viewModel.updateDraft { copy(measurementHem = it) } },
+                    )
+                    MeasurementField(
+                        label = stringResource(R.string.post_measurement_chest),
+                        value = draft.measurementChest,
+                        unitSuffix = unitSuffix,
+                        onChange = { viewModel.updateDraft { copy(measurementChest = it) } },
+                    )
+                    MeasurementField(
+                        label = stringResource(R.string.post_measurement_length),
+                        value = draft.measurementLength,
+                        unitSuffix = unitSuffix,
+                        onChange = { viewModel.updateDraft { copy(measurementLength = it) } },
+                    )
+                    MeasurementField(
+                        label = stringResource(R.string.post_measurement_shoulders),
+                        value = draft.measurementShoulders,
+                        unitSuffix = unitSuffix,
+                        onChange = { viewModel.updateDraft { copy(measurementShoulders = it) } },
+                    )
+                    MeasurementField(
+                        label = stringResource(R.string.post_measurement_sleeve),
+                        value = draft.measurementSleeveLength,
+                        unitSuffix = unitSuffix,
+                        onChange = { viewModel.updateDraft { copy(measurementSleeveLength = it) } },
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
+private fun PostMeasureSectionCard(content: @Composable ColumnScope.() -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = scheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(FashTheme.spacing.spacing4),
+            verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing3),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun PostMeasureSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
 private fun MeasurementField(
     label: String,
     value: String,
+    unitSuffix: String,
     onChange: (String) -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     PostListingOutlinedTextField(
         value = value,
         onValueChange = { onChange(it) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        suffix = {
+            Text(
+                text = unitSuffix,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+        },
     )
 }
 
@@ -180,9 +257,8 @@ fun CreateListingPostStep7(
         PostStepScrollWithBottomNotice(
             modifier = Modifier.weight(1f),
             horizontalPadding = FashTheme.spacing.editorialStart,
-            bottomNotice = stringResource(R.string.post_hint_photos),
+            bottomNotice = stringResource(R.string.post_hint_photos) + "\n" + stringResource(R.string.create_listing_tip_text),
             scrollState = scrollState,
-            bottomExtra = { PostPhotoTipPanel() },
         ) {
             Text(
                 text = stringResource(R.string.post_step_photos),
@@ -313,44 +389,6 @@ private fun PostImagePreviewRow(
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PostPhotoTipPanel() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(bottom = FashTheme.spacing.spacing3),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = FashColors.Primary.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(12.dp),
-                )
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Lightbulb,
-                contentDescription = null,
-                tint = FashColors.Primary,
-            )
-            Column {
-                Text(
-                    text = stringResource(R.string.create_listing_tip_title),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                )
-                Text(
-                    text = stringResource(R.string.create_listing_tip_text),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

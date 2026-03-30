@@ -267,8 +267,24 @@
     <string name="create_listing_location_default">Hà Nội</string>
     <string name="create_listing_just_now">Vừa xong</string>
 
-    <string name="post_step_category">Danh mục &amp; thẻ phong cách</string>
-    <string name="post_step_condition">Tình trạng &amp; size</string>
+    <string name="post_step_category">Danh mục &amp; phong cách</string>
+    <string name="post_step_category_only">Danh mục</string>
+    <string name="post_step1_category_intro">Duyệt theo nhóm (tiêu đề), rồi chạm một thẻ cho loại sản phẩm. Dùng ô tìm để nhảy tới danh mục con.</string>
+    <string name="post_hint_category_step">Bắt buộc: chọn một danh mục con. Tìm kiếm khớp theo cả đường dẫn (tên nhóm + loại cuối).</string>
+    <string name="post_step_style_only">Thẻ phong cách</string>
+    <string name="post_step2_style_intro">Không bắt buộc — tối đa 5 thẻ. Là vibe/phong cách, không phải danh mục sản phẩm. Dùng tìm để lọc danh sách.</string>
+    <string name="post_hint_style_tags_step">Không bắt buộc: chọn tối đa 5 thẻ phong cách. Hỗ trợ tìm kiếm, tách với danh mục.</string>
+    <string name="post_search_style_tags">Tìm thẻ phong cách</string>
+    <string name="post_style_tags_no_matches">Không có thẻ phù hợp. Thử từ khác hoặc xóa ô tìm.</string>
+    <string name="post_step1_intro">Trước tiên chọn danh mục cho sản phẩm, sau đó có thể thêm thẻ phong cách. Bạn có thể cuộn — mỗi phần tách riêng bên dưới.</string>
+    <string name="post_step1_category_section_title">Danh mục</string>
+    <string name="post_step1_category_section_subtitle">Bắt buộc. Tìm hoặc duyệt, rồi chạm một thẻ để chọn loại sản phẩm bạn đang đăng.</string>
+    <string name="post_step1_style_section_title">2 · Thẻ phong cách</string>
+    <string name="post_step1_style_section_subtitle">Không bắt buộc — tối đa 5. Mô tả vibe hoặc phong cách (ví dụ streetwear). Khác với danh mục ở trên.</string>
+    <string name="post_step_condition">Tình trạng</string>
+    <string name="post_step_condition_short">Tình trạng</string>
+    <string name="post_step_listing_details">Tình trạng, tiêu đề &amp; mô tả</string>
+    <string name="post_listing_details_intro">Chọn tình trạng, rồi viết tiêu đề và mô tả rõ ràng để người mua hiểu sản phẩm.</string>
     <string name="post_step_brand">Thương hiệu</string>
     <string name="post_step_text">Tiêu đề &amp; mô tả</string>
     <string name="post_step_country">Xuất xứ</string>
@@ -277,12 +293,22 @@
     <string name="post_step_price">Giá &amp; ưu đãi</string>
     <string name="post_step_shipping">Địa chỉ gửi hàng</string>
     <string name="post_step_review">Xem lại &amp; đăng</string>
-    <string name="post_hint_category_required">Bắt buộc: chọn danh mục con. Thẻ phong cách: tối đa 5 (không bắt buộc).</string>
+    <string name="post_notice_title">Gợi ý</string>
+    <string name="post_review_notice_title">Lưu ý pháp lý</string>
+    <string name="post_hint_category_required">Chọn danh mục để tiếp tục. Thẻ phong cách vẫn không bắt buộc.</string>
     <string name="post_hint_condition_required">Bắt buộc: tình trạng. Size gợi ý (không bắt buộc).</string>
     <string name="post_hint_brand">Không bắt buộc. Chọn hoặc tìm thương hiệu.</string>
     <string name="post_hint_title_desc">Tiêu đề 3–60 ký tự. Mô tả tối đa 500 ký tự.</string>
+    <string name="post_hint_listing_details_step">Bắt buộc: tình trạng, tiêu đề 3–60 ký tự. Mô tả tối đa 500 ký tự.</string>
     <string name="post_hint_country">Không bắt buộc. Nơi sản xuất / xuất xứ.</string>
     <string name="post_hint_measure">Không bắt buộc. Nhập số theo đơn vị đã chọn.</string>
+    <string name="post_measure_size_intro">Nhập size và số đo giúp người mua so sánh với size của họ — bán dễ hơn. Tất cả đều không bắt buộc.</string>
+    <string name="post_hint_measure_size">Không bắt buộc. Size và số đo giúp so khớp; nhập số theo đơn vị đã chọn.</string>
+    <string name="post_measure_notice_combined">Tất cả không bắt buộc. Size và số đo giúp người mua so khớp với form của họ — bán dễ hơn.\nChọn cm hoặc inch rồi nhập số theo đơn vị đã chọn.</string>
+    <string name="post_measure_section_size">Kích cỡ trên nhãn</string>
+    <string name="post_measure_section_unit">Đơn vị số đo</string>
+    <string name="post_measure_section_details">Số đo chi tiết</string>
+    <string name="post_measure_step_subtitle">Toàn bộ mục dưới đây là tùy chọn.</string>
     <string name="post_hint_photos">Bắt buộc: 1–6 ảnh.</string>
     <string name="post_hint_price">Giá VND 1.000 – 100.000.000. Giảm giá tự động: sàn giá &amp; % mỗi tuần (1–50%).</string>
     <string name="post_hint_shipping">Không bắt buộc. Chọn địa chỉ đã lưu; ID gửi lên máy chủ khi đồng bộ.</string>
@@ -328,7 +354,7 @@
     <string name="post_next_blocked_floor_below">Giá sàn phải thấp hơn giá bán.</string>
     <string name="post_next_blocked_drop_percent">Nhập % giảm giá từ 1 đến 50.</string>
     <string name="post_next_blocked_generic">Hoàn thành các mục bắt buộc để tiếp tục.</string>
-    <string name="post_brand_featured">Gợi ý</string>
+    <string name="post_brand_featured">Đề xuất</string>
     <string name="post_description_label">Mô tả</string>
 
     <!-- Edit / delete listing (seller, active listing) -->

@@ -203,12 +203,13 @@ fun CreateListingDraft.toggleAestheticTag(id: String): CreateListingDraft {
 }
 
 fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
-    1 -> categoryId.isNotBlank() && selectedAestheticTagIds.size <= MaxAestheticTags
-    2 -> condition.isNotBlank()
+    1 -> categoryId.isNotBlank()
+    2 -> selectedAestheticTagIds.size <= MaxAestheticTags
     3 -> true
-    4 -> title.trim().length in MinListingTitleLength..MaxListingTitleLength &&
+    4 -> true
+    5 -> condition.isNotBlank() &&
+        title.trim().length in MinListingTitleLength..MaxListingTitleLength &&
         description.length <= MaxListingDescriptionLength
-    5 -> true
     6 -> true
     7 -> imageUris.isNotEmpty()
     8 -> {
@@ -235,11 +236,14 @@ fun CreateListingDraft.nextStepBlockedReasonRes(step: Int): Int? {
     return when (step) {
         1 -> when {
             categoryId.isBlank() -> R.string.post_next_blocked_category
+            else -> R.string.post_next_blocked_generic
+        }
+        2 -> when {
             selectedAestheticTagIds.size > MaxAestheticTags -> R.string.post_next_blocked_tags
             else -> R.string.post_next_blocked_generic
         }
-        2 -> R.string.post_next_blocked_condition
-        4 -> when {
+        5 -> when {
+            condition.isBlank() -> R.string.post_next_blocked_condition
             title.trim().length < MinListingTitleLength -> R.string.post_next_blocked_title_short
             title.trim().length > MaxListingTitleLength -> R.string.post_next_blocked_title_long
             description.length > MaxListingDescriptionLength -> R.string.post_next_blocked_description_long
@@ -274,4 +278,10 @@ fun CommonCountryDto.matchesQuery(q: String): Boolean {
     if (q.isBlank()) return true
     val n = q.trim().lowercase()
     return name.lowercase().contains(n) || iso2.lowercase().contains(n)
+}
+
+fun CommonAestheticTagDto.matchesTagQuery(q: String): Boolean {
+    if (q.isBlank()) return true
+    val n = q.trim().lowercase()
+    return name.lowercase().contains(n) || displayName.lowercase().contains(n)
 }
