@@ -22,30 +22,37 @@ object FashColors {
 
     val OnPrimaryContainer = Color(0xFF400014)
 
-    /** Signature cream surface — warmth vs pure white */
-    val SurfaceVariantCream = Color(0xFFF5F0E8)
+    /** App-wide screen and Material surface base — white canvas */
+    val SurfaceVariantCream = Color.White
 
     /** Base canvas (lowest surface) */
-    val SurfaceLowest = Color(0xFFFFFBF7)
+    val SurfaceLowest = Color.White
 
     /** Main feed / section bands */
-    val SurfaceContainerLow = Color(0xFFF3EFE8)
+    val SurfaceContainerLow = Color.White
 
-    val SurfaceContainer = Color(0xFFEDE8E0)
+    val SurfaceContainer = Color.White
 
-    val SurfaceContainerHigh = Color(0xFFE8E3DB)
+    val SurfaceContainerHigh = Color.White
 
-    /** High-priority cards (e.g. buy-now) — maximum lift */
-    val SurfaceContainerHighest = Color(0xFFFFFFFF)
+    /** High-priority cards (e.g. buy-now) */
+    val SurfaceContainerHighest = Color.White
 
     val OnSurface = Color(0xFF1C1917)
 
     val OnSurfaceVariant = Color(0xFF52443F)
 
-    val Outline = Color(0xFF85736E)
+    /**
+     * Focused borders, key outlines. Warm brown-gray — readable on white without cold “tech gray.”
+     * (Avoid pure white/near-white borders: they disappear on [SurfaceLowest].)
+     */
+    val Outline = Color(0xFF6A5F59)
 
-    /** Use with alpha for “ghost” borders when needed */
-    val OutlineVariant = Color(0xFFD7C8BF)
+    /**
+     * Default hairlines, cards, chips, dividers on white. **Warm stone** (#BEB6B1 family): visibly distinct
+     * from the canvas, softer than flat #D9D9D9, and on-brand next to coral [Primary].
+     */
+    val OutlineVariant = Color(0xFFBEB6B1)
 
     val SecondaryWarm = Color(0xFF6B5349)
 

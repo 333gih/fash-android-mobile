@@ -8,8 +8,7 @@ import androidx.compose.ui.graphics.Color
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
- * Post listing flow uses crisp white surfaces for inputs and cards in light mode
- * (theme defaults use warm cream / grey fills).
+ * Post listing flow uses white surfaces for inputs and step canvas in light mode.
  */
 object PostListingColors {
     @Composable
@@ -37,8 +36,8 @@ private fun outlinedTextFieldColorsFor(container: Color) =
         disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         errorTextColor = MaterialTheme.colorScheme.error,
         focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f),
+        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
         errorBorderColor = MaterialTheme.colorScheme.error,
         cursorColor = MaterialTheme.colorScheme.primary,
         errorCursorColor = MaterialTheme.colorScheme.error,

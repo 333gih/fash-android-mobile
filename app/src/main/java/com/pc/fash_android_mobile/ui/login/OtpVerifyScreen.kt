@@ -69,7 +69,7 @@ import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 
-private val OtpCanvas = Color(0xFFF9F9F9)
+private val OtpCanvas = Color.White
 private const val OTP_LENGTH = 6
 private val CellCorner = RoundedCornerShape(16.dp)
 private val CellHeight = 56.dp
@@ -278,7 +278,7 @@ private fun OtpHelpBottomCard(
         color = scheme.surfaceContainerHighest,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.75f)),
     ) {
         Row(
             modifier = Modifier

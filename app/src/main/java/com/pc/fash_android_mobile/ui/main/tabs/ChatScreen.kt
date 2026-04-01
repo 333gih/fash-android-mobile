@@ -650,7 +650,7 @@ private fun ConversationRow(
                 color = if (item.hasUnread) {
                     FashColors.Primary.copy(alpha = 0.18f)
                 } else {
-                    scheme.outlineVariant.copy(alpha = 0.4f)
+                    scheme.outlineVariant.copy(alpha = 0.68f)
                 },
                 shape = rowShape,
             )

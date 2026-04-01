@@ -180,7 +180,7 @@ private fun PostStep1SectionCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
         color = PostListingColors.fieldSurface(),
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f)),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.68f)),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {

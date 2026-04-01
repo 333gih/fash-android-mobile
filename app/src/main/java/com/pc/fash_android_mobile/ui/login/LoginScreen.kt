@@ -90,7 +90,7 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-private val LoginCanvas = Color(0xFFF9F9F9)
+private val LoginCanvas = Color.White
 private val HeroCornerDp = 28.dp
 private val FieldCornerDp = 16.dp
 private val SocialCornerDp = 16.dp
@@ -555,8 +555,8 @@ private fun EmailFieldWithRail(
                 focusedContainerColor = scheme.surfaceContainerHighest,
                 unfocusedContainerColor = scheme.surfaceContainerHighest,
                 disabledContainerColor = scheme.surfaceContainerHighest,
-                focusedBorderColor = scheme.outlineVariant.copy(alpha = 0.95f),
-                unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.85f),
+                focusedBorderColor = scheme.outline.copy(alpha = 0.55f),
+                unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.92f),
                 cursorColor = scheme.primary,
                 focusedLeadingIconColor = scheme.onSurfaceVariant,
                 unfocusedLeadingIconColor = scheme.onSurfaceVariant,
@@ -620,8 +620,8 @@ private fun PasswordFieldWithRail(
                 focusedContainerColor = scheme.surfaceContainerHighest,
                 unfocusedContainerColor = scheme.surfaceContainerHighest,
                 disabledContainerColor = scheme.surfaceContainerHighest,
-                focusedBorderColor = scheme.outlineVariant.copy(alpha = 0.95f),
-                unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.85f),
+                focusedBorderColor = scheme.outline.copy(alpha = 0.55f),
+                unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.92f),
                 cursorColor = scheme.primary,
                 focusedLeadingIconColor = scheme.onSurfaceVariant,
                 unfocusedLeadingIconColor = scheme.onSurfaceVariant,
@@ -633,7 +633,7 @@ private fun PasswordFieldWithRail(
 @Composable
 private fun OrDivider() {
     val scheme = MaterialTheme.colorScheme
-    val lineColor = scheme.outlineVariant.copy(alpha = 0.55f)
+    val lineColor = scheme.outlineVariant.copy(alpha = 0.7f)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,

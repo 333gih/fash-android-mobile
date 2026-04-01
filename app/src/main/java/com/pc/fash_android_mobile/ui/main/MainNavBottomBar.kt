@@ -72,7 +72,7 @@ fun MainNavBottomBar(
         Column(Modifier.fillMaxWidth()) {
             HorizontalDivider(
                 thickness = 1.dp,
-                color = scheme.outlineVariant.copy(alpha = 0.45f),
+                color = scheme.outlineVariant.copy(alpha = 0.72f),
             )
             Row(
                 modifier = Modifier

@@ -84,10 +84,12 @@ class OnboardingViewModel(
      * Align UI step with server flags: style tags first if not configured; else profile/sizing step.
      */
     fun applyInitialStepFromAccessStatus(status: UserAccessStatus) {
+        if (status.canAccessHome) return
         val hint = status.nextStep?.lowercase().orEmpty()
         _onboardingStep.value = when {
             hint in setOf("profile", "sizing", "sizing_reference", "profile_setup") -> OnboardingStep.ProfileSetup
             hint in setOf("style", "tags", "aesthetic", "aesthetic_tags", "onboard") -> OnboardingStep.StyleSelection
+            hint == "none" -> OnboardingStep.ProfileSetup
             !status.aestheticTagsConfigured -> OnboardingStep.StyleSelection
             else -> OnboardingStep.ProfileSetup
         }

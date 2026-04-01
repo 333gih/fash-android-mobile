@@ -91,14 +91,15 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingShippingAddress
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.theme.FashColors
 
-/** Reference UI: primary red, label gray, cream bar, light gray cards (#F5F5F5). */
+/** Reference UI: primary red, label gray, white surfaces. */
 private val DetailPrimary = Color(0xFFE9334A)
 private val DetailLabelGray = Color(0xFF757575)
 private val DetailTextBlack = Color(0xFF000000)
-private val DetailBarCream = Color(0xFFFAF9F6)
-private val DetailCardBg = Color(0xFFF5F5F5)
-private val DetailBorder = Color(0xFFE0E0E0)
+private val DetailBarCream = Color.White
+private val DetailCardBg = Color.White
+private val DetailBorder = FashColors.OutlineVariant
 private val DetailConditionGreen = Color(0xFF2E7D32)
 private const val DEFAULT_EST_SHIPPING_VND = 30_000L
 

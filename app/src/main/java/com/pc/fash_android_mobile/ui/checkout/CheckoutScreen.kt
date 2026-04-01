@@ -387,7 +387,7 @@ private fun ListingMetaLines(detail: ListingDetail) {
     )
     if (lines.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
+        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.58f))
         lines.forEach { (label, value) ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -467,7 +467,7 @@ private fun OrderSnapshotCard(order: OrderDetail) {
                     color = FashColors.Primary,
                 )
             }
-            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
+            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.58f))
             Text(
                 text = stringResource(R.string.checkout_section_parties),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -667,7 +667,7 @@ private fun PaymentMethodSection(
                     color = scheme.surface,
                     border = BorderStroke(
                         width = if (selected) 2.dp else 1.dp,
-                        color = if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.4f),
+                        color = if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.72f),
                     ),
                 ) {
                     Row(
@@ -746,7 +746,7 @@ private fun OrderSummarySection(
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart),
         shape = SectionCorner,
-        color = Color(0xFFFFF5F0),
+        color = Color.White,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

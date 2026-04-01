@@ -301,7 +301,9 @@ class MainActivity : ComponentActivity() {
                     needsOnboarding = withContext(Dispatchers.IO) {
                         userRepo.getUserAccessStatus().fold(
                             onSuccess = { status ->
-                                onboardingViewModel.applyInitialStepFromAccessStatus(status)
+                                if (!status.canAccessHome) {
+                                    onboardingViewModel.applyInitialStepFromAccessStatus(status)
+                                }
                                 !status.canAccessHome
                             },
                             // Do not fall back to username heuristics: that allowed home while server said can_access_home false.

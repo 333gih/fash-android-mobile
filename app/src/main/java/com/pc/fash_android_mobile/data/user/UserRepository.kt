@@ -610,11 +610,7 @@ class UserRepository(
             o.has("data") && o.get("data") is JSONObject -> o.getJSONObject("data")
             else -> o
         }
-        val serverGate = when {
-            root.has("can_access_home") -> root.optBoolean("can_access_home", false)
-            root.has("canAccessHome") -> root.optBoolean("canAccessHome", false)
-            else -> null
-        }
+        val serverGate = parseServerCanAccessHome(root)
         return UserAccessStatus(
             hasProfile = root.optBoolean("has_profile", root.optBoolean("hasProfile", false)),
             aestheticTagsConfigured = root.optBoolean(
@@ -629,6 +625,30 @@ class UserRepository(
             serverCanAccessHome = serverGate,
             nextStep = root.optString("next_step", root.optString("nextStep", "")).trim().takeIf { it.isNotEmpty() },
         )
+    }
+
+    /**
+     * Wire may send booleans as JSON true/false, strings (`"true"`), or numbers; [JSONObject.optBoolean] only handles JSON booleans.
+     */
+    private fun parseServerCanAccessHome(root: JSONObject): Boolean? {
+        val key = when {
+            root.has("can_access_home") -> "can_access_home"
+            root.has("canAccessHome") -> "canAccessHome"
+            else -> return null
+        }
+        return parseJsonBoolean(root, key)
+    }
+
+    private fun parseJsonBoolean(obj: JSONObject, key: String): Boolean? {
+        if (!obj.has(key)) return null
+        val v = obj.get(key)
+        if (v == null || v === JSONObject.NULL) return null
+        return when (v) {
+            is Boolean -> v
+            is String -> v.trim().equals("true", ignoreCase = true) || v == "1"
+            is Number -> v.toDouble() != 0.0
+            else -> null
+        }
     }
 }
 
@@ -646,9 +666,22 @@ data class UserAccessStatus(
     /** e.g. `onboard`, `style`, `profile` — hints first onboarding screen. */
     val nextStep: String? = null,
 ) {
+    /**
+     * Prefer [serverCanAccessHome] when the API sends `can_access_home` (authoritative).
+     * If that key is absent but `next_step` is `none` and core profile steps are done, treat as home
+     * (server may omit `can_access_home` or send `aesthetic_tags_configured: false` while still allowing home).
+     * Otherwise require all four flags (legacy client-side gate).
+     */
     val canAccessHome: Boolean
-        get() = serverCanAccessHome
-            ?: (hasProfile && aestheticTagsConfigured && onboardingDone && sizingReferenceCompleted)
+        get() {
+            serverCanAccessHome?.let { return it }
+            if (nextStep?.equals("none", ignoreCase = true) == true &&
+                hasProfile && onboardingDone && sizingReferenceCompleted
+            ) {
+                return true
+            }
+            return hasProfile && aestheticTagsConfigured && onboardingDone && sizingReferenceCompleted
+        }
 }
 
 data class SizingReferenceRequest(

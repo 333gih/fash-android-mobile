@@ -257,7 +257,7 @@ fun EditProfileScreen(
                                 .size(AvatarSize)
                                 .clip(CircleShape)
                                 .background(scheme.surfaceContainerHigh)
-                                .border(3.dp, scheme.surface, CircleShape),
+                                .border(3.dp, scheme.outlineVariant, CircleShape),
                         ) {
                             val avatar = avatarUrl ?: profile?.avatarUrl?.takeIf { it.isNotBlank() }
                             if (avatar != null) {
@@ -427,7 +427,7 @@ private fun UsernameInput(
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.dp,
                 color = if (isValid && value.isNotBlank()) FashColors.Success.copy(alpha = 0.5f)
-                else scheme.outlineVariant.copy(alpha = 0.5f),
+                else scheme.outlineVariant.copy(alpha = 0.75f),
             ),
         ) {
             Row(

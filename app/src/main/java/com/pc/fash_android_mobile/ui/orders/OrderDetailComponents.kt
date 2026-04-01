@@ -636,12 +636,12 @@ internal fun OrderBuyerPaymentCard(d: OrderDetail) {
             MoneyLine(stringResource(R.string.order_detail_buyer_product_price), d.amountVnd, emphasis = false)
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.3f),
+                color = scheme.outlineVariant.copy(alpha = 0.55f),
             )
             MoneyLine(stringResource(R.string.order_detail_buyer_shipping_fee), d.shippingFeeVnd, emphasis = false)
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.3f),
+                color = scheme.outlineVariant.copy(alpha = 0.55f),
             )
             MoneyLine(stringResource(R.string.order_detail_buyer_total), total, emphasis = true)
         }
@@ -671,7 +671,7 @@ internal fun OrderSellerRevenueCard(d: OrderDetail) {
             MoneyLine(stringResource(R.string.order_detail_seller_listing_price), d.amountVnd, emphasis = false)
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.3f),
+                color = scheme.outlineVariant.copy(alpha = 0.55f),
             )
             val feeLabel = if (pct != null) {
                 stringResource(R.string.order_detail_commission_percent, pct)
@@ -695,7 +695,7 @@ internal fun OrderSellerRevenueCard(d: OrderDetail) {
             }
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.3f),
+                color = scheme.outlineVariant.copy(alpha = 0.55f),
             )
             MoneyLine(stringResource(R.string.order_detail_seller_net), d.sellerPayoutVnd, emphasis = true)
         }

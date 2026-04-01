@@ -43,7 +43,7 @@ fun PostSelectablePill(
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
     val borderColor =
-        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.55f)
+        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.75f)
     val borderWidth = if (selected) 2.dp else 1.dp
     Surface(
         modifier = modifier
@@ -81,7 +81,7 @@ fun PostSelectableListRow(
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
     val borderColor =
-        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.45f)
+        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.72f)
     val borderWidth = if (selected) 2.dp else 1.dp
     val chipFill =
         if (selected) FashColors.Primary.copy(alpha = 0.12f) else PostListingColors.fieldSurface()

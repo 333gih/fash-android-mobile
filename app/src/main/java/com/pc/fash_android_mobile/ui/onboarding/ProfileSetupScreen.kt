@@ -64,7 +64,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val ProfileSetupCanvas = androidx.compose.ui.graphics.Color(0xFFF9F9F9)
+private val ProfileSetupCanvas = androidx.compose.ui.graphics.Color.White
 private val InputCorner = RoundedCornerShape(16.dp)
 private val AvatarSize = 72.dp
 
@@ -265,7 +265,7 @@ fun ProfileSetupScreen(
                 Surface(
                     shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
                     color = scheme.surfaceContainerHighest,
-                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f)),
+                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.75f)),
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -431,7 +431,7 @@ private fun ProfileMeasurementUnitToggle(
                 color = if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerHighest,
                 border = BorderStroke(
                     1.dp,
-                    if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.5f),
+                    if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.72f),
                 ),
             ) {
                 Text(
@@ -483,7 +483,7 @@ private fun UsernameInput(
         border = BorderStroke(
             width = if (isValid && value.isNotBlank()) 2.dp else 1.dp,
             color = if (isValid && value.isNotBlank()) FashColors.Primary.copy(alpha = 0.55f)
-            else scheme.outlineVariant.copy(alpha = 0.5f),
+            else scheme.outlineVariant.copy(alpha = 0.72f),
         ),
         shadowElevation = 0.dp,
     ) {

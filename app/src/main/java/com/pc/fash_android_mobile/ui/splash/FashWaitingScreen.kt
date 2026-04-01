@@ -30,8 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -51,7 +49,7 @@ import com.pc.fash_android_mobile.ui.theme.BeVietnamProFamily
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-private val SplashBg = Color(0xFFFAF9F9)
+private val SplashBg = Color.White
 private val SplashAccent = Color(0xFFF04D63)
 private val SplashBodyText = Color(0xFF4A4A4A)
 private val SplashWatermark = Color(0xFFF2F2F2)
@@ -77,22 +75,10 @@ fun FashWaitingScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        val wPx = constraints.maxWidth.toFloat()
-        val hPx = constraints.maxHeight.toFloat()
         Box(
             Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFFDFC),
-                            SplashBg,
-                            Color(0xFFF7F2F4),
-                        ),
-                        center = Offset(wPx * 0.35f, hPx * 0.25f),
-                        radius = maxOf(wPx, hPx) * 0.95f,
-                    ),
-                ),
+                .background(SplashBg),
         )
         WatermarkFash(
             modifier = Modifier

@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.explore
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -385,7 +386,8 @@ private fun ExploreFiltersBar(
             }
             .clickable(onClick = onOpenFilters),
         shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerHigh.copy(alpha = 0.65f),
+        color = scheme.surface,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.88f)),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -483,7 +485,7 @@ private fun ExploreFilterBottomSheet(
                     )
                 }
             }
-            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.45f))
+            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.65f))
             ExploreCategoryStrip(
                 categories = categories,
                 selectedCategoryId = selectedCategoryId,
@@ -496,7 +498,7 @@ private fun ExploreFilterBottomSheet(
             )
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.35f),
+                color = scheme.outlineVariant.copy(alpha = 0.58f),
             )
             ExploreMarketplaceFilters(viewModel = viewModel)
         }

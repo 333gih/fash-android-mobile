@@ -276,7 +276,7 @@ fun ChatDetailScreen(
                         )
                     }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
 
                     // Product reference card
                     d.product?.let { product ->
@@ -284,7 +284,7 @@ fun ChatDetailScreen(
                             product = product,
                             onClick = { onProductClick(product.listingId) },
                         )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
                     }
 
                     if (d.isBuyer && !hasOrder && !offerBlocked) {
@@ -295,7 +295,7 @@ fun ChatDetailScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                         )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
                     }
 
                     // Offer price bottom sheet
@@ -482,7 +482,7 @@ fun ChatDetailScreen(
                         TypingIndicator(name = d.otherUser.displayName.ifBlank { d.otherUser.username })
                     }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
 
                     if (composerReadOnly) {
                         ClosedConversationComposerBar(
@@ -912,7 +912,7 @@ private fun OfferMessageBubble(
                 .background(scheme.surfaceContainerLow)
                 .border(
                     width = 1.dp,
-                    color = scheme.outlineVariant.copy(alpha = 0.4f),
+                    color = scheme.outlineVariant.copy(alpha = 0.68f),
                     shape = RoundedCornerShape(16.dp),
                 )
                 .padding(16.dp),

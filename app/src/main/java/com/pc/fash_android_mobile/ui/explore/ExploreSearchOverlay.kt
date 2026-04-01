@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.explore
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -324,11 +325,13 @@ private fun ExploreSearchAdPanel(
     onCloseOverlay: () -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = modifier,
         shape = shape,
-        color = FashColors.SurfaceVariantCream,
-        tonalElevation = 1.dp,
+        color = scheme.surface,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.85f)),
+        tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
         Row(

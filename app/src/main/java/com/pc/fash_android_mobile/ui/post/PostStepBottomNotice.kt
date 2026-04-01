@@ -65,7 +65,7 @@ fun PostFlowNoticeCard(
         color = PostListingColors.fieldSurface(),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.72f)),
     ) {
         Row(
             modifier = Modifier

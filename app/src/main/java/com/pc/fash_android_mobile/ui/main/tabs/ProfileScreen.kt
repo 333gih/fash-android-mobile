@@ -154,7 +154,7 @@ private fun ProfileShippingAddressesRow(onClick: () -> Unit) {
             .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .border(1.dp, scheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+            .border(1.dp, scheme.outlineVariant.copy(alpha = 0.78f), RoundedCornerShape(12.dp)),
         color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
