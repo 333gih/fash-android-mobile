@@ -59,7 +59,7 @@ fun CreateListingReviewCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHighest),
+        colors = CardDefaults.cardColors(containerColor = PostListingColors.fieldSurface()),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column {
@@ -138,7 +138,7 @@ fun CreateListingReviewCard(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(scheme.surfaceVariant),
+                            .background(PostListingColors.fieldSurface()),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -159,7 +159,7 @@ fun CreateListingReviewCard(
                         color = FashColors.Primary,
                         modifier = Modifier
                             .background(
-                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                PostListingColors.fieldSurface(),
                                 RoundedCornerShape(6.dp),
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp),

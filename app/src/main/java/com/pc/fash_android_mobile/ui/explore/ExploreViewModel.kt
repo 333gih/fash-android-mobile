@@ -10,6 +10,7 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -39,6 +40,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         (application as FashApplication).searchRepository
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val commonServiceRepository: CommonServiceRepository =
+        (application as FashApplication).commonServiceRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
@@ -322,7 +325,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         searchRepository.getTrendingTags().fold(
             onSuccess = { _tags.value = it },
             onFailure = {
-                userRepository.getAestheticTags().fold(
+                commonServiceRepository.getAestheticTags(all = true).fold(
                     onSuccess = { _tags.value = it.map { t -> t.name } },
                     onFailure = { },
                 )

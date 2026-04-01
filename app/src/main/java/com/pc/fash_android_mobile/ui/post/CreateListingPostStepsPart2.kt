@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -32,7 +34,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -52,10 +53,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.address.ShippingAddress
+import com.pc.fash_android_mobile.ui.address.ShippingAddressSelectableCard
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.theme.dashedRoundRectBorder
 
 @Composable
 fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
@@ -66,6 +68,7 @@ fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit)
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -175,7 +178,7 @@ private fun PostMeasureSectionCard(content: @Composable ColumnScope.() -> Unit) 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        color = scheme.surfaceContainerLow,
+        color = PostListingColors.fieldSurface(),
         border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -242,6 +245,7 @@ fun CreateListingPostStep7(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -291,7 +295,7 @@ private fun PostAddPhotoBox(onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(16.dp),
             )
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(PostListingColors.fieldSurface())
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -337,7 +341,7 @@ private fun PostImagePreviewRow(
                     .width(80.dp)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    .background(PostListingColors.fieldSurface()),
             ) {
                 FashAsyncImage(
                     model = uri,
@@ -377,6 +381,7 @@ private fun PostImagePreviewRow(
                     .width(80.dp)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(12.dp))
+                    .background(PostListingColors.fieldSurface())
                     .border(
                         width = 2.dp,
                         color = MaterialTheme.colorScheme.outlineVariant,
@@ -404,6 +409,7 @@ fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit)
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -502,21 +508,25 @@ fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit)
 }
 
 @Composable
-fun CreateListingPostStep9(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
+fun CreateListingPostStep9(
+    viewModel: PostViewModel,
+    onCloseRequest: () -> Unit,
+    onAddAddressClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
     val draft by viewModel.draft.collectAsState()
     val addresses by viewModel.localAddresses.collectAsState()
     val canNext = draft.canProceedFromStep(9)
 
     LaunchedEffect(Unit) {
-        viewModel.loadLocalShippingAddresses()
+        viewModel.loadShippingAddresses()
         viewModel.applyDefaultShippingIfNeeded()
     }
-
-    val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -528,81 +538,97 @@ fun CreateListingPostStep9(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             onPrimaryClick = { viewModel.nextStep() },
             primaryEnabled = canNext,
             nextDisabledReasonRes = draft.nextStepBlockedReasonRes(9),
+            centerTitleRes = R.string.address_list_title,
+            showStepCaptionUnderTitle = true,
         )
-        PostStepScrollWithBottomNotice(
-            modifier = Modifier.weight(1f),
-            horizontalPadding = FashTheme.spacing.editorialStart,
-            bottomNotice = stringResource(R.string.post_hint_shipping),
-            scrollState = scrollState,
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(PostListingColors.stepCanvas())
+                .padding(horizontal = FashTheme.spacing.editorialStart),
         ) {
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.post_step_shipping),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                text = stringResource(R.string.address_list_header),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.address_list_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(modifier = Modifier.weight(1f)) {
+                if (addresses.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.post_no_saved_address),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.error,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(addresses, key = { it.id }) { addr ->
+                            ShippingAddressSelectableCard(
+                                address = addr,
+                                selected = draft.shippingAddressId == addr.id,
+                                onClick = {
+                                    viewModel.updateDraft {
+                                        copy(
+                                            shippingAddressId = addr.id,
+                                            shippingAddressLabel = addr.labelForDraft(),
+                                        )
+                                    }
+                                },
+                                onSetDefault = null,
+                                showSetDefaultButton = false,
+                            )
+                        }
+                    }
+                }
+            }
+            PostFlowNoticeCard(
+                text = stringResource(R.string.post_hint_shipping),
+                horizontalPadding = 0.dp,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            if (addresses.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.post_no_saved_address),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            } else {
-                addresses.forEach { addr ->
-                    ShippingAddressRow(
-                        address = addr,
-                        selected = draft.shippingAddressId == addr.id,
-                        onSelect = {
-                            viewModel.updateDraft {
-                                copy(
-                                    shippingAddressId = addr.id,
-                                    shippingAddressLabel = formatShippingLine(addr),
-                                )
-                            }
-                        },
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .dashedRoundRectBorder(
+                        width = 1.dp,
+                        color = scheme.outlineVariant,
+                        cornerRadius = 12.dp,
+                    )
+                    .clickable(onClick = onAddAddressClick),
+                shape = RoundedCornerShape(12.dp),
+                color = PostListingColors.fieldSurface().copy(alpha = 0.92f),
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 14.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = FashColors.Primary)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        text = stringResource(R.string.address_add_new),
+                        color = FashColors.Primary,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-private fun formatShippingLine(a: ShippingAddress): String =
-    listOf(a.recipientName, a.line1, a.district, a.city).filter { it.isNotBlank() }.joinToString(" · ")
-
-@Composable
-private fun ShippingAddressRow(
-    address: ShippingAddress,
-    selected: Boolean,
-    onSelect: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = selected, onClick = onSelect)
-        Column(modifier = Modifier.padding(start = 8.dp)) {
-            Text(
-                text = address.recipientName,
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                text = listOf(address.line1, address.ward, address.district, address.city)
-                    .filter { it.isNotBlank() }
-                    .joinToString(", "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (address.isDefault) {
-                Text(
-                    text = stringResource(R.string.address_badge_default),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = FashColors.Primary,
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -627,7 +653,7 @@ fun CreateListingPostStep10(
 
     LaunchedEffect(Unit) {
         viewModel.loadProfileForPreview()
-        viewModel.loadLocalShippingAddresses()
+        viewModel.loadShippingAddresses()
     }
 
     val reviewScrollState = rememberScrollState()
@@ -635,6 +661,7 @@ fun CreateListingPostStep10(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(

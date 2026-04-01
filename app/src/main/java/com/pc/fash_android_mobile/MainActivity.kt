@@ -46,9 +46,7 @@ import com.facebook.login.LoginManager
 import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
-import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
-import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
@@ -86,6 +84,7 @@ import com.pc.fash_android_mobile.ui.address.ShippingAddressListScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -93,31 +92,26 @@ import kotlinx.coroutines.withContext
 
 private const val SPLASH_DISPLAY_MS = 2_500L
 
-/**
- * True when the user must complete onboarding (style + username).
- * Uses [UserRepository.getMeProfile] so we don't rely on GET /users/me returning 404 for new users
- * (the API often returns 200 with an incomplete profile).
- */
-private fun computeNeedsOnboarding(
-    userRepo: UserRepository,
-    sessionStore: AuthSessionStore,
-): Boolean {
-    val session = sessionStore.read() ?: return false
-    val profileResult = userRepo.getMeProfile()
-    return profileResult.fold(
-        onSuccess = { profile ->
-            !isProfileOnboardingComplete(profile.username)
-        },
-        onFailure = {
-            session.isNewUser || userRepo.getMe().isFailure
-        },
-    )
-}
+/** Delay between access-status polls after onboard + sizing (eventual consistency on server). */
+private const val ACCESS_STATUS_POLL_MS = 350L
+private const val ACCESS_STATUS_POLL_ATTEMPTS = 5
 
-/** Matches [com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel.isUsernameValid] rules. */
-private fun isProfileOnboardingComplete(username: String): Boolean {
-    val u = username.trim()
-    return u.length in 3..30 && u.matches(Regex("^[a-z0-9_.]+$"))
+/**
+ * After [UserRepository.onboard] + [UserRepository.saveSizingReference] succeed, the access-status
+ * endpoint can briefly still return [com.pc.fash_android_mobile.data.user.UserAccessStatus.canAccessHome] false.
+ * Poll a few times; if still not flipped, allow home anyway (writes already succeeded).
+ */
+private suspend fun resolveNeedsOnboardingAfterProfileSubmit(repo: UserRepository): Boolean {
+    repeat(ACCESS_STATUS_POLL_ATTEMPTS) { attempt ->
+        repo.getUserAccessStatus().fold(
+            onSuccess = { status ->
+                if (status.canAccessHome) return false
+            },
+            onFailure = { },
+        )
+        if (attempt < ACCESS_STATUS_POLL_ATTEMPTS - 1) delay(ACCESS_STATUS_POLL_MS)
+    }
+    return false
 }
 
 class MainActivity : ComponentActivity() {
@@ -211,12 +205,21 @@ class MainActivity : ComponentActivity() {
                 snackbarHostState.showSnackbar(msg)
                 authManager.clearSessionExpiredMessage()
             }
-            var needsOnboarding by rememberSaveable { mutableStateOf<Boolean?>(null) }
+            // Not saveable: a persisted false would skip re-fetching access-status after process restore (wrong home).
+            var needsOnboarding by remember { mutableStateOf<Boolean?>(null) }
+            val mainScope = rememberCoroutineScope()
             val isLoggingOut by loginViewModel.isLoggingOut.collectAsState()
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
             val onboardingTags by onboardingViewModel.tags.collectAsState()
             val onboardingSelected by onboardingViewModel.selectedIds.collectAsState()
             val onboardingUsername by onboardingViewModel.username.collectAsState()
+            val onboardingReferenceSize by onboardingViewModel.referenceSize.collectAsState()
+            val onboardingMeasurementUnit by onboardingViewModel.measurementUnit.collectAsState()
+            val onboardingMeasHem by onboardingViewModel.measurementHem.collectAsState()
+            val onboardingMeasChest by onboardingViewModel.measurementChest.collectAsState()
+            val onboardingMeasLength by onboardingViewModel.measurementLength.collectAsState()
+            val onboardingMeasShoulders by onboardingViewModel.measurementShoulders.collectAsState()
+            val onboardingMeasSleeve by onboardingViewModel.measurementSleeve.collectAsState()
             val onboardingLoading by onboardingViewModel.isLoading.collectAsState()
             val onboardingSubmitting by onboardingViewModel.isSubmitting.collectAsState()
             val facebookOk = LoginViewModel.isFacebookConfigured()
@@ -294,10 +297,16 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
-                    if (needsOnboarding != null) return@LaunchedEffect
                     val userRepo = (this@MainActivity.application as FashApplication).userRepository
                     needsOnboarding = withContext(Dispatchers.IO) {
-                        computeNeedsOnboarding(userRepo, authManager.sessionStore)
+                        userRepo.getUserAccessStatus().fold(
+                            onSuccess = { status ->
+                                onboardingViewModel.applyInitialStepFromAccessStatus(status)
+                                !status.canAccessHome
+                            },
+                            // Do not fall back to username heuristics: that allowed home while server said can_access_home false.
+                            onFailure = { true },
+                        )
                     }
                 }
 
@@ -341,10 +350,32 @@ class MainActivity : ComponentActivity() {
                                                 authManager.onSessionCleared()
                                             },
                                         )
-                                        OnboardingStep.ProfileSetup -> ProfileSetupScreen(
+                                        OnboardingStep.ProfileSetup -> {
+                                            val canSubmitOnboardingProfile = remember(
+                                                onboardingUsername,
+                                                onboardingReferenceSize,
+                                            ) {
+                                                onboardingViewModel.canSubmitProfile()
+                                            }
+                                            ProfileSetupScreen(
                                             username = onboardingUsername,
                                             onUsernameChange = onboardingViewModel::onUsernameChange,
                                             isUsernameValid = onboardingViewModel.isUsernameValid(),
+                                            canSubmit = canSubmitOnboardingProfile,
+                                            referenceSize = onboardingReferenceSize,
+                                            onReferenceSizeChange = onboardingViewModel::onReferenceSizeChange,
+                                            measurementUnit = onboardingMeasurementUnit,
+                                            onMeasurementUnitChange = onboardingViewModel::onMeasurementUnitChange,
+                                            measurementHem = onboardingMeasHem,
+                                            onMeasurementHemChange = onboardingViewModel::onMeasurementHemChange,
+                                            measurementChest = onboardingMeasChest,
+                                            onMeasurementChestChange = onboardingViewModel::onMeasurementChestChange,
+                                            measurementLength = onboardingMeasLength,
+                                            onMeasurementLengthChange = onboardingViewModel::onMeasurementLengthChange,
+                                            measurementShoulders = onboardingMeasShoulders,
+                                            onMeasurementShouldersChange = onboardingViewModel::onMeasurementShouldersChange,
+                                            measurementSleeve = onboardingMeasSleeve,
+                                            onMeasurementSleeveChange = onboardingViewModel::onMeasurementSleeveChange,
                                             isSubmitting = onboardingSubmitting,
                                             progressStep = 3,
                                             progressTotal = 3,
@@ -355,11 +386,18 @@ class MainActivity : ComponentActivity() {
                                                             s.copy(isNewUser = false),
                                                         )
                                                     }
-                                                    needsOnboarding = false
+                                                    mainScope.launch {
+                                                        val repo =
+                                                            (this@MainActivity.application as FashApplication).userRepository
+                                                        needsOnboarding = withContext(Dispatchers.IO) {
+                                                            resolveNeedsOnboardingAfterProfileSubmit(repo)
+                                                        }
+                                                    }
                                                 }
                                             },
                                             onBack = onboardingViewModel::goBackToStyle,
                                         )
+                                        }
                                     }
                                 }
                                 isAuthenticated -> {
@@ -413,6 +451,7 @@ class MainActivity : ComponentActivity() {
                                             homeViewModel = homeViewModel,
                                             exploreViewModel = exploreViewModel,
                                             postViewModel = postViewModel,
+                                            addressBookViewModel = addressBookViewModel,
                                             profileViewModel = profileViewModel,
                                             chatViewModel = chatViewModel,
                                             chatUnreadCount = chatUnreadCount,
@@ -426,6 +465,10 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             onEditProfile = { showEditProfile = true },
+                                            onShippingAddressesClick = {
+                                                addressFlowOrderId = null
+                                                showShippingAddressList = true
+                                            },
                                             onOrdersClick = { showOrdersScreen = true },
                                             onOpenFollowConnections = { tab ->
                                                 followConnectionsInitialTab = tab
@@ -597,7 +640,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (showShippingAddressList && addressFlowOrderId != null && !showAddAddressScreen) {
+                                        if (showShippingAddressList && !showAddAddressScreen) {
                                             BackHandler {
                                                 showShippingAddressList = false
                                                 addressFlowOrderId = null
@@ -606,7 +649,7 @@ class MainActivity : ComponentActivity() {
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surface),
-                                                orderId = addressFlowOrderId!!,
+                                                orderId = addressFlowOrderId,
                                                 viewModel = addressBookViewModel,
                                                 onBack = {
                                                     showShippingAddressList = false

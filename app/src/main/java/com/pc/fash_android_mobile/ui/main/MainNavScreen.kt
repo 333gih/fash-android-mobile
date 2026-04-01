@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.pc.fash_android_mobile.ui.explore.ExploreScreen
 import com.pc.fash_android_mobile.ui.explore.ExploreTopBar
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
+import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
@@ -110,6 +111,7 @@ fun MainNavScreen(
     homeViewModel: com.pc.fash_android_mobile.ui.home.HomeViewModel,
     exploreViewModel: com.pc.fash_android_mobile.ui.explore.ExploreViewModel,
     postViewModel: com.pc.fash_android_mobile.ui.post.PostViewModel,
+    addressBookViewModel: AddressBookViewModel,
     profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel,
     chatViewModel: com.pc.fash_android_mobile.ui.chat.ChatViewModel,
     /** Total unread messages for chat tab badge ([ChatRepository.getUnreadCount]). */
@@ -117,6 +119,7 @@ fun MainNavScreen(
     /** [sellerId] when known — used to open seller edit vs public detail. */
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onEditProfile: () -> Unit = {},
+    onShippingAddressesClick: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
     /** [initialTab] 0 = people you follow, 1 = followers (e.g. Explore featured sellers “See all”). */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
@@ -243,6 +246,7 @@ fun MainNavScreen(
                     )
                     MainTab.Post -> CreateListingFlowScreen(
                         viewModel = postViewModel,
+                        addressBookViewModel = addressBookViewModel,
                         onClose = {
                             postViewModel.cancel()
                             onTabChange(MainTab.Home.ordinal)
@@ -259,6 +263,7 @@ fun MainNavScreen(
                         onLogoutAll = onLogoutAll,
                         isLoggingOut = isLoggingOut,
                         onEditProfile = onEditProfile,
+                        onShippingAddressesClick = onShippingAddressesClick,
                         onOrdersClick = onOrdersClick,
                         onListingClick = onListingClick,
                     )

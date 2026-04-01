@@ -12,10 +12,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -72,4 +76,25 @@ fun Modifier.fashShimmer(): Modifier {
             ),
         )
     }
+}
+
+/** Dashed rounded rectangle border (e.g. “Add address” affordance). */
+fun Modifier.dashedRoundRectBorder(
+    width: Dp,
+    color: Color,
+    cornerRadius: Dp = 12.dp,
+) = drawBehind {
+    val w = width.toPx()
+    val r = cornerRadius.toPx()
+    val stroke = Stroke(
+        width = w,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f),
+    )
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(w / 2, w / 2),
+        size = Size(size.width - w, size.height - w),
+        cornerRadius = CornerRadius(r, r),
+        style = stroke,
+    )
 }

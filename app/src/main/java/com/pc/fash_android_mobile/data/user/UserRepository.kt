@@ -334,6 +334,42 @@ class UserRepository(
         inner.optBoolean("available", !inner.optBoolean("taken", false))
     }
 
+    /**
+     * `PUT /users/me/sizing-reference` — saves reference size, unit, optional body measurements;
+     * marks sizing reference complete (required before home feed).
+     */
+    fun saveSizingReference(request: SizingReferenceRequest): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/sizing-reference")
+        val json = JSONObject().apply {
+            put("reference_size", request.referenceSize.trim())
+            put("reference_measurement_unit", request.referenceMeasurementUnit.trim().lowercase())
+            put("reference_measurement_chest", request.referenceMeasurementChest)
+            put("reference_measurement_hem", request.referenceMeasurementHem)
+            put("reference_measurement_length", request.referenceMeasurementLength)
+            put("reference_measurement_shoulders", request.referenceMeasurementShoulders)
+            put("reference_measurement_sleeve_length", request.referenceMeasurementSleeveLength)
+        }.toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .put(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
     /** Updates current user's profile. Use null to leave a field unchanged. */
     fun updateProfile(
         displayName: String? = null,
@@ -479,6 +515,35 @@ class UserRepository(
     }
 
     /**
+     * Secured GET — server gate for home: all four flags must be true.
+     * Errors: JSON `{ "code": <http>, "error": "<message>" }` (typical core-service shape).
+     */
+    fun getUserAccessStatus(): Result<UserAccessStatus> = runCatching {
+        val path = AppEnvironment.userAccessStatusPath.trim().trimStart('/')
+        val url = AppEnvironment.apiPath(path)
+        val body = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val b = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(b).optString("error", b).ifBlank { b }
+                } catch (_: Exception) {
+                    b
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            b
+        }
+        parseUserAccessStatus(body)
+    }
+
+    /**
      * Fetches current user's profile. Uses authenticated client.
      * Tries api/v1/users/me first (core-service with APP_API_PREFIX=/api), then v1/users/me if 404.
      */
@@ -538,7 +603,63 @@ class UserRepository(
         }
         return list
     }
+
+    private fun parseUserAccessStatus(json: String): UserAccessStatus {
+        val o = JSONObject(json.trim())
+        val root = when {
+            o.has("data") && o.get("data") is JSONObject -> o.getJSONObject("data")
+            else -> o
+        }
+        val serverGate = when {
+            root.has("can_access_home") -> root.optBoolean("can_access_home", false)
+            root.has("canAccessHome") -> root.optBoolean("canAccessHome", false)
+            else -> null
+        }
+        return UserAccessStatus(
+            hasProfile = root.optBoolean("has_profile", root.optBoolean("hasProfile", false)),
+            aestheticTagsConfigured = root.optBoolean(
+                "aesthetic_tags_configured",
+                root.optBoolean("aestheticTagsConfigured", false),
+            ),
+            onboardingDone = root.optBoolean("onboarding_done", root.optBoolean("onboardingDone", false)),
+            sizingReferenceCompleted = root.optBoolean(
+                "sizing_reference_completed",
+                root.optBoolean("sizingReferenceCompleted", false),
+            ),
+            serverCanAccessHome = serverGate,
+            nextStep = root.optString("next_step", root.optString("nextStep", "")).trim().takeIf { it.isNotEmpty() },
+        )
+    }
 }
+
+/**
+ * Core `GET …/access-status` (see [UserRepository.getUserAccessStatus]).
+ * When [serverCanAccessHome] is set from JSON, it is authoritative for [canAccessHome] (matches server `can_access_home`).
+ */
+data class UserAccessStatus(
+    val hasProfile: Boolean,
+    val aestheticTagsConfigured: Boolean,
+    val onboardingDone: Boolean,
+    val sizingReferenceCompleted: Boolean,
+    /** If present in JSON (`can_access_home`), overrides the four-flag AND for home access. */
+    val serverCanAccessHome: Boolean? = null,
+    /** e.g. `onboard`, `style`, `profile` — hints first onboarding screen. */
+    val nextStep: String? = null,
+) {
+    val canAccessHome: Boolean
+        get() = serverCanAccessHome
+            ?: (hasProfile && aestheticTagsConfigured && onboardingDone && sizingReferenceCompleted)
+}
+
+data class SizingReferenceRequest(
+    val referenceSize: String,
+    val referenceMeasurementUnit: String,
+    val referenceMeasurementChest: Double = 0.0,
+    val referenceMeasurementHem: Double = 0.0,
+    val referenceMeasurementLength: Double = 0.0,
+    val referenceMeasurementShoulders: Double = 0.0,
+    val referenceMeasurementSleeveLength: Double = 0.0,
+)
 
 data class AestheticTag(
     val id: String,

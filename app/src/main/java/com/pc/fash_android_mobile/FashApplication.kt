@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
+import com.pc.fash_android_mobile.data.address.UserShippingAddressRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
 import com.pc.fash_android_mobile.data.payment.MockPaymentService
@@ -112,6 +113,15 @@ class FashApplication : android.app.Application() {
 
     /** Local shipping address book + per-order selection (sync with core when API is available). */
     val addressLocalStore: AddressLocalStore by lazy { AddressLocalStore(this) }
+
+    /** Core `GET/POST /users/me/shipping-addresses` + set default. */
+    val userShippingAddressRepository: UserShippingAddressRepository by lazy {
+        UserShippingAddressRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
 
     /**
      * Core-proxied payment initiation (returns gateway URL). Never calls payment-service internal APIs.

@@ -7,9 +7,9 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
 import com.pc.fash_android_mobile.data.listing.ListingDetail
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.listing.UpdateListingRequest
-import com.pc.fash_android_mobile.data.user.AestheticTag
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -48,6 +48,8 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
         (application as FashApplication).listingRepository
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val commonServiceRepository =
+        (application as FashApplication).commonServiceRepository
 
     private val _detail = MutableStateFlow<ListingDetail?>(null)
     val detail: StateFlow<ListingDetail?> = _detail.asStateFlow()
@@ -55,8 +57,8 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
     private val _form = MutableStateFlow(EditListingFormState())
     val form: StateFlow<EditListingFormState> = _form.asStateFlow()
 
-    private val _catalogTags = MutableStateFlow<List<AestheticTag>>(emptyList())
-    val catalogTags: StateFlow<List<AestheticTag>> = _catalogTags.asStateFlow()
+    private val _catalogTags = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
+    val catalogTags: StateFlow<List<CommonAestheticTagDto>> = _catalogTags.asStateFlow()
 
     /** Tag ids from the server when the form was last loaded or saved — for delta PUT semantics. */
     private val _baselineTagIds = MutableStateFlow<Set<String>>(emptySet())
@@ -91,7 +93,7 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
             _loadError.value = null
             _detail.value = null
             withContext(Dispatchers.IO) {
-                val catalog = userRepository.getAestheticTags().getOrNull().orEmpty()
+                val catalog = commonServiceRepository.getAestheticTags(all = true).getOrNull().orEmpty()
                 _catalogTags.value = catalog
                 listingRepository.getListingDetail(activeListingId).fold(
                     onSuccess = { d ->
@@ -118,7 +120,7 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    private fun matchTagIds(listingTagStrings: List<String>, catalog: List<AestheticTag>): Set<String> {
+    private fun matchTagIds(listingTagStrings: List<String>, catalog: List<CommonAestheticTagDto>): Set<String> {
         if (listingTagStrings.isEmpty() || catalog.isEmpty()) return emptySet()
         val out = mutableSetOf<String>()
         for (s in listingTagStrings) {

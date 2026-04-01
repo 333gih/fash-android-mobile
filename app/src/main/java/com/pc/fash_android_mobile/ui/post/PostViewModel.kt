@@ -4,9 +4,11 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.address.ShippingAddress
+import com.pc.fash_android_mobile.data.address.mergeShippingAddressesWithLocal
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
@@ -31,6 +33,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     private val userRepository: UserRepository = app.userRepository
     private val commonServiceRepository: CommonServiceRepository = app.commonServiceRepository
     private val addressLocalStore = app.addressLocalStore
+    private val userShippingAddressRepository = app.userShippingAddressRepository
 
     private val _draft = MutableStateFlow(CreateListingDraft())
     val draft: StateFlow<CreateListingDraft> = _draft.asStateFlow()
@@ -125,6 +128,33 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
         _localAddresses.value = addressLocalStore.listAddresses(uid)
     }
 
+    /** Syncs saved ship-from addresses from core-service; falls back to local cache on failure. */
+    fun loadShippingAddresses() {
+        val uid = app.authManager.sessionStore.read()?.userId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            userShippingAddressRepository.listShippingAddresses().fold(
+                onSuccess = { api ->
+                    val local = addressLocalStore.listAddresses(uid)
+                    val merged = mergeShippingAddressesWithLocal(api, local)
+                    addressLocalStore.saveAddresses(uid, merged)
+                    _localAddresses.value = merged
+                },
+                onFailure = {
+                    _localAddresses.value = addressLocalStore.listAddresses(uid)
+                },
+            )
+        }
+    }
+
+    fun selectShippingAddressForListing(addressId: String) {
+        val uid = app.authManager.sessionStore.read()?.userId ?: return
+        val addr = addressLocalStore.listAddresses(uid).find { it.id == addressId } ?: return
+        _draft.value = _draft.value.copy(
+            shippingAddressId = addr.id,
+            shippingAddressLabel = formatAddressLabel(addr),
+        )
+    }
+
     fun applyDefaultShippingIfNeeded() {
         val uid = app.authManager.sessionStore.read()?.userId ?: return
         val d = _draft.value
@@ -136,8 +166,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun formatAddressLabel(a: ShippingAddress): String =
-        listOf(a.recipientName, a.line1, a.district, a.city).filter { it.isNotBlank() }.joinToString(" · ")
+    private fun formatAddressLabel(a: ShippingAddress): String = a.labelForDraft()
 
     fun setImageUris(uris: List<Uri>) {
         _draft.value = _draft.value.withImageUris(uris.take(6).map { it.toString() })
@@ -154,12 +183,12 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
             _step.value = s + 1
             when (_step.value) {
                 9 -> {
-                    loadLocalShippingAddresses()
+                    loadShippingAddresses()
                     applyDefaultShippingIfNeeded()
                 }
                 10 -> {
                     loadProfileForPreview()
-                    loadLocalShippingAddresses()
+                    loadShippingAddresses()
                 }
                 else -> {}
             }
@@ -225,13 +254,14 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 val finalUrls = when {
+                    !BuildConfig.POST_REQUIRE_LISTING_IMAGES && d.imageUris.isEmpty() -> emptyList()
                     d.imageUrls.size == d.imageUris.size && d.imageUrls.isNotEmpty() -> d.imageUrls
                     else -> {
                         if (!uploadImages(uriResolver ?: { null })) return@launch
                         _draft.value.imageUrls
                     }
                 }
-                if (finalUrls.isEmpty()) {
+                if (finalUrls.isEmpty() && BuildConfig.POST_REQUIRE_LISTING_IMAGES) {
                     publishUi(getApplication<Application>().getString(R.string.create_listing_no_images))
                     return@launch
                 }

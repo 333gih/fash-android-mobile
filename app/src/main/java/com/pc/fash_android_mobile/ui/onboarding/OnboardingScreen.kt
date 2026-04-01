@@ -47,7 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.user.AestheticTag
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
@@ -72,18 +72,18 @@ private val STYLE_EMOJI = mapOf(
     "k-fashion" to "🇰🇷",
 )
 
-private fun AestheticTag.emoji(): String = STYLE_EMOJI[name.lowercase()] ?: "◆"
+private fun CommonAestheticTagDto.emoji(): String = STYLE_EMOJI[name.lowercase()] ?: "◆"
 
 @Composable
 fun OnboardingScreen(
     modifier: Modifier = Modifier,
-    tags: List<AestheticTag>,
+    tags: List<CommonAestheticTagDto>,
     selectedIds: Set<String>,
     isLoading: Boolean,
     isSubmitting: Boolean,
     progressStep: Int = 2,
     progressTotal: Int = 3,
-    onToggleSelection: (AestheticTag) -> Unit,
+    onToggleSelection: (CommonAestheticTagDto) -> Unit,
     onContinue: () -> Unit,
     onSkip: () -> Unit,
     onBack: () -> Unit,
@@ -275,7 +275,7 @@ fun OnboardingScreen(
 
 @Composable
 private fun StyleCard(
-    tag: AestheticTag,
+    tag: CommonAestheticTagDto,
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {

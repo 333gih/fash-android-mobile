@@ -5,7 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.user.AestheticTag
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +29,8 @@ class EditProfileViewModel(
 
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val commonServiceRepository =
+        (application as FashApplication).commonServiceRepository
 
     private val _profile = MutableStateFlow<ProfileInfo?>(null)
     val profile: StateFlow<ProfileInfo?> = _profile.asStateFlow()
@@ -51,8 +53,8 @@ class EditProfileViewModel(
     private val _coverImageUrl = MutableStateFlow<String?>(null)
     val coverImageUrl: StateFlow<String?> = _coverImageUrl.asStateFlow()
 
-    private val _tags = MutableStateFlow<List<AestheticTag>>(emptyList())
-    val tags: StateFlow<List<AestheticTag>> = _tags.asStateFlow()
+    private val _tags = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
+    val tags: StateFlow<List<CommonAestheticTagDto>> = _tags.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -101,7 +103,7 @@ class EditProfileViewModel(
     private fun loadTags() {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                userRepository.getAestheticTags()
+                commonServiceRepository.getAestheticTags(all = true)
             }
             result.fold(
                 onSuccess = { _tags.value = it },
@@ -148,7 +150,7 @@ class EditProfileViewModel(
         _bio.value = value.take(BIO_MAX_LENGTH)
     }
 
-    fun toggleTag(tag: AestheticTag) {
+    fun toggleTag(tag: CommonAestheticTagDto) {
         _selectedTagNames.value = if (_selectedTagNames.value.contains(tag.name)) {
             _selectedTagNames.value - tag.name
         } else {

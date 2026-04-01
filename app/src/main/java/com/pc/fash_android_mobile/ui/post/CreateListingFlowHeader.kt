@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,7 +34,7 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 
 /**
- * Single top row: optional back, close (X), centered step label, primary action (NEXT / POST).
+ * Single top row: optional back, close (X), centered step or title, optional primary action (NEXT / POST).
  * Matches full-screen posting flow — no main app bar.
  */
 @Composable
@@ -48,6 +49,12 @@ fun CreateListingFlowHeader(
     primaryLoading: Boolean = false,
     /** Shown under the progress bar when Next/Post is disabled (e.g. missing required fields). */
     nextDisabledReasonRes: Int? = null,
+    /** When set (e.g. shipping step), replaces centered “Step x / y” with this title. */
+    centerTitleRes: Int? = null,
+    /** When [centerTitleRes] is set, show “Bước x / y” as a small caption under the title. */
+    showStepCaptionUnderTitle: Boolean = false,
+    /** When false, hides the top-right NEXT/POST pill (use a bottom button instead). */
+    showPrimaryAction: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -80,42 +87,68 @@ fun CreateListingFlowHeader(
                     )
                 }
             }
-            Text(
-                text = stringResource(R.string.create_listing_step, step, totalSteps),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-                textAlign = TextAlign.Center,
+            Column(
                 modifier = Modifier.weight(1f),
-                maxLines = 1,
-            )
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (centerTitleRes != null) {
+                    Text(
+                        text = stringResource(centerTitleRes),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier.widthIn(max = 200.dp),
+                    )
+                    if (showStepCaptionUnderTitle) {
+                        Text(
+                            text = stringResource(R.string.create_listing_step, step, totalSteps),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.create_listing_step, step, totalSteps),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
+            }
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(
-                    onClick = onPrimaryClick,
-                    enabled = primaryEnabled && !primaryLoading,
-                    shape = RoundedCornerShape(999.dp),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = FashColors.Primary,
-                        contentColor = FashColors.Primary.fashReadableOn(),
-                        disabledContainerColor = scheme.surfaceContainerHighest,
-                        disabledContentColor = scheme.onSurfaceVariant,
-                    ),
-                ) {
-                    if (primaryLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = FashColors.Primary.fashReadableOn(),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(primaryLabelRes),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        )
+                if (showPrimaryAction) {
+                    Button(
+                        onClick = onPrimaryClick,
+                        enabled = primaryEnabled && !primaryLoading,
+                        shape = RoundedCornerShape(999.dp),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = FashColors.Primary,
+                            contentColor = FashColors.Primary.fashReadableOn(),
+                            disabledContainerColor = scheme.surfaceContainerHighest,
+                            disabledContentColor = scheme.onSurfaceVariant,
+                        ),
+                    ) {
+                        if (primaryLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = FashColors.Primary.fashReadableOn(),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(primaryLabelRes),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            )
+                        }
                     }
                 }
             }

@@ -62,7 +62,7 @@ fun PostFlowNoticeCard(
             .padding(horizontal = horizontalPadding)
             .padding(top = 8.dp, bottom = 12.dp),
         shape = shape,
-        color = scheme.surfaceContainerHighest,
+        color = PostListingColors.fieldSurface(),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f)),

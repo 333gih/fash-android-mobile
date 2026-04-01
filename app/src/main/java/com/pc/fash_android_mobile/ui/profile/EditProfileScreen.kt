@@ -60,7 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.user.AestheticTag
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
@@ -543,9 +543,9 @@ private fun BioInput(
 @Composable
 private fun StyleChipsSection(
     label: String,
-    tags: List<AestheticTag>,
+    tags: List<CommonAestheticTagDto>,
     selectedNames: Set<String>,
-    onToggle: (AestheticTag) -> Unit,
+    onToggle: (CommonAestheticTagDto) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme

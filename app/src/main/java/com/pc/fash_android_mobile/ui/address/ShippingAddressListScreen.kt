@@ -2,10 +2,9 @@ package com.pc.fash_android_mobile.ui.address
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,17 +18,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.RadioButtonChecked
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -46,15 +43,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
+/**
+ * @param orderId When non-null, confirming links this address to the order ([AddressBookViewModel.setOrderShipping]).
+ * When null (manage mode), only updates selection / default on device.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShippingAddressListScreen(
-    orderId: String,
+    orderId: String?,
     viewModel: AddressBookViewModel,
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
@@ -62,6 +62,7 @@ fun ShippingAddressListScreen(
     onConfirmed: () -> Unit,
 ) {
     val addresses by viewModel.addresses.collectAsState()
+    val loading by viewModel.loading.collectAsState()
     var selectedId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -70,11 +71,18 @@ fun ShippingAddressListScreen(
 
     LaunchedEffect(addresses, orderId) {
         if (addresses.isNotEmpty()) {
-            selectedId = viewModel.initialSelectionIdForOrder(orderId) ?: addresses.first().id
+            selectedId = when (orderId) {
+                null -> addresses.firstOrNull { it.isDefault }?.id ?: addresses.first().id
+                else -> viewModel.initialSelectionIdForOrder(orderId) ?: addresses.first().id
+            }
         }
     }
 
     BackHandler(onBack = onBack)
+
+    val titleRes = if (orderId != null) R.string.address_list_title else R.string.profile_shipping_addresses
+    val subtitleRes = if (orderId != null) R.string.address_list_subtitle else R.string.address_list_subtitle_manage
+    val primaryButtonRes = if (orderId != null) R.string.address_confirm else R.string.address_done
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -82,7 +90,7 @@ fun ShippingAddressListScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.address_list_title),
+                        text = stringResource(titleRes),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     )
                 },
@@ -115,21 +123,34 @@ fun ShippingAddressListScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.address_list_subtitle),
+                text = stringResource(subtitleRes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(20.dp))
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(addresses, key = { it.id }) { addr ->
-                    AddressSelectableCard(
-                        address = addr,
-                        selected = addr.id == selectedId,
-                        onClick = { selectedId = addr.id },
+            Box(modifier = Modifier.weight(1f)) {
+                if (loading && addresses.isEmpty()) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = FashColors.Primary,
                     )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(addresses, key = { it.id }) { addr ->
+                            ShippingAddressSelectableCard(
+                                address = addr,
+                                selected = addr.id == selectedId,
+                                onClick = { selectedId = addr.id },
+                                onSetDefault = if (!addr.isDefault) {
+                                    { viewModel.setDefaultAddress(addr.id) }
+                                } else {
+                                    null
+                                },
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -152,7 +173,7 @@ fun ShippingAddressListScreen(
                 onClick = {
                     val id = selectedId ?: return@Button
                     val addr = addresses.find { it.id == id } ?: return@Button
-                    viewModel.setOrderShipping(orderId, addr)
+                    orderId?.let { oid -> viewModel.setOrderShipping(oid, addr) }
                     onConfirmed()
                 },
                 enabled = selectedId != null && addresses.isNotEmpty(),
@@ -166,78 +187,10 @@ fun ShippingAddressListScreen(
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.address_confirm),
+                    text = stringResource(primaryButtonRes),
                     fontWeight = FontWeight.Bold,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun AddressSelectableCard(
-    address: ShippingAddress,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = scheme.surface,
-        border = BorderStroke(
-            width = if (selected) 2.dp else 1.dp,
-            color = if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.5f),
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = address.recipientName,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = scheme.onSurface,
-                    )
-                    if (address.isDefault) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = FashColors.Primary.copy(alpha = 0.12f),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.address_badge_default),
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = FashColors.Primary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = address.phone,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = address.formattedSingleLine(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurface,
-                )
-            }
-            Icon(
-                imageVector = if (selected) Icons.Filled.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
         }
     }
 }

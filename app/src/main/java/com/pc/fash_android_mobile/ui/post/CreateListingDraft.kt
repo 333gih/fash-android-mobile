@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.post
 
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
@@ -123,6 +124,9 @@ const val MaxPriceVnd = 100_000_000L
 
 const val TotalPostSteps = 10
 
+/** From env `POST_REQUIRE_LISTING_IMAGES` (default true): at least one photo required for listing. */
+fun postRequireListingImages(): Boolean = BuildConfig.POST_REQUIRE_LISTING_IMAGES
+
 /** @return string resource name for [com.pc.fash_android_mobile.R.string], or null if valid. */
 fun CreateListingDraft.validationErrorKeyForSubmit(): String? {
     if (categoryId.isBlank()) return "post_validation_category"
@@ -130,7 +134,7 @@ fun CreateListingDraft.validationErrorKeyForSubmit(): String? {
     if (title.trim().length > MaxListingTitleLength) return "post_validation_title_long"
     if (description.length > MaxListingDescriptionLength) return "post_validation_description_long"
     if (condition.isBlank()) return "post_validation_condition"
-    if (imageUris.isEmpty()) return "post_validation_photos"
+    if (postRequireListingImages() && imageUris.isEmpty()) return "post_validation_photos"
     val p = parsePositiveLong(priceVnd) ?: return "post_validation_price"
     if (p < MinPriceVnd || p > MaxPriceVnd) return "post_validation_price_range"
     if (selectedAestheticTagIds.size > MaxAestheticTags) return "post_validation_tags_max"
@@ -211,7 +215,7 @@ fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
         title.trim().length in MinListingTitleLength..MaxListingTitleLength &&
         description.length <= MaxListingDescriptionLength
     6 -> true
-    7 -> imageUris.isNotEmpty()
+    7 -> !postRequireListingImages() || imageUris.isNotEmpty()
     8 -> {
         val p = parsePositiveLong(priceVnd)
         p != null && p in MinPriceVnd..MaxPriceVnd &&

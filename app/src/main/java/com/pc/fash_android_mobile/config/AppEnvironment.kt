@@ -86,6 +86,13 @@ object AppEnvironment {
     val internalServiceBearerConfigured: Boolean
         get() = BuildConfig.INTERNAL_SERVICE_BEARER_TOKEN.isNotBlank()
 
+    /**
+     * Secured GET path (relative, passed to [apiPath]) for onboarding/home gate.
+     * Response JSON: `has_profile`, `aesthetic_tags_configured`, `onboarding_done`, `sizing_reference_completed`.
+     */
+    val userAccessStatusPath: String
+        get() = BuildConfig.CORE_USER_ACCESS_STATUS_PATH
+
     /** common-service root (see ANDROID_API_INTEGRATION.md); no language prefix. */
     val commonServiceBaseUrl: String
         get() = BuildConfig.COMMON_SERVICE_BASE_URL.trimEnd('/')

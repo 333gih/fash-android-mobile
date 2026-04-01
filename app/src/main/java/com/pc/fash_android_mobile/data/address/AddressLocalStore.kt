@@ -110,6 +110,14 @@ class AddressLocalStore(
                     ward = o.optString("ward", ""),
                     line1 = o.optString("line1", o.optString("line_1", "")),
                     isDefault = o.optBoolean("is_default", o.optBoolean("isDefault", false)),
+                    label = o.optString("label", ""),
+                    line2 = o.optString("line2", ""),
+                    region = o.optString("region", ""),
+                    postalCode = o.optString("postal_code", o.optString("postalCode", "")),
+                    countryCode = o.optString("country_code", o.optString("countryCode", "VN")).ifBlank { "VN" },
+                    provinceId = o.optString("province_id", o.optString("provinceId", "")).takeIf { it.isNotBlank() },
+                    districtId = o.optString("district_id", o.optString("districtId", "")).takeIf { it.isNotBlank() },
+                    wardId = o.optString("ward_id", o.optString("wardId", "")).takeIf { it.isNotBlank() },
                 )
             }
         } catch (_: Exception) {
@@ -129,7 +137,15 @@ class AddressLocalStore(
                     .put("district", a.district)
                     .put("ward", a.ward)
                     .put("line1", a.line1)
-                    .put("is_default", a.isDefault),
+                    .put("is_default", a.isDefault)
+                    .put("label", a.label)
+                    .put("line2", a.line2)
+                    .put("region", a.region)
+                    .put("postal_code", a.postalCode)
+                    .put("country_code", a.countryCode)
+                    .put("province_id", a.provinceId ?: "")
+                    .put("district_id", a.districtId ?: "")
+                    .put("ward_id", a.wardId ?: ""),
             )
         }
         return arr.toString()

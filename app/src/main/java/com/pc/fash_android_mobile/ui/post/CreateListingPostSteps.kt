@@ -2,6 +2,8 @@
 
 package com.pc.fash_android_mobile.ui.post
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +70,7 @@ fun CreateListingPostStep1(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -172,10 +175,14 @@ fun CreateListingPostStep1(
 private fun PostStep1SectionCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = PostListingColors.fieldSurface(),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -210,6 +217,7 @@ fun CreateListingPostStep2(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -317,7 +325,7 @@ private fun CategoryTreeSection(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                color = PostListingColors.fieldSurface(),
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -396,6 +404,7 @@ fun CreateListingPostStep3(viewModel: PostViewModel, onCloseRequest: () -> Unit)
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -483,6 +492,7 @@ fun CreateListingPostStep4(viewModel: PostViewModel, onCloseRequest: () -> Unit)
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
@@ -551,6 +561,7 @@ fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit)
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(PostListingColors.stepCanvas())
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(

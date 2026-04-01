@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -37,6 +39,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +53,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
@@ -69,6 +74,21 @@ fun ProfileSetupScreen(
     username: String,
     onUsernameChange: (String) -> Unit,
     isUsernameValid: Boolean,
+    canSubmit: Boolean,
+    referenceSize: String,
+    onReferenceSizeChange: (String) -> Unit,
+    measurementUnit: String,
+    onMeasurementUnitChange: (String) -> Unit,
+    measurementHem: String,
+    onMeasurementHemChange: (String) -> Unit,
+    measurementChest: String,
+    onMeasurementChestChange: (String) -> Unit,
+    measurementLength: String,
+    onMeasurementLengthChange: (String) -> Unit,
+    measurementShoulders: String,
+    onMeasurementShouldersChange: (String) -> Unit,
+    measurementSleeve: String,
+    onMeasurementSleeveChange: (String) -> Unit,
     isSubmitting: Boolean,
     progressStep: Int = 3,
     progressTotal: Int = 3,
@@ -221,6 +241,25 @@ fun ProfileSetupScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(28.dp))
+
+                ProfileSetupSizingSection(
+                    referenceSize = referenceSize,
+                    onReferenceSizeChange = onReferenceSizeChange,
+                    measurementUnit = measurementUnit,
+                    onMeasurementUnitChange = onMeasurementUnitChange,
+                    hem = measurementHem,
+                    onHemChange = onMeasurementHemChange,
+                    chest = measurementChest,
+                    onChestChange = onMeasurementChestChange,
+                    length = measurementLength,
+                    onLengthChange = onMeasurementLengthChange,
+                    shoulders = measurementShoulders,
+                    onShouldersChange = onMeasurementShouldersChange,
+                    sleeve = measurementSleeve,
+                    onSleeveChange = onMeasurementSleeveChange,
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Surface(
@@ -258,7 +297,7 @@ fun ProfileSetupScreen(
             ) {
                 FashPrimaryButton(
                     onClick = onComplete,
-                    enabled = isUsernameValid && !isSubmitting,
+                    enabled = canSubmit && !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = FashTheme.spacing.editorialStart, end = FashTheme.spacing.editorialEnd)
@@ -287,6 +326,148 @@ fun ProfileSetupScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ProfileSetupSizingSection(
+    referenceSize: String,
+    onReferenceSizeChange: (String) -> Unit,
+    measurementUnit: String,
+    onMeasurementUnitChange: (String) -> Unit,
+    hem: String,
+    onHemChange: (String) -> Unit,
+    chest: String,
+    onChestChange: (String) -> Unit,
+    length: String,
+    onLengthChange: (String) -> Unit,
+    shoulders: String,
+    onShouldersChange: (String) -> Unit,
+    sleeve: String,
+    onSleeveChange: (String) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        text = stringResource(R.string.profile_setup_sizing_title),
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = scheme.onSurface,
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text = stringResource(R.string.profile_setup_sizing_subtitle),
+        style = MaterialTheme.typography.bodySmall,
+        color = scheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    OutlinedTextField(
+        value = referenceSize,
+        onValueChange = onReferenceSizeChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.profile_setup_reference_size_label)) },
+        placeholder = { Text(stringResource(R.string.profile_setup_reference_size_hint)) },
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = scheme.surfaceContainerHighest,
+            unfocusedContainerColor = scheme.surfaceContainerHighest,
+        ),
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = stringResource(R.string.profile_setup_measurement_unit),
+        style = MaterialTheme.typography.labelMedium,
+        color = scheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    ProfileMeasurementUnitToggle(
+        unit = measurementUnit,
+        onSelect = onMeasurementUnitChange,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = stringResource(R.string.profile_setup_measurements_optional),
+        style = MaterialTheme.typography.labelMedium,
+        color = scheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    ProfileMeasurementField(
+        label = stringResource(R.string.profile_setup_measurement_chest),
+        value = chest,
+        onValueChange = onChestChange,
+    )
+    ProfileMeasurementField(
+        label = stringResource(R.string.profile_setup_measurement_hem),
+        value = hem,
+        onValueChange = onHemChange,
+    )
+    ProfileMeasurementField(
+        label = stringResource(R.string.profile_setup_measurement_length),
+        value = length,
+        onValueChange = onLengthChange,
+    )
+    ProfileMeasurementField(
+        label = stringResource(R.string.profile_setup_measurement_shoulders),
+        value = shoulders,
+        onValueChange = onShouldersChange,
+    )
+    ProfileMeasurementField(
+        label = stringResource(R.string.profile_setup_measurement_sleeve),
+        value = sleeve,
+        onValueChange = onSleeveChange,
+    )
+}
+
+@Composable
+private fun ProfileMeasurementUnitToggle(
+    unit: String,
+    onSelect: (String) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        listOf("cm" to R.string.profile_setup_unit_cm, "in" to R.string.profile_setup_unit_in).forEach { (u, labelRes) ->
+            val selected = unit.equals(u, ignoreCase = true)
+            Surface(
+                modifier = Modifier.clickable { onSelect(u) },
+                shape = RoundedCornerShape(999.dp),
+                color = if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerHighest,
+                border = BorderStroke(
+                    1.dp,
+                    if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.5f),
+                ),
+            ) {
+                Text(
+                    text = stringResource(labelRes),
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) FashColors.Primary else scheme.onSurface,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileMeasurementField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = scheme.surfaceContainerHighest,
+            unfocusedContainerColor = scheme.surfaceContainerHighest,
+        ),
+    )
 }
 
 @Composable

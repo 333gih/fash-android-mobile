@@ -1,7 +1,6 @@
 package com.pc.fash_android_mobile.ui.post
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,8 +31,7 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
- * Pill selector aligned with Explore filter chips: soft fill, no outline stroke,
- * editorial primary when selected ([FashColors.Primary] + onPrimary).
+ * Pill selector for post flow: white fill + outline when unselected; [FashColors.Primary] fill when selected.
  */
 @Composable
 fun PostSelectablePill(
@@ -44,16 +41,27 @@ fun PostSelectablePill(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = if (selected) scheme.onPrimary else scheme.onSurface,
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
+    val borderColor =
+        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.55f)
+    val borderWidth = if (selected) 2.dp else 1.dp
+    Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
-            .background(if (selected) FashColors.Primary else scheme.surfaceContainerHigh)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .clip(shape)
             .clickable(onClick = onClick),
-    )
+        shape = shape,
+        color = if (selected) FashColors.Primary else PostListingColors.fieldSurface(),
+        border = BorderStroke(borderWidth, borderColor),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) scheme.onPrimary else scheme.onSurface,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
+    }
 }
 
 /**
@@ -76,7 +84,7 @@ fun PostSelectableListRow(
         if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.45f)
     val borderWidth = if (selected) 2.dp else 1.dp
     val chipFill =
-        if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerHigh
+        if (selected) FashColors.Primary.copy(alpha = 0.12f) else PostListingColors.fieldSurface()
 
     Surface(
         modifier = modifier
@@ -84,7 +92,7 @@ fun PostSelectableListRow(
             .clip(shape)
             .clickable(onClick = onClick),
         shape = shape,
-        color = scheme.surface,
+        color = PostListingColors.fieldSurface(),
         border = BorderStroke(borderWidth, borderColor),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -181,12 +189,7 @@ fun PostListingSearchField(
         label = label,
         singleLine = true,
         shape = shape,
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.45f),
-            focusedBorderColor = scheme.primary.copy(alpha = 0.7f),
-            cursorColor = scheme.primary,
-            focusedLabelColor = scheme.primary,
-        ),
+        colors = postListingOutlinedFieldColors(),
     )
 }
 
@@ -202,7 +205,6 @@ fun PostListingOutlinedTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     suffix: @Composable (() -> Unit)? = null,
 ) {
-    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     OutlinedTextField(
         value = value,
@@ -215,11 +217,6 @@ fun PostListingOutlinedTextField(
         shape = shape,
         keyboardOptions = keyboardOptions,
         suffix = suffix,
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = scheme.outlineVariant.copy(alpha = 0.45f),
-            focusedBorderColor = scheme.primary.copy(alpha = 0.7f),
-            cursorColor = scheme.primary,
-            focusedLabelColor = scheme.primary,
-        ),
+        colors = postListingOutlinedFieldColors(),
     )
 }

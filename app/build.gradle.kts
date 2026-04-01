@@ -103,6 +103,14 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("int", "CHAT_MAX_OFFERS_PER_CONVERSATION", maxOffersPerConversation.toString())
 
     /**
+     * When true, create-listing step "Photos" requires at least one image (Next + submit validation).
+     * When false, Next is enabled without photos (e.g. dev); API may still reject empty `image_urls`.
+     */
+    val postRequireListingImages =
+        envVal("POST_REQUIRE_LISTING_IMAGES")?.equals("true", ignoreCase = true) ?: true
+    buildConfigField("boolean", "POST_REQUIRE_LISTING_IMAGES", postRequireListingImages.toString())
+
+    /**
      * Return URL for wallet apps after payment (must be HTTPS for most gateways).
      * Core-service should proxy [CorePaymentRepository] initiate and pass this to payment-service.
      */
@@ -131,6 +139,14 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         envVal("COMMON_SERVICE_BASE_URL")
             ?: "http://76.13.211.193/common-service/"
     buildConfigField("String", "COMMON_SERVICE_BASE_URL", buildConfigStringLiteral(commonServiceBase))
+
+    /**
+     * Secured GET under [API_BASE_URL] (via [AppEnvironment.apiPath]) returning onboarding/home gate flags.
+     * JSON: `has_profile`, `aesthetic_tags_configured`, `onboarding_done`, `sizing_reference_completed`.
+     */
+    val userAccessStatusPath =
+        envVal("CORE_USER_ACCESS_STATUS_PATH") ?: "api/v1/users/me/access-status"
+    buildConfigField("String", "CORE_USER_ACCESS_STATUS_PATH", buildConfigStringLiteral(userAccessStatusPath))
 
     /**
      * Optional server internal auth (ANDROID_API_INTEGRATION.md). **Do not** put real secrets in retail APKs;
