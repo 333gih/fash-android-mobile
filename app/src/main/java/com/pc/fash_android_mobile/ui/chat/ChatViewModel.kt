@@ -387,6 +387,19 @@ class ChatViewModel(
                 else -> app.getString(R.string.chat_inbox_preview_offer_generic, amtStr)
             }
         }
-        return item.lastMessageText.ifBlank { " " }
+        return item.lastMessageText.trim().ifBlank {
+            app.getString(R.string.chat_inbox_preview_placeholder)
+        }
+    }
+
+    /** True when the inbox row shows [conversationPreviewLine] placeholder (no real last message). */
+    fun conversationPreviewIsPlaceholder(item: ConversationItem): Boolean {
+        val myId = sessionStore.read()?.userId?.trim().orEmpty()
+        val isSeller = myId.isNotBlank() && item.sellerUserId == myId
+        if (item.pendingOfferAmountVnd > 0L && isSeller) return false
+        val isOfferRow = item.lastMessageType.equals("offer", ignoreCase = true) ||
+            item.lastOfferAmountVnd > 0L
+        if (isOfferRow) return false
+        return item.lastMessageText.trim().isBlank()
     }
 }

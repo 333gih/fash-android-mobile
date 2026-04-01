@@ -507,6 +507,7 @@ class MainActivity : ComponentActivity() {
                                                         selectedListingId = lid
                                                     }
                                                 },
+                                                onVisitSellerShop = { },
                                             )
                                         }
                                         if (editListingId != null) {

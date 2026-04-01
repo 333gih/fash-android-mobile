@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -54,6 +55,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
@@ -62,10 +64,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.R
@@ -192,11 +198,11 @@ fun ChatScreen(
                     }
                 }
             }
-            showGroupedInbox && displayGroups.isEmpty() -> EmptyInboxHint()
-            !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint()
+            showGroupedInbox && displayGroups.isEmpty() -> EmptyInboxHint(onExploreClick = onNavigateToExplore)
+            !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint(onExploreClick = onNavigateToExplore)
             showGroupedInbox -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 displayGroups.forEach { group ->
                     item(key = "h-group-${group.listingId}") {
@@ -219,15 +225,17 @@ fun ChatScreen(
                                 item = item,
                                 formatTimestamp = viewModel::formatTimestamp,
                                 previewLine = viewModel.conversationPreviewLine(item),
+                                previewIsPlaceholder = viewModel.conversationPreviewIsPlaceholder(item),
                                 onClick = { onConversationClick(item) },
                             )
                         }
                     }
                 }
+                chatInboxTailFiller()
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 itemsIndexed(
                     conversations,
@@ -237,9 +245,11 @@ fun ChatScreen(
                         item = item,
                         formatTimestamp = viewModel::formatTimestamp,
                         previewLine = viewModel.conversationPreviewLine(item),
+                        previewIsPlaceholder = viewModel.conversationPreviewIsPlaceholder(item),
                         onClick = { onConversationClick(item) },
                     )
                 }
+                chatInboxTailFiller()
             }
                     }
                 }
@@ -295,11 +305,39 @@ fun ChatTopBar(
 }
 
 @Composable
-private fun EmptyInboxHint() {
+private fun EmptyInboxHint(onExploreClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     FashEmptyState(
         icon = Icons.Outlined.ChatBubbleOutline,
         title = stringResource(R.string.chat_empty),
         subtitle = stringResource(R.string.chat_empty_subtitle),
+        footer = {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.chat_empty_suggestions_title),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                FashEmptyBulletTipLine(text = stringResource(R.string.chat_empty_tip_1))
+                FashEmptyBulletTipLine(text = stringResource(R.string.chat_empty_tip_2))
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onExploreClick,
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+            ) {
+                Text(
+                    text = stringResource(R.string.home_empty_cta_explore),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+        },
     )
 }
 
@@ -509,11 +547,83 @@ private fun ListingGroupHeader(
     }
 }
 
+private fun LazyListScope.chatInboxTailFiller() {
+    item(key = "inbox_list_tail_filler") {
+        InboxListTailContent()
+    }
+}
+
+@Composable
+private fun InboxListTailContent() {
+    val scheme = MaterialTheme.colorScheme
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val tailHeight = (screenHeightDp * 0.28f).dp.coerceIn(140.dp, 280.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(tailHeight)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        FashColors.SurfaceVariantCream.copy(alpha = 0.6f),
+                    ),
+                ),
+            )
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                FashColors.Primary.copy(alpha = 0.35f),
+                            ),
+                        ),
+                    ),
+            )
+            Text(
+                text = stringResource(R.string.chat_inbox_list_footer_hint),
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.2.sp,
+                ),
+                color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                FashColors.Primary.copy(alpha = 0.35f),
+                                Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ConversationRow(
     item: ConversationItem,
     formatTimestamp: (String) -> String,
     previewLine: String,
+    previewIsPlaceholder: Boolean,
     onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -529,16 +639,22 @@ private fun ConversationRow(
             .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 4.dp)
             .clip(rowShape)
             .background(
-                if (item.hasUnread) scheme.surfaceContainerLow.copy(alpha = 0.65f) else Color.Transparent,
+                when {
+                    item.hasUnread -> scheme.surfaceContainerLow.copy(alpha = 0.78f)
+                    else -> scheme.surfaceContainerLow.copy(alpha = 0.42f)
+                },
+                rowShape,
+            )
+            .border(
+                width = 1.dp,
+                color = if (item.hasUnread) {
+                    FashColors.Primary.copy(alpha = 0.18f)
+                } else {
+                    scheme.outlineVariant.copy(alpha = 0.4f)
+                },
+                shape = rowShape,
             )
             .clickable(onClick = onClick)
-            .then(
-                if (item.hasUnread) {
-                    Modifier.border(1.dp, FashColors.Primary.copy(alpha = 0.12f), rowShape)
-                } else {
-                    Modifier
-                },
-            )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -588,20 +704,46 @@ private fun ConversationRow(
                 Text(
                     text = formatTimestamp(item.timestamp),
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
+                        fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Medium,
                     ),
-                    color = if (item.hasUnread) FashColors.Primary else scheme.onSurfaceVariant,
+                    color = if (item.hasUnread) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.92f),
                 )
             }
-            Text(
-                text = previewLine,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
-                ),
-                color = if (item.hasUnread) scheme.onSurface else scheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (previewIsPlaceholder) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp),
+                        tint = FashColors.Primary.copy(alpha = 0.7f),
+                    )
+                    Text(
+                        text = previewLine,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Normal,
+                            fontStyle = FontStyle.Italic,
+                        ),
+                        color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                Text(
+                    text = previewLine,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
+                    ),
+                    color = if (item.hasUnread) scheme.onSurface else scheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -610,7 +752,12 @@ private fun ConversationRow(
             modifier = Modifier
                 .size(ProductThumbSize)
                 .clip(RoundedCornerShape(8.dp))
-                .background(scheme.surfaceContainerHigh),
+                .background(scheme.surfaceContainerHigh)
+                .border(
+                    width = 1.dp,
+                    color = FashColors.Primary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(8.dp),
+                ),
         ) {
             if (thumbUrl != null) {
                 FashAsyncImage(

@@ -69,7 +69,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _bottomBarMode = MutableStateFlow(ProductBottomBarMode.Normal)
     val bottomBarMode: StateFlow<ProductBottomBarMode> = _bottomBarMode.asStateFlow()
 
-    /** True while navigating to chat after Message — drives full-screen [com.pc.fash_android_mobile.ui.splash.FashWaitingScreen]. */
+    /** True while opening a conversation after Message — shows inline progress on the chat button. */
     private val _isOpeningChat = MutableStateFlow(false)
     val isOpeningChat: StateFlow<Boolean> = _isOpeningChat.asStateFlow()
 
@@ -267,6 +267,34 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             listingRepository.toggleSave(d.id).fold(
                 onSuccess = { saved ->
                     _detail.update { it?.copy(isSaved = saved) }
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun toggleLike() {
+        val d = _detail.value ?: return
+        viewModelScope.launch {
+            listingRepository.toggleLike(d.id).fold(
+                onSuccess = { liked ->
+                    _detail.update { cur ->
+                        val c = cur ?: return@update null
+                        val delta = when {
+                            liked && !c.isLiked -> 1
+                            !liked && c.isLiked -> -1
+                            else -> 0
+                        }
+                        c.copy(
+                            isLiked = liked,
+                            likeCount = (c.likeCount + delta).coerceAtLeast(0),
+                        )
+                    }
                 },
                 onFailure = {
                     _events.tryEmit(

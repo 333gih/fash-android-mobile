@@ -294,6 +294,60 @@ class ListingRepository(
         return (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
     }
 
+    /**
+     * Listing tags / aesthetic_tags may be plain strings or `{ "id", "name" }` objects.
+     * Using [JSONArray.optString] on object elements stringifies the whole JSON (bad for UI).
+     */
+    private fun parseTagStringArray(arr: JSONArray?): List<String> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { o ->
+                o.optString("name", "").ifBlank { null }
+                    ?: o.optString("Name", "").ifBlank { null }
+            } ?: run {
+                val s = arr.optString(i, "").trim()
+                when {
+                    s.isEmpty() -> null
+                    s.startsWith("{") -> tagNameFromEmbeddedJson(s)
+                    else -> s
+                }
+            }
+        }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun tagNameFromEmbeddedJson(s: String): String? =
+        try {
+            JSONObject(s).optString("name", "").ifBlank { null }
+                ?: JSONObject(s).optString("Name", "").ifBlank { null }
+        } catch (_: Exception) {
+            null
+        }
+
+    /** `aesthetic_tags`: `{ "id", "name", "display_name" }[]` — prefer display_name. */
+    private fun parseAestheticTagLabels(arr: JSONArray?): List<String> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { o ->
+                o.optString("display_name", "").ifBlank { null }
+                    ?: o.optString("DisplayName", "").ifBlank { null }
+                    ?: o.optString("name", "").ifBlank { null }
+                    ?: o.optString("Name", "").ifBlank { null }
+            }
+        }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun optMeasurement(o: JSONObject, key: String): Double? {
+        if (!o.has(key) || o.isNull(key)) return null
+        val d = o.optDouble(key, Double.NaN)
+        return if (d.isNaN()) null else d
+    }
+
     private fun executePutJson(url: String, json: String) {
         val request = Request.Builder()
             .url(url)
@@ -322,34 +376,117 @@ class ListingRepository(
         // Backend returns PascalCase ("Seller", "Category") for Go structs
         val seller = o.optJSONObject("seller") ?: o.optJSONObject("Seller")
         val categoryObj = o.optJSONObject("category") ?: o.optJSONObject("Category")
+        val parentObj = o.optJSONObject("parent_category") ?: o.optJSONObject("ParentCategory")
+        val brandObj = o.optJSONObject("brand") ?: o.optJSONObject("Brand")
+        val countryObj = o.optJSONObject("country") ?: o.optJSONObject("Country")
+        val shipObj = o.optJSONObject("shipping_address") ?: o.optJSONObject("ShippingAddress")
         val imageUrls = parseStringArray(
             o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs"),
         )
         val coverUrl = o.optString("cover_image_url", "")
             .ifBlank { o.optString("CoverImageURL", "") }
             .ifBlank { imageUrls.firstOrNull() ?: "" }
-        val tagsArr = o.optJSONArray("tags")
-            ?: o.optJSONArray("Tags")
-            ?: o.optJSONArray("aesthetic_tags")
-            ?: o.optJSONArray("AestheticTags")
+        val tagsArr = o.optJSONArray("tags") ?: o.optJSONArray("Tags")
+        val aestheticArr = o.optJSONArray("aesthetic_tags") ?: o.optJSONArray("AestheticTags")
+        val brandName = brandObj?.optString("name", "")?.ifBlank { null }
+            ?: brandObj?.optString("Name", "")?.ifBlank { null }
+            ?: o.optString("brand", "").ifBlank { null }
+            ?: o.optString("Brand", "").ifBlank { null }
+        val parentCategoryName = parentObj?.optString("name", "")?.ifBlank { null }
+            ?: parentObj?.optString("Name", "")?.ifBlank { null }
+        val shippingAddress = shipObj?.let { s ->
+            val line1 = s.optString("line1", s.optString("Line1", ""))
+            val label = s.optString("label", s.optString("Label", "")).ifBlank { null }
+            if (line1.isBlank() && label.isNullOrBlank()) null
+            else {
+                ListingShippingAddress(
+                    label = label,
+                    line1 = line1,
+                    line2 = s.optString("line2", s.optString("Line2", "")).ifBlank { null },
+                    city = s.optString("city", s.optString("City", "")).ifBlank { null },
+                    region = s.optString("region", s.optString("Region", "")).ifBlank { null },
+                    postalCode = s.optString("postal_code", s.optString("PostalCode", "")).ifBlank { null },
+                    countryCode = s.optString("country_code", s.optString("CountryCode", "")).ifBlank { null },
+                )
+            }
+        }
+        val parsedFloorPrice: Long? = when {
+            o.has("floor_price") -> o.optLong("floor_price", 0L)
+            o.has("FloorPrice") -> o.optLong("FloorPrice", 0L)
+            else -> null
+        }
+        val nextDrop = o.optString("next_price_drop_at", o.optString("NextPriceDropAt", "")).trim()
+        val listPriceVnd: Long? = sequenceOf(
+            "list_price",
+            "ListPrice",
+            "compare_at_price",
+            "CompareAtPrice",
+            "original_price",
+            "OriginalPrice",
+            "msrp",
+            "MSRP",
+        ).mapNotNull { key ->
+            if (!o.has(key)) return@mapNotNull null
+            val v = o.optLong(key, 0L)
+            v.takeIf { it > 0L }
+        }.firstOrNull()
+        val estimatedShippingVnd: Long? = sequenceOf(
+            "estimated_shipping_fee",
+            "EstimatedShippingFee",
+            "shipping_fee_estimate",
+            "ShippingFeeEstimate",
+            "shipping_fee",
+            "ShippingFee",
+        ).mapNotNull { key ->
+            if (!o.has(key)) return@mapNotNull null
+            val v = o.optLong(key, 0L)
+            v.takeIf { it > 0L }
+        }.firstOrNull()
         return ListingDetail(
             id = o.optString("id", o.optString("ID", "")),
             title = o.optString("title", o.optString("Title", "")),
             description = o.optString("description", o.optString("Description", "")),
             imageUrls = imageUrls.ifEmpty { listOf(coverUrl).filter { it.isNotBlank() } },
             priceVnd = o.optLong("price", o.optLong("Price", 0L)),
+            listPriceVnd = listPriceVnd,
             condition = o.optString("condition", o.optString("Condition", "")),
-            // Resolve category name from nested Category object or flat field
             category = categoryObj?.optString("name", "")?.ifBlank { null }
                 ?: categoryObj?.optString("Name", "")?.ifBlank { null }
                 ?: o.optString("category", "").ifBlank { null },
+            parentCategoryName = parentCategoryName,
             size = o.optString("size", "").ifBlank { o.optString("Size", "").ifBlank { null } },
-            brand = o.optString("brand", "").ifBlank { o.optString("Brand", "").ifBlank { null } },
+            brand = brandName,
             material = o.optString("material", "").ifBlank { null },
-            tags = parseStringArray(tagsArr),
+            tags = parseTagStringArray(tagsArr),
+            aestheticTags = parseAestheticTagLabels(aestheticArr),
             likeCount = o.optInt("like_count", o.optInt("LikeCount", 0)),
             saveCount = o.optInt("save_count", o.optInt("SaveCount", 0)),
-            // Prefer Seller.UserID (auth user) then top-level SellerID
+            viewCount = o.optInt("view_count", o.optInt("ViewCount", 0)),
+            measurementUnit = o.optString("measurement_unit", o.optString("MeasurementUnit", "")).ifBlank { null },
+            measurementHem = optMeasurement(o, "measurement_hem"),
+            measurementChest = optMeasurement(o, "measurement_chest"),
+            measurementLength = optMeasurement(o, "measurement_length"),
+            measurementShoulders = optMeasurement(o, "measurement_shoulders"),
+            measurementSleeveLength = optMeasurement(o, "measurement_sleeve_length"),
+            acceptOffers = o.optBoolean("accept_offers", o.optBoolean("AcceptOffers", false)),
+            autoPriceDropEnabled = o.optBoolean(
+                "auto_price_drop_enabled",
+                o.optBoolean("AutoPriceDropEnabled", false),
+            ),
+            floorPriceVnd = parsedFloorPrice,
+            priceDropPercent = when {
+                o.has("price_drop_percent") ->
+                    o.optInt("price_drop_percent", o.optInt("PriceDropPercent", 0))
+                o.has("PriceDropPercent") -> o.optInt("PriceDropPercent", 0)
+                else -> null
+            },
+            nextPriceDropAtIso = nextDrop.ifBlank { null },
+            countryName = countryObj?.optString("name", "")?.ifBlank { null }
+                ?: countryObj?.optString("Name", "")?.ifBlank { null },
+            countryIso2 = countryObj?.optString("iso2", "")?.ifBlank { null }
+                ?: countryObj?.optString("ISO2", "")?.ifBlank { null },
+            shippingAddress = shippingAddress,
+            estimatedShippingVnd = estimatedShippingVnd,
             sellerId = seller?.optString("user_id", "")?.ifBlank { null }
                 ?: seller?.optString("UserID", "")?.ifBlank { null }
                 ?: o.optString("seller_id", "").ifBlank { null }
@@ -361,6 +498,39 @@ class ListingRepository(
                 ?: seller?.optString("AvatarURL", "")?.ifBlank { null },
             sellerDisplayName = seller?.optString("display_name", "")?.ifBlank { null }
                 ?: seller?.optString("DisplayName", "")?.ifBlank { null },
+            sellerVerified = seller?.let { s ->
+                s.optBoolean("verified", false) || s.optBoolean("Verified", false)
+            } ?: false,
+            sellerListingCount = seller?.let { s ->
+                when {
+                    s.has("listing_count") -> s.optInt("listing_count", 0)
+                    s.has("ListingCount") -> s.optInt("ListingCount", 0)
+                    else -> null
+                }
+            },
+            sellerFollowerCount = seller?.let { s ->
+                when {
+                    s.has("follower_count") -> s.optInt("follower_count", 0)
+                    s.has("FollowerCount") -> s.optInt("FollowerCount", 0)
+                    else -> null
+                }
+            },
+            sellerFollowingCount = seller?.let { s ->
+                when {
+                    s.has("following_count") -> s.optInt("following_count", 0)
+                    s.has("FollowingCount") -> s.optInt("FollowingCount", 0)
+                    else -> null
+                }
+            },
+            sellerAverageRating = seller?.let { s ->
+                when {
+                    s.has("average_rating") -> s.optDouble("average_rating", 0.0).toFloat()
+                    s.has("AverageRating") -> s.optDouble("AverageRating", 0.0).toFloat()
+                    else -> null
+                }
+            },
+            createdAtIso = o.optString("created_at", o.optString("CreatedAt", "")).trim().ifBlank { null },
+            updatedAtIso = o.optString("updated_at", o.optString("UpdatedAt", "")).trim().ifBlank { null },
             isLiked = o.optBoolean("is_liked", false),
             isSaved = o.optBoolean("is_saved", false),
             status = o.optString("status", o.optString("Status", "active")).lowercase().ifBlank { "active" },

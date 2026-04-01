@@ -115,6 +115,7 @@ import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
+import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
@@ -325,10 +326,33 @@ fun ChatDetailScreen(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (sortedMessages.isEmpty() && !isMessagesLoading) {
+                            val scheme = MaterialTheme.colorScheme
                             FashEmptyState(
                                 icon = Icons.Outlined.ChatBubbleOutline,
                                 title = stringResource(R.string.chat_empty_messages_title),
                                 subtitle = stringResource(R.string.chat_empty_messages_subtitle),
+                                footer = {
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.chat_empty_suggestions_title),
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                        ),
+                                        color = scheme.onSurface,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        FashEmptyBulletTipLine(
+                                            text = stringResource(R.string.chat_empty_messages_tip_1),
+                                        )
+                                        FashEmptyBulletTipLine(
+                                            text = stringResource(R.string.chat_empty_messages_tip_2),
+                                        )
+                                    }
+                                },
                             )
                         } else {
                             LazyColumn(
