@@ -8,17 +8,21 @@ import androidx.compose.ui.graphics.Color
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
- * Post listing flow uses white surfaces for inputs and step canvas in light mode.
+ * Post listing flow — surfaces follow [MaterialTheme.colorScheme] (editorial vs pure white light).
  */
 object PostListingColors {
     @Composable
-    fun fieldSurface(): Color =
-        if (isSystemInDarkTheme()) FashColors.SurfaceContainerHighestDark else Color.White
+    fun fieldSurface(): Color {
+        val scheme = MaterialTheme.colorScheme
+        return if (isSystemInDarkTheme()) FashColors.SurfaceContainerHighestDark else scheme.surfaceContainerHighest
+    }
 
     /** Full-bleed background for each post step. */
     @Composable
-    fun stepCanvas(): Color =
-        if (isSystemInDarkTheme()) FashColors.SurfaceLowestDark else Color.White
+    fun stepCanvas(): Color {
+        val scheme = MaterialTheme.colorScheme
+        return if (isSystemInDarkTheme()) FashColors.SurfaceLowestDark else scheme.background
+    }
 }
 
 @Composable

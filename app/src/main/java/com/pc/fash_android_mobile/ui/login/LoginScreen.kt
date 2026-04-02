@@ -475,6 +475,7 @@ private fun LoginHeroPageIndicator(
     currentPage: Int,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -493,7 +494,7 @@ private fun LoginHeroPageIndicator(
                     .width(width)
                     .clip(RoundedCornerShape(3.dp))
                     .background(
-                        if (selected) FashColors.Primary else FashColors.OutlineVariant.copy(alpha = 0.7f),
+                        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.7f),
                     ),
             )
         }

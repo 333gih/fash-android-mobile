@@ -449,8 +449,14 @@
     <string name="profile_followers">Followers</string>
     <string name="profile_following">Following</string>
     <string name="follow_connections_title">Connections</string>
-    <string name="follow_list_empty_following">You’re not following anyone yet.</string>
-    <string name="follow_list_empty_followers">No followers yet.</string>
+    <string name="follow_list_empty_following_title">No accounts yet</string>
+    <string name="follow_list_empty_following_subtitle">People you follow will show up here — discover sellers on Explore.</string>
+    <string name="follow_list_empty_following_tip_1">Open Explore or a listing and tap Follow when you like someone’s style.</string>
+    <string name="follow_list_empty_following_tip_2">You can manage who you follow anytime from this list.</string>
+    <string name="follow_list_empty_followers_title">No followers yet</string>
+    <string name="follow_list_empty_followers_subtitle">When someone follows your account, they’ll appear in this tab.</string>
+    <string name="follow_list_empty_followers_tip_1">List items and complete your profile to grow your audience.</string>
+    <string name="follow_list_empty_followers_tip_2">Share your shop or listings so more buyers can find you.</string>
     <string name="profile_products">Products</string>
     <string name="profile_sold">Sold</string>
     <string name="profile_rating_format">%1$.1f (%2$d reviews)</string>

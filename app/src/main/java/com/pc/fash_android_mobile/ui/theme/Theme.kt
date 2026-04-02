@@ -29,11 +29,15 @@ object FashTheme {
 /**
  * Digital Editorial theme — Vina-Pink, cream surfaces, Be Vietnam Pro.
  * @param dynamicColor When true (and on API 31+), uses system dynamic palette instead of brand colors.
+ * @param lightAppearance When not in dark mode and [dynamicColor] is false: editorial paper vs full white
+ *   (explicit Light in Settings). Ignored when [darkTheme] is true.
  */
 @Composable
 fun FashTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    /** When [darkTheme] is false and [dynamicColor] is off: editorial paper vs full white (explicit Light). */
+    lightAppearance: FashLightAppearance = FashLightAppearance.Editorial,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
@@ -42,7 +46,7 @@ fun FashTheme(
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> fashDarkColorScheme()
-        else -> fashLightColorScheme()
+        else -> fashLightColorScheme(lightAppearance)
     }
 
     val view = LocalView.current
@@ -73,4 +77,4 @@ fun FashandroidmobileTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
-) = FashTheme(darkTheme, dynamicColor, content)
+) = FashTheme(darkTheme, dynamicColor, lightAppearance = FashLightAppearance.Editorial, content = content)

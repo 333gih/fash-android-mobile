@@ -466,7 +466,7 @@ private fun UsernameInput(
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
-                        color = scheme.primary,
+                        color = FashColors.Primary,
                     )
                 } else if (isValid && value.isNotBlank()) {
                     Icon(

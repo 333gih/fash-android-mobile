@@ -105,11 +105,12 @@ private fun QuickActionCell(
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     Column(
         modifier = modifier
             .clip(shape)
-            .background(FashColors.SurfaceVariantCream)
+            .background(scheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

@@ -93,13 +93,10 @@ import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
-/** Reference UI: primary red, label gray, white surfaces. */
+/** Reference UI: primary red, label gray; surfaces follow [MaterialTheme.colorScheme]. */
 private val DetailPrimary = Color(0xFFE9334A)
 private val DetailLabelGray = Color(0xFF757575)
 private val DetailTextBlack = Color(0xFF000000)
-private val DetailBarCream = Color.White
-private val DetailCardBg = Color.White
-private val DetailBorder = FashColors.OutlineVariant
 private val DetailConditionGreen = Color(0xFF2E7D32)
 private const val DEFAULT_EST_SHIPPING_VND = 30_000L
 
@@ -114,7 +111,8 @@ fun ProductDetailScreen(
     onBuyNow: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
-    onVisitSellerShop: () -> Unit = {},
+    /** Seller username only — passed to `GET …/api/v1/users/{username}`. */
+    onVisitSellerShop: (sellerUsername: String) -> Unit = {},
 ) {
     val detail by viewModel.detail.collectAsState()
     val sellerProfile by viewModel.sellerProfile.collectAsState()
@@ -123,6 +121,7 @@ fun ProductDetailScreen(
     val loadError by viewModel.loadError.collectAsState()
     val isOpeningChat by viewModel.isOpeningChat.collectAsState()
     val bottomBarMode by viewModel.bottomBarMode.collectAsState()
+    val scheme = MaterialTheme.colorScheme
 
     LaunchedEffect(listingId) {
         viewModel.loadDetail(listingId)
@@ -134,16 +133,22 @@ fun ProductDetailScreen(
         when {
             isLoading && detail == null -> {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(48.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(scheme.background)
+                        .padding(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(color = DetailPrimary)
+                    CircularProgressIndicator(color = FashColors.Primary)
                 }
             }
             loadError != null && detail == null -> {
                 val err = loadError!!
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(48.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(scheme.background)
+                        .padding(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -168,7 +173,11 @@ fun ProductDetailScreen(
                                 .weight(1f)
                                 .verticalScroll(rememberScrollState()),
                         ) {
-                            Column(Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(scheme.background),
+                            ) {
                                 DetailHeroImage(
                                     detail = d,
                                     onLike = { viewModel.toggleLike() },
@@ -179,7 +188,7 @@ fun ProductDetailScreen(
                                     profile = sellerProfile,
                                     onVisitShop = onVisitSellerShop,
                                 )
-                                HorizontalDivider(color = DetailBorder.copy(alpha = 0.6f), thickness = 1.dp)
+                                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.78f), thickness = 1.dp)
                                 DetailBreadcrumbPriceTitle(detail = d)
                                 DetailAttributeGrid(detail = d)
                                 if (detailHasMeasurements(d)) {
@@ -218,6 +227,7 @@ fun ProductDetailScreen(
 
 @Composable
 private fun DetailTopBar(onBack: () -> Unit, onShare: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     TopAppBar(
         title = {
             Text(
@@ -245,7 +255,7 @@ private fun DetailTopBar(onBack: () -> Unit, onShare: () -> Unit) {
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = DetailBarCream,
+            containerColor = scheme.surface,
             titleContentColor = DetailTextBlack,
             navigationIconContentColor = DetailPrimary,
             actionIconContentColor = DetailPrimary,
@@ -259,6 +269,7 @@ private fun DetailHeroImage(
     onLike: () -> Unit,
     onSave: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
     val urls = remember(detail.id, detail.imageUrls) {
         detail.imageUrls.map { resolveImageUrl(it) }.filter { it.isNotEmpty() }
@@ -280,7 +291,7 @@ private fun DetailHeroImage(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(DetailCardBg),
+                        .background(scheme.surfaceContainerHighest),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -313,7 +324,7 @@ private fun DetailHeroImage(
                 .align(Alignment.BottomStart)
                 .padding(12.dp),
             shape = RoundedCornerShape(24.dp),
-            color = Color.White.copy(alpha = 0.92f),
+            color = scheme.surfaceContainerHighest.copy(alpha = 0.92f),
             shadowElevation = 2.dp,
         ) {
             Row(
@@ -390,8 +401,10 @@ private fun StatMini(
 private fun DetailSellerRow(
     detail: ListingDetail,
     profile: ProfileInfo?,
-    onVisitShop: () -> Unit,
+    onVisitShop: (sellerUsername: String) -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val shopUsername = detail.sellerUsername?.takeIf { it.isNotBlank() }
     val avatarUrl = resolveImageUrl(profile?.avatarUrl ?: detail.sellerAvatarUrl.orEmpty())
     val name = profile?.displayName?.ifBlank { null }
         ?: detail.sellerDisplayName?.ifBlank { null }
@@ -401,7 +414,7 @@ private fun DetailSellerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(scheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -409,7 +422,7 @@ private fun DetailSellerRow(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(DetailCardBg),
+                .background(scheme.surfaceVariant),
         ) {
             if (avatarUrl.isNotEmpty()) {
                 FashAsyncImage(
@@ -445,7 +458,8 @@ private fun DetailSellerRow(
             )
         }
         OutlinedButton(
-            onClick = onVisitShop,
+            onClick = { shopUsername?.let(onVisitShop) },
+            enabled = shopUsername != null,
             border = BorderStroke(1.dp, DetailPrimary),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -461,12 +475,13 @@ private fun DetailSellerRow(
 
 @Composable
 private fun DetailBreadcrumbPriceTitle(detail: ListingDetail) {
+    val scheme = MaterialTheme.colorScheme
     val bread = buildBreadcrumb(detail)
     val listPrice = detail.listPriceVnd?.takeIf { it > detail.priceVnd }
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(scheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         bread?.let {
@@ -513,6 +528,7 @@ private fun DetailBreadcrumbPriceTitle(detail: ListingDetail) {
 
 @Composable
 private fun DetailAttributeGrid(detail: ListingDetail) {
+    val scheme = MaterialTheme.colorScheme
     val brand = detail.brand?.takeIf { it.isNotBlank() } ?: "—"
     val origin = originLine(detail)
     val sizeLine = formatSizeEu(detail)
@@ -520,7 +536,7 @@ private fun DetailAttributeGrid(detail: ListingDetail) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(scheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -567,11 +583,12 @@ private fun AttrCell(
     value: String,
     valueColor: Color,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, DetailBorder),
+        color = scheme.surfaceContainerHighest,
+        border = BorderStroke(1.dp, scheme.outlineVariant),
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -596,10 +613,11 @@ private fun AttrCell(
 
 @Composable
 private fun DetailMeasurementsHeader() {
+    val scheme = MaterialTheme.colorScheme
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(scheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp)
             .padding(top = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -616,6 +634,7 @@ private fun DetailMeasurementsHeader() {
 
 @Composable
 private fun DetailMeasurementsTable(detail: ListingDetail) {
+    val scheme = MaterialTheme.colorScheme
     val empty = stringResource(R.string.product_meas_empty)
     val mu = detail.measurementUnit?.trim()?.takeIf { it.isNotEmpty() } ?: "cm"
     fun fmt(v: Double?): String = v?.let { x ->
@@ -632,21 +651,21 @@ private fun DetailMeasurementsTable(detail: ListingDetail) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(bottom = 16.dp)
-            .border(1.dp, DetailBorder, RoundedCornerShape(12.dp))
+            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp)),
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             MeasCell(stringResource(R.string.product_meas_chest), chest)
-            VerticalDivider(Modifier.fillMaxHeight(), color = DetailBorder)
+            VerticalDivider(Modifier.fillMaxHeight(), color = scheme.outlineVariant)
             MeasCell(stringResource(R.string.product_meas_length), len)
         }
-        HorizontalDivider(color = DetailBorder, thickness = 1.dp)
+        HorizontalDivider(color = scheme.outlineVariant, thickness = 1.dp)
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             MeasCell(stringResource(R.string.product_meas_shoulders), shoulder)
-            VerticalDivider(Modifier.fillMaxHeight(), color = DetailBorder)
+            VerticalDivider(Modifier.fillMaxHeight(), color = scheme.outlineVariant)
             MeasCell(stringResource(R.string.product_meas_sleeve), sleeve)
         }
-        HorizontalDivider(color = DetailBorder, thickness = 1.dp)
+        HorizontalDivider(color = scheme.outlineVariant, thickness = 1.dp)
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
                 stringResource(R.string.product_meas_hem),
@@ -678,6 +697,7 @@ private fun RowScope.MeasCell(label: String, value: String) {
 
 @Composable
 private fun DetailShippingCard(detail: ListingDetail) {
+    val scheme = MaterialTheme.colorScheme
     val feeVnd = detail.estimatedShippingVnd ?: DEFAULT_EST_SHIPPING_VND
     val region = shipFromRegion(detail.shippingAddress)
     Surface(
@@ -685,7 +705,7 @@ private fun DetailShippingCard(detail: ListingDetail) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(12.dp),
-        color = DetailCardBg,
+        color = scheme.surfaceContainerHighest,
     ) {
         Row(
             Modifier.padding(14.dp),
@@ -718,11 +738,12 @@ private fun DetailShippingCard(detail: ListingDetail) {
 
 @Composable
 private fun DetailDescriptionBlock(detail: ListingDetail) {
+    val scheme = MaterialTheme.colorScheme
     val tags = mergedTagLabels(detail)
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(scheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
@@ -746,7 +767,7 @@ private fun DetailDescriptionBlock(detail: ListingDetail) {
                         "#$t",
                         modifier = Modifier
                             .clip(RoundedCornerShape(16.dp))
-                            .background(DetailCardBg)
+                            .background(scheme.surfaceContainerLow)
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = DetailLabelGray,
@@ -764,6 +785,7 @@ private fun DetailMoreFromSeller(
     excludeId: String,
     onItemClick: (String, String?) -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val u = username ?: "user"
     Column(
         Modifier
@@ -793,7 +815,7 @@ private fun DetailMoreFromSeller(
                             .fillMaxWidth()
                             .aspectRatio(3f / 4f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(DetailCardBg),
+                            .background(scheme.surfaceVariant),
                     ) {
                         val url = resolveImageUrl(item.coverImageUrl)
                         if (url.isNotEmpty()) {
@@ -824,12 +846,13 @@ private fun DetailBottomBar(
     onChat: () -> Unit,
     onBuyNow: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     when (mode) {
         ProductBottomBarMode.Normal -> {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color.White)
+                    .background(scheme.surface)
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -839,7 +862,7 @@ private fun DetailBottomBar(
                     onClick = onChat,
                     enabled = !chatLoading,
                     modifier = Modifier.weight(1f).height(52.dp),
-                    border = BorderStroke(0.5.dp, DetailBorder),
+                    border = BorderStroke(0.5.dp, scheme.outlineVariant),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = DetailTextBlack,
                         containerColor = Color.Transparent,
@@ -849,7 +872,7 @@ private fun DetailBottomBar(
                     shape = RoundedCornerShape(12.dp),
                 ) {
                     if (chatLoading) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = DetailPrimary)
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = FashColors.Primary)
                     } else {
                         Icon(Icons.AutoMirrored.Filled.Message, null, Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
@@ -895,16 +918,17 @@ private fun DetailBottomBar(
         }
         ProductBottomBarMode.ReservedOther -> StatusBar(stringResource(R.string.product_reserved_other), Color(0xFFFFF8E1), Color(0xFFF57C00))
         ProductBottomBarMode.ReservedBuyer -> StatusBar(stringResource(R.string.product_reserved_buyer), Color(0xFFE8F5E9), Color(0xFF2E7D32))
-        ProductBottomBarMode.Sold -> StatusBar(stringResource(R.string.product_listing_sold_bar), DetailCardBg, DetailLabelGray)
+        ProductBottomBarMode.Sold -> StatusBar(stringResource(R.string.product_listing_sold_bar), scheme.surfaceContainerHighest, DetailLabelGray)
     }
 }
 
 @Composable
 private fun StatusBar(text: String, bg: Color, fg: Color) {
+    val scheme = MaterialTheme.colorScheme
     Box(
         Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(scheme.background)
             .navigationBarsPadding()
             .padding(16.dp),
         contentAlignment = Alignment.Center,

@@ -64,7 +64,8 @@ fun ExplorePromoCarousel(
     /** Optional: analytics, deep link, or future in-app actions. */
     onSlideClick: (pageIndex: Int) -> Unit = {},
 ) {
-    val slides = remember {
+    val scheme = MaterialTheme.colorScheme
+    val slides = remember(scheme) {
         listOf(
             PromoSlide(
                 titleRes = R.string.explore_promo_slide1_title,
@@ -79,8 +80,8 @@ fun ExplorePromoCarousel(
             PromoSlide(
                 titleRes = R.string.explore_promo_slide3_title,
                 subtitleRes = R.string.explore_promo_slide3_subtitle,
-                gradient = listOf(FashColors.SurfaceContainerLow, FashColors.SurfaceVariantCream),
-                border = FashColors.OutlineVariant.copy(alpha = 0.65f),
+                gradient = listOf(scheme.surfaceContainerLow, scheme.surfaceVariant),
+                border = scheme.outlineVariant.copy(alpha = 0.65f),
             ),
         )
     }
@@ -193,6 +194,7 @@ private fun PromoPageIndicator(
     currentPage: Int,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -211,7 +213,7 @@ private fun PromoPageIndicator(
                     .width(width)
                     .clip(RoundedCornerShape(3.dp))
                     .background(
-                        if (selected) FashColors.Primary else FashColors.OutlineVariant.copy(alpha = 0.7f),
+                        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.7f),
                     ),
             )
         }

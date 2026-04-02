@@ -72,6 +72,8 @@ fun ProfileScreen(
     onShippingAddressesClick: () -> Unit = { },
     onOrdersClick: () -> Unit = { },
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
+    /** 0 = Following tab, 1 = Followers — same as [com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen]. */
+    onOpenFollowConnections: (initialTab: Int) -> Unit = {},
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
@@ -125,7 +127,11 @@ fun ProfileScreen(
                         profile = profile,
                         onEditClick = onEditProfile,
                     )
-                    ProfileStats(profile = profile)
+                    ProfileStats(
+                        profile = profile,
+                        onFollowersClick = { onOpenFollowConnections(1) },
+                        onFollowingClick = { onOpenFollowConnections(0) },
+                    )
                     ProfileShippingAddressesRow(onClick = onShippingAddressesClick)
                     ProfileTabs(
                         selectedTab = selectedTab,
@@ -333,8 +339,126 @@ private fun ProfileHeader(
     }
 }
 
+/** Public storefront header (no edit actions) — same layout as [ProfileHeader] minus edit controls. */
 @Composable
-private fun ProfileStats(profile: com.pc.fash_android_mobile.data.user.ProfileInfo?) {
+internal fun SellerProfileHeader(
+    profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val coverUrl = profile?.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
+    val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(scheme.surfaceContainerHigh),
+        ) {
+            if (coverUrl != null) {
+                FashAsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = FashTheme.spacing.editorialStart, bottom = 0.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(scheme.surfaceContainerHigh)
+                    .padding(4.dp),
+            ) {
+                if (avatarUrl != null) {
+                    FashAsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(FashColors.Primary.copy(alpha = 0.2f)),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.height(80.dp))
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 8.dp, bottom = 16.dp),
+    ) {
+        Text(
+            text = profile?.displayName?.ifBlank { profile?.username ?: "—" } ?: "—",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            color = scheme.onSurface,
+        )
+        Text(
+            text = "@${profile?.username ?: "—"}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        profile?.bio?.takeIf { it.isNotBlank() }?.let { bio ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = bio,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (!profile?.aestheticTags.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                profile!!.aestheticTags.forEach { tag ->
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = FashColors.Primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+                            .background(FashColors.Primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ProfileStats(
+    profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
+    onFollowersClick: () -> Unit = {},
+    onFollowingClick: () -> Unit = {},
+) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
@@ -343,18 +467,24 @@ private fun ProfileStats(profile: com.pc.fash_android_mobile.data.user.ProfileIn
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         ProfileStatItem(
+            modifier = Modifier.weight(1f),
             value = formatCount(profile?.followerCount ?: 0),
             label = stringResource(R.string.profile_followers),
+            onClick = onFollowersClick,
         )
         ProfileStatItem(
+            modifier = Modifier.weight(1f),
             value = (profile?.followingCount ?: 0).toString(),
             label = stringResource(R.string.profile_following),
+            onClick = onFollowingClick,
         )
         ProfileStatItem(
+            modifier = Modifier.weight(1f),
             value = (profile?.productCount ?: 0).toString(),
             label = stringResource(R.string.profile_products),
         )
         ProfileStatItem(
+            modifier = Modifier.weight(1f),
             value = (profile?.soldCount ?: 0).toString(),
             label = stringResource(R.string.profile_sold),
         )
@@ -397,8 +527,21 @@ private fun ProfileStats(profile: com.pc.fash_android_mobile.data.user.ProfileIn
 }
 
 @Composable
-private fun ProfileStatItem(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+internal fun ProfileStatItem(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    val m = if (onClick != null) {
+        modifier.clickable(onClick = onClick)
+    } else {
+        modifier
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = m,
+    ) {
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -413,7 +556,7 @@ private fun ProfileStatItem(value: String, label: String) {
 }
 
 @Composable
-private fun ProfileTabs(
+internal fun ProfileTabs(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
 ) {
@@ -459,7 +602,7 @@ private fun ProfileTabs(
 }
 
 @Composable
-private fun ProfileProductGrid(
+internal fun ProfileProductGrid(
     items: List<ListingFeedItem>,
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -509,7 +652,7 @@ private fun ProfileProductGrid(
 }
 
 @Composable
-private fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
+internal fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
     val imageUrl = resolveImageUrl(item.coverImageUrl)
     val scheme = MaterialTheme.colorScheme
 

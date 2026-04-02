@@ -67,6 +67,7 @@ import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.data.user.UserSearchResult
 
 /** `FASH.` + screen suffix — same typography as Explore (medium mark + titleLarge). */
 @Composable
@@ -125,6 +126,8 @@ fun MainNavScreen(
     onOrdersClick: () -> Unit = {},
     /** [initialTab] 0 = people you follow, 1 = followers (e.g. Explore featured sellers “See all”). */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
+    /** Featured seller chip on Explore — opens seller shop (`GET …/users/{username}`). */
+    onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
@@ -248,6 +251,7 @@ fun MainNavScreen(
                     MainTab.Explore -> ExploreScreen(
                         viewModel = exploreViewModel,
                         onListingClick = onListingClick,
+                        onFeaturedSellerClick = onFeaturedSellerClick,
                         onSeeAllFeaturedSellersClick = { onOpenFollowConnections(0) },
                     )
                     MainTab.Post -> CreateListingFlowScreen(
@@ -271,6 +275,7 @@ fun MainNavScreen(
                         onShippingAddressesClick = onShippingAddressesClick,
                         onOrdersClick = onOrdersClick,
                         onListingClick = onListingClick,
+                        onOpenFollowConnections = onOpenFollowConnections,
                     )
                 }
             }

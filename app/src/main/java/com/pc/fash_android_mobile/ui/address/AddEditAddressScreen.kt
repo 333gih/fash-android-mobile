@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.ui.address
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,6 +61,7 @@ fun AddEditAddressScreen(
     showCatalogHint: Boolean = true,
 ) {
     val provinces by viewModel.provinces.collectAsState()
+    val provincesLoading by viewModel.provincesLoading.collectAsState()
     val districts by viewModel.districts.collectAsState()
     val wards by viewModel.wards.collectAsState()
 
@@ -172,6 +174,17 @@ fun AddEditAddressScreen(
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) { padding ->
+        if (provincesLoading && provinces.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = FashColors.Primary)
+            }
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()

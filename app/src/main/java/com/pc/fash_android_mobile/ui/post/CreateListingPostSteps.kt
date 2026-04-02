@@ -128,7 +128,7 @@ fun CreateListingPostStep1(
                             .height(120.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = FashColors.Primary)
                     }
                 } else if (categoryQuery.isBlank()) {
                     CategoryTreeSection(

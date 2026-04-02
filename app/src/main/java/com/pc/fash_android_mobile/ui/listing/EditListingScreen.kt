@@ -415,7 +415,11 @@ fun EditListingScreen(
                     enabled = !isDeleting,
                 ) {
                     if (isDeleting) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = FashColors.Primary,
+                        )
                     } else {
                         Text(
                             stringResource(R.string.edit_listing_delete_confirm),

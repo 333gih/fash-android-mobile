@@ -1,11 +1,5 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +32,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,10 +51,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -68,6 +62,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
@@ -177,7 +172,12 @@ fun ChatScreen(
                     },
                 ) {
                     when {
-            isLoading -> ConversationSkeletonList()
+            isLoading -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = FashColors.Primary)
+            }
             loadError != null -> Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -231,7 +231,7 @@ fun ChatScreen(
                         }
                     }
                 }
-                chatInboxTailFiller()
+                chatInboxTailFiller(listViewportHeight = listHeight)
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -249,7 +249,7 @@ fun ChatScreen(
                         onClick = { onConversationClick(item) },
                     )
                 }
-                chatInboxTailFiller()
+                chatInboxTailFiller(listViewportHeight = listHeight)
             }
                     }
                 }
@@ -346,11 +346,12 @@ private fun ChatInboxAdPanel(
     modifier: Modifier = Modifier,
     onExploreClick: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     Surface(
         modifier = modifier,
         shape = shape,
-        color = FashColors.SurfaceVariantCream,
+        color = scheme.surfaceVariant,
         tonalElevation = 1.dp,
         shadowElevation = 0.dp,
     ) {
@@ -547,26 +548,27 @@ private fun ListingGroupHeader(
     }
 }
 
-private fun LazyListScope.chatInboxTailFiller() {
+private fun LazyListScope.chatInboxTailFiller(listViewportHeight: Dp) {
     item(key = "inbox_list_tail_filler") {
-        InboxListTailContent()
+        InboxListTailContent(listViewportHeight = listViewportHeight)
     }
 }
 
 @Composable
-private fun InboxListTailContent() {
+private fun InboxListTailContent(listViewportHeight: Dp) {
     val scheme = MaterialTheme.colorScheme
-    val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val tailHeight = (screenHeightDp * 0.28f).dp.coerceIn(140.dp, 280.dp)
+    // Tall enough footer so the hint sits toward the bottom of the inbox area when the list is short
+    // (avoids the line hugging the last chat row with a huge empty gap above the Explore strip).
+    val minTail = (listViewportHeight * 0.48f).coerceIn(220.dp, 520.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(tailHeight)
+            .heightIn(min = minTail)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        FashColors.SurfaceVariantCream.copy(alpha = 0.6f),
+                        scheme.surfaceVariant.copy(alpha = 0.6f),
                     ),
                 ),
             )
@@ -765,75 +767,6 @@ private fun ConversationRow(
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConversationSkeletonList() {
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceContainerHigh,
-        MaterialTheme.colorScheme.surfaceContainerHighest,
-        MaterialTheme.colorScheme.surfaceContainerHigh,
-    )
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "shimmer_translate",
-    )
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(translateAnim - 200f, translateAnim - 200f),
-        end = Offset(translateAnim, translateAnim),
-    )
-
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(7) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(AvatarSize)
-                        .clip(CircleShape)
-                        .background(brush),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(brush),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(brush),
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .size(ProductThumbSize)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(brush),
                 )
             }
         }

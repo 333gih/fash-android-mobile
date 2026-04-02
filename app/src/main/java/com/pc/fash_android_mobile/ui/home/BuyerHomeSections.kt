@@ -103,12 +103,13 @@ private fun JourneyStatCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     Column(
         modifier = modifier
             .widthIn(min = 108.dp, max = 132.dp)
             .clip(shape)
-            .background(FashColors.SurfaceVariantCream)
+            .background(scheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -168,7 +169,7 @@ fun HomeHeroBanner(
                 onClick = onExploreClick,
                 modifier = Modifier.padding(top = 4.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = FashColors.SurfaceLowest,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = FashColors.Primary,
                 ),
             ) {

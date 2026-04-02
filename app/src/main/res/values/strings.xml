@@ -469,8 +469,14 @@
     <string name="profile_followers">Người theo dõi</string>
     <string name="profile_following">Đang theo dõi</string>
     <string name="follow_connections_title">Kết nối</string>
-    <string name="follow_list_empty_following">Bạn chưa theo dõi ai.</string>
-    <string name="follow_list_empty_followers">Chưa có ai theo dõi bạn.</string>
+    <string name="follow_list_empty_following_title">Chưa theo dõi ai</string>
+    <string name="follow_list_empty_following_subtitle">Khi bạn theo dõi người bán, họ sẽ xuất hiện ở đây — cùng khám phá trên Explore.</string>
+    <string name="follow_list_empty_following_tip_1">Mở Explore hoặc một tin đăng và nhấn Theo dõi khi bạn thích phong cách của họ.</string>
+    <string name="follow_list_empty_following_tip_2">Bạn có thể quản lý danh sách theo dõi bất cứ lúc nào từ đây.</string>
+    <string name="follow_list_empty_followers_title">Chưa có người theo dõi bạn</string>
+    <string name="follow_list_empty_followers_subtitle">Khi có người theo dõi tài khoản của bạn, họ sẽ hiển thị trong tab này.</string>
+    <string name="follow_list_empty_followers_tip_1">Đăng tin và hoàn thiện hồ sơ để thu hút người theo dõi.</string>
+    <string name="follow_list_empty_followers_tip_2">Chia sẻ shop hoặc tin đăng để nhiều người tìm thấy bạn hơn.</string>
     <string name="profile_products">Sản phẩm</string>
     <string name="profile_sold">Đã bán</string>
     <string name="profile_rating_format">%1$.1f (%2$d đánh giá)</string>

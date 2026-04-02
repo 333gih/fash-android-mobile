@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Tab 0: [UserRepository.getMyFollowing] — `GET …/users/me/following`.
+ * Tab 1: [UserRepository.getMyFollowers] — `GET …/users/me/followers`.
+ */
 class FollowConnectionsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val userRepository: UserRepository =
@@ -27,8 +31,23 @@ class FollowConnectionsViewModel(application: Application) : AndroidViewModel(ap
     private val _followers = MutableStateFlow<List<UserSearchResult>>(emptyList())
     val followers: StateFlow<List<UserSearchResult>> = _followers.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _followingTotal = MutableStateFlow(0)
+    val followingTotal: StateFlow<Int> = _followingTotal.asStateFlow()
+
+    private val _followersTotal = MutableStateFlow(0)
+    val followersTotal: StateFlow<Int> = _followersTotal.asStateFlow()
+
+    private val _followingLoading = MutableStateFlow(false)
+    val followingLoading: StateFlow<Boolean> = _followingLoading.asStateFlow()
+
+    private val _followersLoading = MutableStateFlow(false)
+    val followersLoading: StateFlow<Boolean> = _followersLoading.asStateFlow()
+
+    private val _followingLoadingMore = MutableStateFlow(false)
+    val followingLoadingMore: StateFlow<Boolean> = _followingLoadingMore.asStateFlow()
+
+    private val _followersLoadingMore = MutableStateFlow(false)
+    val followersLoadingMore: StateFlow<Boolean> = _followersLoadingMore.asStateFlow()
 
     private val _followingFailed = MutableStateFlow(false)
     val followingFailed: StateFlow<Boolean> = _followingFailed.asStateFlow()
@@ -38,41 +57,111 @@ class FollowConnectionsViewModel(application: Application) : AndroidViewModel(ap
 
     fun show(initialTabIndex: Int) {
         _selectedTab.value = initialTabIndex.coerceIn(0, 1)
-        load()
+        viewModelScope.launch {
+            loadTab(_selectedTab.value, refresh = true)
+        }
     }
 
     fun selectTab(index: Int) {
-        _selectedTab.value = index.coerceIn(0, 1)
+        val i = index.coerceIn(0, 1)
+        if (_selectedTab.value == i) return
+        _selectedTab.value = i
+        viewModelScope.launch {
+            loadTab(i, refresh = false)
+        }
     }
 
-    fun load() {
+    fun retryActiveTab() {
         viewModelScope.launch {
-            _isLoading.value = true
+            loadTab(_selectedTab.value, refresh = true)
+        }
+    }
+
+    fun loadMoreFollowing() {
+        if (_followingLoading.value || _followingLoadingMore.value) return
+        if (_following.value.size >= _followingTotal.value) return
+        viewModelScope.launch {
+            _followingLoadingMore.value = true
             _followingFailed.value = false
+            withContext(Dispatchers.IO) {
+                userRepository.getMyFollowing(limit = PAGE_SIZE, offset = _following.value.size).fold(
+                    onSuccess = { page ->
+                        _following.value = _following.value + page.items
+                        _followingTotal.value = page.total
+                    },
+                    onFailure = {
+                        _followingFailed.value = true
+                    },
+                )
+            }
+            _followingLoadingMore.value = false
+        }
+    }
+
+    fun loadMoreFollowers() {
+        if (_followersLoading.value || _followersLoadingMore.value) return
+        if (_followers.value.size >= _followersTotal.value) return
+        viewModelScope.launch {
+            _followersLoadingMore.value = true
             _followersFailed.value = false
-            val followingResult = withContext(Dispatchers.IO) { userRepository.getMyFollowing() }
-            val followersResult = withContext(Dispatchers.IO) { userRepository.getMyFollowers() }
-            followingResult.fold(
-                onSuccess = {
-                    _following.value = it
-                    _followingFailed.value = false
+            withContext(Dispatchers.IO) {
+                userRepository.getMyFollowers(limit = PAGE_SIZE, offset = _followers.value.size).fold(
+                    onSuccess = { page ->
+                        _followers.value = _followers.value + page.items
+                        _followersTotal.value = page.total
+                    },
+                    onFailure = {
+                        _followersFailed.value = true
+                    },
+                )
+            }
+            _followersLoadingMore.value = false
+        }
+    }
+
+    private suspend fun loadTab(tab: Int, refresh: Boolean) {
+        if (tab == 0) loadFollowing(refresh) else loadFollowers(refresh)
+    }
+
+    private suspend fun loadFollowing(refresh: Boolean) {
+        if (!refresh && _following.value.isNotEmpty()) return
+        _followingLoading.value = true
+        _followingFailed.value = false
+        withContext(Dispatchers.IO) {
+            userRepository.getMyFollowing(limit = PAGE_SIZE, offset = 0).fold(
+                onSuccess = { page ->
+                    _following.value = page.items
+                    _followingTotal.value = page.total
                 },
                 onFailure = {
                     _following.value = emptyList()
                     _followingFailed.value = true
                 },
             )
-            followersResult.fold(
-                onSuccess = {
-                    _followers.value = it
-                    _followersFailed.value = false
+        }
+        _followingLoading.value = false
+    }
+
+    private suspend fun loadFollowers(refresh: Boolean) {
+        if (!refresh && _followers.value.isNotEmpty()) return
+        _followersLoading.value = true
+        _followersFailed.value = false
+        withContext(Dispatchers.IO) {
+            userRepository.getMyFollowers(limit = PAGE_SIZE, offset = 0).fold(
+                onSuccess = { page ->
+                    _followers.value = page.items
+                    _followersTotal.value = page.total
                 },
                 onFailure = {
                     _followers.value = emptyList()
                     _followersFailed.value = true
                 },
             )
-            _isLoading.value = false
         }
+        _followersLoading.value = false
+    }
+
+    companion object {
+        private const val PAGE_SIZE = 20
     }
 }

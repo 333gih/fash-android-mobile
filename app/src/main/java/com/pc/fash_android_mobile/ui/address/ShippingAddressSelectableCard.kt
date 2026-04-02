@@ -23,7 +23,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,14 +60,14 @@ fun ShippingAddressSelectableCard(
         color = if (selected) {
             FashColors.Primary.copy(alpha = 0.08f)
         } else {
-            if (isSystemInDarkTheme()) scheme.surface else Color.White
+            if (isSystemInDarkTheme()) scheme.surface else scheme.surfaceContainerHighest
         },
         border = BorderStroke(
             width = if (selected) 2.dp else 1.dp,
             color = if (selected) {
                 FashColors.Primary
             } else {
-                scheme.outlineVariant.copy(alpha = 0.5f)
+                scheme.outlineVariant.copy(alpha = 0.72f)
             },
         ),
     ) {

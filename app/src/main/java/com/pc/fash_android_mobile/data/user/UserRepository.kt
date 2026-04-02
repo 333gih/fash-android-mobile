@@ -271,22 +271,24 @@ class UserRepository(
     }
 
     /**
-     * People the current user follows (core-service: `GET /api/v1/users/me/following`).
-     * Response may be a JSON array or an object with `data`, `users`, or `following`.
+     * Authenticated user’s following list (`GET /api/v1/users/me/following`).
+     * Server envelope: `{ "items": [...], "limit", "offset", "total" }`.
      */
-    fun getMyFollowing(limit: Int = 100, offset: Int = 0): Result<List<UserSearchResult>> = runCatching {
+    fun getMyFollowing(limit: Int = 20, offset: Int = 0): Result<FollowListPage> = runCatching {
         getMyFollowList(pathSegment = "following", limit = limit, offset = offset)
     }
 
     /**
-     * Users who follow the current user (core-service: `GET /api/v1/users/me/followers`).
+     * Users who follow the authenticated user (`GET /api/v1/users/me/followers`).
+     * Same envelope as [getMyFollowing].
      */
-    fun getMyFollowers(limit: Int = 100, offset: Int = 0): Result<List<UserSearchResult>> = runCatching {
+    fun getMyFollowers(limit: Int = 20, offset: Int = 0): Result<FollowListPage> = runCatching {
         getMyFollowList(pathSegment = "followers", limit = limit, offset = offset)
     }
 
-    private fun getMyFollowList(pathSegment: String, limit: Int, offset: Int): List<UserSearchResult> {
-        val url = "${AppEnvironment.apiPath("api/v1/users/me/$pathSegment")}?limit=$limit&offset=$offset"
+    private fun getMyFollowList(pathSegment: String, limit: Int, offset: Int): FollowListPage {
+        val capped = limit.coerceIn(1, 100)
+        val url = "${AppEnvironment.apiPath("api/v1/users/me/$pathSegment")}?limit=$capped&offset=${offset.coerceAtLeast(0)}"
         val body = securedClient.newCall(
             Request.Builder()
                 .url(url)
@@ -302,7 +304,43 @@ class UserRepository(
             }
             response.body?.string().orEmpty()
         }
-        return parseUserListResponse(body)
+        return parseFollowListEnvelope(body, requestLimit = capped, requestOffset = offset.coerceAtLeast(0))
+    }
+
+    /**
+     * Parses paginated follow/followers JSON (`items` + `total`, or legacy arrays / `data` / `users`).
+     */
+    private fun parseFollowListEnvelope(body: String, requestLimit: Int, requestOffset: Int): FollowListPage {
+        val raw = body.trim()
+        if (raw.isEmpty()) {
+            return FollowListPage(items = emptyList(), total = 0, limit = requestLimit, offset = requestOffset)
+        }
+        if (raw.startsWith("[")) {
+            val items = parseUserSearchResults(raw)
+            return FollowListPage(
+                items = items,
+                total = items.size,
+                limit = requestLimit,
+                offset = requestOffset,
+            )
+        }
+        val obj = try {
+            JSONObject(raw)
+        } catch (_: Exception) {
+            return FollowListPage(items = emptyList(), total = 0, limit = requestLimit, offset = requestOffset)
+        }
+        val items = mutableListOf<UserSearchResult>()
+        for (k in listOf("items", "data", "users", "following", "followers")) {
+            val a = obj.optJSONArray(k)
+            if (a != null) {
+                items.addAll(parseUserSearchResults(a.toString()))
+                break
+            }
+        }
+        val total = obj.optInt("total", items.size)
+        val lim = obj.optInt("limit", requestLimit).takeIf { it > 0 } ?: requestLimit
+        val off = obj.optInt("offset", requestOffset)
+        return FollowListPage(items = items, total = total, limit = lim, offset = off)
     }
 
     /** Parses a user list from home-feed-style wrappers or a raw array. */
@@ -322,27 +360,58 @@ class UserRepository(
         return emptyList()
     }
 
+    /**
+     * Public profile (`GET /api/v1/users/{id|username}`).
+     * Tries [securedClient] first so an authenticated viewer receives viewer-specific fields (e.g. `is_following`);
+     * falls back to [publicClient] on 401/403 (guest / expired token).
+     */
     fun getProfile(userIdOrUsername: String): Result<ProfileInfo> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/users/${userIdOrUsername.trim()}")
-        val body = publicClient.newCall(
-            Request.Builder()
-                .url(url)
-                .get()
-                .header("Accept", "application/json")
-                .header("User-Agent", "FashAndroid/1.0")
-                .build(),
-        ).execute().use { response ->
-            if (response.code == 404) error("Profile not found")
-            if (!response.isSuccessful) {
-                val b = response.body?.string().orEmpty()
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
-            }
-            response.body?.string().orEmpty()
-        }
+        val raw = userIdOrUsername.trim().removePrefix("@")
+        if (raw.isBlank()) error("Profile id required")
+        val seg = encodePathSegment(raw)
+        val url = AppEnvironment.apiPath("api/v1/users/$seg")
+        val body = fetchProfileBody(url)
         val obj = JSONObject(body.trim())
         val profileJson = if (obj.has("data")) obj.getJSONObject("data").toString() else body
         parseProfileInfo(profileJson)
+    }
+
+    private fun fetchProfileBody(url: String): String {
+        val req = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        securedClient.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            when (response.code) {
+                200 -> return body
+                401, 403 -> { /* guest — try public */ }
+                404 -> error("Profile not found")
+                else -> {
+                    val msg = try {
+                        JSONObject(body).optString("error", body).ifBlank { body }
+                    } catch (_: Exception) {
+                        body
+                    }
+                    error("HTTP ${response.code}: $msg")
+                }
+            }
+        }
+        return publicClient.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (response.code == 404) error("Profile not found")
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(body).optString("error", body).ifBlank { body }
+                } catch (_: Exception) {
+                    body
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            body
+        }
     }
 
     /** Checks if username is available. Returns true when available, false when taken. */
@@ -498,7 +567,11 @@ class UserRepository(
                 displayName = o.optString("display_name", o.optString("DisplayName", "")),
                 avatarUrl = o.optString("avatar_url", o.optString("AvatarURL", "")),
                 followerCount = o.optInt("follower_count", o.optInt("FollowerCount", 0)),
-                verified = o.optBoolean("verified", false),
+                verified = o.optBoolean("verified", o.optBoolean("Verified", false)),
+                followingCount = o.optInt("following_count", o.optInt("FollowingCount", 0)),
+                listingCount = o.optInt("listing_count", o.optInt("ListingCount", 0)),
+                followedAtIso = o.optString("followed_at", o.optString("FollowedAt", "")).trim().takeIf { it.isNotEmpty() },
+                coverUrl = o.optString("cover_url", o.optString("CoverURL", "")),
             )
         }
     }
@@ -517,19 +590,32 @@ class UserRepository(
                 }
             }
         }
+        val ratingVal = listOf(
+            o.optDouble("rating", -1.0),
+            o.optDouble("Rating", -1.0),
+            o.optDouble("average_rating", -1.0),
+            o.optDouble("AverageRating", -1.0),
+        ).firstOrNull { it >= 0 }?.toFloat()
         return ProfileInfo(
             userId = o.optString("user_id", o.optString("UserID", "")),
             username = o.optString("username", o.optString("Username", "")),
             displayName = o.optString("display_name", o.optString("DisplayName", "")),
             avatarUrl = o.optString("avatar_url", o.optString("AvatarURL", "")),
             followerCount = o.optInt("follower_count", o.optInt("FollowerCount", 0)),
-            rating = o.optDouble("rating", -1.0).takeIf { it >= 0 }?.toFloat(),
+            rating = ratingVal,
             reviewCount = o.optInt("review_count", -1).takeIf { it >= 0 },
-            isFollowing = o.optBoolean("is_following", false).takeIf { o.has("is_following") },
+            isFollowing = when {
+                o.has("is_following") -> o.optBoolean("is_following", false)
+                o.has("IsFollowing") -> o.optBoolean("IsFollowing", false)
+                else -> null
+            },
             bio = o.optString("bio", o.optString("Bio", "")),
-            coverImageUrl = o.optString("cover_image_url", o.optString("coverImageUrl", "")),
+            coverImageUrl = o.optString("cover_image_url", o.optString("coverImageUrl", o.optString("CoverURL", ""))),
             followingCount = o.optInt("following_count", o.optInt("FollowingCount", 0)),
-            productCount = o.optInt("product_count", o.optInt("ProductCount", o.optInt("listing_count", 0))),
+            productCount = o.optInt(
+                "product_count",
+                o.optInt("ProductCount", o.optInt("listing_count", o.optInt("ListingCount", 0))),
+            ),
             soldCount = o.optInt("sold_count", o.optInt("SoldCount", 0)),
             aestheticTags = tagList,
             hasFastDelivery = o.optBoolean("has_fast_delivery", o.optBoolean("hasFastDelivery", false)),
@@ -742,6 +828,7 @@ data class AestheticTag(
     val sortOrder: Int,
 )
 
+/** One row from user search or from `GET …/users/me/following` / `…/followers` `items[]`. */
 data class UserSearchResult(
     val userId: String,
     val username: String,
@@ -749,6 +836,18 @@ data class UserSearchResult(
     val avatarUrl: String,
     val followerCount: Int,
     val verified: Boolean = false,
+    val followingCount: Int = 0,
+    val listingCount: Int = 0,
+    val followedAtIso: String? = null,
+    val coverUrl: String = "",
+)
+
+/** Paginated envelope for [getMyFollowing] / [getMyFollowers]. */
+data class FollowListPage(
+    val items: List<UserSearchResult>,
+    val total: Int,
+    val limit: Int,
+    val offset: Int,
 )
 
 data class ProfileInfo(

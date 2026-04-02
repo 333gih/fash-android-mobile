@@ -54,6 +54,8 @@ import com.pc.fash_android_mobile.ui.listing.EditListingScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
+import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileScreen
+import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
 import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
 import com.pc.fash_android_mobile.data.chat.ConversationItem
@@ -79,6 +81,7 @@ import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
 import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
+import com.pc.fash_android_mobile.ui.theme.FashLightAppearance
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.address.AddEditAddressScreen
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
@@ -134,6 +137,7 @@ class MainActivity : ComponentActivity() {
     private val editListingViewModel: EditListingViewModel by viewModels()
     private val postViewModel: PostViewModel by viewModels()
     private val profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel by viewModels()
+    private val sellerProfileViewModel: SellerProfileViewModel by viewModels()
     private val editProfileViewModel: EditProfileViewModel by viewModels()
     private val chatViewModel: ChatViewModel by viewModels()
     private val chatDetailViewModel: ChatDetailViewModel by viewModels()
@@ -193,6 +197,7 @@ class MainActivity : ComponentActivity() {
                 launch { ordersViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
                 launch { orderDetailViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
                 launch { addressBookViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
+                launch { sellerProfileViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
             }
 
             val email by loginViewModel.email.collectAsState()
@@ -244,7 +249,11 @@ class MainActivity : ComponentActivity() {
                 AppThemePreference.Mode.DARK -> true
                 AppThemePreference.Mode.SYSTEM -> systemDark
             }
-            FashTheme(darkTheme = useDarkTheme) {
+            val lightAppearance = when (themeMode) {
+                AppThemePreference.Mode.LIGHT -> FashLightAppearance.PureWhite
+                else -> FashLightAppearance.Editorial
+            }
+            FashTheme(darkTheme = useDarkTheme, lightAppearance = lightAppearance) {
                 var splashFinished by rememberSaveable { mutableStateOf(false) }
                 var splashStartMs by rememberSaveable { mutableStateOf(0L) }
                 LaunchedEffect(Unit) {
@@ -473,6 +482,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 isAuthenticated -> {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -544,6 +554,10 @@ class MainActivity : ComponentActivity() {
                                             onOpenFollowConnections = { tab ->
                                                 followConnectionsInitialTab = tab
                                                 showFollowConnections = true
+                                            },
+                                            onFeaturedSellerClick = { seller ->
+                                                val u = seller.username.trim()
+                                                if (u.isNotEmpty()) sellerShopUsername = u
                                             },
                                             onConversationClick = { item ->
                                                 selectedConversationItem = item
@@ -621,7 +635,31 @@ class MainActivity : ComponentActivity() {
                                                         selectedListingId = lid
                                                     }
                                                 },
-                                                onVisitSellerShop = { },
+                                                onVisitSellerShop = { username ->
+                                                    sellerShopUsername = username
+                                                },
+                                            )
+                                        }
+                                        if (sellerShopUsername != null) {
+                                            BackHandler { sellerShopUsername = null }
+                                            SellerProfileScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                viewModel = sellerProfileViewModel,
+                                                sellerUsername = sellerShopUsername!!,
+                                                onBack = { sellerShopUsername = null },
+                                                onListingClick = { lid, sellerId ->
+                                                    val myId =
+                                                        authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                    if (!sellerId.isNullOrBlank() && sellerId == myId) {
+                                                        sellerShopUsername = null
+                                                        editListingId = lid
+                                                    } else {
+                                                        sellerShopUsername = null
+                                                        selectedListingId = lid
+                                                    }
+                                                },
                                             )
                                         }
                                         if (editListingId != null) {
@@ -818,6 +856,10 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 viewModel = followConnectionsViewModel,
                                                 onBack = { showFollowConnections = false },
+                                                onExploreClick = {
+                                                    showFollowConnections = false
+                                                    selectedTab = MainTab.Explore.ordinal
+                                                },
                                             )
                                         }
                                     }

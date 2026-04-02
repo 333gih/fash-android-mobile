@@ -33,5 +33,5 @@ fun rememberPrimaryCtaBrush(widthDp: Dp, heightDp: Dp): Brush {
     }
 }
 
-/** Ghost border: outlineVariant at 15% — use for cards on white when tonal shift isn’t enough */
-fun ghostBorderColor(outlineVariant: Color): Color = outlineVariant.copy(alpha = 0.32f)
+/** Ghost border on elevated cards — tuned so the edge reads on the paper canvas. */
+fun ghostBorderColor(outlineVariant: Color): Color = outlineVariant.copy(alpha = 0.42f)

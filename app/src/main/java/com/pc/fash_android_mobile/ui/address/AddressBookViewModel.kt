@@ -38,6 +38,9 @@ class AddressBookViewModel(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
+    private val _provincesLoading = MutableStateFlow(false)
+    val provincesLoading: StateFlow<Boolean> = _provincesLoading.asStateFlow()
+
     private val _provinces = MutableStateFlow<List<CommonAddressDto>>(emptyList())
     val provinces: StateFlow<List<CommonAddressDto>> = _provinces.asStateFlow()
 
@@ -83,7 +86,12 @@ class AddressBookViewModel(
     fun loadProvincesIfNeeded() {
         if (_provinces.value.isNotEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            commonRepo.getAddresses(level = 1).onSuccess { _provinces.value = it }
+            _provincesLoading.value = true
+            try {
+                commonRepo.getAddresses(level = 1).onSuccess { _provinces.value = it }
+            } finally {
+                _provincesLoading.value = false
+            }
         }
     }
 

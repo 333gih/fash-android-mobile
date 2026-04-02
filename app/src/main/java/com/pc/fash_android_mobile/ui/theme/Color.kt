@@ -2,170 +2,192 @@ package com.pc.fash_android_mobile.ui.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.ui.graphics.Color
 
 /**
- * Brand and surface tokens for "The Digital Editorial" design system.
- * Prefer [fashLightColorScheme] / [fashDarkColorScheme] with Material 3; use these for gradients and one-off accents.
+ * Which light palette [fashLightColorScheme] uses. **Editorial** = warm paper (System default when device
+ * is light). **PureWhite** = full white background when user picks **Light** in Settings.
+ */
+enum class FashLightAppearance {
+    Editorial,
+    PureWhite,
+}
+
+/**
+ * Legacy Material-style names for the Fash palette. Brand and semantic text come from [FashColorTokens.LightEditorial];
+ * surface fields match the **editorial** baseline — prefer [MaterialTheme.colorScheme] in composables so
+ * **PureWhite** light mode is applied correctly.
+ *
+ * Prefer [fashLightColorScheme] / [fashDarkColorScheme] with Material 3; use [FashColors] for gradients
+ * and one-off accents when [MaterialTheme.colorScheme] is not enough.
  */
 object FashColors {
     /** Editorial coral — main actions and brand (matches latest login art) */
-    val Primary = Color(0xFFFF4B64)
+    val Primary = FashColorTokens.LightEditorial.brandPrimary
 
     /** Deeper tone for gradients / pressed */
-    val PrimaryDeep = Color(0xFFE03E56)
+    val PrimaryDeep = FashColorTokens.LightEditorial.brandPrimaryDeep
 
     /** Softer primary tint — backgrounds and secondary emphasis */
-    val PrimaryContainer = Color(0xFFFF7A8C)
+    val PrimaryContainer = FashColorTokens.LightEditorial.brandPrimaryContainer
 
-    val OnPrimary = Color(0xFFFFEFEC)
+    val OnPrimary = FashColorTokens.LightEditorial.onBrandPrimary
 
-    val OnPrimaryContainer = Color(0xFF400014)
+    val OnPrimaryContainer = FashColorTokens.LightEditorial.onBrandPrimaryContainer
 
-    /** App-wide screen and Material surface base — white canvas */
-    val SurfaceVariantCream = Color.White
+    /** Editorial secondary surfaces — use [MaterialTheme.colorScheme.surfaceVariant] for theme-aware UI. */
+    val SurfaceVariantCream = FashColorTokens.LightEditorial.surfaceVariant
 
-    /** Base canvas (lowest surface) */
-    val SurfaceLowest = Color.White
+    /** Editorial paper canvas — use [MaterialTheme.colorScheme.background] for theme-aware UI. */
+    val SurfaceLowest = FashColorTokens.LightEditorial.screen
 
     /** Main feed / section bands */
-    val SurfaceContainerLow = Color.White
+    val SurfaceContainerLow = FashColorTokens.LightEditorial.surfaceContainerLow
 
-    val SurfaceContainer = Color.White
+    val SurfaceContainer = FashColorTokens.LightEditorial.surfaceContainer
 
-    val SurfaceContainerHigh = Color.White
+    val SurfaceContainerHigh = FashColorTokens.LightEditorial.surfaceContainerHigh
 
     /** High-priority cards (e.g. buy-now) */
-    val SurfaceContainerHighest = Color.White
+    val SurfaceContainerHighest = FashColorTokens.LightEditorial.surfaceContainerHighest
 
     /**
      * Settings → Display → “System default” selected row (warm editorial cream).
      * Matches brand reference #F5F2EA (RGB 245, 242, 234).
      */
-    val SystemDefaultThemeHighlight = Color(0xFFF5F2EA)
+    val SystemDefaultThemeHighlight = FashColorTokens.LightEditorial.settingsSystemDefaultRow
 
-    val OnSurface = Color(0xFF1C1917)
+    val OnSurface = FashColorTokens.LightEditorial.textPrimary
 
-    val OnSurfaceVariant = Color(0xFF52443F)
+    val OnSurfaceVariant = FashColorTokens.LightEditorial.textSecondary
 
     /**
      * Focused borders, key outlines. Warm brown-gray — readable on white without cold “tech gray.”
      * (Avoid pure white/near-white borders: they disappear on [SurfaceLowest].)
      */
-    val Outline = Color(0xFF6A5F59)
+    val Outline = FashColorTokens.LightEditorial.outlineStrong
 
     /**
-     * Default hairlines, cards, chips, dividers on white. **Warm stone** (#BEB6B1 family): visibly distinct
-     * from the canvas, softer than flat #D9D9D9, and on-brand next to coral [Primary].
+     * Default hairlines, cards, chips, dividers — use [MaterialTheme.colorScheme.outlineVariant] in UI.
      */
-    val OutlineVariant = Color(0xFFBEB6B1)
+    val OutlineVariant = FashColorTokens.LightEditorial.outlineMuted
 
-    val SecondaryWarm = Color(0xFF6B5349)
+    val SecondaryWarm = FashColorTokens.LightEditorial.secondary
 
-    val OnSecondaryWarm = Color(0xFFFFFFFF)
+    val OnSecondaryWarm = FashColorTokens.LightEditorial.onSecondary
 
-    val SecondaryContainer = Color(0xFFFFDCC6)
+    val SecondaryContainer = FashColorTokens.LightEditorial.secondaryContainer
 
-    val OnSecondaryContainer = Color(0xFF331200)
+    val OnSecondaryContainer = FashColorTokens.LightEditorial.onSecondaryContainer
 
-    val TertiaryAccent = Color(0xFF8C4A3F)
+    val TertiaryAccent = FashColorTokens.LightEditorial.tertiary
 
-    val OnTertiary = Color(0xFFFFFFFF)
+    val OnTertiary = FashColorTokens.LightEditorial.onTertiary
 
     /** FAB / floating — ambient tint base (#FF3B5C @ ~6% via modifiers) */
     val AmbientShadowBase = Primary
 
-    val Error = Color(0xFFBA1A1A)
+    val Error = FashColorTokens.LightEditorial.error
 
-    val OnError = Color(0xFFFFFFFF)
+    val OnError = FashColorTokens.LightEditorial.onError
 
-    val ErrorContainer = Color(0xFFFFDAD6)
+    val ErrorContainer = FashColorTokens.LightEditorial.errorContainer
 
-    val OnErrorContainer = Color(0xFF410002)
+    val OnErrorContainer = FashColorTokens.LightEditorial.onErrorContainer
 
     /** Success / available indicator (e.g. username check) */
-    val Success = Color(0xFF2E7D32)
+    val Success = FashColorTokens.LightEditorial.success
 
     // —— Dark editorial —— //
 
-    val PrimaryDark = Color(0xFFFF6B7D)
+    val PrimaryDark = FashColorTokens.Dark.brandPrimary
 
-    val PrimaryContainerDark = Color(0xFFB02140)
+    val PrimaryContainerDark = FashColorTokens.Dark.brandPrimaryContainer
 
-    val OnPrimaryDark = Color(0xFF5C0016)
+    val OnPrimaryDark = FashColorTokens.Dark.onBrandPrimary
 
-    val OnPrimaryContainerDark = Color(0xFFFFDADA)
+    val OnPrimaryContainerDark = FashColorTokens.Dark.onBrandPrimaryContainer
 
-    val SurfaceLowestDark = Color(0xFF141210)
+    val SurfaceLowestDark = FashColorTokens.Dark.screen
 
-    val SurfaceContainerLowDark = Color(0xFF1C1916)
+    val SurfaceContainerLowDark = FashColorTokens.Dark.surfaceContainerLow
 
-    val SurfaceContainerDark = Color(0xFF231F1C)
+    val SurfaceContainerDark = FashColorTokens.Dark.surfaceContainer
 
-    val SurfaceContainerHighDark = Color(0xFF2B2623)
+    val SurfaceContainerHighDark = FashColorTokens.Dark.surfaceContainerHigh
 
-    val SurfaceContainerHighestDark = Color(0xFF342E2A)
+    val SurfaceContainerHighestDark = FashColorTokens.Dark.surfaceContainerHighest
 
-    val SurfaceVariantDark = Color(0xFF3D3834)
+    val SurfaceVariantDark = FashColorTokens.Dark.surfaceVariant
 
-    val OnSurfaceDark = Color(0xFFF5EFEA)
+    val OnSurfaceDark = FashColorTokens.Dark.textPrimary
 
-    val OnSurfaceVariantDark = Color(0xFFD0C4BC)
+    val OnSurfaceVariantDark = FashColorTokens.Dark.textSecondary
 
-    val OutlineDark = Color(0xFF9D8B83)
+    val OutlineDark = FashColorTokens.Dark.outlineStrong
 
-    val OutlineVariantDark = Color(0xFF4A4340)
+    val OutlineVariantDark = FashColorTokens.Dark.outlineMuted
 
-    val SecondaryDark = Color(0xFFD7C2B6)
+    val SecondaryDark = FashColorTokens.Dark.secondary
 
-    val OnSecondaryDark = Color(0xFF3B2D27)
+    val OnSecondaryDark = FashColorTokens.Dark.onSecondary
 
-    val SecondaryContainerDark = Color(0xFF524239)
+    val SecondaryContainerDark = FashColorTokens.Dark.secondaryContainer
 
-    val OnSecondaryContainerDark = Color(0xFFF5DCCF)
+    val OnSecondaryContainerDark = FashColorTokens.Dark.onSecondaryContainer
 
-    val TertiaryDark = Color(0xFFFFB4A8)
+    val TertiaryDark = FashColorTokens.Dark.tertiary
 
-    val OnTertiaryDark = Color(0xFF561E16)
+    val OnTertiaryDark = FashColorTokens.Dark.onTertiary
 
-    val ErrorDark = Color(0xFFFFB4AB)
+    val ErrorDark = FashColorTokens.Dark.error
 
-    val OnErrorDark = Color(0xFF690005)
+    val OnErrorDark = FashColorTokens.Dark.onError
 
-    val ErrorContainerDark = Color(0xFF93000A)
+    val ErrorContainerDark = FashColorTokens.Dark.errorContainer
 
-    val OnErrorContainerDark = Color(0xFFFFDAD6)
+    val OnErrorContainerDark = FashColorTokens.Dark.onErrorContainer
 }
 
-fun fashLightColorScheme() = lightColorScheme(
-    primary = FashColors.Primary,
-    onPrimary = FashColors.OnPrimary,
-    primaryContainer = FashColors.PrimaryContainer,
-    onPrimaryContainer = FashColors.OnPrimaryContainer,
-    secondary = FashColors.SecondaryWarm,
-    onSecondary = FashColors.OnSecondaryWarm,
-    secondaryContainer = FashColors.SecondaryContainer,
-    onSecondaryContainer = FashColors.OnSecondaryContainer,
-    tertiary = FashColors.TertiaryAccent,
-    onTertiary = FashColors.OnTertiary,
-    background = FashColors.SurfaceLowest,
-    onBackground = FashColors.OnSurface,
-    surface = FashColors.SurfaceLowest,
-    onSurface = FashColors.OnSurface,
-    surfaceVariant = FashColors.SurfaceVariantCream,
-    onSurfaceVariant = FashColors.OnSurfaceVariant,
-    surfaceContainerLowest = FashColors.SurfaceLowest,
-    surfaceContainerLow = FashColors.SurfaceContainerLow,
-    surfaceContainer = FashColors.SurfaceContainer,
-    surfaceContainerHigh = FashColors.SurfaceContainerHigh,
-    surfaceContainerHighest = FashColors.SurfaceContainerHighest,
-    outline = FashColors.Outline,
-    outlineVariant = FashColors.OutlineVariant,
-    error = FashColors.Error,
-    onError = FashColors.OnError,
-    errorContainer = FashColors.ErrorContainer,
-    onErrorContainer = FashColors.OnErrorContainer,
-)
+fun fashLightColorScheme(
+    appearance: FashLightAppearance = FashLightAppearance.Editorial,
+) = run {
+    val L = lightSurfacePalette(appearance)
+    val E = FashColorTokens.LightEditorial
+    lightColorScheme(
+        primary = E.brandPrimary,
+        onPrimary = E.onBrandPrimary,
+        primaryContainer = E.brandPrimaryContainer,
+        onPrimaryContainer = E.onBrandPrimaryContainer,
+        secondary = E.secondary,
+        onSecondary = E.onSecondary,
+        secondaryContainer = E.secondaryContainer,
+        onSecondaryContainer = E.onSecondaryContainer,
+        tertiary = E.tertiary,
+        onTertiary = E.onTertiary,
+        background = L.screen,
+        onBackground = E.textPrimary,
+        surface = L.screen,
+        onSurface = E.textPrimary,
+        surfaceVariant = L.surfaceVariant,
+        onSurfaceVariant = E.textSecondary,
+        surfaceContainerLowest = L.screen,
+        surfaceContainerLow = L.surfaceContainerLow,
+        surfaceContainer = L.surfaceContainer,
+        surfaceContainerHigh = L.surfaceContainerHigh,
+        surfaceContainerHighest = L.surfaceContainerHighest,
+        outline = L.outlineStrong,
+        outlineVariant = L.outlineMuted,
+        error = E.error,
+        onError = E.onError,
+        errorContainer = E.errorContainer,
+        onErrorContainer = E.onErrorContainer,
+    )
+}
+
+private fun lightSurfacePalette(appearance: FashLightAppearance): LightSurfacePalette = when (appearance) {
+    FashLightAppearance.Editorial -> FashColorTokens.LightEditorial
+    FashLightAppearance.PureWhite -> FashColorTokens.LightPureWhite
+}
 
 fun fashDarkColorScheme() = darkColorScheme(
     primary = FashColors.PrimaryDark,
