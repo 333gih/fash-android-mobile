@@ -67,7 +67,6 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel,
     onLogout: () -> Unit,
-    onLogoutAll: () -> Unit,
     isLoggingOut: Boolean = false,
     onEditProfile: () -> Unit = { },
     onShippingAddressesClick: () -> Unit = { },

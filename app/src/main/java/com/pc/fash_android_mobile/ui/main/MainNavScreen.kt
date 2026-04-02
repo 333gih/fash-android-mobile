@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Explore
@@ -61,6 +62,7 @@ import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
+import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -128,6 +130,7 @@ fun MainNavScreen(
     onTabChange: (Int) -> Unit,
 ) {
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
+    var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
     val tabs = MainTab.entries
     val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val openExploreSearch: () -> Unit = {
@@ -152,7 +155,10 @@ fun MainNavScreen(
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
                     onLogout = onLogout,
-                    onLogoutAll = onLogoutAll,
+                    onOpenSettings = {
+                        showNotificationScreen = false
+                        showSettingsScreen = true
+                    },
                     isLoggingOut = isLoggingOut,
                 )
                 MainTab.Home, MainTab.Post, MainTab.Chat -> MainTopBar(
@@ -260,7 +266,6 @@ fun MainNavScreen(
                     MainTab.Profile -> ProfileScreen(
                         viewModel = profileViewModel,
                         onLogout = onLogout,
-                        onLogoutAll = onLogoutAll,
                         isLoggingOut = isLoggingOut,
                         onEditProfile = onEditProfile,
                         onShippingAddressesClick = onShippingAddressesClick,
@@ -278,6 +283,28 @@ fun MainNavScreen(
             onBack = { showNotificationScreen = false },
         )
     }
+    if (showSettingsScreen) {
+        BackHandler { showSettingsScreen = false }
+        SettingsScreen(
+            modifier = Modifier.fillMaxSize(),
+            onBack = { showSettingsScreen = false },
+            onLogout = onLogout,
+            onLogoutAll = onLogoutAll,
+            isLoggingOut = isLoggingOut,
+            onOpenShippingAddresses = {
+                showSettingsScreen = false
+                onShippingAddressesClick()
+            },
+            onOpenOrders = {
+                showSettingsScreen = false
+                onOrdersClick()
+            },
+            onOpenEditProfile = {
+                showSettingsScreen = false
+                onEditProfile()
+            },
+        )
+    }
     }
 }
 
@@ -288,7 +315,7 @@ private fun ProfileTopBar(
     onNotificationsClick: () -> Unit,
     onOrdersClick: () -> Unit,
     onLogout: () -> Unit,
-    onLogoutAll: () -> Unit,
+    onOpenSettings: () -> Unit,
     isLoggingOut: Boolean,
 ) {
     var menuExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
@@ -324,24 +351,31 @@ private fun ProfileTopBar(
                     tint = FashColors.Primary,
                 )
             }
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.home_logout)) },
-                    onClick = { menuExpanded = false; onLogout() },
-                    enabled = !isLoggingOut,
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.home_logout_all)) },
-                    onClick = { menuExpanded = false; onLogoutAll() },
-                    enabled = !isLoggingOut,
-                )
+            // DropdownMenu must share a Box with the anchor IconButton; as a bare Row sibling it mispositions.
+            Box(modifier = Modifier.wrapContentSize(align = Alignment.TopEnd)) {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.cd_overflow_menu),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.home_logout)) },
+                        onClick = { menuExpanded = false; onLogout() },
+                        enabled = !isLoggingOut,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.home_settings)) },
+                        onClick = { menuExpanded = false; onOpenSettings() },
+                        enabled = !isLoggingOut,
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(

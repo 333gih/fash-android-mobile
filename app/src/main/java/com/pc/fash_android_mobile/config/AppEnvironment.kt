@@ -88,10 +88,19 @@ object AppEnvironment {
 
     /**
      * Secured GET path (relative, passed to [apiPath]) for onboarding/home gate.
-     * Response JSON: `has_profile`, `aesthetic_tags_configured`, `onboarding_done`, `sizing_reference_completed`.
+     * Core-service: `api/v1/users/me/setup-status` (override via env `CORE_USER_ACCESS_STATUS_PATH`).
+     * Response JSON: `has_profile`, `aesthetic_tags_configured`, `onboarding_done`, `sizing_reference_completed`,
+     * `can_access_home`, `next_step`, etc.
      */
     val userAccessStatusPath: String
         get() = BuildConfig.CORE_USER_ACCESS_STATUS_PATH
+
+    /**
+     * From env `SKIP_SIZING_REFERENCE_COMPLETED` — when true, sizing onboarding UI is hidden even if the
+     * server reports `sizing_reference_completed: false`.
+     */
+    val skipSizingReferenceCompleted: Boolean
+        get() = BuildConfig.SKIP_SIZING_REFERENCE_COMPLETED
 
     /** common-service root (see ANDROID_API_INTEGRATION.md); no language prefix. */
     val commonServiceBaseUrl: String

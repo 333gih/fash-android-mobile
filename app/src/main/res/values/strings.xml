@@ -11,6 +11,7 @@
     <string name="search_label">Tìm kiếm</string>
     <string name="search_placeholder">Tìm kiếm phong cách của bạn…</string>
     <string name="cd_back">Quay lại</string>
+    <string name="cd_overflow_menu">Thêm tùy chọn</string>
     <string name="settings_language">Ngôn ngữ</string>
     <string name="language_vietnamese">Tiếng Việt</string>
     <string name="language_english">English</string>
@@ -84,13 +85,35 @@
     <string name="login_password_failed">Email hoặc mật khẩu không đúng.</string>
     <string name="home_welcome">Chào mừng</string>
     <string name="home_logout">Đăng xuất</string>
+    <string name="home_settings">Cài đặt</string>
     <string name="home_logout_all">Đăng xuất tất cả thiết bị</string>
+    <string name="settings_title">Cài đặt</string>
+    <string name="settings_section_language">Ngôn ngữ</string>
+    <string name="settings_language_hint">Tiếng Việt hoặc English — áp dụng cho toàn bộ ứng dụng.</string>
+    <string name="settings_section_display">Giao diện</string>
+    <string name="settings_theme_system">Theo hệ thống</string>
+    <string name="settings_theme_light">Sáng</string>
+    <string name="settings_theme_dark">Tối</string>
+    <string name="settings_section_shopping">Mua sắm</string>
+    <string name="settings_row_shipping_addresses">Địa chỉ giao hàng</string>
+    <string name="settings_row_orders">Đơn hàng của tôi</string>
+    <string name="settings_section_profile">Hồ sơ</string>
+    <string name="settings_row_edit_profile">Chỉnh sửa hồ sơ</string>
+    <string name="settings_section_notifications">Thông báo</string>
+    <string name="settings_row_notification_settings">Cài đặt thông báo hệ thống</string>
+    <string name="settings_row_notification_settings_sub">Bật hoặc tắt trong cài đặt Android</string>
+    <string name="settings_section_account">Tài khoản</string>
+    <string name="settings_section_about">Giới thiệu</string>
+    <string name="settings_about_version_label">Phiên bản</string>
+    <string name="settings_about_version_value">%1$s (%2$d)</string>
+    <string name="settings_about_env_line">Môi trường: %1$s · %2$s</string>
+    <string name="settings_footer_hint">Ngôn ngữ API (core-service) theo lựa chọn ngôn ngữ ứng dụng khi máy chủ bật tiền tố ngôn ngữ.</string>
     <string name="logout_success">Đã đăng xuất.</string>
     <string name="logout_failed">Đăng xuất thất bại.</string>
 
     <string name="onboarding_title">Chọn phong cách của bạn</string>
     <string name="onboarding_question">Phong cách của bạn?</string>
-    <string name="onboarding_subtitle">Chọn ít nhất 3 để cá nhân hóa feed</string>
+    <string name="onboarding_subtitle">Tùy chọn — chọn thẻ hoặc bỏ qua</string>
     <string name="onboarding_selected_count">Đã chọn %1$d/%2$d</string>
     <string name="onboarding_skip">Bỏ qua</string>
     <string name="onboarding_continue">Tiếp tục</string>
@@ -120,6 +143,10 @@
     <string name="profile_setup_measurement_shoulders">Vai</string>
     <string name="profile_setup_measurement_sleeve">Dài tay</string>
     <string name="onboarding_sizing_error">Không lưu được kích thước. Thử lại.</string>
+    <string name="onboarding_aesthetic_error">Không lưu được phong cách. Thử lại.</string>
+    <string name="onboarding_sizing_screen_title">Kích thước</string>
+    <string name="onboarding_sizing_optional_hint">Tùy chọn — điền để gợi ý size phù hợp hơn.</string>
+    <string name="onboarding_username_screen_title">Tên người dùng</string>
 
     <string name="nav_home">Trang chủ</string>
     <string name="nav_explore">Khám phá</string>

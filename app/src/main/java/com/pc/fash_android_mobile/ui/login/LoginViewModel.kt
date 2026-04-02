@@ -356,7 +356,10 @@ class LoginViewModel(
             }
             _isLoggingOut.value = false
             result.fold(
-                onSuccess = { _events.tryEmit(app.getString(R.string.logout_success)) },
+                onSuccess = {
+                    (app as FashApplication).onboardingLocalStore.clearAll()
+                    _events.tryEmit(app.getString(R.string.logout_success))
+                },
                 onFailure = { _events.tryEmit(app.getString(R.string.logout_failed)) },
             )
         }
@@ -375,7 +378,10 @@ class LoginViewModel(
             }
             _isLoggingOut.value = false
             result.fold(
-                onSuccess = { _events.tryEmit(app.getString(R.string.logout_success)) },
+                onSuccess = {
+                    (app as FashApplication).onboardingLocalStore.clearAll()
+                    _events.tryEmit(app.getString(R.string.logout_success))
+                },
                 onFailure = { _events.tryEmit(app.getString(R.string.logout_failed)) },
             )
         }

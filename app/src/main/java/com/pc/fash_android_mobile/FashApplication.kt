@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
+import com.pc.fash_android_mobile.data.onboarding.OnboardingLocalStore
 import com.pc.fash_android_mobile.data.address.UserShippingAddressRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
@@ -113,6 +114,9 @@ class FashApplication : android.app.Application() {
 
     /** Local shipping address book + per-order selection (sync with core when API is available). */
     val addressLocalStore: AddressLocalStore by lazy { AddressLocalStore(this) }
+
+    /** Optional onboarding skips (aesthetic / sizing) per user; cleared on logout from [LoginViewModel]. */
+    val onboardingLocalStore: OnboardingLocalStore by lazy { OnboardingLocalStore(this) }
 
     /** Core `GET/POST /users/me/shipping-addresses` + set default. */
     val userShippingAddressRepository: UserShippingAddressRepository by lazy {

@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -70,7 +71,8 @@ import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingStep
-import com.pc.fash_android_mobile.ui.onboarding.ProfileSetupScreen
+import com.pc.fash_android_mobile.ui.onboarding.SizingReferenceScreen
+import com.pc.fash_android_mobile.ui.onboarding.UsernameOnboardScreen
 import com.pc.fash_android_mobile.ui.login.LoginStep
 import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
@@ -84,6 +86,7 @@ import com.pc.fash_android_mobile.ui.address.ShippingAddressListScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -97,10 +100,16 @@ private const val ACCESS_STATUS_POLL_MS = 350L
 private const val ACCESS_STATUS_POLL_ATTEMPTS = 5
 
 /**
- * After [UserRepository.onboard] + [UserRepository.saveSizingReference] succeed, the access-status
- * endpoint can briefly still return [com.pc.fash_android_mobile.data.user.UserAccessStatus.canAccessHome] false.
- * Poll a few times; if still not flipped, allow home anyway (writes already succeeded).
+ * After [UserRepository.onboard] (username step) succeeds, the access-status endpoint can briefly still
+ * return [com.pc.fash_android_mobile.data.user.UserAccessStatus.canAccessHome] false.
+ * Poll a few times; if still not flipped, allow home anyway (write already succeeded).
  */
+private suspend fun refreshNeedsOnboardingFlag(repo: UserRepository): Boolean =
+    repo.getUserAccessStatus().fold(
+        onSuccess = { !it.canAccessHome },
+        onFailure = { true },
+    )
+
 private suspend fun resolveNeedsOnboardingAfterProfileSubmit(repo: UserRepository): Boolean {
     repeat(ACCESS_STATUS_POLL_ATTEMPTS) { attempt ->
         repo.getUserAccessStatus().fold(
@@ -226,7 +235,16 @@ class MainActivity : ComponentActivity() {
             val googleOk = LoginViewModel.isGoogleConfigured()
 
             ProvideAppLocale {
-            FashTheme {
+            val contextForTheme = LocalContext.current
+            val themeRev by AppThemePreference.revision.collectAsState()
+            val themeMode = remember(themeRev) { AppThemePreference.readMode(contextForTheme) }
+            val systemDark = isSystemInDarkTheme()
+            val useDarkTheme = when (themeMode) {
+                AppThemePreference.Mode.LIGHT -> false
+                AppThemePreference.Mode.DARK -> true
+                AppThemePreference.Mode.SYSTEM -> systemDark
+            }
+            FashTheme(darkTheme = useDarkTheme) {
                 var splashFinished by rememberSaveable { mutableStateOf(false) }
                 var splashStartMs by rememberSaveable { mutableStateOf(0L) }
                 LaunchedEffect(Unit) {
@@ -312,12 +330,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(Unit) {
-                    onboardingViewModel.events.collect { message ->
-                        snackbarHostState.showSnackbar(message)
-                    }
-                }
-
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (splashFinished) {
                         Box(Modifier.fillMaxSize()) {
@@ -325,80 +337,137 @@ class MainActivity : ComponentActivity() {
                                 isLoggingOut -> FashWaitingScreen()
                                 isAuthenticated && needsOnboarding == null -> FashWaitingScreen()
                                 isAuthenticated && needsOnboarding == true -> {
-                                    LaunchedEffect(Unit) {
-                                        if (onboardingStep == OnboardingStep.StyleSelection) {
+                                    LaunchedEffect(onboardingStep) {
+                                        if (onboardingStep == OnboardingStep.AestheticTags) {
                                             onboardingViewModel.loadTags()
                                         }
                                     }
+                                    LaunchedEffect(onboardingStep, email) {
+                                        if (onboardingStep == OnboardingStep.UsernameOnboard) {
+                                            onboardingViewModel.seedUsernameFromEmailIfEmpty(email)
+                                        }
+                                    }
+                                    val userRepoOnboarding = remember {
+                                        (application as FashApplication).userRepository
+                                    }
                                     when (onboardingStep) {
-                                        OnboardingStep.StyleSelection -> OnboardingScreen(
+                                        OnboardingStep.AestheticTags -> OnboardingScreen(
                                             tags = onboardingTags,
                                             selectedIds = onboardingSelected,
                                             isLoading = onboardingLoading,
                                             isSubmitting = onboardingSubmitting,
-                                            progressStep = 2,
+                                            progressStep = 1,
                                             progressTotal = 3,
                                             onToggleSelection = onboardingViewModel::toggleSelection,
                                             onContinue = {
-                                                onboardingViewModel.goToProfileSetup(
-                                                    onboardingViewModel.generateUsernameFromEmail(loginViewModel.email.value),
-                                                )
+                                                onboardingViewModel.submitAestheticTagsPut {
+                                                    mainScope.launch {
+                                                        needsOnboarding = withContext(Dispatchers.IO) {
+                                                            refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                        }
+                                                    }
+                                                }
                                             },
                                             onSkip = {
-                                                onboardingViewModel.skipToProfileSetup(loginViewModel.email.value)
+                                                onboardingViewModel.skipAestheticTagsPersistLocal {
+                                                    mainScope.launch {
+                                                        needsOnboarding = withContext(Dispatchers.IO) {
+                                                            refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                        }
+                                                    }
+                                                }
                                             },
                                             onBack = {
                                                 authManager.sessionStore.clear()
                                                 authManager.onSessionCleared()
                                             },
                                         )
-                                        OnboardingStep.ProfileSetup -> {
-                                            val canSubmitOnboardingProfile = remember(
-                                                onboardingUsername,
+                                        OnboardingStep.SizingReference -> {
+                                            val canSizing = remember(
                                                 onboardingReferenceSize,
                                             ) {
-                                                onboardingViewModel.canSubmitProfile()
+                                                onboardingViewModel.canSubmitSizing()
                                             }
-                                            ProfileSetupScreen(
-                                            username = onboardingUsername,
-                                            onUsernameChange = onboardingViewModel::onUsernameChange,
-                                            isUsernameValid = onboardingViewModel.isUsernameValid(),
-                                            canSubmit = canSubmitOnboardingProfile,
-                                            referenceSize = onboardingReferenceSize,
-                                            onReferenceSizeChange = onboardingViewModel::onReferenceSizeChange,
-                                            measurementUnit = onboardingMeasurementUnit,
-                                            onMeasurementUnitChange = onboardingViewModel::onMeasurementUnitChange,
-                                            measurementHem = onboardingMeasHem,
-                                            onMeasurementHemChange = onboardingViewModel::onMeasurementHemChange,
-                                            measurementChest = onboardingMeasChest,
-                                            onMeasurementChestChange = onboardingViewModel::onMeasurementChestChange,
-                                            measurementLength = onboardingMeasLength,
-                                            onMeasurementLengthChange = onboardingViewModel::onMeasurementLengthChange,
-                                            measurementShoulders = onboardingMeasShoulders,
-                                            onMeasurementShouldersChange = onboardingViewModel::onMeasurementShouldersChange,
-                                            measurementSleeve = onboardingMeasSleeve,
-                                            onMeasurementSleeveChange = onboardingViewModel::onMeasurementSleeveChange,
-                                            isSubmitting = onboardingSubmitting,
-                                            progressStep = 3,
-                                            progressTotal = 3,
-                                            onComplete = {
-                                                onboardingViewModel.submitOnboard {
-                                                    authManager.sessionStore.read()?.let { s ->
-                                                        authManager.sessionStore.save(
-                                                            s.copy(isNewUser = false),
-                                                        )
-                                                    }
-                                                    mainScope.launch {
-                                                        val repo =
-                                                            (this@MainActivity.application as FashApplication).userRepository
-                                                        needsOnboarding = withContext(Dispatchers.IO) {
-                                                            resolveNeedsOnboardingAfterProfileSubmit(repo)
+                                            SizingReferenceScreen(
+                                                referenceSize = onboardingReferenceSize,
+                                                onReferenceSizeChange = onboardingViewModel::onReferenceSizeChange,
+                                                measurementUnit = onboardingMeasurementUnit,
+                                                onMeasurementUnitChange = onboardingViewModel::onMeasurementUnitChange,
+                                                measurementHem = onboardingMeasHem,
+                                                onMeasurementHemChange = onboardingViewModel::onMeasurementHemChange,
+                                                measurementChest = onboardingMeasChest,
+                                                onMeasurementChestChange = onboardingViewModel::onMeasurementChestChange,
+                                                measurementLength = onboardingMeasLength,
+                                                onMeasurementLengthChange = onboardingViewModel::onMeasurementLengthChange,
+                                                measurementShoulders = onboardingMeasShoulders,
+                                                onMeasurementShouldersChange = onboardingViewModel::onMeasurementShouldersChange,
+                                                measurementSleeve = onboardingMeasSleeve,
+                                                onMeasurementSleeveChange = onboardingViewModel::onMeasurementSleeveChange,
+                                                canSubmit = canSizing,
+                                                isSubmitting = onboardingSubmitting,
+                                                progressStep = 2,
+                                                progressTotal = 3,
+                                                onComplete = {
+                                                    onboardingViewModel.submitSizingOnly {
+                                                        mainScope.launch {
+                                                            needsOnboarding = withContext(Dispatchers.IO) {
+                                                                refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                            }
                                                         }
                                                     }
-                                                }
-                                            },
-                                            onBack = onboardingViewModel::goBackToStyle,
-                                        )
+                                                },
+                                                onSkip = {
+                                                    onboardingViewModel.skipSizingPersistLocal {
+                                                        mainScope.launch {
+                                                            needsOnboarding = withContext(Dispatchers.IO) {
+                                                                refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                onBack = {
+                                                    if (!onboardingViewModel.handleBack()) {
+                                                        authManager.sessionStore.clear()
+                                                        authManager.onSessionCleared()
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        OnboardingStep.UsernameOnboard -> {
+                                            val canUsername = remember(onboardingUsername) {
+                                                onboardingViewModel.canSubmitUsername()
+                                            }
+                                            UsernameOnboardScreen(
+                                                username = onboardingUsername,
+                                                onUsernameChange = onboardingViewModel::onUsernameChange,
+                                                isUsernameValid = onboardingViewModel.isUsernameValid(),
+                                                canSubmit = canUsername,
+                                                isSubmitting = onboardingSubmitting,
+                                                progressStep = 3,
+                                                progressTotal = 3,
+                                                onComplete = {
+                                                    onboardingViewModel.submitUsernameOnboard {
+                                                        authManager.sessionStore.read()?.let { s ->
+                                                            authManager.sessionStore.save(
+                                                                s.copy(isNewUser = false),
+                                                            )
+                                                        }
+                                                        mainScope.launch {
+                                                            val repo =
+                                                                (this@MainActivity.application as FashApplication).userRepository
+                                                            needsOnboarding = withContext(Dispatchers.IO) {
+                                                                resolveNeedsOnboardingAfterProfileSubmit(repo)
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                onBack = {
+                                                    if (!onboardingViewModel.handleBack()) {
+                                                        authManager.sessionStore.clear()
+                                                        authManager.onSessionCleared()
+                                                    }
+                                                },
+                                            )
                                         }
                                     }
                                 }

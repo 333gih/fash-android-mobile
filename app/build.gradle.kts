@@ -142,11 +142,19 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
 
     /**
      * Secured GET under [API_BASE_URL] (via [AppEnvironment.apiPath]) returning onboarding/home gate flags.
-     * JSON: `has_profile`, `aesthetic_tags_configured`, `onboarding_done`, `sizing_reference_completed`.
+     * Prefer core-service `GET .../users/me/setup-status` (same JSON as legacy `access-status` when present).
      */
     val userAccessStatusPath =
-        envVal("CORE_USER_ACCESS_STATUS_PATH") ?: "api/v1/users/me/access-status"
+        envVal("CORE_USER_ACCESS_STATUS_PATH") ?: "api/v1/users/me/setup-status"
     buildConfigField("String", "CORE_USER_ACCESS_STATUS_PATH", buildConfigStringLiteral(userAccessStatusPath))
+
+    /**
+     * When true, do not show sizing-reference onboarding even if `sizing_reference_completed` is false
+     * (dev / markets where sizing step is disabled).
+     */
+    val skipSizingReferenceCompleted =
+        envVal("SKIP_SIZING_REFERENCE_COMPLETED")?.equals("true", ignoreCase = true) == true
+    buildConfigField("boolean", "SKIP_SIZING_REFERENCE_COMPLETED", skipSizingReferenceCompleted.toString())
 
     /**
      * Optional server internal auth (ANDROID_API_INTEGRATION.md). **Do not** put real secrets in retail APKs;

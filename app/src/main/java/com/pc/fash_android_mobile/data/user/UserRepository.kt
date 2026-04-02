@@ -72,6 +72,42 @@ class UserRepository(
         parseAestheticTags(body)
     }
 
+    /**
+     * `PUT /users/me/aesthetic-tags` — sets user's aesthetic tag selections (ids + names).
+     */
+    fun putUserAestheticTags(tags: List<AestheticTagPutItem>): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/aesthetic-tags")
+        val arr = JSONArray()
+        tags.forEach { t ->
+            arr.put(
+                JSONObject().apply {
+                    put("id", t.id)
+                    put("name", t.name)
+                },
+            )
+        }
+        val json = JSONObject().put("aesthetic_tags", arr).toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .put(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
     fun onboard(username: String, aestheticTags: List<String>): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/users/onboard")
         val json = JSONObject()
@@ -515,7 +551,7 @@ class UserRepository(
     }
 
     /**
-     * Secured GET — server gate for home: all four flags must be true.
+     * Secured GET — onboarding/home gate (path from [AppEnvironment.userAccessStatusPath], e.g. `.../setup-status`).
      * Errors: JSON `{ "code": <http>, "error": "<message>" }` (typical core-service shape).
      */
     fun getUserAccessStatus(): Result<UserAccessStatus> = runCatching {
@@ -683,6 +719,11 @@ data class UserAccessStatus(
             return hasProfile && aestheticTagsConfigured && onboardingDone && sizingReferenceCompleted
         }
 }
+
+data class AestheticTagPutItem(
+    val id: String,
+    val name: String,
+)
 
 data class SizingReferenceRequest(
     val referenceSize: String,

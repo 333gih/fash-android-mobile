@@ -38,6 +38,12 @@ object FashColors {
     /** High-priority cards (e.g. buy-now) */
     val SurfaceContainerHighest = Color.White
 
+    /**
+     * Settings → Display → “System default” selected row (warm editorial cream).
+     * Matches brand reference #F5F2EA (RGB 245, 242, 234).
+     */
+    val SystemDefaultThemeHighlight = Color(0xFFF5F2EA)
+
     val OnSurface = Color(0xFF1C1917)
 
     val OnSurfaceVariant = Color(0xFF52443F)

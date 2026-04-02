@@ -89,7 +89,6 @@ fun OnboardingScreen(
     onBack: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val canContinue = selectedIds.size >= 3
 
     val topAnim = remember { Animatable(0f) }
     val gridAnim = remember { Animatable(0f) }
@@ -242,7 +241,7 @@ fun OnboardingScreen(
 
                 FashPrimaryButton(
                     onClick = onContinue,
-                    enabled = canContinue && !isSubmitting,
+                    enabled = !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = FashTheme.spacing.editorialStart, end = FashTheme.spacing.editorialEnd)

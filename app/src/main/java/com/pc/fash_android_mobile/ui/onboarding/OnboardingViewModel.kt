@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.user.AestheticTagPutItem
 import com.pc.fash_android_mobile.data.user.SizingReferenceRequest
 import com.pc.fash_android_mobile.data.user.UserAccessStatus
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -19,11 +21,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val MIN_SELECTIONS = 3
-
 enum class OnboardingStep {
-    StyleSelection,
-    ProfileSetup,
+    AestheticTags,
+    SizingReference,
+    UsernameOnboard,
 }
 
 class OnboardingViewModel(
@@ -34,8 +35,12 @@ class OnboardingViewModel(
         (application as FashApplication).userRepository
     private val commonServiceRepository =
         (application as FashApplication).commonServiceRepository
+    private val onboardingLocalStore =
+        (application as FashApplication).onboardingLocalStore
+    private val sessionStore =
+        (application as FashApplication).authManager.sessionStore
 
-    private val _onboardingStep = MutableStateFlow(OnboardingStep.StyleSelection)
+    private val _onboardingStep = MutableStateFlow(OnboardingStep.AestheticTags)
     val onboardingStep: StateFlow<OnboardingStep> = _onboardingStep.asStateFlow()
 
     private val _tags = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
@@ -68,8 +73,8 @@ class OnboardingViewModel(
     private val _measurementSleeve = MutableStateFlow("")
     val measurementSleeve: StateFlow<String> = _measurementSleeve.asStateFlow()
 
-    /** After a successful [UserRepository.onboard], sizing PUT can be retried without re-posting onboard. */
-    private var onboardSucceededPendingSizing: Boolean = false
+    private var lastAccessStatus: UserAccessStatus? = null
+    private val backStack = mutableListOf<OnboardingStep>()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -80,18 +85,63 @@ class OnboardingViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    private fun currentUserId(): String = sessionStore.read()?.userId.orEmpty()
+
     /**
-     * Align UI step with server flags: style tags first if not configured; else profile/sizing step.
+     * Align UI step with server flags and local skips. Clears back stack (cold entry / full refresh).
      */
     fun applyInitialStepFromAccessStatus(status: UserAccessStatus) {
         if (status.canAccessHome) return
-        val hint = status.nextStep?.lowercase().orEmpty()
-        _onboardingStep.value = when {
-            hint in setOf("profile", "sizing", "sizing_reference", "profile_setup") -> OnboardingStep.ProfileSetup
-            hint in setOf("style", "tags", "aesthetic", "aesthetic_tags", "onboard") -> OnboardingStep.StyleSelection
-            hint == "none" -> OnboardingStep.ProfileSetup
-            !status.aestheticTagsConfigured -> OnboardingStep.StyleSelection
-            else -> OnboardingStep.ProfileSetup
+        lastAccessStatus = status
+        backStack.clear()
+        _onboardingStep.value = resolveNextStep(status)
+    }
+
+    private fun resolveNextStep(status: UserAccessStatus): OnboardingStep {
+        val uid = currentUserId()
+        val skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted
+        return when {
+            !status.aestheticTagsConfigured && !onboardingLocalStore.skippedAestheticTags(uid) ->
+                OnboardingStep.AestheticTags
+            !status.sizingReferenceCompleted && !skipSizingEnv && !onboardingLocalStore.skippedSizing(uid) ->
+                OnboardingStep.SizingReference
+            !status.onboardingDone ->
+                OnboardingStep.UsernameOnboard
+            else ->
+                OnboardingStep.UsernameOnboard
+        }
+    }
+
+    private fun advanceAfterStatus(
+        status: UserAccessStatus,
+        completedStep: OnboardingStep?,
+    ) {
+        lastAccessStatus = status
+        val prev = _onboardingStep.value
+        val next = resolveNextStep(status)
+        if (completedStep != null && prev == completedStep) {
+            when {
+                completedStep == OnboardingStep.AestheticTags && next == OnboardingStep.SizingReference ->
+                    backStack.add(OnboardingStep.AestheticTags)
+                completedStep == OnboardingStep.SizingReference && next == OnboardingStep.UsernameOnboard ->
+                    backStack.add(OnboardingStep.SizingReference)
+            }
+        }
+        _onboardingStep.value = next
+    }
+
+    /**
+     * @return true if navigated to previous step; false if caller should sign out / exit onboarding.
+     */
+    fun handleBack(): Boolean {
+        val prev = backStack.removeLastOrNull() ?: return false
+        _onboardingStep.value = prev
+        return true
+    }
+
+    fun seedUsernameFromEmailIfEmpty(email: String) {
+        if (_username.value.isBlank()) {
+            _username.value = generateUsernameFromEmail(email)
         }
     }
 
@@ -121,20 +171,10 @@ class OnboardingViewModel(
         }
     }
 
-    fun canContinueFromStyle(): Boolean = _selectedIds.value.size >= MIN_SELECTIONS
-
-    fun goToProfileSetup(suggestedUsername: String = "") {
-        _username.value = suggestedUsername.ifBlank { generateUsernameFromEmail("") }
-        _onboardingStep.value = OnboardingStep.ProfileSetup
-    }
-
-    fun goBackToStyle() {
-        onboardSucceededPendingSizing = false
-        _onboardingStep.value = OnboardingStep.StyleSelection
-    }
+    /** Optional step: may continue with zero tags (PUT empty) or use Skip to persist local only. */
+    fun canContinueFromStyle(): Boolean = true
 
     fun onUsernameChange(value: String) {
-        onboardSucceededPendingSizing = false
         _username.value = value
             .lowercase()
             .replace(Regex("[^a-z0-9_.]"), "")
@@ -198,11 +238,18 @@ class OnboardingViewModel(
 
     fun isReferenceSizeValid(): Boolean = _referenceSize.value.trim().isNotEmpty()
 
-    fun canSubmitProfile(): Boolean = isUsernameValid() && isReferenceSizeValid()
+    fun canSubmitSizing(): Boolean = isReferenceSizeValid()
+
+    fun canSubmitUsername(): Boolean = isUsernameValid()
 
     fun getSelectedTagNames(): List<String> = _tags.value
         .filter { _selectedIds.value.contains(it.id) }
         .map { it.name }
+
+    private fun buildSelectedTagPutItems(): List<AestheticTagPutItem> =
+        _tags.value
+            .filter { _selectedIds.value.contains(it.id) }
+            .map { AestheticTagPutItem(id = it.id, name = it.name.ifBlank { it.displayName }) }
 
     private fun buildSizingRequest(): SizingReferenceRequest =
         SizingReferenceRequest(
@@ -215,38 +262,89 @@ class OnboardingViewModel(
             referenceMeasurementSleeveLength = parseMeasurementToDouble(_measurementSleeve.value),
         )
 
-    fun submitOnboard(onSuccess: () -> Unit) {
-        val u = _username.value.trim()
-        if (!isUsernameValid() || !isReferenceSizeValid()) return
-        val selectedTags = getSelectedTagNames()
+    fun submitAestheticTagsPut(onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
-                if (!onboardSucceededPendingSizing) {
-                    val onboardResult = withContext(Dispatchers.IO) {
-                        userRepository.onboard(u, selectedTags)
-                    }
-                    onboardResult.fold(
-                        onSuccess = { onboardSucceededPendingSizing = true },
-                        onFailure = {
-                            val msg = it.message?.takeIf { m -> m.isNotBlank() }
-                                ?: getApplication<Application>().getString(R.string.onboarding_submit_error)
-                            val displayMsg = if (msg.contains("409") || msg.contains("taken") || msg.contains("Username")) {
-                                getApplication<Application>().getString(R.string.profile_setup_username_taken)
-                            } else {
-                                msg
-                            }
-                            _events.tryEmit(displayMsg)
-                            return@launch
-                        },
-                    )
+                val putResult = withContext(Dispatchers.IO) {
+                    userRepository.putUserAestheticTags(buildSelectedTagPutItems())
                 }
+                putResult.fold(
+                    onSuccess = {
+                        val status = withContext(Dispatchers.IO) {
+                            userRepository.getUserAccessStatus().getOrNull()
+                        }
+                        // GET access-status often lags the PUT; merge success so we don't stay on this step.
+                        val base = status ?: lastAccessStatus
+                            ?: UserAccessStatus(
+                                hasProfile = false,
+                                aestheticTagsConfigured = true,
+                                onboardingDone = false,
+                                sizingReferenceCompleted = false,
+                            )
+                        advanceAfterStatus(
+                            base.copy(aestheticTagsConfigured = true),
+                            OnboardingStep.AestheticTags,
+                        )
+                        onSuccess()
+                    },
+                    onFailure = {
+                        val msg = it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.onboarding_aesthetic_error)
+                        _events.tryEmit(msg)
+                    },
+                )
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    fun skipAestheticTagsPersistLocal(onSuccess: () -> Unit) {
+        val uid = currentUserId()
+        if (uid.isNotBlank()) {
+            onboardingLocalStore.setSkippedAestheticTags(uid, true)
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                val status = withContext(Dispatchers.IO) {
+                    userRepository.getUserAccessStatus().getOrNull()
+                }
+                if (status != null) {
+                    advanceAfterStatus(status, null)
+                }
+                onSuccess()
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    fun submitSizingOnly(onSuccess: () -> Unit) {
+        if (!canSubmitSizing()) return
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
                 val sizingResult = withContext(Dispatchers.IO) {
                     userRepository.saveSizingReference(buildSizingRequest())
                 }
                 sizingResult.fold(
                     onSuccess = {
-                        onboardSucceededPendingSizing = false
+                        val status = withContext(Dispatchers.IO) {
+                            userRepository.getUserAccessStatus().getOrNull()
+                        }
+                        val base = status ?: lastAccessStatus
+                            ?: UserAccessStatus(
+                                hasProfile = false,
+                                aestheticTagsConfigured = true,
+                                onboardingDone = false,
+                                sizingReferenceCompleted = true,
+                            )
+                        advanceAfterStatus(
+                            base.copy(sizingReferenceCompleted = true),
+                            OnboardingStep.SizingReference,
+                        )
                         onSuccess()
                     },
                     onFailure = {
@@ -261,10 +359,54 @@ class OnboardingViewModel(
         }
     }
 
-    fun skipToProfileSetup(email: String) {
-        _selectedIds.value = emptySet()
-        _username.value = generateUsernameFromEmail(email)
-        _onboardingStep.value = OnboardingStep.ProfileSetup
+    fun skipSizingPersistLocal(onSuccess: () -> Unit) {
+        val uid = currentUserId()
+        if (uid.isNotBlank()) {
+            onboardingLocalStore.setSkippedSizing(uid, true)
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                val status = withContext(Dispatchers.IO) {
+                    userRepository.getUserAccessStatus().getOrNull()
+                }
+                if (status != null) {
+                    advanceAfterStatus(status, null)
+                }
+                onSuccess()
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    fun submitUsernameOnboard(onSuccess: () -> Unit) {
+        val u = _username.value.trim()
+        if (!isUsernameValid()) return
+        val selectedTags = getSelectedTagNames()
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                val onboardResult = withContext(Dispatchers.IO) {
+                    userRepository.onboard(u, selectedTags)
+                }
+                onboardResult.fold(
+                    onSuccess = { onSuccess() },
+                    onFailure = {
+                        val msg = it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.onboarding_submit_error)
+                        val displayMsg = if (msg.contains("409") || msg.contains("taken") || msg.contains("Username")) {
+                            getApplication<Application>().getString(R.string.profile_setup_username_taken)
+                        } else {
+                            msg
+                        }
+                        _events.tryEmit(displayMsg)
+                    },
+                )
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
     }
 
     fun generateUsernameFromEmail(email: String): String {
