@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.common.CategoryTreeNode
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
@@ -45,11 +48,27 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
-    private val _tags = MutableStateFlow<List<String>>(emptyList())
-    val tags: StateFlow<List<String>> = _tags.asStateFlow()
+    /** Trending tag names for search overlay / discovery (from `GET /search/trending-tags`). */
+    private val _trendingTagNames = MutableStateFlow<List<String>>(emptyList())
+    val trendingTagNames: StateFlow<List<String>> = _trendingTagNames.asStateFlow()
 
-    private val _selectedTagIndex = MutableStateFlow(0) // 0 = All
-    val selectedTagIndex: StateFlow<Int> = _selectedTagIndex.asStateFlow()
+    /** Full aesthetic tag catalog from common-service (filter chips use id + display name). */
+    private val _aestheticTagsCatalog = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
+    val aestheticTagsCatalog: StateFlow<List<CommonAestheticTagDto>> = _aestheticTagsCatalog.asStateFlow()
+
+    /** OR filter — listing must match any selected tag. */
+    private val _selectedAestheticTagIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedAestheticTagIds: StateFlow<Set<String>> = _selectedAestheticTagIds.asStateFlow()
+
+    private val _brands = MutableStateFlow<List<CommonBrandDto>>(emptyList())
+    val brands: StateFlow<List<CommonBrandDto>> = _brands.asStateFlow()
+
+    private val _selectedBrandId = MutableStateFlow<String?>(null)
+    val selectedBrandId: StateFlow<String?> = _selectedBrandId.asStateFlow()
+
+    /** `all` (default) or `match_profile` — passed as `sizing_mode` when not `all`. */
+    private val _sizingMode = MutableStateFlow("all")
+    val sizingMode: StateFlow<String> = _sizingMode.asStateFlow()
 
     private val _featuredSellers = MutableStateFlow<List<UserSearchResult>>(emptyList())
     val featuredSellers: StateFlow<List<UserSearchResult>> = _featuredSellers.asStateFlow()
@@ -231,14 +250,27 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         submitSearch()
     }
 
-    /** Trending tag chip: match filter tags when possible, else search by text. */
+    /** Trending tag chip: match catalog by name, then filter by id; else run text search. */
     fun selectSearchOverlayTrendingTag(tag: String) {
         val cleaned = tag.trim()
         if (cleaned.isBlank()) return
-        val idx = _tags.value.indexOfFirst { it.equals(cleaned, ignoreCase = true) }
-        if (idx >= 0) {
-            selectTag(idx + 1)
+        val match = _aestheticTagsCatalog.value.firstOrNull { t ->
+            t.name.equals(cleaned, ignoreCase = true) ||
+                t.displayName.equals(cleaned, ignoreCase = true)
+        }
+        if (match != null) {
+            _selectedAestheticTagIds.value = setOf(match.id)
             setSearchBarExpanded(false)
+            viewModelScope.launch {
+                _isLoading.value = true
+                _loadError.value = false
+                if (_isSearchMode.value) {
+                    runSearchWithCurrentFilters()
+                } else {
+                    fetchListingsFirstPage()
+                }
+                _isLoading.value = false
+            }
         } else {
             selectSearchSuggestionAndSubmit(cleaned)
         }
@@ -310,27 +342,53 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadCategories() {
-        listingRepository.getCategories().fold(
-            onSuccess = { list ->
-                _categories.value = list
+        commonServiceRepository.getCategoryTree().fold(
+            onSuccess = { tree ->
+                val leaves = flattenCategoryLeaves(tree)
                     .filter { it.id.isNotBlank() }
                     .distinctBy { it.id }
                     .sortedBy { it.name.lowercase() }
+                _categories.value = leaves.map { Category(id = it.id, name = it.name, slug = it.slug) }
             },
-            onFailure = { _categories.value = emptyList() },
+            onFailure = {
+                listingRepository.getCategories().fold(
+                    onSuccess = { list ->
+                        _categories.value = list
+                            .filter { it.id.isNotBlank() }
+                            .distinctBy { it.id }
+                            .sortedBy { it.name.lowercase() }
+                    },
+                    onFailure = { _categories.value = emptyList() },
+                )
+            },
         )
     }
 
     private suspend fun loadTags() {
         searchRepository.getTrendingTags().fold(
-            onSuccess = { _tags.value = it },
-            onFailure = {
-                commonServiceRepository.getAestheticTags(all = true).fold(
-                    onSuccess = { _tags.value = it.map { t -> t.name } },
-                    onFailure = { },
-                )
-            },
+            onSuccess = { _trendingTagNames.value = it },
+            onFailure = { _trendingTagNames.value = emptyList() },
         )
+        commonServiceRepository.getAestheticTags(all = true).fold(
+            onSuccess = { _aestheticTagsCatalog.value = it },
+            onFailure = { },
+        )
+        commonServiceRepository.getBrands(limit = 80, offset = 0).fold(
+            onSuccess = { page -> _brands.value = page.items.sortedBy { it.name.lowercase() } },
+            onFailure = { _brands.value = emptyList() },
+        )
+    }
+
+    private fun flattenCategoryLeaves(nodes: List<CategoryTreeNode>): List<CategoryTreeNode> {
+        val out = mutableListOf<CategoryTreeNode>()
+        for (n in nodes) {
+            if (n.children.isEmpty()) {
+                out.add(n)
+            } else {
+                out.addAll(flattenCategoryLeaves(n.children))
+            }
+        }
+        return out
     }
 
     private suspend fun loadFeaturedSellers() {
@@ -383,15 +441,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     private fun searchListingsPage(offset: Int, isSearch: Boolean): Result<List<ListingFeedItem>> {
         val q = if (isSearch) _searchQuery.value.trim() else ""
-        val idx = _selectedTagIndex.value
-        val tag = if (idx <= 0) null else _tags.value.getOrNull(idx - 1)
         val categoryId = _selectedCategoryId.value
         val sort = if (isSearch && q.isNotEmpty()) _sortOption.value else "popular"
         val (minP, maxP) = normalizedPriceBounds()
+        val tagIds = _selectedAestheticTagIds.value.toList()
         return searchRepository.searchListings(
             q = q,
             categoryId = categoryId,
-            tags = tag,
+            aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
+            sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
+            brandId = _selectedBrandId.value,
             minPrice = minP,
             maxPrice = maxP,
             condition = _selectedConditionFilter.value,
@@ -506,9 +565,57 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         return existing + appended
     }
 
-    fun selectTag(index: Int) {
-        if (index == _selectedTagIndex.value) return
-        _selectedTagIndex.value = index
+    fun toggleAestheticTagFilter(tagId: String) {
+        val id = tagId.trim()
+        if (id.isEmpty()) return
+        _selectedAestheticTagIds.update { cur -> if (id in cur) cur - id else cur + id }
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun clearAestheticTagFilters() {
+        if (_selectedAestheticTagIds.value.isEmpty()) return
+        _selectedAestheticTagIds.value = emptySet()
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun selectBrandFilter(brandId: String?) {
+        val next = brandId?.takeIf { it.isNotBlank() }
+        if (next == _selectedBrandId.value) return
+        _selectedBrandId.value = next
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun setSizingModeFilter(mode: String) {
+        val m = if (mode.equals("match_profile", ignoreCase = true)) "match_profile" else "all"
+        if (m == _sizingMode.value) return
+        _sizingMode.value = m
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = false

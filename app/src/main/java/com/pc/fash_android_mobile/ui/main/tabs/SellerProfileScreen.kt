@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -66,6 +68,9 @@ fun SellerProfileScreen(
         viewModel.loadForSeller(sellerUsername)
     }
 
+    val listState = rememberLazyListState()
+    val collapseProgress = rememberProfileHeaderCollapseProgress(listState)
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -73,7 +78,11 @@ fun SellerProfileScreen(
                 title = {
                     Text(
                         text = if (titleHandle.isNotBlank()) "@$titleHandle" else "—",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = if (collapseProgress.value > 0.45f) {
+                            MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                        } else {
+                            MaterialTheme.typography.titleLarge
+                        },
                     )
                 },
                 navigationIcon = {
@@ -91,7 +100,7 @@ fun SellerProfileScreen(
             )
         },
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
@@ -127,32 +136,32 @@ fun SellerProfileScreen(
                     }
                 }
                 else -> {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    ) {
-                        SellerProfileHeader(profile = profile)
-                        if (profile != null && viewModel.canFollowSeller()) {
-                            SellerFollowRow(
-                                isFollowing = isFollowing,
-                                inFlight = followInFlight,
-                                onToggle = { viewModel.toggleFollow() },
-                            )
-                        }
-                        ProfileStats(profile = profile)
-                        ProfileTabs(
-                            selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it },
-                        )
-                        val items = if (selectedTab == 0) sellingListings else soldListings
-                        ProfileProductGrid(
-                            items = items,
-                            onItemClick = { id -> onListingClick(id, profile?.userId) },
-                            modifier = Modifier.weight(1f),
-                            isSellingTab = selectedTab == 0,
-                        )
-                    }
+                    val items = if (selectedTab == 0) sellingListings else soldListings
+                    ProfileCollapsingScrollLayout(
+                        listState = listState,
+                        expandedHeader = {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                SellerProfileHeader(profile = profile)
+                                if (profile != null && viewModel.canFollowSeller()) {
+                                    SellerFollowRow(
+                                        isFollowing = isFollowing,
+                                        inFlight = followInFlight,
+                                        onToggle = { viewModel.toggleFollow() },
+                                    )
+                                }
+                                ProfileStats(profile = profile)
+                            }
+                        },
+                        compactHeader = {
+                            ProfileCompactHeaderBar(profile = profile)
+                        },
+                        selectedTab = selectedTab,
+                        onTabSelected = { selectedTab = it },
+                        items = items,
+                        isSellingTab = selectedTab == 0,
+                        onListingClick = { id -> onListingClick(id, profile?.userId) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
         }
@@ -165,30 +174,59 @@ private fun SellerFollowRow(
     inFlight: Boolean,
     onToggle: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(bottom = 8.dp),
+            .padding(top = 8.dp, bottom = 8.dp),
     ) {
-        OutlinedButton(
-            onClick = onToggle,
-            enabled = !inFlight,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
-        ) {
-            if (inFlight) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp,
-                    color = FashColors.Primary,
-                )
-            } else {
-                Text(
-                    text = stringResource(
-                        if (isFollowing) R.string.following_button else R.string.follow_button,
-                    ),
-                )
+        if (isFollowing) {
+            OutlinedButton(
+                onClick = onToggle,
+                enabled = !inFlight,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(FashTheme.spacing.buttonHeight),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+            ) {
+                if (inFlight) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = FashColors.Primary,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.following_button),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        } else {
+            Button(
+                onClick = onToggle,
+                enabled = !inFlight,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(FashTheme.spacing.buttonHeight),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.primary,
+                    contentColor = scheme.onPrimary,
+                ),
+            ) {
+                if (inFlight) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = scheme.onPrimary,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.follow_button),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
         }
     }

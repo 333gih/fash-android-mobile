@@ -3,12 +3,12 @@ package com.pc.fash_android_mobile.ui.main.tabs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -118,31 +122,42 @@ fun ProfileScreen(
                 }
             }
             else -> {
-                Column(
+                val listState = rememberLazyListState()
+                val items = if (selectedTab == 0) sellingListings else soldListings
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .fillMaxHeight(),
                 ) {
-                    ProfileHeader(
-                        profile = profile,
-                        onEditClick = onEditProfile,
-                    )
-                    ProfileStats(
-                        profile = profile,
-                        onFollowersClick = { onOpenFollowConnections(1) },
-                        onFollowingClick = { onOpenFollowConnections(0) },
-                    )
-                    ProfileShippingAddressesRow(onClick = onShippingAddressesClick)
-                    ProfileTabs(
+                    ProfileCollapsingScrollLayout(
+                        listState = listState,
+                        expandedHeader = {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                ProfileHeader(
+                                    profile = profile,
+                                    onEditClick = onEditProfile,
+                                )
+                                ProfileStats(
+                                    profile = profile,
+                                    onFollowersClick = { onOpenFollowConnections(1) },
+                                    onFollowingClick = { onOpenFollowConnections(0) },
+                                )
+                                ProfileShippingAddressesRow(onClick = onShippingAddressesClick)
+                            }
+                        },
+                        compactHeader = {
+                            ProfileCompactHeaderBar(
+                                profile = profile,
+                                onClick = onEditProfile,
+                            )
+                        },
                         selectedTab = selectedTab,
                         onTabSelected = { selectedTab = it },
-                    )
-                    val items = if (selectedTab == 0) sellingListings else soldListings
-                    ProfileProductGrid(
                         items = items,
-                        onItemClick = { id -> onListingClick(id, profile?.userId) },
-                        modifier = Modifier.weight(1f),
                         isSellingTab = selectedTab == 0,
+                        onListingClick = { id -> onListingClick(id, profile?.userId) },
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -317,13 +332,14 @@ private fun ProfileHeader(
         }
         if (!profile?.aestheticTags.isNullOrEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+            LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                profile!!.aestheticTags.forEach { tag ->
+                items(
+                    items = profile!!.aestheticTags,
+                    key = { it },
+                ) { tag ->
                     Text(
                         text = tag,
                         style = MaterialTheme.typography.labelSmall,
@@ -339,7 +355,9 @@ private fun ProfileHeader(
     }
 }
 
-/** Public storefront header (no edit actions) — same layout as [ProfileHeader] minus edit controls. */
+/**
+ * Storefront header — mirrors [ProfileHeader] (cover, avatar, typography, tag chips) without edit actions.
+ */
 @Composable
 internal fun SellerProfileHeader(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
@@ -398,8 +416,6 @@ internal fun SellerProfileHeader(
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Spacer(modifier = Modifier.height(80.dp))
         }
     }
 
@@ -431,13 +447,14 @@ internal fun SellerProfileHeader(
         }
         if (!profile?.aestheticTags.isNullOrEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+            LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                profile!!.aestheticTags.forEach { tag ->
+                items(
+                    items = profile!!.aestheticTags,
+                    key = { it },
+                ) { tag ->
                     Text(
                         text = tag,
                         style = MaterialTheme.typography.labelSmall,
@@ -655,28 +672,26 @@ internal fun ProfileProductGrid(
 internal fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
     val imageUrl = resolveImageUrl(item.coverImageUrl)
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(3f / 4f)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(shape)
             .clickable(onClick = onClick),
     ) {
         if (imageUrl.isNotEmpty()) {
             FashAsyncImage(
                 model = imageUrl,
                 contentDescription = item.title,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(8.dp)),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
         } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(8.dp))
                     .background(scheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center,
             ) {
@@ -692,10 +707,10 @@ internal fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                    Brush.verticalGradient(
                         colors = listOf(
-                            androidx.compose.ui.graphics.Color.Transparent,
-                            androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.72f),
                         ),
                     ),
                 )
@@ -704,7 +719,7 @@ internal fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
             Text(
                 text = formatPrice(item.priceVnd),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = androidx.compose.ui.graphics.Color.White,
+                color = Color.White,
             )
         }
     }

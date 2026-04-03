@@ -43,10 +43,20 @@ class SearchRepository(
 
     /**
      * `GET /search/listings` — full-text search / browse.
+     *
+     * [aestheticTagIds] — comma-separated tag UUIDs (OR). Prefer over legacy [tags] names when both set.
+     * [aestheticTagId] — single tag UUID (optional convenience).
+     * [sizingMode] — `all` (omit) or `match_profile`.
      */
     fun searchListings(
         q: String = "",
         categoryId: String? = null,
+        /** Comma-separated aesthetic tag UUIDs (OR). */
+        aestheticTagIds: List<String>? = null,
+        aestheticTagId: String? = null,
+        sizingMode: String? = null,
+        brandId: String? = null,
+        /** Legacy: comma-separated aesthetic tag names (server may still accept as `tags`). */
         tags: String? = null,
         minPrice: Long? = null,
         maxPrice: Long? = null,
@@ -55,16 +65,28 @@ class SearchRepository(
         limit: Int = 20,
         offset: Int = 0,
     ): Result<List<ListingFeedItem>> = runCatching {
+        val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
         val query = mutableListOf<String>()
         query.add("limit=$limit")
         query.add("offset=$offset")
-        query.add("q=${java.net.URLEncoder.encode(q, "UTF-8")}")
-        categoryId?.takeIf { it.isNotBlank() }?.let { query.add("category_id=$it") }
-        tags?.takeIf { it.isNotBlank() }?.let { query.add("tags=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+        query.add("q=${enc(q)}")
+        categoryId?.takeIf { it.isNotBlank() }?.let { query.add("category_id=${enc(it.trim())}") }
+        val idCsv = aestheticTagIds
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.takeIf { it.isNotEmpty() }
+            ?.joinToString(",")
+        idCsv?.let { query.add("aesthetic_tag_ids=${enc(it)}") }
+        aestheticTagId?.takeIf { it.isNotBlank() }?.let { query.add("aesthetic_tag_id=${enc(it.trim())}") }
+        sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
+            ?.let { query.add("sizing_mode=${enc(it.trim().lowercase())}") }
+        brandId?.takeIf { it.isNotBlank() }?.let { query.add("brand_id=${enc(it.trim())}") }
+        tags?.takeIf { it.isNotBlank() && idCsv == null }?.let { query.add("tags=${enc(it)}") }
         minPrice?.let { query.add("min_price=$it") }
         maxPrice?.let { query.add("max_price=$it") }
-        condition?.takeIf { it.isNotBlank() }?.let { query.add("condition=${java.net.URLEncoder.encode(it, "UTF-8")}") }
-        query.add("sort=${java.net.URLEncoder.encode(sort, "UTF-8")}")
+        condition?.takeIf { it.isNotBlank() }?.let { query.add("condition=${enc(it)}") }
+        query.add("sort=${enc(sort)}")
         val url = AppEnvironment.apiPath("api/v1/search/listings") + "?" + query.joinToString("&")
         val body = executeGet(url)
         ListingFeedJsonParser.parseFeedArray(body)

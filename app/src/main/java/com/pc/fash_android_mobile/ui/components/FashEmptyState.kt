@@ -27,6 +27,10 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 /**
  * Centered empty state: circular icon tint, title, subtitle — same pattern as chat inbox
  * ([com.pc.fash_android_mobile.ui.main.tabs.ChatScreen] `EmptyInboxHint`).
+ *
+ * @param scrollable When true (default), content is wrapped in [verticalScroll] and the outer [Box]
+ * uses [fillMaxSize]. Set to **false** when placing inside a [LazyColumn] item — nested vertical
+ * scrollables must not get infinite max-height constraints from the lazy list.
  */
 @Composable
 fun FashEmptyState(
@@ -36,10 +40,13 @@ fun FashEmptyState(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     footer: @Composable (() -> Unit)? = null,
+    scrollable: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (scrollable) Modifier.fillMaxSize() else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -47,7 +54,7 @@ fun FashEmptyState(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(horizontal = 40.dp, vertical = 24.dp),
         ) {
             Box(

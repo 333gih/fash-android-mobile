@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,6 +76,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
@@ -103,8 +104,11 @@ fun ExploreScreen(
     /** “See all” in the featured sellers header. */
     onSeeAllFeaturedSellersClick: () -> Unit = {},
 ) {
-    val tags by viewModel.tags.collectAsState()
-    val selectedTagIndex by viewModel.selectedTagIndex.collectAsState()
+    val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
+    val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
+    val brands by viewModel.brands.collectAsState()
+    val selectedBrandId by viewModel.selectedBrandId.collectAsState()
+    val sizingMode by viewModel.sizingMode.collectAsState()
     val featuredSellers by viewModel.featuredSellers.collectAsState()
     val listings by viewModel.listings.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -119,22 +123,29 @@ fun ExploreScreen(
     val conditionFilter by viewModel.selectedConditionFilter.collectAsState()
     val hasActiveFilters = remember(
         selectedCategoryId,
-        selectedTagIndex,
+        selectedAestheticTagIds,
         minPriceText,
         maxPriceText,
         conditionFilter,
+        selectedBrandId,
+        sizingMode,
     ) {
         selectedCategoryId != null ||
-            selectedTagIndex > 0 ||
+            selectedAestheticTagIds.isNotEmpty() ||
             minPriceText.isNotEmpty() ||
             maxPriceText.isNotEmpty() ||
-            conditionFilter != null
+            conditionFilter != null ||
+            selectedBrandId != null ||
+            sizingMode != "all"
     }
     val filterSummaryLine = exploreFilterSummaryString(
         categories = categories,
         selectedCategoryId = selectedCategoryId,
-        tags = tags,
-        selectedTagIndex = selectedTagIndex,
+        aestheticTagsCatalog = aestheticTagsCatalog,
+        selectedAestheticTagIds = selectedAestheticTagIds,
+        brands = brands,
+        selectedBrandId = selectedBrandId,
+        sizingMode = sizingMode,
         minPriceText = minPriceText,
         maxPriceText = maxPriceText,
         conditionFilter = conditionFilter,
@@ -231,7 +242,7 @@ fun ExploreScreen(
                         }
                     }
                     when {
-                        isLoading && tags.isEmpty() && listings.isEmpty() -> {
+                        isLoading && listings.isEmpty() -> {
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Box(
                                     modifier = Modifier
@@ -307,8 +318,11 @@ fun ExploreScreen(
                     viewModel = viewModel,
                     categories = categories,
                     selectedCategoryId = selectedCategoryId,
-                    tags = tags,
-                    selectedTagIndex = selectedTagIndex,
+                    aestheticTagsCatalog = aestheticTagsCatalog,
+                    selectedAestheticTagIds = selectedAestheticTagIds,
+                    brands = brands,
+                    selectedBrandId = selectedBrandId,
+                    sizingMode = sizingMode,
                     onDismiss = { showFilterSheet = false },
                 )
             }
@@ -320,8 +334,11 @@ fun ExploreScreen(
 private fun exploreFilterSummaryString(
     categories: List<Category>,
     selectedCategoryId: String?,
-    tags: List<String>,
-    selectedTagIndex: Int,
+    aestheticTagsCatalog: List<CommonAestheticTagDto>,
+    selectedAestheticTagIds: Set<String>,
+    brands: List<CommonBrandDto>,
+    selectedBrandId: String?,
+    sizingMode: String,
     minPriceText: String,
     maxPriceText: String,
     conditionFilter: String?,
@@ -333,9 +350,21 @@ private fun exploreFilterSummaryString(
             categories.find { it.id == id }?.name?.trim()
         }
     if (!categoryName.isNullOrEmpty()) parts.add(categoryName)
-    if (selectedTagIndex > 0) {
-        val tag = tags.getOrNull(selectedTagIndex - 1)?.trim()
-        if (!tag.isNullOrEmpty()) parts.add(tag)
+    if (selectedAestheticTagIds.isNotEmpty()) {
+        val labels = selectedAestheticTagIds.mapNotNull { id ->
+            aestheticTagsCatalog.find { it.id == id }?.let { t ->
+                t.displayName.ifBlank { t.name }.trim().takeIf { it.isNotEmpty() }
+            }
+        }
+        if (labels.isNotEmpty()) {
+            parts.add(labels.joinToString(", "))
+        }
+    }
+    selectedBrandId?.let { bid ->
+        brands.find { it.id == bid }?.name?.trim()?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
+    }
+    if (sizingMode.equals("match_profile", ignoreCase = true)) {
+        parts.add(stringResource(R.string.explore_filter_summary_sizing_match))
     }
     val min = minPriceText.trim()
     val max = maxPriceText.trim()
@@ -441,10 +470,16 @@ private fun ExploreFilterBottomSheet(
     viewModel: ExploreViewModel,
     categories: List<Category>,
     selectedCategoryId: String?,
-    tags: List<String>,
-    selectedTagIndex: Int,
+    aestheticTagsCatalog: List<CommonAestheticTagDto>,
+    selectedAestheticTagIds: Set<String>,
+    brands: List<CommonBrandDto>,
+    selectedBrandId: String?,
+    sizingMode: String,
     onDismiss: () -> Unit,
 ) {
+    var showCategoryPicker by rememberSaveable { mutableStateOf(false) }
+    var showBrandPicker by rememberSaveable { mutableStateOf(false) }
+    var showAestheticPicker by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
@@ -486,15 +521,24 @@ private fun ExploreFilterBottomSheet(
                 }
             }
             HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.65f))
-            ExploreCategoryStrip(
+            ExploreCategoryFilterRow(
                 categories = categories,
                 selectedCategoryId = selectedCategoryId,
-                onSelectCategory = viewModel::selectCategory,
+                onOpenPicker = { showCategoryPicker = true },
             )
-            ExploreStyleTagSection(
-                tags = tags,
-                selectedTagIndex = selectedTagIndex,
-                onSelectTag = viewModel::selectTag,
+            ExploreAestheticFilterRow(
+                catalog = aestheticTagsCatalog,
+                selectedIds = selectedAestheticTagIds,
+                onOpenPicker = { showAestheticPicker = true },
+            )
+            ExploreBrandFilterRow(
+                brands = brands,
+                selectedBrandId = selectedBrandId,
+                onOpenPicker = { showBrandPicker = true },
+            )
+            ExploreSizingFilterSection(
+                sizingMode = sizingMode,
+                onSelect = viewModel::setSizingModeFilter,
             )
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
@@ -503,49 +547,61 @@ private fun ExploreFilterBottomSheet(
             ExploreMarketplaceFilters(viewModel = viewModel)
         }
     }
+    ExploreCategoryPickerSheet(
+        visible = showCategoryPicker,
+        onDismiss = { showCategoryPicker = false },
+        categories = categories,
+        selectedCategoryId = selectedCategoryId,
+        onSelectCategory = viewModel::selectCategory,
+    )
+    ExploreBrandPickerSheet(
+        visible = showBrandPicker,
+        onDismiss = { showBrandPicker = false },
+        brands = brands,
+        selectedBrandId = selectedBrandId,
+        onSelectBrand = viewModel::selectBrandFilter,
+    )
+    ExploreAestheticTagsPickerSheet(
+        visible = showAestheticPicker,
+        onDismiss = { showAestheticPicker = false },
+        catalog = aestheticTagsCatalog,
+        selectedIds = selectedAestheticTagIds,
+        onToggle = viewModel::toggleAestheticTagFilter,
+        onClear = viewModel::clearAestheticTagFilters,
+    )
 }
 
 @Composable
-private fun ExploreStyleTagSection(
-    tags: List<String>,
-    selectedTagIndex: Int,
-    onSelectTag: (Int) -> Unit,
+private fun ExploreSizingFilterSection(
+    sizingMode: String,
+    onSelect: (String) -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
     val edge = FashTheme.spacing.editorialStart
-    val edgeEnd = FashTheme.spacing.editorialEnd
+    val isAll = sizingMode.equals("all", ignoreCase = true)
+    val isMatch = sizingMode.equals("match_profile", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = FashTheme.spacing.spacing2),
     ) {
-        Text(
-            text = stringResource(R.string.explore_style_section_title),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = scheme.onSurface,
-            modifier = Modifier.padding(start = edge, end = edgeEnd, bottom = 8.dp),
-        )
-        Row(
+        ExploreFilterSectionLabel(text = stringResource(R.string.explore_filter_sizing_title))
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = edge, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ExploreFilterChip(
-                label = stringResource(R.string.explore_style_any),
-                selected = selectedTagIndex == 0,
-                onClick = { onSelectTag(0) },
+                label = stringResource(R.string.explore_filter_sizing_all),
+                selected = isAll,
+                onClick = { onSelect("all") },
             )
-            tags.forEachIndexed { index, tag ->
-                val label = tag.trim()
-                if (label.isEmpty()) return@forEachIndexed
-                ExploreFilterChip(
-                    label = label,
-                    selected = selectedTagIndex == index + 1,
-                    onClick = { onSelectTag(index + 1) },
-                )
-            }
+            ExploreFilterChip(
+                label = stringResource(R.string.explore_filter_sizing_match_profile),
+                selected = isMatch,
+                onClick = { onSelect("match_profile") },
+            )
         }
     }
 }

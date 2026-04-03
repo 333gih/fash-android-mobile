@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -475,25 +476,42 @@ class UserRepository(
         }
     }
 
-    /** Updates current user's profile. Use null to leave a field unchanged. */
-    fun updateProfile(
-        displayName: String? = null,
-        username: String? = null,
-        bio: String? = null,
-        avatarUrl: String? = null,
-        coverImageUrl: String? = null,
-        aestheticTags: List<String>? = null,
-    ): Result<Unit> = runCatching {
+    /**
+     * PATCH `/users/me` — only non-null fields are sent.
+     * [ProfilePatch.aestheticTags] `null` = omit key (leave unchanged); empty list = clear.
+     */
+    fun updateProfile(patch: ProfilePatch): Result<Unit> = runCatching {
         val json = JSONObject()
-        displayName?.let { json.put("display_name", it) }
-        username?.let { json.put("username", it) }
-        bio?.let { json.put("bio", it) }
-        avatarUrl?.let { json.put("avatar_url", it) }
-        coverImageUrl?.let {
+        patch.displayName?.let { json.put("display_name", it) }
+        patch.username?.let { json.put("username", it) }
+        patch.bio?.let { json.put("bio", it) }
+        patch.avatarUrl?.let { json.put("avatar_url", it) }
+        patch.coverImageUrl?.let {
             json.put("cover_image_url", it)
             json.put("cover_url", it)
         }
-        aestheticTags?.let { json.put("aesthetic_tags", JSONArray(it)) }
+        patch.aestheticTags?.let { list ->
+            val arr = JSONArray()
+            list.forEach { t ->
+                arr.put(
+                    JSONObject().apply {
+                        put("id", t.id)
+                        put("name", t.name)
+                    },
+                )
+            }
+            json.put("aesthetic_tags", arr)
+        }
+        patch.referenceSize?.let { json.put("reference_size", it) }
+        patch.referenceMeasurementUnit?.let { u ->
+            json.put("reference_measurement_unit", u.trim().lowercase(Locale.ROOT))
+        }
+        patch.referenceMeasurementChest?.let { json.put("reference_measurement_chest", it) }
+        patch.referenceMeasurementHem?.let { json.put("reference_measurement_hem", it) }
+        patch.referenceMeasurementLength?.let { json.put("reference_measurement_length", it) }
+        patch.referenceMeasurementShoulders?.let { json.put("reference_measurement_shoulders", it) }
+        patch.referenceMeasurementSleeveLength?.let { json.put("reference_measurement_sleeve_length", it) }
+        if (json.length() == 0) return@runCatching Unit
         val body = json.toString()
         val url = AppEnvironment.apiPath("api/v1/users/me")
         val request = Request.Builder()
@@ -580,15 +598,29 @@ class UserRepository(
         val o = JSONObject(json.trim())
         val tagsArr = o.optJSONArray("aesthetic_tags") ?: o.optJSONArray("tags")
         val tagList = mutableListOf<String>()
+        val snapshotList = mutableListOf<AestheticTagPutItem>()
         if (tagsArr != null) {
             for (i in 0 until tagsArr.length()) {
                 val item = tagsArr.opt(i)
                 when (item) {
                     is String -> tagList.add(item)
-                    is JSONObject -> tagList.add(item.optString("name", item.optString("display_name", "")).ifBlank { item.optString("id", "") })
+                    is JSONObject -> {
+                        val id = item.optString("id", "").trim()
+                        val name = item.optString("name", item.optString("display_name", "")).trim()
+                        val label = name.ifBlank { item.optString("id", "") }
+                        tagList.add(label)
+                        if (id.isNotEmpty()) {
+                            snapshotList.add(AestheticTagPutItem(id, name.ifBlank { id }))
+                        }
+                    }
                     else -> { }
                 }
             }
+        }
+        fun optDoubleIfPresent(key: String): Double? {
+            if (!o.has(key)) return null
+            val v = o.optDouble(key, Double.NaN)
+            return if (v.isNaN()) null else v
         }
         val ratingVal = listOf(
             o.optDouble("rating", -1.0),
@@ -618,6 +650,14 @@ class UserRepository(
             ),
             soldCount = o.optInt("sold_count", o.optInt("SoldCount", 0)),
             aestheticTags = tagList,
+            aestheticTagSnapshots = snapshotList,
+            referenceSize = o.optString("reference_size", "").trim().takeIf { it.isNotEmpty() },
+            referenceMeasurementUnit = o.optString("reference_measurement_unit", "").trim().takeIf { it.isNotEmpty() },
+            referenceMeasurementChest = optDoubleIfPresent("reference_measurement_chest"),
+            referenceMeasurementHem = optDoubleIfPresent("reference_measurement_hem"),
+            referenceMeasurementLength = optDoubleIfPresent("reference_measurement_length"),
+            referenceMeasurementShoulders = optDoubleIfPresent("reference_measurement_shoulders"),
+            referenceMeasurementSleeveLength = optDoubleIfPresent("reference_measurement_sleeve_length"),
             hasFastDelivery = o.optBoolean("has_fast_delivery", o.optBoolean("hasFastDelivery", false)),
         )
     }
@@ -811,6 +851,34 @@ data class AestheticTagPutItem(
     val name: String,
 )
 
+/**
+ * PATCH `/users/me` body. Only non-null fields are serialized.
+ * [aestheticTags] `null` = omit (unchanged); `emptyList()` = clear.
+ */
+data class ProfilePatch(
+    val displayName: String? = null,
+    val username: String? = null,
+    val bio: String? = null,
+    val avatarUrl: String? = null,
+    val coverImageUrl: String? = null,
+    val aestheticTags: List<AestheticTagPutItem>? = null,
+    val referenceSize: String? = null,
+    val referenceMeasurementUnit: String? = null,
+    val referenceMeasurementChest: Double? = null,
+    val referenceMeasurementHem: Double? = null,
+    val referenceMeasurementLength: Double? = null,
+    val referenceMeasurementShoulders: Double? = null,
+    val referenceMeasurementSleeveLength: Double? = null,
+) {
+    fun isEmpty(): Boolean =
+        displayName == null && username == null && bio == null && avatarUrl == null && coverImageUrl == null &&
+            aestheticTags == null &&
+            referenceSize == null && referenceMeasurementUnit == null &&
+            referenceMeasurementChest == null && referenceMeasurementHem == null &&
+            referenceMeasurementLength == null && referenceMeasurementShoulders == null &&
+            referenceMeasurementSleeveLength == null
+}
+
 data class SizingReferenceRequest(
     val referenceSize: String,
     val referenceMeasurementUnit: String,
@@ -865,5 +933,14 @@ data class ProfileInfo(
     val productCount: Int = 0,
     val soldCount: Int = 0,
     val aestheticTags: List<String> = emptyList(),
+    /** id+name from API when tags are objects — used for PATCH round-trip. */
+    val aestheticTagSnapshots: List<AestheticTagPutItem> = emptyList(),
+    val referenceSize: String? = null,
+    val referenceMeasurementUnit: String? = null,
+    val referenceMeasurementChest: Double? = null,
+    val referenceMeasurementHem: Double? = null,
+    val referenceMeasurementLength: Double? = null,
+    val referenceMeasurementShoulders: Double? = null,
+    val referenceMeasurementSleeveLength: Double? = null,
     val hasFastDelivery: Boolean = false,
 )

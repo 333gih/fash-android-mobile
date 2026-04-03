@@ -212,6 +212,21 @@
     <string name="explore_category_all">Tất cả danh mục</string>
     <string name="explore_style_section_title">Phong cách (aesthetic)</string>
     <string name="explore_style_any">Mọi phong cách</string>
+    <string name="explore_filter_brand_title">Thương hiệu</string>
+    <string name="explore_filter_brand_any">Mọi thương hiệu</string>
+    <string name="explore_filter_sizing_title">Kích cỡ</string>
+    <string name="explore_filter_sizing_all">Tất cả</string>
+    <string name="explore_filter_sizing_match_profile">Khớp size của tôi</string>
+    <string name="explore_filter_aesthetic_search_placeholder">Tìm phong cách…</string>
+    <string name="explore_filter_aesthetic_clear">Bỏ chọn phong cách</string>
+    <string name="explore_filter_aesthetic_none">Mọi phong cách</string>
+    <string name="explore_filter_aesthetic_selected_count">%1$d phong cách</string>
+    <string name="explore_filter_category_search_placeholder">Tìm danh mục…</string>
+    <string name="explore_filter_brand_search_placeholder">Tìm thương hiệu…</string>
+    <string name="explore_filter_category_summary_cd">Bộ lọc danh mục: %1$s</string>
+    <string name="explore_filter_brand_summary_cd">Bộ lọc thương hiệu: %1$s</string>
+    <string name="explore_filter_aesthetic_summary_cd">Bộ lọc phong cách: %1$s</string>
+    <string name="explore_filter_summary_sizing_match">Khớp size</string>
     <string name="explore_filters_hide">Thu gọn bộ lọc</string>
     <string name="explore_filters_show">Hiện bộ lọc</string>
     <string name="explore_filters_toggle_cd">Mở bộ lọc — danh mục, phong cách, giá và sắp xếp</string>
@@ -490,6 +505,9 @@
     <string name="profile_load_error">Không tải được hồ sơ.</string>
 
     <string name="edit_profile_title">Chỉnh sửa hồ sơ</string>
+    <string name="edit_profile_close_cd">Đóng</string>
+    <string name="edit_profile_cover_placeholder">Ảnh bìa</string>
+    <string name="edit_profile_change_photo_cd">Đổi ảnh</string>
     <string name="edit_profile_save">Lưu</string>
     <string name="edit_profile_save_changes">Lưu thay đổi</string>
     <string name="edit_profile_display_name_label">TÊN HIỂN THỊ</string>
@@ -499,7 +517,17 @@
     <string name="edit_profile_bio_label">GIỚI THIỆU BẢN THÂN</string>
     <string name="edit_profile_bio_placeholder">Giới thiệu ngắn về bạn…</string>
     <string name="edit_profile_bio_counter">%1$d/%2$d</string>
-    <string name="edit_profile_style_label">PHONG CÁCH - AESTHETIC</string>
+    <string name="edit_profile_style_label">PHONG CÁCH</string>
+    <string name="edit_profile_style_section_subtitle">Chọn thẻ phù hợp — tìm nhanh trong bảng bên dưới.</string>
+    <string name="edit_profile_style_edit_button">Chỉnh sửa phong cách</string>
+    <string name="edit_profile_style_search_placeholder">Tìm phong cách…</string>
+    <string name="edit_profile_style_done">Xong</string>
+    <string name="edit_profile_style_selected_count">Đã chọn %d</string>
+    <string name="edit_profile_style_clear_all">Xóa hết</string>
+    <string name="edit_profile_style_empty_hint">Chưa chọn phong cách — nhấn Chỉnh sửa phong cách để thêm.</string>
+    <string name="edit_profile_display_name_counter">%1$d/%2$d</string>
+    <string name="edit_profile_section_sizing">KÍCH THƯỚC THAM CHIẾU</string>
+    <string name="edit_profile_unit_st">st</string>
     <string name="edit_profile_save_error">Lưu thay đổi thất bại. Thử lại.</string>
     <string name="edit_profile_upload_error">Tải ảnh lên thất bại.</string>
 

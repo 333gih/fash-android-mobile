@@ -43,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
@@ -246,20 +247,34 @@ internal fun ProfileSetupSizingSection(
     onShouldersChange: (String) -> Unit,
     sleeve: String,
     onSleeveChange: (String) -> Unit,
+    supportedMeasurementUnits: List<String> = listOf("cm", "in"),
+    /** Tighter gaps between title, copy, and fields (e.g. Edit Profile). */
+    compactDensity: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val gapTitleToSubtitle = if (compactDensity) 4.dp else 6.dp
+    val gapSubtitleToRef = if (compactDensity) 8.dp else 16.dp
+    val gapRefToUnitLabel = if (compactDensity) 8.dp else 12.dp
+    val gapUnitLabelToToggle = if (compactDensity) 6.dp else 8.dp
+    val gapBeforeMeasurements = if (compactDensity) 10.dp else 16.dp
+    val gapMeasurementsLabelToFields = if (compactDensity) 6.dp else 8.dp
+    val fieldBottom = if (compactDensity) 4.dp else 8.dp
     Text(
         text = stringResource(R.string.profile_setup_sizing_title),
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        style = if (compactDensity) {
+            MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+        } else {
+            MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        },
         color = scheme.onSurface,
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(gapTitleToSubtitle))
     Text(
         text = stringResource(R.string.profile_setup_sizing_subtitle),
         style = MaterialTheme.typography.bodySmall,
         color = scheme.onSurfaceVariant,
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(gapSubtitleToRef))
     OutlinedTextField(
         value = referenceSize,
         onValueChange = onReferenceSizeChange,
@@ -273,48 +288,54 @@ internal fun ProfileSetupSizingSection(
             unfocusedContainerColor = scheme.surfaceContainerHighest,
         ),
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(gapRefToUnitLabel))
     Text(
         text = stringResource(R.string.profile_setup_measurement_unit),
         style = MaterialTheme.typography.labelMedium,
         color = scheme.onSurfaceVariant,
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(gapUnitLabelToToggle))
     ProfileMeasurementUnitToggle(
         unit = measurementUnit,
         onSelect = onMeasurementUnitChange,
+        supportedUnits = supportedMeasurementUnits,
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(gapBeforeMeasurements))
     Text(
         text = stringResource(R.string.profile_setup_measurements_optional),
         style = MaterialTheme.typography.labelMedium,
         color = scheme.onSurfaceVariant,
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(gapMeasurementsLabelToFields))
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_chest),
         value = chest,
         onValueChange = onChestChange,
+        bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_hem),
         value = hem,
         onValueChange = onHemChange,
+        bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_length),
         value = length,
         onValueChange = onLengthChange,
+        bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_shoulders),
         value = shoulders,
         onValueChange = onShouldersChange,
+        bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_sleeve),
         value = sleeve,
         onValueChange = onSleeveChange,
+        bottomPadding = fieldBottom,
     )
 }
 
@@ -322,13 +343,20 @@ internal fun ProfileSetupSizingSection(
 private fun ProfileMeasurementUnitToggle(
     unit: String,
     onSelect: (String) -> Unit,
+    supportedUnits: List<String> = listOf("cm", "in"),
 ) {
     val scheme = MaterialTheme.colorScheme
+    val labelResByUnit = mapOf(
+        "cm" to R.string.profile_setup_unit_cm,
+        "in" to R.string.profile_setup_unit_in,
+        "st" to R.string.edit_profile_unit_st,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf("cm" to R.string.profile_setup_unit_cm, "in" to R.string.profile_setup_unit_in).forEach { (u, labelRes) ->
+        supportedUnits.forEach { u ->
+            val labelRes = labelResByUnit[u] ?: R.string.profile_setup_unit_cm
             val selected = unit.equals(u, ignoreCase = true)
             Surface(
-                modifier = Modifier.clickable { onSelect(u) },
+                modifier = Modifier.clickable { onSelect(u.lowercase()) },
                 shape = RoundedCornerShape(999.dp),
                 color = if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerHighest,
                 border = BorderStroke(
@@ -353,6 +381,7 @@ private fun ProfileMeasurementField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
+    bottomPadding: Dp = 8.dp,
 ) {
     val scheme = MaterialTheme.colorScheme
     OutlinedTextField(
@@ -360,7 +389,7 @@ private fun ProfileMeasurementField(
         onValueChange = onValueChange,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = bottomPadding),
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

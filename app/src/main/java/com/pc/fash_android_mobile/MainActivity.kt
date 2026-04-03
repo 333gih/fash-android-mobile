@@ -304,8 +304,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(isAuthenticated) {
-                    if (!isAuthenticated) return@LaunchedEffect
+                // After splash: validateOrClearSession() has refreshed the access token — avoids FCM 401 from stale JWT.
+                LaunchedEffect(splashFinished, isAuthenticated) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     withContext(Dispatchers.IO) {
                         fashApp.fcmTokenRegistrar.registerCurrentTokenIfSession()
                     }

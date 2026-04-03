@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
@@ -231,7 +229,7 @@ fun ChatScreen(
                         }
                     }
                 }
-                chatInboxTailFiller(listViewportHeight = listHeight)
+                chatInboxTailFiller()
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -249,7 +247,7 @@ fun ChatScreen(
                         onClick = { onConversationClick(item) },
                     )
                 }
-                chatInboxTailFiller(listViewportHeight = listHeight)
+                chatInboxTailFiller()
             }
                     }
                 }
@@ -548,75 +546,59 @@ private fun ListingGroupHeader(
     }
 }
 
-private fun LazyListScope.chatInboxTailFiller(listViewportHeight: Dp) {
+private fun LazyListScope.chatInboxTailFiller() {
     item(key = "inbox_list_tail_filler") {
-        InboxListTailContent(listViewportHeight = listViewportHeight)
+        InboxListTailContent()
     }
 }
 
 @Composable
-private fun InboxListTailContent(listViewportHeight: Dp) {
+private fun InboxListTailContent() {
     val scheme = MaterialTheme.colorScheme
-    // Tall enough footer so the hint sits toward the bottom of the inbox area when the list is short
-    // (avoids the line hugging the last chat row with a huge empty gap above the Explore strip).
-    val minTail = (listViewportHeight * 0.48f).coerceIn(220.dp, 520.dp)
-    Box(
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = minTail)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        scheme.surfaceVariant.copy(alpha = 0.6f),
-                    ),
-                ),
-            )
-            .padding(horizontal = 20.dp, vertical = 20.dp),
-        contentAlignment = Alignment.BottomCenter,
+            .padding(horizontal = 20.dp)
+            .padding(top = 20.dp, bottom = 12.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(1.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                FashColors.Primary.copy(alpha = 0.35f),
-                            ),
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            FashColors.Primary.copy(alpha = 0.35f),
                         ),
                     ),
-            )
-            Text(
-                text = stringResource(R.string.chat_inbox_list_footer_hint),
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.2.sp,
                 ),
-                color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 12.dp),
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(1.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                FashColors.Primary.copy(alpha = 0.35f),
-                                Color.Transparent,
-                            ),
+        )
+        Text(
+            text = stringResource(R.string.chat_inbox_list_footer_hint),
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.2.sp,
+            ),
+            color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            FashColors.Primary.copy(alpha = 0.35f),
+                            Color.Transparent,
                         ),
                     ),
-            )
-        }
+                ),
+        )
     }
 }
 
