@@ -25,9 +25,12 @@
     <string name="splash_wordmark">FASH</string>
     <string name="splash_footer_gen_z">THẾ HỆ GEN Z</string>
     <!-- Waiting / splash Compose screen (center copy; design-system typography in code) -->
+    <string name="waiting_screen_eyebrow">Vòng phong cách · bền vững</string>
     <string name="waiting_screen_headline">Thời trang pre-loved, cho tủ đồ bền vững</string>
     <string name="waiting_screen_line_2">Bán lại món bạn không còn mặc — để người khác tái sử dụng và thể hiện phong cách riêng.</string>
     <string name="waiting_screen_line_3">Tái sử dụng. Làm mới. Giảm lãng phí thời trang.</string>
+    <string name="waiting_screen_still_loading">Đang khởi động…</string>
+    <string name="waiting_screen_still_loading_cd">Đang tải ứng dụng</string>
     <string name="brand_wordmark">FASH.</string>
     <!-- Main top bar: second line after wordmark (same scale as Explore). -->
     <string name="brand_header_suffix_home">Home</string>
@@ -799,6 +802,30 @@
     <string name="orders_empty_buying_sub">Đơn hàng sẽ hiển thị khi bạn mua sản phẩm</string>
     <string name="orders_empty_selling">Chưa có đơn bán</string>
     <string name="orders_empty_selling_sub">Đơn hàng sẽ hiển thị khi có người mua</string>
+    <string name="orders_filter_all">Tất cả</string>
+    <string name="orders_empty_filtered_title">Không có đơn ở trạng thái này</string>
+    <string name="orders_empty_filtered_sub">Thử bộ lọc khác hoặc kéo xuống để làm mới.</string>
+    <string name="orders_ad_title">Khám phá thời trang pre-loved</string>
+    <string name="orders_ad_subtitle">Xem tin đăng và gợi ý người bán dành cho bạn.</string>
+    <string name="orders_ad_cta">Khám phá</string>
+    <string name="orders_promo_pager_cd">Ưu đãi %1$d / %2$d</string>
+    <string name="orders_promo_badge">Ưu đãi</string>
+    <string name="orders_promo_slide1_title">Gộp vận chuyển &amp; tiết kiệm</string>
+    <string name="orders_promo_slide1_subtitle">Gộp đơn đủ điều kiện để giảm phí giao hàng lần mua sau.</string>
+    <string name="orders_promo_slide2_title">Thanh toán an toàn</string>
+    <string name="orders_promo_slide2_subtitle">Tiền được giữ cho đến khi bạn xác nhận nhận hàng — mua pre-loved yên tâm hơn.</string>
+    <string name="orders_promo_slide3_title">Quyền lợi người bán</string>
+    <string name="orders_promo_slide3_subtitle">Hoàn tất đơn đúng hạn để tăng hiển thị. Chiến dịch mới có thể xuất hiện tại đây.</string>
+    <string name="orders_chip_all">Tất cả</string>
+    <string name="orders_chip_payment_pending">Chờ trả</string>
+    <string name="orders_chip_payment_held">Chờ gửi</string>
+    <string name="orders_chip_in_transit">Đang giao</string>
+    <string name="orders_chip_delivered">Đã nhận</string>
+    <string name="orders_chip_cancelled">Đã hủy</string>
+    <string name="orders_chip_disputed">Khiếu nại</string>
+    <string name="orders_filter_clear">Xem tất cả đơn</string>
+    <string name="orders_error_title">Không tải được đơn hàng</string>
+    <string name="orders_error_sub">Kiểm tra kết nối và thử lại.</string>
     <string name="avatar_default_cd">Ảnh đại diện</string>
 
     <!-- Order detail -->

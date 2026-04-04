@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Foreground layer for the adaptive icon (API 26+). Vector + inset keeps the mark in the 72dp safe zone. -->
+<!-- Foreground layer for the adaptive icon (API 26+). Brand hanger on white background layer. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/fash_icon_fg"
+    android:drawable="@drawable/ic_fash_brand_hanger"
     android:insetLeft="19dp"
     android:insetTop="19dp"
     android:insetRight="19dp"

@@ -5,25 +5,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
-import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.fashShimmer
 
 /**
@@ -40,6 +34,7 @@ fun FashAsyncImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    alignment: Alignment = Alignment.Center,
 ) {
     SubcomposeAsyncImage(
         model = ImageRequest.Builder(LocalContext.current)
@@ -49,6 +44,7 @@ fun FashAsyncImage(
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
+        alignment = alignment,
     ) {
         when (painter.state) {
             is AsyncImagePainter.State.Success -> SubcomposeAsyncImageContent()
@@ -67,8 +63,33 @@ fun FashAsyncImage(
 }
 
 /**
- * Circular avatar: loads [imageUrl] when non-blank; otherwise shows a default person icon
- * (and optional [fallbackInitial] letter on the same surface).
+ * Remote or local profile photo: uses Coil with center-crop for URLs; brand default vector otherwise
+ * (sharp at all sizes — do not pass [R.drawable.fash_default_profile_avatar] through Coil).
+ */
+@Composable
+fun FashProfileAvatarImage(
+    imageUrl: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+) {
+    if (!imageUrl.isNullOrBlank()) {
+        FashAsyncImage(
+            model = imageUrl,
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.Center,
+        )
+    } else {
+        FashDefaultProfileAvatar(
+            contentDescription = contentDescription,
+            modifier = modifier,
+        )
+    }
+}
+
+/**
+ * Circular avatar: loads [imageUrl] when non-blank; otherwise shows the brand default avatar.
  */
 @Composable
 fun FashAvatarCircle(
@@ -76,7 +97,6 @@ fun FashAvatarCircle(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
-    fallbackInitial: Char? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
@@ -86,27 +106,10 @@ fun FashAvatarCircle(
             .background(scheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center,
     ) {
-        if (!imageUrl.isNullOrBlank()) {
-            FashAsyncImage(
-                model = imageUrl,
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-        } else if (fallbackInitial != null && fallbackInitial.isLetter()) {
-            Text(
-                text = fallbackInitial.uppercaseChar().toString(),
-                style = MaterialTheme.typography.titleMedium,
-                color = scheme.onSurfaceVariant,
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = contentDescription
-                    ?: stringResource(R.string.avatar_default_cd),
-                tint = scheme.onSurfaceVariant,
-                modifier = Modifier.size(size * 0.55f),
-            )
-        }
+        FashProfileAvatarImage(
+            imageUrl = imageUrl,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }

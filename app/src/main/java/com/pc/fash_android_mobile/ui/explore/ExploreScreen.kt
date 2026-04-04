@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.ui.explore
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -108,6 +109,10 @@ import com.pc.fash_android_mobile.data.search.toUserSearchResult
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.FashPromoSlider
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
+import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewEmptySlotPlaceholder
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
@@ -123,6 +128,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 /** Taller tiles on Explore so listing art isn’t read as thin strips (3:5 portrait). */
 private val ExploreListingTileAspectRatio = 3f / 5f
 
+/** Lazy grid index of the inline promo row (header block = 0, promo = 1, filters = 2, …). */
+private const val EXPLORE_PROMO_GRID_INDEX = 1
+
 /** Filter bottom sheet: cap height so the map/list behind stays partly visible; content scrolls inside. */
 private const val ExploreFilterSheetMaxHeightFraction = 0.7f
 
@@ -136,6 +144,9 @@ fun ExploreScreen(
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     /** “See all” in the featured sellers header. */
     onSeeAllFeaturedSellersClick: () -> Unit = {},
+    /** Same promo deck as Orders / Notifications ([FashPromoSlider]); `null` uses defaults. */
+    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    promoSlides: List<FashPromoSlideDef>? = null,
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
@@ -311,15 +322,27 @@ fun ExploreScreen(
             ) {
                 when (primarySection) {
                     ExplorePrimarySection.Listings -> {
+                        val showStickyExplorePromo by remember {
+                            derivedStateOf {
+                                val layoutInfo = gridState.layoutInfo
+                                if (layoutInfo.visibleItemsInfo.isEmpty()) return@derivedStateOf false
+                                val inlinePromoVisible =
+                                    layoutInfo.visibleItemsInfo.any { it.index == EXPLORE_PROMO_GRID_INDEX }
+                                !inlinePromoVisible
+                            }
+                        }
+                        Column(Modifier.fillMaxSize()) {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 172.dp),
                             state = gridState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
                             contentPadding = PaddingValues(
                                 start = FashTheme.spacing.editorialStart,
                                 end = FashTheme.spacing.editorialEnd,
                                 top = 0.dp,
-                                bottom = FashTheme.spacing.spacing6,
+                                bottom = FashTheme.spacing.spacing3,
                             ),
                             horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                             verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing4),
@@ -346,17 +369,23 @@ fun ExploreScreen(
                                             .fillMaxWidth()
                                             .padding(top = 4.dp, bottom = 8.dp),
                                     )
-                                    ExplorePromoCarousel(
-                                        pagerContentPadding = PaddingValues(0.dp),
-                                    )
-                                    ExploreFiltersBar(
-                                        hasActiveFilters = hasActiveFilters,
-                                        filterSummaryParts = filterSummaryParts,
-                                        filterSummaryLine = filterSummaryLine,
-                                        includeEdgeHorizontalPadding = false,
-                                        onOpenFilters = { showFilterSheet = true },
-                                    )
                                 }
+                            }
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                FashPromoSliderBlock(
+                                    slides = promoSlides,
+                                    contentPadding = PaddingValues(0.dp),
+                                    onSlideClick = onPromoSlideClick,
+                                )
+                            }
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                ExploreFiltersBar(
+                                    hasActiveFilters = hasActiveFilters,
+                                    filterSummaryParts = filterSummaryParts,
+                                    filterSummaryLine = filterSummaryLine,
+                                    includeEdgeHorizontalPadding = false,
+                                    onOpenFilters = { showFilterSheet = true },
+                                )
                             }
                             when {
                                 isLoading && listings.isEmpty() -> {
@@ -438,6 +467,28 @@ fun ExploreScreen(
                                     }
                                 }
                             }
+                        }
+                        AnimatedVisibility(
+                            visible = showStickyExplorePromo,
+                            modifier = Modifier.fillMaxWidth(),
+                            enter = slideInVertically(
+                                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                initialOffsetY = { it },
+                            ) + fadeIn(animationSpec = tween(280)),
+                            exit = slideOutVertically(
+                                animationSpec = tween(240, easing = FastOutSlowInEasing),
+                                targetOffsetY = { it },
+                            ) + fadeOut(animationSpec = tween(200)),
+                        ) {
+                            StickyBottomPromoBar(elevated = true) {
+                                FashPromoSlider(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    slides = promoSlides,
+                                    contentPadding = PaddingValues(0.dp),
+                                    onSlideClick = onPromoSlideClick,
+                                )
+                            }
+                        }
                         }
                     }
                     ExplorePrimarySection.Sellers -> {
@@ -743,13 +794,10 @@ private fun ExploreSellerTikTokCard(
                     .clickable(onClick = onSellerClick),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val initial = user.displayName.trim().firstOrNull()?.takeIf { it.isLetter() }
-                    ?: user.username.trim().firstOrNull()?.takeIf { it.isLetter() }
                 FashAvatarCircle(
                     imageUrl = user.avatarUrl,
                     contentDescription = null,
                     size = 52.dp,
-                    fallbackInitial = initial,
                 )
                 Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
                     val name = user.displayName.trim().ifBlank { user.username }
@@ -957,6 +1005,7 @@ private fun exploreFilterSummaryLineFromParts(parts: List<String>): String {
     return parts.joinToString(separator = " · ")
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreFiltersBar(
     hasActiveFilters: Boolean,
@@ -1472,6 +1521,7 @@ private fun ExploreFilterBottomSheet(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreSizingFilterSection(
     sizingMode: String,
@@ -1972,8 +2022,6 @@ private fun FeaturedSellerStoryAvatar(
     val gap = ringGap
     val outer = inner + ring * 2 + gap * 2
     val imageUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }
-    val initial =
-        (seller.displayName.firstOrNull() ?: seller.username.firstOrNull())?.takeIf { it.isLetter() }
 
     Box(
         modifier = Modifier.size(outer),
@@ -1992,7 +2040,6 @@ private fun FeaturedSellerStoryAvatar(
                     imageUrl = imageUrl,
                     contentDescription = contentDescription,
                     size = inner,
-                    fallbackInitial = initial,
                 )
             }
         } else {
@@ -2000,7 +2047,6 @@ private fun FeaturedSellerStoryAvatar(
                 imageUrl = imageUrl,
                 contentDescription = contentDescription,
                 size = inner,
-                fallbackInitial = initial,
             )
         }
     }

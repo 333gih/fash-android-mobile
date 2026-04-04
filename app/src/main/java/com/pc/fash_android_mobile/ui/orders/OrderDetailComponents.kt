@@ -47,6 +47,7 @@ import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -770,6 +771,7 @@ internal fun CounterpartyCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val url = avatarUrl.takeIf { it.isNotBlank() }?.let { orderDetailResolveImageUrl(it) }.orEmpty()
+    val avatarForUi = url.takeIf { it.isNotEmpty() }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
@@ -793,14 +795,11 @@ internal fun CounterpartyCard(
                             .clip(CircleShape)
                             .background(scheme.surfaceContainerHigh),
                     ) {
-                        if (url.isNotEmpty()) {
-                            FashAsyncImage(
-                                model = url,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                        }
+                        FashProfileAvatarImage(
+                            imageUrl = avatarForUi,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {

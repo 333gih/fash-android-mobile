@@ -959,6 +959,10 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 viewModel = ordersViewModel,
                                                 onBack = { showOrdersScreen = false },
+                                                onExploreClick = {
+                                                    showOrdersScreen = false
+                                                    selectedTab = MainTab.Explore.ordinal
+                                                },
                                                 onOrderClick = { order ->
                                                     showOrdersScreen = false
                                                     selectedOrderId = order.orderId

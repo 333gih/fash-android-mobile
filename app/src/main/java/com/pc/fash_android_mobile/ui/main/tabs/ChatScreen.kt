@@ -7,9 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +30,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,22 +49,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.data.chat.ConversationItem
@@ -85,18 +81,14 @@ private val AvatarSize = 48.dp
 private val ProductThumbSize = 56.dp
 private val ChipCorner = RoundedCornerShape(20.dp)
 
-/** Share of [BoxWithConstraints] height reserved for the bottom promo strip (below filter chips). */
-private const val ChatInboxAdHeightFraction = 0.2f
-
-private val ChatInboxAdMinHeight = 72.dp
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     modifier: Modifier = Modifier,
     viewModel: ChatViewModel,
     onConversationClick: (ConversationItem) -> Unit = {},
-    onNavigateToExplore: () -> Unit = {},
+    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    promoSlides: List<FashPromoSlideDef>? = null,
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val displayGroups by viewModel.displayGroups.collectAsState()
@@ -143,20 +135,16 @@ fun ChatScreen(
             )
         }
 
-        // ~20% bottom: fixed promo strip; top ~80%: scrollable inbox (messages never sit under the ad).
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
-            val adHeight = (maxHeight * ChatInboxAdHeightFraction).coerceAtLeast(ChatInboxAdMinHeight)
-            val listHeight = (maxHeight - adHeight).coerceAtLeast(0.dp)
-            Column(Modifier.fillMaxSize()) {
                 PullToRefreshBox(
                     isRefreshing = isRefreshing,
                     onRefresh = { viewModel.refresh() },
                     modifier = Modifier
-                        .height(listHeight)
+                        .weight(1f)
                         .fillMaxWidth(),
                     state = pullState,
                     indicator = {
@@ -196,8 +184,8 @@ fun ChatScreen(
                     }
                 }
             }
-            showGroupedInbox && displayGroups.isEmpty() -> EmptyInboxHint(onExploreClick = onNavigateToExplore)
-            !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint(onExploreClick = onNavigateToExplore)
+            showGroupedInbox && displayGroups.isEmpty() -> EmptyInboxHint()
+            !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint()
             showGroupedInbox -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -229,7 +217,6 @@ fun ChatScreen(
                         }
                     }
                 }
-                chatInboxTailFiller()
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -247,18 +234,18 @@ fun ChatScreen(
                         onClick = { onConversationClick(item) },
                     )
                 }
-                chatInboxTailFiller()
             }
-                    }
+            }
                 }
 
-                ChatInboxAdPanel(
-                    modifier = Modifier
-                        .height(adHeight)
-                        .fillMaxWidth(),
-                    onExploreClick = onNavigateToExplore,
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = scheme.outlineVariant.copy(alpha = 0.35f),
                 )
-            }
+                FashPromoSliderBlock(
+                    slides = promoSlides,
+                    onSlideClick = onPromoSlideClick,
+                )
         }
     }
 }
@@ -303,7 +290,7 @@ fun ChatTopBar(
 }
 
 @Composable
-private fun EmptyInboxHint(onExploreClick: () -> Unit) {
+private fun EmptyInboxHint() {
     val scheme = MaterialTheme.colorScheme
     FashEmptyState(
         icon = Icons.Outlined.ChatBubbleOutline,
@@ -324,70 +311,8 @@ private fun EmptyInboxHint(onExploreClick: () -> Unit) {
                 FashEmptyBulletTipLine(text = stringResource(R.string.chat_empty_tip_1))
                 FashEmptyBulletTipLine(text = stringResource(R.string.chat_empty_tip_2))
             }
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onExploreClick,
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
-            ) {
-                Text(
-                    text = stringResource(R.string.home_empty_cta_explore),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                )
-            }
         },
     )
-}
-
-@Composable
-private fun ChatInboxAdPanel(
-    modifier: Modifier = Modifier,
-    onExploreClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-    Surface(
-        modifier = modifier,
-        shape = shape,
-        color = scheme.surfaceVariant,
-        tonalElevation = 1.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.chat_inbox_ad_title),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = stringResource(R.string.chat_inbox_ad_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            OutlinedButton(
-                onClick = onExploreClick,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
-            ) {
-                Text(
-                    text = stringResource(R.string.chat_inbox_ad_cta),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                )
-            }
-        }
-    }
 }
 
 /**
@@ -546,62 +471,6 @@ private fun ListingGroupHeader(
     }
 }
 
-private fun LazyListScope.chatInboxTailFiller() {
-    item(key = "inbox_list_tail_filler") {
-        InboxListTailContent()
-    }
-}
-
-@Composable
-private fun InboxListTailContent() {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 20.dp, bottom = 12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            FashColors.Primary.copy(alpha = 0.35f),
-                        ),
-                    ),
-                ),
-        )
-        Text(
-            text = stringResource(R.string.chat_inbox_list_footer_hint),
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.2.sp,
-            ),
-            color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            FashColors.Primary.copy(alpha = 0.35f),
-                            Color.Transparent,
-                        ),
-                    ),
-                ),
-        )
-    }
-}
-
 @Composable
 private fun ConversationRow(
     item: ConversationItem,
@@ -613,8 +482,6 @@ private fun ConversationRow(
     val scheme = MaterialTheme.colorScheme
     val avatarUrl = item.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val thumbUrl = item.productThumbnailUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
-    val initial = item.displayName.firstOrNull()?.takeIf { it.isLetter() }
-        ?: item.username.firstOrNull()?.takeIf { it.isLetter() }
     val rowShape = RoundedCornerShape(14.dp)
 
     Row(
@@ -660,7 +527,6 @@ private fun ConversationRow(
                 contentDescription = null,
                 modifier = Modifier,
                 size = AvatarSize,
-                fallbackInitial = initial,
             )
         }
 

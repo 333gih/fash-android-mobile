@@ -96,6 +96,7 @@ import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.data.listing.ListingShippingAddress
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -439,6 +440,7 @@ private fun DetailSellerRow(
     val scheme = MaterialTheme.colorScheme
     val shopUsername = detail.sellerUsername?.takeIf { it.isNotBlank() }
     val avatarUrl = resolveImageUrl(profile?.avatarUrl ?: detail.sellerAvatarUrl.orEmpty())
+    val avatarForUi = avatarUrl.takeIf { it.isNotEmpty() }
     val name = profile?.displayName?.ifBlank { null }
         ?: detail.sellerDisplayName?.ifBlank { null }
         ?: detail.sellerUsername.orEmpty()
@@ -457,14 +459,11 @@ private fun DetailSellerRow(
                 .clip(CircleShape)
                 .background(scheme.surfaceVariant),
         ) {
-            if (avatarUrl.isNotEmpty()) {
-                FashAsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
+            FashProfileAvatarImage(
+                imageUrl = avatarForUi,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

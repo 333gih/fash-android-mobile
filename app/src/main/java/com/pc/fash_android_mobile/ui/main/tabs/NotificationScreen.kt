@@ -1,6 +1,8 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,18 +28,28 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.components.FashBottomPromoAdStrip
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.ui.theme.FashColors
+
+private const val NotificationAdHeightFraction = 0.18f
+private val NotificationAdMinHeight = 72.dp
 
 /**
  * In-app notification inbox. Renders an empty state until a real notification feed API exists.
+ * Bottom: same promo carousel + ad strip as the orders screen (visually connected to main app promos).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
+    onExploreClick: () -> Unit = {},
+    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    promoSlides: List<FashPromoSlideDef>? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
 
@@ -72,34 +85,62 @@ fun NotificationScreen(
                 )
             },
         ) { paddingValues ->
-            FashEmptyState(
-                icon = Icons.Outlined.Notifications,
-                title = stringResource(R.string.notification_empty_title),
-                subtitle = stringResource(R.string.notification_empty_subtitle),
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentDescription = null,
-                footer = {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.notification_empty_hints_title),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = scheme.onSurface,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val adHeight = (maxHeight * NotificationAdHeightFraction).coerceAtLeast(NotificationAdMinHeight)
+                Column(Modifier.fillMaxSize()) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
+                            .weight(1f)
+                            .fillMaxWidth(),
                     ) {
-                        FashEmptyBulletTipLine(text = stringResource(R.string.notification_empty_tip_1))
-                        FashEmptyBulletTipLine(text = stringResource(R.string.notification_empty_tip_2))
-                        FashEmptyBulletTipLine(text = stringResource(R.string.notification_empty_tip_3))
+                        FashEmptyState(
+                            icon = Icons.Outlined.Notifications,
+                            title = stringResource(R.string.notification_empty_title),
+                            subtitle = stringResource(R.string.notification_empty_subtitle),
+                            modifier = Modifier.fillMaxSize(),
+                            contentDescription = null,
+                            footer = {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(R.string.notification_empty_hints_title),
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = scheme.onSurface,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp),
+                                ) {
+                                    FashEmptyBulletTipLine(text = stringResource(R.string.notification_empty_tip_1))
+                                    FashEmptyBulletTipLine(text = stringResource(R.string.notification_empty_tip_2))
+                                    FashEmptyBulletTipLine(text = stringResource(R.string.notification_empty_tip_3))
+                                }
+                            },
+                        )
                     }
-                },
-            )
+
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = scheme.outlineVariant.copy(alpha = 0.35f),
+                    )
+                    FashPromoSliderBlock(
+                        slides = promoSlides,
+                        onSlideClick = onPromoSlideClick,
+                    )
+                    FashBottomPromoAdStrip(
+                        modifier = Modifier
+                            .height(adHeight)
+                            .fillMaxWidth(),
+                        onExploreClick = onExploreClick,
+                    )
+                }
+            }
         }
     }
 }

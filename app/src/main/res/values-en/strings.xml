@@ -23,9 +23,12 @@
     <string name="splash_wordmark">FASH</string>
     <string name="splash_footer_gen_z">GEN Z GENERATION</string>
     <!-- Waiting / splash Compose screen -->
+    <string name="waiting_screen_eyebrow">Style loop · sustainable</string>
     <string name="waiting_screen_headline">Pre-loved fashion, made to last</string>
     <string name="waiting_screen_line_2">Sell what you no longer wear—so someone else can love it again.</string>
     <string name="waiting_screen_line_3">Reuse. Refresh. Waste less fashion.</string>
+    <string name="waiting_screen_still_loading">Starting up…</string>
+    <string name="waiting_screen_still_loading_cd">Loading app</string>
     <string name="brand_wordmark">FASH.</string>
     <string name="brand_header_suffix_home">Home</string>
     <string name="brand_header_suffix_explore">Explore</string>
@@ -759,6 +762,32 @@
     <string name="orders_empty_buying_sub">Orders appear when you buy an item</string>
     <string name="orders_empty_selling">No sales yet</string>
     <string name="orders_empty_selling_sub">Orders appear when someone buys from you</string>
+    <string name="orders_filter_all">All</string>
+    <string name="orders_empty_filtered_title">No orders in this status</string>
+    <string name="orders_empty_filtered_sub">Try another filter or pull down to refresh.</string>
+    <string name="orders_ad_title">Discover pre-loved fashion</string>
+    <string name="orders_ad_subtitle">Explore listings and seller picks tailored for you.</string>
+    <string name="orders_ad_cta">Explore</string>
+    <!-- Orders promo slider (admin / packages — default copy; replace via API later) -->
+    <string name="orders_promo_pager_cd">Promo %1$d of %2$d</string>
+    <string name="orders_promo_badge">Offer</string>
+    <string name="orders_promo_slide1_title">Bundle shipping &amp; save</string>
+    <string name="orders_promo_slide1_subtitle">Combine eligible orders to reduce delivery fees on your next checkout.</string>
+    <string name="orders_promo_slide2_title">Protected payments</string>
+    <string name="orders_promo_slide2_subtitle">Funds stay in escrow until you confirm receipt — shop pre-loved with confidence.</string>
+    <string name="orders_promo_slide3_title">Seller perks</string>
+    <string name="orders_promo_slide3_subtitle">Complete orders on time to unlock more visibility. New campaigns may appear here.</string>
+    <!-- Short labels for horizontal status chips (orders list) -->
+    <string name="orders_chip_all">All</string>
+    <string name="orders_chip_payment_pending">To pay</string>
+    <string name="orders_chip_payment_held">To ship</string>
+    <string name="orders_chip_in_transit">Shipping</string>
+    <string name="orders_chip_delivered">Received</string>
+    <string name="orders_chip_cancelled">Cancelled</string>
+    <string name="orders_chip_disputed">Dispute</string>
+    <string name="orders_filter_clear">Show all orders</string>
+    <string name="orders_error_title">Couldn’t load orders</string>
+    <string name="orders_error_sub">Check your connection and try again.</string>
     <string name="avatar_default_cd">Profile photo</string>
     <string name="order_detail_loading">Loading order…</string>
     <string name="order_detail_title">Order details</string>

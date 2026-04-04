@@ -1,9 +1,7 @@
 package com.pc.fash_android_mobile.ui.home
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,10 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,9 +40,6 @@ import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.theme.editorialHorizontalPadding
-import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
-import kotlinx.coroutines.delay
-
 private fun formatJourneyCount(n: Int): String =
     when {
         n > 99 -> "99+"
@@ -177,83 +169,6 @@ private fun JourneyStatCard(
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
         )
-    }
-}
-
-@Composable
-fun HomeHeroBanner(
-    onExploreClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var heroVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(160)
-        heroVisible = true
-    }
-    val heroAlpha by animateFloatAsState(
-        targetValue = if (heroVisible) 1f else 0f,
-        animationSpec = tween(480, easing = FastOutSlowInEasing),
-        label = "homeHeroAlpha",
-    )
-    val heroScale by animateFloatAsState(
-        targetValue = if (heroVisible) 1f else 0.94f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "homeHeroScale",
-    )
-
-    val heroTextColor = listOf(FashColors.PrimaryDeep, FashColors.Primary).fashReadableOnGradient()
-    val heroSubtitleColor = heroTextColor.copy(alpha = 0.95f)
-    val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(FashTheme.spacing.editorialHorizontalPadding(vertical = 4.dp)),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    alpha = heroAlpha
-                    scaleX = heroScale
-                    scaleY = heroScale
-                }
-                .clip(shape)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(FashColors.PrimaryDeep, FashColors.Primary),
-                    ),
-                )
-                .padding(20.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = stringResource(R.string.home_hero_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = heroTextColor,
-                )
-                Text(
-                    text = stringResource(R.string.home_hero_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = heroSubtitleColor,
-                )
-                OutlinedButton(
-                    onClick = onExploreClick,
-                    modifier = Modifier.padding(top = 4.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = FashColors.Primary,
-                    ),
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_hero_cta),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
-            }
-        }
     }
 }
 

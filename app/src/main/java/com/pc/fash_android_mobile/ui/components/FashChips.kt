@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
@@ -24,7 +25,14 @@ fun FashPillFilterChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(text = label, style = MaterialTheme.typography.labelLarge) },
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
         modifier = modifier,
         enabled = enabled,
         shape = shape,

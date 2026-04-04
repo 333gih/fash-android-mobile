@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -57,10 +57,9 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
-import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
-import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /** Scroll distance (first list item) over which the profile header fully collapses. */
@@ -86,6 +85,7 @@ fun rememberProfileHeaderCollapseProgress(listState: LazyListState): androidx.co
  * Single scroll: profile block collapses with animation, sticky tabs, then product rows.
  * [expandedHeader] is the full hero + stats block; [compactHeader] is the slim bar when scrolled.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProfileCollapsingScrollLayout(
     listState: LazyListState,
@@ -130,11 +130,13 @@ fun ProfileCollapsingScrollLayout(
         (screenHeightDpInt * 0.28f).dp.coerceIn(120.dp, 280.dp)
     }
 
+    val listBg = MaterialTheme.colorScheme.background
     LazyColumn(
         state = listState,
         modifier = modifier
             .fillMaxWidth()
-            .fillMaxHeight(),
+            .fillMaxHeight()
+            .background(listBg),
     ) {
         item(key = "profile_header") {
             CollapsingProfileHeaderSlot(
@@ -327,8 +329,6 @@ fun ProfileCompactHeaderBar(
     val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { resolveProfileImageUrl(it) }
     val display = profile?.displayName?.ifBlank { profile.username ?: "—" } ?: "—"
     val handle = profile?.username?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "—"
-    val initial = display.firstOrNull()?.takeIf { it.isLetter() }
-        ?: profile?.username?.firstOrNull()?.takeIf { it.isLetter() }
 
     Row(
         modifier = modifier
@@ -352,28 +352,13 @@ fun ProfileCompactHeaderBar(
                 .clip(CircleShape)
                 .background(scheme.surfaceContainerHigh),
         ) {
-            if (avatarUrl != null) {
-                FashAsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(FashColors.Primary.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = initial?.uppercaseChar()?.toString() ?: "?",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = FashColors.Primary,
-                    )
-                }
-            }
+            FashProfileAvatarImage(
+                imageUrl = avatarUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape),
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(

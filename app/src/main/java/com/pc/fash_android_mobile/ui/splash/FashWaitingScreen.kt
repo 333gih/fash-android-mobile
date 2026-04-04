@@ -1,15 +1,19 @@
 package com.pc.fash_android_mobile.ui.splash
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -60,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.BeVietnamProFamily
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -69,6 +78,9 @@ private val SplashAccent = Color(0xFFF04D63)
 
 private val ThumbCorner = RoundedCornerShape(28.dp)
 private val GrayscaleFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+
+/** After this delay, show progress + label so long cold starts / session checks feel responsive. */
+private const val LONG_WAIT_FEEDBACK_MS = 2_500L
 
 /**
  * Full-screen waiting / splash / transition surface: editorial watermark, corner thumbs, GEN Z footer, step dots.
@@ -123,15 +135,29 @@ fun FashWaitingScreen(
         ),
         label = "activeDotPulse",
     )
+    val centerBreathScale by infiniteTransition.animateFloat(
+        initialValue = 0.988f,
+        targetValue = 1.012f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2_600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "centerBreathScale",
+    )
+
+    var showLongWaitFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(LONG_WAIT_FEEDBACK_MS)
+        showLongWaitFeedback = true
+    }
+
+    val stillLoadingCd = stringResource(R.string.waiting_screen_still_loading_cd)
 
     val cornerAngle = cornerFloat * 2f * PI.toFloat()
     val topCornerX = sin(cornerAngle) * 5f
     val topCornerY = cos(cornerAngle * 0.65f) * 6f
     val bottomCornerX = cos(cornerAngle * 1.1f) * 6f
     val bottomCornerY = sin(cornerAngle * 0.85f) * 5f
-
-    var centerVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { centerVisible = true }
 
     BoxWithConstraints(
         modifier = modifier
@@ -175,47 +201,12 @@ fun FashWaitingScreen(
             cropAlignment = Alignment.BottomEnd,
         )
 
-        AnimatedVisibility(
-            visible = centerVisible,
-            enter = fadeIn(animationSpec = tween(520)) +
-                scaleIn(initialScale = 0.94f, animationSpec = tween(520)),
-            modifier = Modifier.align(Alignment.Center),
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .scale(centerBreathScale),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.waiting_screen_headline),
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                    ),
-                    color = scheme.onSurface,
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Text(
-                    text = stringResource(R.string.waiting_screen_line_2),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 24.sp,
-                        textAlign = TextAlign.Center,
-                    ),
-                    color = onSurfaceMuted,
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = stringResource(R.string.waiting_screen_line_3),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        letterSpacing = 0.3.sp,
-                    ),
-                    color = FashColors.Primary,
-                )
-            }
+            WaitingScreenCenterEditorial()
         }
 
         Column(
@@ -225,6 +216,37 @@ fun FashWaitingScreen(
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            AnimatedVisibility(
+                visible = showLongWaitFeedback,
+                enter = fadeIn(animationSpec = tween(420)) +
+                    slideInVertically(initialOffsetY = { it / 5 }),
+                exit = fadeOut(animationSpec = tween(200)),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                ) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .width(168.dp)
+                            .height(3.dp)
+                            .semantics { contentDescription = stillLoadingCd },
+                        color = SplashAccent,
+                        trackColor = dividerColor.copy(alpha = 0.35f),
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.waiting_screen_still_loading),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = onSurfaceMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
             GenZFooterLine(
                 label = stringResource(R.string.splash_footer_gen_z),
                 background = scheme.surface,
@@ -237,6 +259,140 @@ fun FashWaitingScreen(
                 inactiveColor = dotInactive,
                 dotWavePhase = dotWave,
                 activePulseScale = activeDotPulse,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WaitingScreenCenterEditorial(
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val onSurfaceMuted = scheme.onSurfaceVariant
+
+    var showEyebrow by remember { mutableStateOf(false) }
+    var showHeadline by remember { mutableStateOf(false) }
+    var showAccentTrack by remember { mutableStateOf(false) }
+    var showBody by remember { mutableStateOf(false) }
+    var showMantra by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(120)
+        showEyebrow = true
+        delay(180)
+        showHeadline = true
+        delay(120)
+        showAccentTrack = true
+        delay(160)
+        showBody = true
+        delay(140)
+        showMantra = true
+    }
+
+    val accentBarWidth by animateDpAsState(
+        targetValue = if (showAccentTrack) 72.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "accentBarWidth",
+    )
+
+    val accentPulse = rememberInfiniteTransition(label = "accentPulse")
+    val accentPulseAlpha by accentPulse.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "accentPulseAlpha",
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp),
+    ) {
+        AnimatedVisibility(
+            visible = showEyebrow,
+            enter = fadeIn(animationSpec = tween(420)) +
+                slideInVertically { it / 4 },
+        ) {
+            Text(
+                text = stringResource(R.string.waiting_screen_eyebrow),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 1.2.sp,
+                    textAlign = TextAlign.Center,
+                ),
+                color = onSurfaceMuted.copy(alpha = 0.85f),
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        AnimatedVisibility(
+            visible = showHeadline,
+            enter = fadeIn(animationSpec = tween(480)) +
+                slideInVertically { it / 4 },
+        ) {
+            Text(
+                text = stringResource(R.string.waiting_screen_headline),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontStyle = FontStyle.Italic,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 28.sp,
+                ),
+                color = scheme.onSurface,
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .height(4.dp)
+                .width(accentBarWidth)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            FashColors.Primary.copy(alpha = accentPulseAlpha),
+                            SplashAccent.copy(alpha = 0.85f * accentPulseAlpha),
+                        ),
+                    ),
+                ),
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        AnimatedVisibility(
+            visible = showBody,
+            enter = fadeIn(animationSpec = tween(420)) +
+                slideInVertically { it / 6 },
+        ) {
+            Text(
+                text = stringResource(R.string.waiting_screen_line_2),
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Normal,
+                    lineHeight = 24.sp,
+                    textAlign = TextAlign.Center,
+                ),
+                color = onSurfaceMuted,
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        AnimatedVisibility(
+            visible = showMantra,
+            enter = fadeIn(animationSpec = tween(400)) +
+                slideInVertically { it / 6 },
+        ) {
+            Text(
+                text = stringResource(R.string.waiting_screen_line_3),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    letterSpacing = 0.3.sp,
+                ),
+                color = FashColors.Primary,
             )
         }
     }

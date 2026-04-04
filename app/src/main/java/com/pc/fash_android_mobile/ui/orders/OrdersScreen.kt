@@ -1,10 +1,21 @@
 package com.pc.fash_android_mobile.ui.orders
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,47 +26,78 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashBottomPromoAdStrip
+import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.components.FashPillFilterChip
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.order.OrderItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+
+private const val OrdersAdHeightFraction = 0.18f
+private val OrdersAdMinHeight = 72.dp
+
+private data class OrderStatusFilterChipDef(
+    val filter: OrderStatusFilter,
+    val labelRes: Int,
+)
+
+private val orderStatusFilterChips: List<OrderStatusFilterChipDef> = listOf(
+    OrderStatusFilterChipDef(OrderStatusFilter.ALL, R.string.orders_chip_all),
+    OrderStatusFilterChipDef(OrderStatusFilter.PAYMENT_PENDING, R.string.orders_chip_payment_pending),
+    OrderStatusFilterChipDef(OrderStatusFilter.PAYMENT_HELD, R.string.orders_chip_payment_held),
+    OrderStatusFilterChipDef(OrderStatusFilter.IN_TRANSIT, R.string.orders_chip_in_transit),
+    OrderStatusFilterChipDef(OrderStatusFilter.DELIVERED_CONFIRMED, R.string.orders_chip_delivered),
+    OrderStatusFilterChipDef(OrderStatusFilter.CANCELLED, R.string.orders_chip_cancelled),
+    OrderStatusFilterChipDef(OrderStatusFilter.DISPUTED, R.string.orders_chip_disputed),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,14 +106,30 @@ fun OrdersScreen(
     viewModel: OrdersViewModel,
     onBack: () -> Unit,
     onSearchClick: () -> Unit = {},
+    /** Bottom promo strip — same role as chat inbox (e.g. open Explore). */
+    onExploreClick: () -> Unit = {},
+    /** Slider above ad: [slideId] from [FashPromoSlideDef], page index for analytics / deep links. */
+    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    /** When non-null, replaces default promo slides (e.g. remote config / admin CMS). */
+    promoSlides: List<FashPromoSlideDef>? = null,
     onOrderClick: (OrderItem) -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
     val buyingOrders by viewModel.buyingOrders.collectAsState()
     val sellingOrders by viewModel.sellingOrders.collectAsState()
+    val buyingFilter by viewModel.buyingStatusFilter.collectAsState()
+    val sellingFilter by viewModel.sellingStatusFilter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val confirmingOrderId by viewModel.confirmingOrderId.collectAsState()
+    val pullState = rememberPullToRefreshState()
+
+    val currentFilter = if (selectedTab == 0) buyingFilter else sellingFilter
+    val sourceOrders = if (selectedTab == 0) buyingOrders else sellingOrders
+    val filteredOrders = remember(sourceOrders, currentFilter) {
+        sourceOrders.filter { currentFilter.matches(it) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadOrders()
@@ -110,164 +168,288 @@ fun OrdersScreen(
             ),
         )
 
-        OrdersTabs(
-            selectedTab = selectedTab,
-            onTabSelected = viewModel::selectTab,
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 0.dp,
+        ) {
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color.Transparent,
+                contentColor = FashColors.Primary,
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { viewModel.selectTab(0) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.orders_tab_buying),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { viewModel.selectTab(1) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.orders_tab_selling),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+            }
+        }
+
+        OrderStatusFilterBar(
+            orders = sourceOrders,
+            selected = currentFilter,
+            onSelect = viewModel::selectStatusFilter,
         )
 
-        when {
-            isLoading && buyingOrders.isEmpty() && sellingOrders.isEmpty() -> {
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            val adHeight = (maxHeight * OrdersAdHeightFraction).coerceAtLeast(OrdersAdMinHeight)
+            Column(Modifier.fillMaxSize()) {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(48.dp),
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
                 ) {
-                    CircularProgressIndicator(color = FashColors.Primary)
-                }
-            }
-            loadError != null && buyingOrders.isEmpty() && sellingOrders.isEmpty() -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = loadError!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.retryLoad() },
-                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                            contentColor = FashColors.Primary,
-                        ),
-                    ) {
-                        Text(stringResource(R.string.feed_retry))
+                    when {
+                    isLoading && buyingOrders.isEmpty() && sellingOrders.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(color = FashColors.Primary)
+                        }
                     }
-                }
-            }
-            else -> {
-                val items = if (selectedTab == 0) buyingOrders else sellingOrders
-                if (items.isEmpty()) {
-                    OrdersEmptyHint(isBuying = selectedTab == 0)
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            horizontal = FashTheme.spacing.editorialStart,
-                            vertical = 16.dp,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        itemsIndexed(
-                            items,
-                            key = { index, order -> stableLazyKey(order.orderId, index, "ord") },
-                        ) { _, order ->
-                            OrderCard(
-                                order = order,
-                                isConfirming = confirmingOrderId == order.orderId,
-                                onConfirmReceipt = { viewModel.confirmReceipt(order.orderId) },
-                                onReview = { /* TODO: open review screen */ },
-                                onClick = { onOrderClick(order) },
+                    loadError != null && buyingOrders.isEmpty() && sellingOrders.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            FashEmptyState(
+                                icon = Icons.Outlined.ErrorOutline,
+                                title = stringResource(R.string.orders_error_title),
+                                subtitle = loadError?.takeIf { it.isNotBlank() }
+                                    ?: stringResource(R.string.orders_error_sub),
+                                modifier = Modifier.fillMaxSize(),
+                                scrollable = false,
+                                footer = {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedButton(
+                                        onClick = { viewModel.retryLoad() },
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = FashColors.Primary,
+                                        ),
+                                        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+                                    ) {
+                                        Text(stringResource(R.string.feed_retry))
+                                    }
+                                },
                             )
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OrdersEmptyHint(isBuying: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(horizontal = 40.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .background(FashColors.Primary.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LocalMall,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
-                    tint = FashColors.Primary,
-                )
-            }
-            Text(
-                text = stringResource(
-                    if (isBuying) R.string.orders_empty_buying else R.string.orders_empty_selling,
-                ),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = scheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = stringResource(
-                    if (isBuying) R.string.orders_empty_buying_sub else R.string.orders_empty_selling_sub,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-@Composable
-private fun OrdersTabs(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(scheme.surface)
-            .padding(horizontal = FashTheme.spacing.editorialStart),
-    ) {
-        listOf(
-            R.string.orders_tab_buying,
-            R.string.orders_tab_selling,
-        ).forEachIndexed { index, resId ->
-            val selected = selectedTab == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onTabSelected(index) }
-                    .padding(vertical = 12.dp),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = stringResource(resId),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .background(FashColors.Primary),
-                        )
+                    else -> {
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshing,
+                            onRefresh = { viewModel.refreshOrders() },
+                            modifier = Modifier.fillMaxSize(),
+                            state = pullState,
+                            indicator = {
+                                PullToRefreshDefaults.Indicator(
+                                    state = pullState,
+                                    isRefreshing = isRefreshing,
+                                    color = FashColors.Primary,
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.align(Alignment.TopCenter),
+                                )
+                            },
+                        ) {
+                            AnimatedContent(
+                                targetState = selectedTab to currentFilter,
+                                transitionSpec = {
+                                    (fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                                        slideInVertically { it / 28 }) togetherWith
+                                        (fadeOut(tween(160)) + slideOutVertically { -it / 36 })
+                                },
+                                label = "ordersList",
+                            ) { (_, _) ->
+                                when {
+                                    sourceOrders.isEmpty() -> {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            OrdersEmptyHint(
+                                                isBuying = selectedTab == 0,
+                                                onExploreClick = onExploreClick,
+                                            )
+                                        }
+                                    }
+                                    filteredOrders.isEmpty() -> {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            OrdersFilteredEmptyHint(
+                                                onClearFilter = {
+                                                    viewModel.selectStatusFilter(OrderStatusFilter.ALL)
+                                                },
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        LazyColumn(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentPadding = PaddingValues(
+                                                horizontal = FashTheme.spacing.editorialStart,
+                                                vertical = 16.dp,
+                                            ),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            itemsIndexed(
+                                                items = filteredOrders,
+                                                key = { index, order ->
+                                                    stableLazyKey(order.orderId, index, "ord")
+                                                },
+                                            ) { _, order ->
+                                                OrderCard(
+                                                    order = order,
+                                                    isConfirming = confirmingOrderId == order.orderId,
+                                                    onConfirmReceipt = { viewModel.confirmReceipt(order.orderId) },
+                                                    onReview = { /* TODO */ },
+                                                    onClick = { onOrderClick(order) },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     }
                 }
+
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                )
+                FashPromoSliderBlock(
+                    slides = promoSlides,
+                    onSlideClick = onPromoSlideClick,
+                )
+                FashBottomPromoAdStrip(
+                    modifier = Modifier
+                        .height(adHeight)
+                        .fillMaxWidth(),
+                    onExploreClick = onExploreClick,
+                )
             }
         }
     }
+}
+
+@Composable
+private fun OrderStatusFilterBar(
+    orders: List<OrderItem>,
+    selected: OrderStatusFilter,
+    onSelect: (OrderStatusFilter) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = scheme.outlineVariant.copy(alpha = 0.35f),
+        )
+        Surface(
+            color = scheme.surface,
+            tonalElevation = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(scroll)
+                    .padding(
+                        horizontal = FashTheme.spacing.editorialStart,
+                        vertical = 10.dp,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                orderStatusFilterChips.forEach { chip ->
+                    val count = countOrdersForFilter(orders, chip.filter)
+                    val label = buildString {
+                        append(stringResource(chip.labelRes))
+                        if (count > 0) append(" ($count)")
+                    }
+                    FashPillFilterChip(
+                        selected = chip.filter == selected,
+                        onClick = { onSelect(chip.filter) },
+                        label = label,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrdersFilteredEmptyHint(onClearFilter: () -> Unit) {
+    FashEmptyState(
+        icon = Icons.Outlined.FilterAlt,
+        title = stringResource(R.string.orders_empty_filtered_title),
+        subtitle = stringResource(R.string.orders_empty_filtered_sub),
+        modifier = Modifier.fillMaxSize(),
+        scrollable = false,
+        footer = {
+            Spacer(modifier = Modifier.height(4.dp))
+            OutlinedButton(
+                onClick = onClearFilter,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+            ) {
+                Text(stringResource(R.string.orders_filter_clear))
+            }
+        },
+    )
+}
+
+@Composable
+private fun OrdersEmptyHint(
+    isBuying: Boolean,
+    onExploreClick: () -> Unit,
+) {
+    FashEmptyState(
+        icon = if (isBuying) Icons.Outlined.ShoppingBag else Icons.Outlined.Storefront,
+        title = stringResource(
+            if (isBuying) R.string.orders_empty_buying else R.string.orders_empty_selling,
+        ),
+        subtitle = stringResource(
+            if (isBuying) R.string.orders_empty_buying_sub else R.string.orders_empty_selling_sub,
+        ),
+        modifier = Modifier.fillMaxSize(),
+        scrollable = false,
+        footer = {
+            Spacer(modifier = Modifier.height(4.dp))
+            OutlinedButton(
+                onClick = onExploreClick,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+            ) {
+                Text(stringResource(R.string.home_empty_cta_explore))
+            }
+        },
+    )
 }
 
 @Composable
@@ -280,8 +462,6 @@ private fun OrderCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val imageUrl = order.imageUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }.orEmpty()
-    val isDelivering = order.status in listOf("in_transit", "delivering", "shipped", "shipping")
-    val isCompleted = order.status in listOf("delivered_confirmed", "completed")
 
     Card(
         modifier = Modifier
@@ -326,10 +506,7 @@ private fun OrderCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    StatusBadge(
-                        isDelivering = isDelivering,
-                        isCompleted = isCompleted,
-                    )
+                    OrderStatusBadge(status = order.status)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -352,7 +529,7 @@ private fun OrderCard(
                         colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                             contentColor = FashColors.Primary,
                         ),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        contentPadding = PaddingValues(
                             horizontal = 16.dp,
                             vertical = 8.dp,
                         ),
@@ -377,7 +554,7 @@ private fun OrderCard(
                         colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                             contentColor = FashColors.Primary,
                         ),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        contentPadding = PaddingValues(
                             horizontal = 16.dp,
                             vertical = 8.dp,
                         ),
@@ -394,22 +571,27 @@ private fun OrderCard(
 }
 
 @Composable
-private fun StatusBadge(
-    isDelivering: Boolean,
-    isCompleted: Boolean,
-) {
-    val (textRes, bgColor, textColor) = when {
-        isDelivering -> Triple(R.string.orders_status_delivering, androidx.compose.ui.graphics.Color(0xFFB3E5FC), androidx.compose.ui.graphics.Color(0xFF1976D2))
-        isCompleted -> Triple(R.string.orders_status_completed, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
-        else -> Triple(R.string.orders_status_pending, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
+private fun OrderStatusBadge(status: String) {
+    val scheme = MaterialTheme.colorScheme
+    val norm = normalizeOrderStatus(status)
+    val (bg, fg) = when (norm) {
+        "payment_pending" -> FashColors.Primary.copy(alpha = 0.12f) to FashColors.Primary
+        "payment_held" -> scheme.secondaryContainer to scheme.onSecondaryContainer
+        "in_transit" -> androidx.compose.ui.graphics.Color(0xFFB3E5FC) to androidx.compose.ui.graphics.Color(0xFF1976D2)
+        "delivered_confirmed" -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
+        "cancelled" -> scheme.errorContainer to scheme.onErrorContainer
+        "disputed" -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+        else -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
     }
     Text(
-        text = stringResource(textRes),
+        text = orderStatusLabelForList(status),
         style = MaterialTheme.typography.labelSmall,
-        color = textColor,
+        color = fg,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(bgColor)
+            .background(bg)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }

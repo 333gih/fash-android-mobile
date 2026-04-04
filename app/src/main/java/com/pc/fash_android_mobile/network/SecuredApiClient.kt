@@ -46,7 +46,7 @@ class SecuredApiClient(
             val session = sessionStore.read()
             val base = chain.request().newBuilder()
                 .header("Accept", "application/json")
-                .header("User-Agent", USER_AGENT)
+                .header("User-Agent", FASH_HTTP_USER_AGENT)
             val internalSecret = BuildConfig.INTERNAL_SECRET.trim()
             if (internalSecret.isNotEmpty()) {
                 base.header("X-Internal-Secret", internalSecret)
@@ -132,7 +132,4 @@ class SecuredApiClient(
         }
     }
 
-    companion object {
-        private const val USER_AGENT = "FashAndroid/1.0"
-    }
 }

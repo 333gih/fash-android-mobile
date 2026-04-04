@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Square artboard: inset circle + F so Crop/Fit at any dp stays balanced in circular clips. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Inset circle (margin ~6) so edges are not clipped harshly under CircleShape + anti-alias -->
+    <path
+        android:fillColor="@color/fash_primary"
+        android:pathData="M54,10C78.3,10 98,29.7 98,54C98,78.3 78.3,98 54,98C29.7,98 10,78.3 10,54C10,29.7 29.7,10 54,10Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M36,34L36,74L44,74L44,56L68,56L68,50L44,50L44,40L72,40L72,34L36,34Z" />
+</vector>

@@ -60,8 +60,10 @@ class AddressBookViewModel(
      */
     fun refresh() {
         val uid = userId() ?: return
+        // Show cached addresses immediately so callers (e.g. order detail) don't race empty in-memory state.
+        _addresses.value = store.listAddresses(uid)
+        _loading.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            _loading.value = true
             try {
                 shippingRepo.listShippingAddresses().fold(
                     onSuccess = { api ->

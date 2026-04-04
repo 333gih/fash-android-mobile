@@ -199,7 +199,13 @@ fun MainNavScreen(
                     },
                     isLoggingOut = isLoggingOut,
                 )
-                MainTab.Home, MainTab.Post, MainTab.Chat -> MainTopBar(
+                MainTab.Home -> MainTopBar(
+                    suffixRes = tab.headerSuffixRes,
+                    onSearchClick = openExploreSearch,
+                    onNotificationsClick = { showNotificationScreen = true },
+                    onOrdersClick = onOrdersClick,
+                )
+                MainTab.Post, MainTab.Chat -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
@@ -208,6 +214,7 @@ fun MainNavScreen(
                     suffixRes = MainTab.Home.headerSuffixRes,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
+                    onOrdersClick = onOrdersClick,
                 )
                 }
             }
@@ -282,12 +289,16 @@ fun MainNavScreen(
                         onNavigateToChat = { onTabChange(MainTab.Chat.ordinal) },
                         onNavigateToSaved = { onTabChange(MainTab.Profile.ordinal) },
                         onNavigateToPost = { onTabChange(MainTab.Post.ordinal) },
+                        onPromoSlideClick = { _, _ -> onTabChange(MainTab.Explore.ordinal) },
+                        promoSlides = null,
                     )
                     MainTab.Explore -> ExploreScreen(
                         viewModel = exploreViewModel,
                         onListingClick = onListingClick,
                         onFeaturedSellerClick = onFeaturedSellerClick,
                         onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
+                        onPromoSlideClick = { _, _ -> },
+                        promoSlides = null,
                     )
                     MainTab.Post -> CreateListingFlowScreen(
                         viewModel = postViewModel,
@@ -300,7 +311,8 @@ fun MainNavScreen(
                     MainTab.Chat -> ChatScreen(
                         viewModel = chatViewModel,
                         onConversationClick = onConversationClick,
-                        onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
+                        onPromoSlideClick = { _, _ -> onTabChange(MainTab.Explore.ordinal) },
+                        promoSlides = null,
                     )
                     MainTab.Profile -> ProfileScreen(
                         viewModel = profileViewModel,
@@ -322,6 +334,10 @@ fun MainNavScreen(
         NotificationScreen(
             modifier = Modifier.fillMaxSize(),
             onBack = { showNotificationScreen = false },
+            onExploreClick = {
+                showNotificationScreen = false
+                onTabChange(MainTab.Explore.ordinal)
+            },
         )
     }
     if (showSettingsScreen) {
@@ -452,6 +468,7 @@ private fun MainTopBar(
     @StringRes suffixRes: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
+    onOrdersClick: (() -> Unit)? = null,
 ) {
     androidx.compose.material3.TopAppBar(
         title = { FashScreenTitle(suffixRes = suffixRes) },
@@ -475,6 +492,15 @@ private fun MainTopBar(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = stringResource(R.string.notifications),
                         tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            onOrdersClick?.let { openOrders ->
+                IconButton(onClick = openOrders) {
+                    Icon(
+                        imageVector = Icons.Default.LocalMall,
+                        contentDescription = stringResource(R.string.orders_icon_cd),
+                        tint = FashColors.Primary,
                     )
                 }
             }

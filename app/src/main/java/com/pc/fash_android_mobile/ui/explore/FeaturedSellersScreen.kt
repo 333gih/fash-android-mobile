@@ -216,13 +216,10 @@ private fun FeaturedSellerFullCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 val avatarUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }
-                val initial =
-                    (seller.displayName.firstOrNull() ?: seller.username.firstOrNull())?.takeIf { it.isLetter() }
                 com.pc.fash_android_mobile.ui.components.FashAvatarCircle(
                     imageUrl = avatarUrl,
                     contentDescription = null,
                     size = 64.dp,
-                    fallbackInitial = initial,
                 )
                 Column(
                     modifier = Modifier

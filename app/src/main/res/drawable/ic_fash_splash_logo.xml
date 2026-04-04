@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  System splash (API 31+): hanger mark with safe inset so the circular mask shows the logo,
-  not a flat coral disk. Same vector as launcher foreground; PNG avoided for predictable scaling.
+  System splash (API 31+): brand hanger PNG with inset so the circular mask doesn’t clip the hook.
+  (Legacy vector fash_icon_fg looked like a dress silhouette — replaced by art-provided mark.)
 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/fash_icon_fg"
+    android:drawable="@drawable/ic_fash_brand_hanger"
     android:insetLeft="18dp"
     android:insetTop="18dp"
     android:insetRight="18dp"

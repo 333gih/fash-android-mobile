@@ -29,6 +29,12 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedTab = MutableStateFlow(0) // 0: Buying, 1: Selling
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
+    private val _buyingStatusFilter = MutableStateFlow(OrderStatusFilter.ALL)
+    val buyingStatusFilter: StateFlow<OrderStatusFilter> = _buyingStatusFilter.asStateFlow()
+
+    private val _sellingStatusFilter = MutableStateFlow(OrderStatusFilter.ALL)
+    val sellingStatusFilter: StateFlow<OrderStatusFilter> = _sellingStatusFilter.asStateFlow()
+
     private val _buyingOrders = MutableStateFlow<List<OrderItem>>(emptyList())
     val buyingOrders: StateFlow<List<OrderItem>> = _buyingOrders.asStateFlow()
 
@@ -37,6 +43,9 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
@@ -63,32 +72,53 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
         _selectedTab.value = index
     }
 
+    fun selectStatusFilter(filter: OrderStatusFilter) {
+        when (_selectedTab.value) {
+            0 -> _buyingStatusFilter.value = filter
+            else -> _sellingStatusFilter.value = filter
+        }
+    }
+
     /** Quietly re-fetches both buying and selling orders without showing a loading indicator. */
     private suspend fun silentRefreshOrders() {
         val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders() }
         val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders() }
-        buyingResult.getOrNull()?.let { _buyingOrders.value = it }
-        sellingResult.getOrNull()?.let { _sellingOrders.value = it }
+        buyingResult.onSuccess { _buyingOrders.value = it }.onFailure { /* keep list */ }
+        sellingResult.onSuccess { _sellingOrders.value = it }.onFailure { /* keep list */ }
     }
 
     fun loadOrders() {
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = null
-            val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders() }
-            val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders() }
-            buyingResult.onSuccess { _buyingOrders.value = it }
-                .onFailure {
-                    _loadError.value = it.message
-                    _buyingOrders.value = emptyList()
-                }
-            sellingResult.onSuccess { _sellingOrders.value = it }
-                .onFailure {
-                    if (_loadError.value == null) _loadError.value = it.message
-                    _sellingOrders.value = emptyList()
-                }
+            fetchOrdersIntoState()
             _isLoading.value = false
         }
+    }
+
+    /** Pull-to-refresh: reload without full-screen blocking spinner when lists already have data. */
+    fun refreshOrders() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            _loadError.value = null
+            fetchOrdersIntoState()
+            _isRefreshing.value = false
+        }
+    }
+
+    private suspend fun fetchOrdersIntoState() {
+        val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders() }
+        val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders() }
+        buyingResult.onSuccess { _buyingOrders.value = it }
+            .onFailure {
+                _loadError.value = it.message
+                _buyingOrders.value = emptyList()
+            }
+        sellingResult.onSuccess { _sellingOrders.value = it }
+            .onFailure {
+                if (_loadError.value == null) _loadError.value = it.message
+                _sellingOrders.value = emptyList()
+            }
     }
 
     fun confirmReceipt(orderId: String) {

@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,7 +36,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -44,10 +45,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -78,10 +78,177 @@ import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAssets
+import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+
+/** Cover height; avatar overlaps content below by [ProfileHeroAvatarOverlap]. */
+private val ProfileHeroCoverHeight = 168.dp
+private val ProfileHeroAvatarOverlap = 40.dp
+private val ProfileHeroAvatarRingDp = 88.dp
+private val ProfileHeroAvatarInnerDp = 80.dp
+
+@Composable
+private fun ProfileHeroSection(
+    coverModel: Any,
+    avatarUrl: String?,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ProfileHeroCoverHeight),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(scheme.surfaceContainerHigh),
+        ) {
+            FashAsyncImage(
+                model = coverModel,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .height(80.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                scheme.scrim.copy(alpha = 0.38f),
+                            ),
+                        ),
+                    ),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = FashTheme.spacing.editorialStart)
+                .offset(y = ProfileHeroAvatarOverlap),
+        ) {
+            Surface(
+                modifier = Modifier.size(ProfileHeroAvatarRingDp),
+                shape = CircleShape,
+                color = scheme.surface,
+                shadowElevation = 3.dp,
+                tonalElevation = 0.dp,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp),
+                ) {
+                    FashProfileAvatarImage(
+                        imageUrl = avatarUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(ProfileHeroAvatarInnerDp)
+                            .clip(CircleShape),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileAestheticChipsRow(
+    profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
+    onAestheticTagClick: (tagName: String, tagId: String?) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val aestheticChips = profile?.let { p ->
+        if (p.aestheticTagSnapshots.isNotEmpty()) {
+            p.aestheticTagSnapshots.map { it.name to it.id }
+        } else {
+            p.aestheticTags.map { it to null }
+        }
+    }.orEmpty()
+    if (aestheticChips.isEmpty()) return
+    Spacer(modifier = Modifier.height(12.dp))
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        itemsIndexed(
+            items = aestheticChips,
+            key = { i, pair -> "${pair.first}_${pair.second}_$i" },
+        ) { _, pair ->
+            val (tagName, tagId) = pair
+            Text(
+                text = tagName,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onPrimaryContainer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+                    .background(scheme.primaryContainer.copy(alpha = 0.92f))
+                    .clickable(onClick = { onAestheticTagClick(tagName, tagId) })
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileIdentityBlock(
+    profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
+    onEditClick: (() -> Unit)?,
+    onAestheticTagClick: (tagName: String, tagId: String?) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 44.dp, bottom = 16.dp),
+    ) {
+        Text(
+            text = profile?.displayName?.ifBlank { profile.username ?: "—" } ?: "—",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            color = scheme.onSurface,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "@${profile?.username ?: "—"}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        if (onEditClick != null) {
+            TextButton(
+                onClick = onEditClick,
+                modifier = Modifier.padding(top = 2.dp),
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = scheme.primary,
+                ),
+            ) {
+                Text(
+                    text = stringResource(R.string.profile_edit),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+        profile?.bio?.takeIf { it.isNotBlank() }?.let { bio ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = bio,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        ProfileAestheticChipsRow(profile = profile, onAestheticTagClick = onAestheticTagClick)
+    }
+}
 
 @Composable
 fun ProfileScreen(
@@ -117,7 +284,12 @@ fun ProfileScreen(
         viewModel.ensureProfileLoaded()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(scheme.background),
+    ) {
         when {
             isLoading && profile == null -> {
                 Box(
@@ -257,273 +429,34 @@ private fun ProfileHeader(
     onEditClick: () -> Unit,
     onAestheticTagClick: (tagName: String, tagId: String?) -> Unit = { _, _ -> },
 ) {
-    val scheme = MaterialTheme.colorScheme
     val coverUrl = profile?.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(scheme.surfaceContainerHigh),
-        ) {
-            if (coverUrl != null) {
-                FashAsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-        }
-        IconButton(
-            onClick = onEditClick,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = null,
-                tint = scheme.onSurface,
-            )
-        }
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = FashTheme.spacing.editorialStart, bottom = 0.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(scheme.surfaceContainerHigh)
-                    .padding(4.dp),
-            ) {
-                if (avatarUrl != null) {
-                    FashAsyncImage(
-                        model = avatarUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(FashColors.Primary.copy(alpha = 0.2f)),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            OutlinedButton(
-                onClick = onEditClick,
-                modifier = Modifier
-                    .padding(bottom = 24.dp)
-                    .padding(end = 16.dp),
-                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                    contentColor = FashColors.Primary,
-                ),
-            ) {
-                Text(
-                    text = stringResource(R.string.profile_edit),
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 8.dp, bottom = 16.dp),
-    ) {
-        Text(
-            text = profile?.displayName?.ifBlank { profile?.username ?: "—" } ?: "—",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
-        )
-        Text(
-            text = "@${profile?.username ?: "—"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-        )
-        profile?.bio?.takeIf { it.isNotBlank() }?.let { bio ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = bio,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        val aestheticChips = profile?.let { p ->
-            if (p.aestheticTagSnapshots.isNotEmpty()) {
-                p.aestheticTagSnapshots.map { it.name to it.id }
-            } else {
-                p.aestheticTags.map { it to null }
-            }
-        }.orEmpty()
-        if (aestheticChips.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                itemsIndexed(
-                    items = aestheticChips,
-                    key = { i, pair -> "${pair.first}_${pair.second}_$i" },
-                ) { _, pair ->
-                    val (tagName, tagId) = pair
-                    Text(
-                        text = tagName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = FashColors.Primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
-                            .background(FashColors.Primary.copy(alpha = 0.15f))
-                            .clickable(onClick = { onAestheticTagClick(tagName, tagId) })
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
-            }
-        }
-    }
+    val coverModel: Any = coverUrl ?: FashDefaultProfileAssets.coverRes
+    ProfileHeroSection(coverModel = coverModel, avatarUrl = avatarUrl)
+    ProfileIdentityBlock(
+        profile = profile,
+        onEditClick = onEditClick,
+        onAestheticTagClick = onAestheticTagClick,
+    )
 }
 
 /**
- * Storefront header — mirrors [ProfileHeader] (cover, avatar, typography, tag chips) without edit actions.
+ * Storefront header — same hero + identity as [ProfileHeader], without edit action.
  */
 @Composable
 internal fun SellerProfileHeader(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
     onAestheticTagClick: (tagName: String, tagId: String?) -> Unit = { _, _ -> },
 ) {
-    val scheme = MaterialTheme.colorScheme
     val coverUrl = profile?.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(scheme.surfaceContainerHigh),
-        ) {
-            if (coverUrl != null) {
-                FashAsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-        }
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = FashTheme.spacing.editorialStart, bottom = 0.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(scheme.surfaceContainerHigh)
-                    .padding(4.dp),
-            ) {
-                if (avatarUrl != null) {
-                    FashAsyncImage(
-                        model = avatarUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(FashColors.Primary.copy(alpha = 0.2f)),
-                    )
-                }
-            }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 8.dp, bottom = 16.dp),
-    ) {
-        Text(
-            text = profile?.displayName?.ifBlank { profile?.username ?: "—" } ?: "—",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
-        )
-        Text(
-            text = "@${profile?.username ?: "—"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-        )
-        profile?.bio?.takeIf { it.isNotBlank() }?.let { bio ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = bio,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        val sellerAestheticChips = profile?.let { p ->
-            if (p.aestheticTagSnapshots.isNotEmpty()) {
-                p.aestheticTagSnapshots.map { it.name to it.id }
-            } else {
-                p.aestheticTags.map { it to null }
-            }
-        }.orEmpty()
-        if (sellerAestheticChips.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                itemsIndexed(
-                    items = sellerAestheticChips,
-                    key = { i, pair -> "seller_${pair.first}_${pair.second}_$i" },
-                ) { _, pair ->
-                    val (tagName, tagId) = pair
-                    Text(
-                        text = tagName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = FashColors.Primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
-                            .background(FashColors.Primary.copy(alpha = 0.15f))
-                            .clickable(onClick = { onAestheticTagClick(tagName, tagId) })
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
-            }
-        }
-    }
+    val coverModelSeller: Any = coverUrl ?: FashDefaultProfileAssets.coverRes
+    ProfileHeroSection(coverModel = coverModelSeller, avatarUrl = avatarUrl)
+    ProfileIdentityBlock(
+        profile = profile,
+        onEditClick = null,
+        onAestheticTagClick = onAestheticTagClick,
+    )
 }
 
 @Composable
@@ -533,46 +466,56 @@ internal fun ProfileStats(
     onFollowingClick: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        ProfileStatItem(
-            modifier = Modifier.weight(1f),
-            value = formatCount(profile?.followerCount ?: 0),
-            label = stringResource(R.string.profile_followers),
-            onClick = onFollowersClick,
-            contentDescription = stringResource(R.string.profile_followers_open_cd),
-            showIdleHint = true,
-            idlePhaseOffsetMs = 0,
-        )
-        ProfileStatItem(
-            modifier = Modifier.weight(1f),
-            value = (profile?.followingCount ?: 0).toString(),
-            label = stringResource(R.string.profile_following),
-            onClick = onFollowingClick,
-            contentDescription = stringResource(R.string.profile_following_open_cd),
-            showIdleHint = true,
-            idlePhaseOffsetMs = 120,
-        )
-        ProfileStatItem(
-            modifier = Modifier.weight(1f),
-            value = (profile?.productCount ?: 0).toString(),
-            label = stringResource(R.string.profile_products),
-        )
-        ProfileStatItem(
-            modifier = Modifier.weight(1f),
-            value = (profile?.soldCount ?: 0).toString(),
-            label = stringResource(R.string.profile_sold),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            ProfileStatItem(
+                modifier = Modifier.weight(1f),
+                value = formatCount(profile?.followerCount ?: 0),
+                label = stringResource(R.string.profile_followers),
+                onClick = onFollowersClick,
+                contentDescription = stringResource(R.string.profile_followers_open_cd),
+                showIdleHint = true,
+                idlePhaseOffsetMs = 0,
+            )
+            ProfileStatItem(
+                modifier = Modifier.weight(1f),
+                value = (profile?.followingCount ?: 0).toString(),
+                label = stringResource(R.string.profile_following),
+                onClick = onFollowingClick,
+                contentDescription = stringResource(R.string.profile_following_open_cd),
+                showIdleHint = true,
+                idlePhaseOffsetMs = 120,
+            )
+            ProfileStatItem(
+                modifier = Modifier.weight(1f),
+                value = (profile?.productCount ?: 0).toString(),
+                label = stringResource(R.string.profile_products),
+            )
+            ProfileStatItem(
+                modifier = Modifier.weight(1f),
+                value = (profile?.soldCount ?: 0).toString(),
+                label = stringResource(R.string.profile_sold),
+            )
+        }
     }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(bottom = 16.dp),
+            .padding(top = 4.dp, bottom = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         profile?.rating?.takeIf { it > 0 }?.let { rating ->
@@ -785,7 +728,7 @@ internal fun ProfileTabs(
                     Text(
                         text = stringResource(resId),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
+                        color = if (selected) scheme.primary else scheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     if (selected) {
@@ -793,7 +736,7 @@ internal fun ProfileTabs(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(2.dp)
-                                .background(FashColors.Primary),
+                                .background(scheme.primary),
                         )
                     }
                 }

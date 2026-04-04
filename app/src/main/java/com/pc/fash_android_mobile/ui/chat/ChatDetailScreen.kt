@@ -114,6 +114,7 @@ import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
+import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAvatar
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
@@ -797,6 +798,7 @@ private fun StableChatImage(
         model = request,
         contentDescription = null,
         contentScale = contentScale,
+        alignment = Alignment.Center,
         modifier = modifier,
     )
 }
@@ -1221,10 +1223,9 @@ private fun ChatDetailHeader(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Text(
-                    text = (displayName.firstOrNull() ?: '?').uppercaseChar().toString(),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = FashColors.Primary,
+                FashDefaultProfileAvatar(
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -1544,8 +1545,7 @@ private fun OfferPriceBottomSheet(
  *
  * Design-system compliance:
  * - Bubble shape and color match the LEFT (incoming) message bubble.
- * - Mini avatar uses [FashColors.Primary] tint with a letter fallback — identical to
- *   [ChatDetailHeader].
+ * - Mini avatar uses the same brand default as [ChatDetailHeader].
  * - Three dots use a **scale pulse** (not vertical offset) so motion is never clipped by the
  *   bubble’s [RoundedCornerShape] clip. Stagger uses [StartOffset] on [infiniteRepeatable].
  * - Each dot’s [animateFloat] is declared separately (never inside a loop).
@@ -1603,13 +1603,9 @@ private fun TypingIndicator(name: String) {
                 .background(FashColors.Primary.copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = (name.firstOrNull() ?: '?').uppercaseChar().toString(),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                ),
-                color = FashColors.Primary,
+            FashDefaultProfileAvatar(
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
             )
         }
 

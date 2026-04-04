@@ -335,13 +335,10 @@ private fun FollowUserRow(user: UserSearchResult) {
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val initial = user.displayName.trim().firstOrNull()?.takeIf { it.isLetter() }
-            ?: user.username.trim().firstOrNull()?.takeIf { it.isLetter() }
         FashAvatarCircle(
             imageUrl = user.avatarUrl,
             contentDescription = null,
             size = 48.dp,
-            fallbackInitial = initial,
         )
         Column(modifier = Modifier.padding(start = 14.dp)) {
             val name = user.displayName.trim().ifBlank { user.username }

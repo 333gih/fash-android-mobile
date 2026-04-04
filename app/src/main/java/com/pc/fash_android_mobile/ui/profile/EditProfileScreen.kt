@@ -73,6 +73,8 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
+import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAssets
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.onboarding.ProfileSetupSizingSection
@@ -237,23 +239,13 @@ fun EditProfileScreen(
                                 .background(scheme.surfaceVariant.copy(alpha = 0.55f)),
                         ) {
                             val cover = coverImageUrl ?: profile?.coverImageUrl?.takeIf { it.isNotBlank() }
-                            if (cover != null) {
-                                FashAsyncImage(
-                                    model = cover,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            } else {
-                                Text(
-                                    text = stringResource(R.string.edit_profile_cover_placeholder),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = scheme.onSurfaceVariant.copy(alpha = 0.72f),
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .padding(8.dp),
-                                )
-                            }
+                            val coverModel: Any = cover ?: FashDefaultProfileAssets.coverRes
+                            FashAsyncImage(
+                                model = coverModel,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
                             IconButton(
                                 onClick = { coverPicker.launch("image/*") },
                                 modifier = Modifier
@@ -285,14 +277,11 @@ fun EditProfileScreen(
                                     .border(2.dp, scheme.outlineVariant.copy(alpha = 0.4f), CircleShape),
                             ) {
                                 val avatar = avatarUrl ?: profile?.avatarUrl?.takeIf { it.isNotBlank() }
-                                if (avatar != null) {
-                                    FashAsyncImage(
-                                        model = avatar,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                }
+                                FashProfileAvatarImage(
+                                    imageUrl = avatar,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
                                 IconButton(
                                     onClick = { avatarPicker.launch("image/*") },
                                     modifier = Modifier

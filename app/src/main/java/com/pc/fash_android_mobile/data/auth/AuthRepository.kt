@@ -3,6 +3,8 @@ package com.pc.fash_android_mobile.data.auth
 import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
+import com.pc.fash_android_mobile.network.FASH_HTTP_USER_AGENT
+import com.pc.fash_android_mobile.util.ClientIpAddress
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -78,11 +80,14 @@ class AuthRepository(
     }
 
     fun refresh(refreshToken: String): Result<AuthSession> = runCatching {
-        val path = AppEnvironment.authRefreshPath.trim().trimStart('/')
-        val url = AppEnvironment.authServicePath(path)
+        val rel = AppEnvironment.authRefreshPath.trim().trimStart('/')
+        // Same language segment as core API (`.../en/api/v1/...`) when CORE_API_USE_LANGUAGE_PREFIX is true.
+        val url = AppEnvironment.apiPath(rel)
         val json = JSONObject()
-            .put("refresh_token", refreshToken.trim())
             .put("application_id", AppEnvironment.authApplicationId.trim())
+            .put("ip_address", ClientIpAddress.localIpv4OrEmpty())
+            .put("refresh_token", refreshToken.trim())
+            .put("user_agent", FASH_HTTP_USER_AGENT)
             .toString()
         val body = postJsonBody(url, json)
         parseLoginResponse(body)
@@ -146,7 +151,7 @@ class AuthRepository(
             .post(json.toRequestBody(JSON_MEDIA))
             .header("Accept", "application/json")
             .header("Content-Type", "application/json; charset=utf-8")
-            .header("User-Agent", "FashAndroid/1.0")
+            .header("User-Agent", FASH_HTTP_USER_AGENT)
             .build()
         return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()

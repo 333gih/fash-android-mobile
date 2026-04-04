@@ -60,6 +60,7 @@ import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -184,6 +185,8 @@ fun OrderDetailScreen(
     LaunchedEffect(orderId) {
         val vm = addressBookViewModel ?: return@LaunchedEffect
         vm.refresh()
+        // refresh() merges from API asynchronously; wait until it finishes before treating "no addresses".
+        vm.loading.first { !it }
         if (vm.addresses.value.isEmpty()) {
             showEmptyAddressAlert = true
         }

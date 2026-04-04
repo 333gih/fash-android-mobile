@@ -127,9 +127,11 @@ fun SellerProfileScreen(
             )
         },
     ) { paddingValues ->
+        val scheme = MaterialTheme.colorScheme
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(scheme.background)
                 .padding(paddingValues),
         ) {
             when {
@@ -174,6 +176,7 @@ fun SellerProfileScreen(
                                         onNavigateToExploreFromProfile(null, null, id, name, null, null)
                                     },
                                 )
+                                ProfileStats(profile = profile)
                                 if (profile != null && viewModel.canFollowSeller()) {
                                     SellerFollowRow(
                                         isFollowing = isFollowing,
@@ -181,7 +184,6 @@ fun SellerProfileScreen(
                                         onToggle = { viewModel.toggleFollow() },
                                     )
                                 }
-                                ProfileStats(profile = profile)
                                 SellerListingFocusSection(
                                     focus = sellerFocus,
                                     forbidden = sellerFocusForbidden,

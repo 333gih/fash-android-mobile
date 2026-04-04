@@ -1,4 +1,4 @@
-package com.pc.fash_android_mobile.ui.explore
+package com.pc.fash_android_mobile.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,99 +44,144 @@ import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
-private val PromoCardHeight = 128.dp
-private val AutoAdvanceMs = 6_000L
-
-private data class PromoSlide(
+/**
+ * Admin-ready promo slide (orders, notifications, home, etc.).
+ * [id] is stable for analytics and deep links when wired from CMS / remote config.
+ */
+data class FashPromoSlideDef(
+    val id: String,
     val titleRes: Int,
     val subtitleRes: Int,
     val gradient: List<Color>,
     val border: Color? = null,
 )
 
+private val FashPromoCardHeight = 112.dp
+private const val AutoAdvanceMs = 6_500L
+
+fun defaultFashPromoSlides(scheme: ColorScheme): List<FashPromoSlideDef> = listOf(
+    FashPromoSlideDef(
+        id = "bundle_shipping",
+        titleRes = R.string.orders_promo_slide1_title,
+        subtitleRes = R.string.orders_promo_slide1_subtitle,
+        gradient = listOf(FashColors.PrimaryDeep, FashColors.Primary),
+    ),
+    FashPromoSlideDef(
+        id = "protected_payments",
+        titleRes = R.string.orders_promo_slide2_title,
+        subtitleRes = R.string.orders_promo_slide2_subtitle,
+        gradient = listOf(FashColors.SecondaryWarm, FashColors.TertiaryAccent),
+    ),
+    FashPromoSlideDef(
+        id = "seller_perks",
+        titleRes = R.string.orders_promo_slide3_title,
+        subtitleRes = R.string.orders_promo_slide3_subtitle,
+        gradient = listOf(scheme.surfaceContainerLow, scheme.surfaceVariant),
+        border = scheme.outlineVariant.copy(alpha = 0.65f),
+    ),
+)
+
+/**
+ * Horizontal promo pager (gradient cards, dots overlaid).
+ *
+ * **Default slides** ([defaultFashPromoSlides], `orders_promo_*` strings) are shared with
+ * Orders, Notifications, Home, Explore, and Chat — pass [slides] only when overriding (e.g. CMS).
+ *
+ * @param slides When null, uses [defaultFashPromoSlides]. Pass a non-null list from ViewModel when admin API is ready.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ExplorePromoCarousel(
+fun FashPromoSlider(
     modifier: Modifier = Modifier,
-    /** When the parent already applies horizontal insets (e.g. grid `contentPadding`), use [PaddingValues(0.dp)] to avoid double padding. */
-    pagerContentPadding: PaddingValues = PaddingValues(
-        start = FashTheme.spacing.editorialStart,
-        end = FashTheme.spacing.editorialEnd,
+    slides: List<FashPromoSlideDef>? = null,
+    contentPadding: PaddingValues = PaddingValues(
+        horizontal = FashTheme.spacing.editorialStart,
     ),
-    /** Optional: analytics, deep link, or future in-app actions. */
-    onSlideClick: (pageIndex: Int) -> Unit = {},
+    onSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
-    val slides = remember(scheme) {
-        listOf(
-            PromoSlide(
-                titleRes = R.string.explore_promo_slide1_title,
-                subtitleRes = R.string.explore_promo_slide1_subtitle,
-                gradient = listOf(FashColors.PrimaryDeep, FashColors.Primary),
-            ),
-            PromoSlide(
-                titleRes = R.string.explore_promo_slide2_title,
-                subtitleRes = R.string.explore_promo_slide2_subtitle,
-                gradient = listOf(FashColors.SecondaryWarm, FashColors.TertiaryAccent),
-            ),
-            PromoSlide(
-                titleRes = R.string.explore_promo_slide3_title,
-                subtitleRes = R.string.explore_promo_slide3_subtitle,
-                gradient = listOf(scheme.surfaceContainerLow, scheme.surfaceVariant),
-                border = scheme.outlineVariant.copy(alpha = 0.65f),
-            ),
-        )
-    }
+    val resolved = slides ?: remember(scheme) { defaultFashPromoSlides(scheme) }
+    if (resolved.isEmpty()) return
 
-    val pagerState = rememberPagerState(pageCount = { slides.size })
+    val pagerState = rememberPagerState(pageCount = { resolved.size })
 
-    LaunchedEffect(pagerState) {
+    LaunchedEffect(pagerState, resolved.size) {
+        if (resolved.size <= 1) return@LaunchedEffect
         while (isActive) {
             delay(AutoAdvanceMs)
-            val next = (pagerState.currentPage + 1) % slides.size
+            val next = (pagerState.currentPage + 1) % resolved.size
             runCatching { pagerState.animateScrollToPage(next) }
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 4.dp),
+            .padding(top = 6.dp, bottom = 4.dp),
     ) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = pagerContentPadding,
+            contentPadding = contentPadding,
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.CenterVertically,
         ) { page ->
-            val slide = slides[page]
+            val slide = resolved[page]
             val cd = stringResource(
-                R.string.explore_promo_pager_cd,
+                R.string.orders_promo_pager_cd,
                 page + 1,
-                slides.size,
+                resolved.size,
             )
-            ExplorePromoCard(
+            FashPromoCard(
                 slide = slide,
-                badge = stringResource(R.string.explore_promo_badge),
+                badge = stringResource(R.string.orders_promo_badge),
                 contentDescription = cd,
-                onClick = { onSlideClick(page) },
+                onClick = { onSlideClick(slide.id, page) },
             )
         }
 
-        PromoPageIndicator(
-            pageCount = slides.size,
-            currentPage = pagerState.currentPage,
-            modifier = Modifier
-                .padding(top = 10.dp)
-                .align(Alignment.CenterHorizontally),
+        if (resolved.size > 1) {
+            FashPromoPageIndicator(
+                pageCount = resolved.size,
+                currentPage = pagerState.currentPage,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp),
+            )
+        }
+    }
+}
+
+/**
+ * [Surface] (surfaceContainerLow) + [FashPromoSlider] — same chrome as Orders / Notifications
+ * inline promo blocks. Use [slides] = null for the shared default deck.
+ */
+@Composable
+fun FashPromoSliderBlock(
+    modifier: Modifier = Modifier,
+    slides: List<FashPromoSlideDef>? = null,
+    contentPadding: PaddingValues = PaddingValues(
+        horizontal = FashTheme.spacing.editorialStart,
+    ),
+    onSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+    ) {
+        FashPromoSlider(
+            modifier = Modifier.fillMaxWidth(),
+            slides = slides,
+            contentPadding = contentPadding,
+            onSlideClick = onSlideClick,
         )
     }
 }
 
 @Composable
-private fun ExplorePromoCard(
-    slide: PromoSlide,
+private fun FashPromoCard(
+    slide: FashPromoSlideDef,
     badge: String,
     contentDescription: String,
     onClick: () -> Unit,
@@ -145,7 +192,7 @@ private fun ExplorePromoCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(PromoCardHeight)
+            .height(FashPromoCardHeight)
             .semantics(mergeDescendants = true) {
                 this.contentDescription = contentDescription
             }
@@ -155,7 +202,7 @@ private fun ExplorePromoCard(
                 slide.border?.let { b -> Modifier.border(1.dp, b, shape) } ?: Modifier,
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
             text = badge,
@@ -167,12 +214,12 @@ private fun ExplorePromoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.CenterStart)
-                .padding(end = 56.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(end = 48.dp, bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = stringResource(slide.titleRes),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = titleColor,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -181,7 +228,7 @@ private fun ExplorePromoCard(
                 text = stringResource(slide.subtitleRes),
                 style = MaterialTheme.typography.bodySmall,
                 color = subtitleColor,
-                maxLines = 3,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -189,7 +236,7 @@ private fun ExplorePromoCard(
 }
 
 @Composable
-private fun PromoPageIndicator(
+private fun FashPromoPageIndicator(
     pageCount: Int,
     currentPage: Int,
     modifier: Modifier = Modifier,
@@ -205,7 +252,7 @@ private fun PromoPageIndicator(
             val width by animateDpAsState(
                 targetValue = if (selected) 18.dp else 6.dp,
                 animationSpec = tween(durationMillis = 220),
-                label = "promoDot",
+                label = "fashPromoDot",
             )
             Box(
                 modifier = Modifier
