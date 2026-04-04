@@ -84,7 +84,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     withContext(Dispatchers.IO) {
                         loadBuyerHomeStats()
                         fetchHomeFeedWithRetry()
-                    }.getOrNull()?.let { _items.value = it }
+                    }.getOrNull()?.let { feed ->
+                        _items.value = feed
+                        syncSellerFollowingFromListings(feed)
+                    }
                 }
             }
         }
@@ -93,9 +96,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadBuyerHomeStats() {
         val orders = orderRepository.getBuyingOrders(limit = 50, offset = 0).getOrElse { emptyList() }
         val delivering = orders.count { it.status in BuyerDeliveringStatuses }
-        val saved = listingRepository.getWishlistListingIds(limit = 100, offset = 0)
-            .getOrElse { emptyList() }
-            .size
+        val saved = listingRepository.getWishlistSavedCount(limit = 100, offset = 0).getOrElse { 0 }
         val unread = chatRepository.getUnreadCount().getOrElse { 0 }
         _buyerStats.value = BuyerHomeStats(
             activeDeliveryOrders = delivering,
@@ -116,6 +117,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = {
                     _items.value = it
+                    syncSellerFollowingFromListings(it)
                     _loadError.value = false
                 },
                 onFailure = {
@@ -159,9 +161,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             _isRefreshing.value = false
             result.fold(
-                onSuccess = { _items.value = it },
+                onSuccess = {
+                    _items.value = it
+                    syncSellerFollowingFromListings(it)
+                },
                 onFailure = { _loadError.value = true },
             )
+        }
+    }
+
+    /**
+     * Aligns local follow chip state with `seller.is_following` from listing payloads (viewer batched flags).
+     */
+    private fun syncSellerFollowingFromListings(items: List<ListingFeedItem>) {
+        if (items.isEmpty()) return
+        _followingIds.update { cur ->
+            val m = cur.toMutableSet()
+            for (item in items) {
+                val sid = item.sellerId?.takeIf { it.isNotBlank() } ?: continue
+                if (item.sellerIsFollowing) m.add(sid) else m.remove(sid)
+            }
+            m
         }
     }
 
@@ -183,6 +203,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             } else it
                         }
                     }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
+                        ),
+                    )
                 },
                 onFailure = {
                     _events.tryEmit(
@@ -197,7 +222,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleSave(item: ListingFeedItem) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                listingRepository.toggleSave(item.id)
+                listingRepository.toggleSave(item.id, item.isSaved)
             }
             result.fold(
                 onSuccess = { saved ->
@@ -205,8 +230,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     _items.update { list ->
                         list.map {
                             if (it.id == item.id) {
+                                val delta = when {
+                                    saved && !it.isSaved -> 1
+                                    !saved && it.isSaved -> -1
+                                    else -> 0
+                                }
                                 it.copy(
-                                    saveCount = if (saved) it.saveCount + 1 else (it.saveCount - 1).coerceAtLeast(0),
+                                    saveCount = (it.saveCount + delta).coerceAtLeast(0),
                                     isSaved = saved,
                                 )
                             } else it
@@ -215,6 +245,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     viewModelScope.launch {
                         withContext(Dispatchers.IO) { loadBuyerHomeStats() }
                     }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
+                        ),
+                    )
                 },
                 onFailure = {
                     _events.tryEmit(

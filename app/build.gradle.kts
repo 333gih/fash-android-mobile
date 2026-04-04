@@ -117,6 +117,20 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     val paymentRedirectUrl = envVal("PAYMENT_REDIRECT_URL")
         ?: "https://fash.app/payment/callback"
     buildConfigField("String", "PAYMENT_REDIRECT_URL", buildConfigStringLiteral(paymentRedirectUrl))
+
+    /**
+     * Public HTTPS base for listing share links (no trailing slash); listing id is appended: `{base}/{listingId}`.
+     * Must match [AndroidManifest.xml] VIEW intent-filter host/pathPrefix for app links.
+     */
+    val listingShareBaseUrl = envVal("LISTING_SHARE_BASE_URL") ?: "https://fash.app/p/l"
+    buildConfigField("String", "LISTING_SHARE_BASE_URL", buildConfigStringLiteral(listingShareBaseUrl))
+    val listingShareHost = listingShareBaseUrl
+        .removePrefix("https://")
+        .removePrefix("http://")
+        .substringBefore('/')
+        .trim()
+        .ifBlank { "fash.app" }
+    manifestPlaceholders["listingShareHost"] = listingShareHost
     /**
      * Core API path template for initiating gateway payment (single %s = order_id).
      * Example: api/v1/orders/%s/payments/initiate
@@ -183,6 +197,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Overridden per flavor by [injectFromEnv] (LISTING_SHARE_BASE_URL host).
+        manifestPlaceholders["listingShareHost"] = "fash.app"
     }
 
     flavorDimensions += "environment"
@@ -258,6 +274,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
+    implementation(libs.coil)
     implementation(libs.coil.compose)
     implementation("androidx.browser:browser:1.8.0")
     // Explicit coordinates — ensures IDE/Kotlin resolve `com.facebook.*` (Catalog `libs.fb.login` can fail indexing in some setups).

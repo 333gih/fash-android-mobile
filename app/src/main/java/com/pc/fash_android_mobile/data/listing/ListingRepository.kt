@@ -13,6 +13,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 
 /**
  * Listing/feed API client. Uses secured client for authenticated endpoints.
@@ -59,7 +60,7 @@ class ListingRepository(
         parseFeedResponse(executeGet(primary))
     }
 
-    /** `GET /listings/wishlist` → listing id list. */
+    /** `GET /listings/wishlist` → listing id list (legacy / alternate response shape). */
     fun getWishlistListingIds(limit: Int = 50, offset: Int = 0): Result<List<String>> = runCatching {
         val url = "${AppEnvironment.apiPath("api/v1/listings/wishlist")}?limit=$limit&offset=$offset"
         val body = executeGet(url)
@@ -67,6 +68,26 @@ class ListingRepository(
         val root = if (obj.has("data")) obj.getJSONObject("data") else obj
         val arr = root.optJSONArray("listing_ids") ?: JSONArray("[]")
         (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
+    }
+
+    /** `GET /listings/wishlist` — full listings + `total` (viewer flags; paginated). */
+    fun getWishlistListings(limit: Int = 50, offset: Int = 0): Result<List<ListingFeedItem>> = runCatching {
+        val url = "${AppEnvironment.apiPath("api/v1/listings/wishlist")}?limit=$limit&offset=$offset"
+        parseFeedResponse(executeGet(url))
+    }
+
+    /**
+     * Saved-listings count for buyer stats. Uses response `total` when present, else `listings` length.
+     */
+    fun getWishlistSavedCount(limit: Int = 100, offset: Int = 0): Result<Int> = runCatching {
+        val url = "${AppEnvironment.apiPath("api/v1/listings/wishlist")}?limit=$limit&offset=$offset"
+        val body = executeGet(url)
+        val obj = JSONObject(body.trim())
+        val root = if (obj.has("data")) obj.getJSONObject("data") else obj
+        val t = root.optInt("total", root.optInt("Total", -1))
+        if (t >= 0) return@runCatching t
+        val arr = root.optJSONArray("listings") ?: root.optJSONArray("Listings") ?: JSONArray("[]")
+        arr.length()
     }
 
     /** `PUT /listings/{id}` — category cannot change (omit). */
@@ -141,15 +162,25 @@ class ListingRepository(
     fun toggleLike(listingId: String): Result<Boolean> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/listings/$listingId/like")
         val body = executePost(url)
-        val obj = JSONObject(body)
-        obj.optBoolean("liked", false)
+        parseToggleBooleanResponse(body, "liked")
     }
 
-    fun toggleSave(listingId: String): Result<Boolean> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/listings/$listingId/save")
-        val body = executePost(url)
-        val obj = JSONObject(body)
-        obj.optBoolean("saved", false)
+    /**
+     * Save / unsave for the current user.
+     * - When [currentlySaved] is false: **POST** `/listings/{id}/save` (toggle semantics — add to wishlist).
+     * - When [currentlySaved] is true: **DELETE** `/listings/{id}/save` (idempotent unsave; response `{ "saved": false }`).
+     */
+    fun toggleSave(listingId: String, currentlySaved: Boolean): Result<Boolean> = runCatching {
+        val id = listingId.trim()
+        val url = AppEnvironment.apiPath("api/v1/listings/$id/save")
+        if (currentlySaved) {
+            val body = executeDelete(url)
+            parseToggleBooleanResponse(body, "saved")
+            false
+        } else {
+            val body = executePost(url)
+            parseToggleBooleanResponse(body, "saved")
+        }
     }
 
     fun recordView(listingId: String): Result<Unit> = runCatching {
@@ -269,12 +300,62 @@ class ListingRepository(
         }
     }
 
+    /**
+     * POST /listings/{id}/like|save — response may be `{ "liked": true }`, `{ "data": { "liked": true } }`,
+     * PascalCase keys, or OpenAPI placeholder maps (first boolean wins).
+     */
+    private fun parseToggleBooleanResponse(body: String, vararg keys: String): Boolean {
+        val raw = body.trim().ifBlank { "{}" }
+        val root = try {
+            JSONObject(raw)
+        } catch (_: Exception) {
+            return false
+        }
+        val data = root.optJSONObject("data") ?: root.optJSONObject("Data") ?: root
+        val candidateKeys = buildSet {
+            for (k in keys) {
+                add(k)
+                add(k.replaceFirstChar { it.titlecase(Locale.ROOT) })
+            }
+        }
+        for (k in candidateKeys) {
+            if (data.has(k)) return data.optBoolean(k, false)
+        }
+        val it = data.keys()
+        while (it.hasNext()) {
+            val name = it.next()
+            if (data.isNull(name)) continue
+            try {
+                if (data.get(name) is Boolean) return data.getBoolean(name)
+            } catch (_: Exception) {
+                continue
+            }
+        }
+        return false
+    }
+
     private fun executePost(url: String): String {
         val request = Request.Builder()
             .url(url)
             .post(ByteArray(0).toRequestBody(null))
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        return securedClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throwHttpError(response.code, body)
+            }
+            body.ifBlank { "{}" }
+        }
+    }
+
+    private fun executeDelete(url: String): String {
+        val request = Request.Builder()
+            .url(url)
+            .delete()
+            .header("Accept", "application/json")
             .header("User-Agent", "FashAndroid/1.0")
             .build()
         return securedClient.newCall(request).execute().use { response ->
@@ -326,20 +407,31 @@ class ListingRepository(
             null
         }
 
-    /** `aesthetic_tags`: `{ "id", "name", "display_name" }[]` — prefer display_name. */
-    private fun parseAestheticTagLabels(arr: JSONArray?): List<String> {
+    /** `aesthetic_tags`: `{ "id", "name", "display_name" }[]` — prefer display_name; keeps id for Explore. */
+    private fun parseAestheticTagRefs(arr: JSONArray?): List<AestheticTagRef> {
         if (arr == null) return emptyList()
-        return (0 until arr.length()).mapNotNull { i ->
-            arr.optJSONObject(i)?.let { o ->
-                o.optString("display_name", "").ifBlank { null }
+        val out = mutableListOf<AestheticTagRef>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i)
+            if (o != null) {
+                val id = o.optString("id", "").ifBlank { o.optString("ID", "") }.ifBlank { null }
+                val label = o.optString("display_name", "").ifBlank { null }
                     ?: o.optString("DisplayName", "").ifBlank { null }
                     ?: o.optString("name", "").ifBlank { null }
                     ?: o.optString("Name", "").ifBlank { null }
+                val t = label?.trim()?.takeIf { it.isNotEmpty() } ?: continue
+                out.add(AestheticTagRef(id = id, label = t))
+                continue
+            }
+            val s = arr.optString(i, "").trim()
+            if (s.isEmpty()) continue
+            if (s.startsWith("{")) {
+                tagNameFromEmbeddedJson(s)?.let { out.add(AestheticTagRef(id = null, label = it)) }
+            } else {
+                out.add(AestheticTagRef(id = null, label = s))
             }
         }
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
+        return out.distinctBy { it.label }
     }
 
     private fun optMeasurement(o: JSONObject, key: String): Double? {
@@ -388,12 +480,19 @@ class ListingRepository(
             .ifBlank { imageUrls.firstOrNull() ?: "" }
         val tagsArr = o.optJSONArray("tags") ?: o.optJSONArray("Tags")
         val aestheticArr = o.optJSONArray("aesthetic_tags") ?: o.optJSONArray("AestheticTags")
+        val brandIdWire = brandObj?.optString("id", "")?.ifBlank { null }
+            ?: brandObj?.optString("ID", "")?.ifBlank { null }
         val brandName = brandObj?.optString("name", "")?.ifBlank { null }
             ?: brandObj?.optString("Name", "")?.ifBlank { null }
             ?: o.optString("brand", "").ifBlank { null }
             ?: o.optString("Brand", "").ifBlank { null }
         val parentCategoryName = parentObj?.optString("name", "")?.ifBlank { null }
             ?: parentObj?.optString("Name", "")?.ifBlank { null }
+        val categoryIdWire = categoryObj?.optString("id", "")?.ifBlank { null }
+            ?: categoryObj?.optString("ID", "")?.ifBlank { null }
+        val parentCategoryIdWire = parentObj?.optString("id", "")?.ifBlank { null }
+            ?: parentObj?.optString("ID", "")?.ifBlank { null }
+        val aestheticRefs = parseAestheticTagRefs(aestheticArr)
         val shippingAddress = shipObj?.let { s ->
             val line1 = s.optString("line1", s.optString("Line1", ""))
             val label = s.optString("label", s.optString("Label", "")).ifBlank { null }
@@ -453,12 +552,16 @@ class ListingRepository(
             category = categoryObj?.optString("name", "")?.ifBlank { null }
                 ?: categoryObj?.optString("Name", "")?.ifBlank { null }
                 ?: o.optString("category", "").ifBlank { null },
+            categoryId = categoryIdWire,
             parentCategoryName = parentCategoryName,
+            parentCategoryId = parentCategoryIdWire,
             size = o.optString("size", "").ifBlank { o.optString("Size", "").ifBlank { null } },
             brand = brandName,
+            brandId = brandIdWire,
             material = o.optString("material", "").ifBlank { null },
             tags = parseTagStringArray(tagsArr),
-            aestheticTags = parseAestheticTagLabels(aestheticArr),
+            aestheticTags = aestheticRefs.map { it.label },
+            aestheticTagRefs = aestheticRefs,
             likeCount = o.optInt("like_count", o.optInt("LikeCount", 0)),
             saveCount = o.optInt("save_count", o.optInt("SaveCount", 0)),
             viewCount = o.optInt("view_count", o.optInt("ViewCount", 0)),
@@ -483,6 +586,9 @@ class ListingRepository(
             nextPriceDropAtIso = nextDrop.ifBlank { null },
             countryName = countryObj?.optString("name", "")?.ifBlank { null }
                 ?: countryObj?.optString("Name", "")?.ifBlank { null },
+            countryId = countryObj?.optString("id", "")?.ifBlank { null }
+                ?: countryObj?.optString("ID", "")?.ifBlank { null }
+                ?: o.optString("country_id", o.optString("CountryID", "")).ifBlank { null },
             countryIso2 = countryObj?.optString("iso2", "")?.ifBlank { null }
                 ?: countryObj?.optString("ISO2", "")?.ifBlank { null },
             shippingAddress = shippingAddress,
@@ -531,8 +637,23 @@ class ListingRepository(
             },
             createdAtIso = o.optString("created_at", o.optString("CreatedAt", "")).trim().ifBlank { null },
             updatedAtIso = o.optString("updated_at", o.optString("UpdatedAt", "")).trim().ifBlank { null },
-            isLiked = o.optBoolean("is_liked", false),
-            isSaved = o.optBoolean("is_saved", false),
+            sellerIsFollowing = seller?.let { s ->
+                when {
+                    s.has("is_following") -> s.optBoolean("is_following", false)
+                    s.has("IsFollowing") -> s.optBoolean("IsFollowing", false)
+                    else -> null
+                }
+            },
+            isLiked = when {
+                o.has("is_liked") -> o.optBoolean("is_liked", false)
+                o.has("IsLiked") -> o.optBoolean("IsLiked", false)
+                else -> false
+            },
+            isSaved = when {
+                o.has("is_saved") -> o.optBoolean("is_saved", false)
+                o.has("IsSaved") -> o.optBoolean("IsSaved", false)
+                else -> false
+            },
             status = o.optString("status", o.optString("Status", "active")).lowercase().ifBlank { "active" },
         )
     }

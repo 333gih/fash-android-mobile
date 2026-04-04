@@ -1,0 +1,59 @@
+# Featured sellers (`GET /search/featured-sellers`)
+
+## Purpose
+
+Returns a **ranked list of seller profiles** for home/discovery carousels (similar to “suggested creators” / TikTok-style: profile + a few listing IDs for horizontal previews).
+
+This endpoint uses **PostgreSQL only**. Listing **full-text search** continues to use **Typesense** (`GET /search/listings`). Featured sellers are a **fixed leaderboard** (sort by popularity signals), not a search index, so Typesense is not required here.
+
+## Authentication
+
+Requires the same JWT as other `/search/*` routes.
+
+## Query parameters
+
+| Param   | Default | Max | Description        |
+|---------|---------|-----|--------------------|
+| `limit` | `5`     | 50  | Number of sellers. |
+
+## Eligibility (who appears)
+
+A seller is included only if **all** of the following hold:
+
+1. **User** row exists and `status = 'active'`.
+2. **Profile** has `onboarding_done = true`.
+3. **At least one listing** with `status = 'active'` for that `seller_id` (existence check; not only `listing_count`).
+
+## Exclusions
+
+The **viewer** does not see:
+
+- Themselves (`user_id` excluded).
+- Users they **blocked** or who **blocked** them (same block rules as `GET /users/search`).
+
+## Ranking (order)
+
+Results are sorted **deterministically** in this order:
+
+1. `verified` (verified sellers first)
+2. `follower_count` descending
+3. `listing_count` descending
+4. `average_rating` descending (`NULL` last)
+5. `updated_at` on profile descending (tie-breaker)
+
+## Response shape
+
+Each element is a `FeaturedSellerItem`:
+
+- `user_id`, `username`, `display_name`, `bio`, `avatar_url` (signed when configured)
+- `follower_count`, `listing_count`, `average_rating`, `verified`
+- `preview_listing_ids`: up to **3** newest **active** listing UUIDs for that seller (client loads listing cards the same way as elsewhere)
+
+## Operations notes
+
+- **Indexes** (optional, for large scale): consider indexes on `listings(seller_id, status)`, `profiles(onboarding_done, verified)`, `users(status)`.
+- **Consistency**: `listing_count` / ratings are denormalized on `profiles`; eligibility uses **live** `EXISTS` on active listings.
+
+## Why not Typesense?
+
+Typesense is optimized for **search queries** over listing documents. Featured sellers are a **small, sorted slice** of profiles with simple filters; SQL keeps one source of truth and avoids syncing a second “profiles” collection for this read path.

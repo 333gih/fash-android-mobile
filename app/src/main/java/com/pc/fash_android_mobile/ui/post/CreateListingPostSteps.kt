@@ -2,7 +2,6 @@
 
 package com.pc.fash_android_mobile.ui.post
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -179,8 +178,7 @@ private fun PostStep1SectionCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        color = PostListingColors.fieldSurface(),
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.68f)),
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {

@@ -1,6 +1,5 @@
 package com.pc.fash_android_mobile.ui.explore
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,13 +52,14 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
+import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
 
 // —— Design system (aligned with ExploreFiltersBar + ExploreMarketplaceFilters) ——
 
-/** Search fields in filter pickers — same border/cursor/container rules as price filters. */
+/** Search fields in filter pickers — same cursor/container rules as price filters. */
 @Composable
 internal fun exploreFilterSearchFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = FashColors.Primary.copy(alpha = 0.55f),
@@ -127,7 +127,7 @@ internal fun ExploreFilterHorizontalDivider() {
 }
 
 /**
- * Inset list panel — lifted [surfaceContainerHigh] card with editorial outline (readable on paper canvas).
+ * Inset list panel — soft [surfaceContainerHigh] block without a drawn frame (tonal only).
  */
 @Composable
 internal fun ExploreFilterListSurface(
@@ -142,7 +142,6 @@ internal fun ExploreFilterListSurface(
             .padding(bottom = FashTheme.spacing.spacing2),
         shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
         color = scheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.72f)),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -260,6 +259,143 @@ fun ExploreBrandFilterRow(
 }
 
 /**
+ * Country of origin (made in): summary + searchable single-select (matches `country_id` + `country_iso2` on search).
+ */
+@Composable
+fun ExploreCountryFilterRow(
+    countries: List<CommonCountryDto>,
+    selectedCountryId: String?,
+    selectedCountryIso2: String?,
+    onOpenPicker: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (countries.isEmpty()) return
+    val edge = FashTheme.spacing.editorialStart
+    val summary = when {
+        selectedCountryId.isNullOrBlank() && selectedCountryIso2.isNullOrBlank() ->
+            stringResource(R.string.explore_filter_country_any)
+        else -> {
+            val byId = selectedCountryId?.let { id -> countries.find { it.id == id } }
+            val byIso = if (byId == null && !selectedCountryIso2.isNullOrBlank()) {
+                countries.find { it.iso2.equals(selectedCountryIso2, ignoreCase = true) }
+            } else {
+                null
+            }
+            (byId ?: byIso)?.name?.trim()?.takeIf { it.isNotEmpty() }
+                ?: stringResource(R.string.explore_filter_country_any)
+        }
+    }
+    val cd = stringResource(R.string.explore_filter_country_summary_cd, summary)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = FashTheme.spacing.spacing2),
+    ) {
+        ExploreFilterSectionLabel(text = stringResource(R.string.explore_filter_country_title))
+        FilterSelectionSummaryCard(
+            summary = summary,
+            onClick = onOpenPicker,
+            contentDescription = cd,
+            modifier = Modifier.padding(horizontal = edge),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ExploreCountryPickerSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    countries: List<CommonCountryDto>,
+    selectedCountryId: String?,
+    selectedCountryIso2: String?,
+    onSelectCountry: (countryId: String?, iso2: String?) -> Unit,
+) {
+    if (!visible || countries.isEmpty()) return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scheme = MaterialTheme.colorScheme
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val q = searchQuery.trim().lowercase(Locale.getDefault())
+    val filtered = remember(countries, q) {
+        if (q.isEmpty()) countries
+        else countries.filter { c ->
+            c.name.lowercase(Locale.getDefault()).contains(q) ||
+                c.iso2.lowercase(Locale.getDefault()).contains(q)
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = scheme.surface,
+        contentColor = scheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = FashTheme.spacing.spacing4),
+        ) {
+            ExploreFilterPickerHeader(
+                title = stringResource(R.string.explore_filter_country_title),
+                onDone = onDismiss,
+            )
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 4.dp),
+                placeholder = {
+                    Text(
+                        text = stringResource(R.string.explore_filter_country_search_placeholder),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+                colors = exploreFilterSearchFieldColors(),
+            )
+            ExploreFilterHorizontalDivider()
+            ExploreFilterListSurface {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 440.dp),
+                ) {
+                    item {
+                        ExploreFilterSingleSelectRow(
+                            label = stringResource(R.string.explore_filter_country_any),
+                            selected = selectedCountryId.isNullOrBlank() && selectedCountryIso2.isNullOrBlank(),
+                            onClick = {
+                                onSelectCountry(null, null)
+                                onDismiss()
+                            },
+                        )
+                    }
+                    items(filtered, key = { it.id }) { c ->
+                        val id = c.id.trim()
+                        if (id.isEmpty()) return@items
+                        val iso = c.iso2.trim()
+                        val selected = id == selectedCountryId ||
+                            (!iso.isEmpty() && iso.equals(selectedCountryIso2, ignoreCase = true))
+                        ExploreFilterSingleSelectRow(
+                            label = c.name.ifBlank { iso },
+                            selected = selected,
+                            onClick = {
+                                onSelectCountry(id, iso)
+                                onDismiss()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Aesthetic tags: summary line + opens multi-select searchable sheet (main filter sheet stays short).
  */
 @Composable
@@ -298,7 +434,7 @@ fun ExploreAestheticFilterRow(
 }
 
 /**
- * Tappable summary row — matches [ExploreFiltersBar]: [surface] + editorial outline, coral chevron.
+ * Tappable summary row — tonal fill only (no outline), aligned with [ExploreFiltersBar].
  */
 @Composable
 fun FilterSelectionSummaryCard(
@@ -319,8 +455,7 @@ fun FilterSelectionSummaryCard(
             }
             .clickable(onClick = onClick),
         shape = shape,
-        color = scheme.surface,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.88f)),
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {

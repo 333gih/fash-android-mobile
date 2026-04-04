@@ -132,6 +132,51 @@ class UserRepository(
     }
 
     /**
+     * `PUT /api/v1/users/me/password` — set first password (omit [currentPassword]) or change password.
+     * [newPassword] length 8–72 per API. Errors: `INVALID_CURRENT_PASSWORD`, `CURRENT_PASSWORD_REQUIRED`.
+     */
+    fun putUserPassword(newPassword: String, currentPassword: String?): Result<Unit> = runCatching {
+        require(newPassword.length in 8..72) { "PASSWORD_LENGTH" }
+        val url = AppEnvironment.apiPath("api/v1/users/me/password")
+        val json = JSONObject().put("new_password", newPassword)
+        val cur = currentPassword?.trim().orEmpty()
+        if (cur.isNotEmpty()) {
+            json.put("current_password", cur)
+        }
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .put(json.toString().toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val obj = runCatching { JSONObject(body) }.getOrNull()
+                val code = obj?.optString("code")?.trim().orEmpty()
+                    .ifBlank { obj?.optString("error_code")?.trim().orEmpty() }
+                val err = obj?.optString("error")?.trim().orEmpty()
+                    .ifBlank { obj?.optString("message")?.trim().orEmpty() }
+                    .ifBlank { body }
+                val codeOrErr = "$code $err"
+                when {
+                    code.equals("INVALID_CURRENT_PASSWORD", ignoreCase = true) ||
+                        err.contains("INVALID_CURRENT_PASSWORD", ignoreCase = true) ||
+                        codeOrErr.contains("INVALID_CURRENT_PASSWORD", ignoreCase = true) ->
+                        error("INVALID_CURRENT_PASSWORD")
+                    code.equals("CURRENT_PASSWORD_REQUIRED", ignoreCase = true) ||
+                        err.contains("CURRENT_PASSWORD_REQUIRED", ignoreCase = true) ||
+                        codeOrErr.contains("CURRENT_PASSWORD_REQUIRED", ignoreCase = true) ->
+                        error("CURRENT_PASSWORD_REQUIRED")
+                    else -> error("HTTP ${response.code}: $err")
+                }
+            }
+        }
+    }
+
+    /**
      * Follow user (core-service: `POST /api/v1/users/:id/follow`).
      * Accepts UUID or username; returns canonical user id (UUID) on success.
      */
@@ -413,6 +458,92 @@ class UserRepository(
             }
             body
         }
+    }
+
+    /**
+     * Seller shop focus (`GET /api/v1/users/{username|uuid}/seller-focus`).
+     * Requires Bearer; [securedClient] only. 403 → [SellerFocusForbiddenException];
+     * 401 → [SellerFocusUnauthorizedException].
+     */
+    fun getSellerListingFocus(userIdOrUsername: String): Result<SellerListingFocus> = runCatching {
+        val raw = userIdOrUsername.trim().removePrefix("@")
+        if (raw.isBlank()) error("Profile id required")
+        val seg = encodePathSegment(raw)
+        val url = AppEnvironment.apiPath("api/v1/users/$seg/seller-focus")
+        val req = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        securedClient.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            when (response.code) {
+                200 -> {
+                    val obj = JSONObject(body.trim())
+                    val inner = if (obj.has("data")) obj.getJSONObject("data").toString() else body
+                    parseSellerListingFocus(inner)
+                }
+                403 -> throw SellerFocusForbiddenException()
+                401 -> throw SellerFocusUnauthorizedException()
+                else -> {
+                    val msg = try {
+                        JSONObject(body).optString("error", body).ifBlank { body }
+                    } catch (_: Exception) {
+                        body
+                    }
+                    error("HTTP ${response.code}: $msg")
+                }
+            }
+        }
+    }
+
+    private fun parseSellerListingFocus(json: String): SellerListingFocus {
+        val obj = JSONObject(json)
+        val categories = mutableListOf<SellerFocusCategory>()
+        obj.optJSONArray("categories")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val c = arr.optJSONObject(i) ?: continue
+                val id = c.optString("id", "").trim()
+                val name = c.optString("name", "").trim()
+                if (id.isEmpty() && name.isEmpty()) continue
+                val parentId = c.optString("parent_id").trim().takeIf { it.isNotEmpty() }
+                val parentName = c.optString("parent_name").trim().takeIf { it.isNotEmpty() }
+                categories.add(
+                    SellerFocusCategory(
+                        id = id,
+                        name = name.ifEmpty { "—" },
+                        parentId = parentId,
+                        parentName = parentName,
+                    ),
+                )
+            }
+        }
+        val brands = mutableListOf<SellerFocusBrand>()
+        obj.optJSONArray("brands")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val b = arr.optJSONObject(i) ?: continue
+                val id = b.optString("id", "").trim()
+                val name = b.optString("name", "").trim()
+                if (id.isEmpty() && name.isEmpty()) continue
+                brands.add(SellerFocusBrand(id = id, name = name.ifEmpty { "—" }))
+            }
+        }
+        val tags = mutableListOf<SellerFocusTag>()
+        obj.optJSONArray("aesthetic_tags")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val t = arr.optJSONObject(i) ?: continue
+                val id = t.optString("id", "").trim()
+                val name = t.optString("name", "").trim()
+                if (id.isEmpty() && name.isEmpty()) continue
+                tags.add(SellerFocusTag(id = id, name = name.ifEmpty { "—" }))
+            }
+        }
+        return SellerListingFocus(
+            categories = categories,
+            brands = brands,
+            aestheticTags = tags,
+        )
     }
 
     /** Checks if username is available. Returns true when available, false when taken. */
@@ -773,6 +904,16 @@ class UserRepository(
             else -> o
         }
         val serverGate = parseServerCanAccessHome(root)
+        val passwordSet = when {
+            root.has("password_set") -> root.getBoolean("password_set")
+            root.has("passwordSet") -> root.getBoolean("passwordSet")
+            else -> null
+        }
+        val isChangePassword = when {
+            root.has("is_change_password") -> root.getBoolean("is_change_password")
+            root.has("isChangePassword") -> root.getBoolean("isChangePassword")
+            else -> null
+        }
         return UserAccessStatus(
             hasProfile = root.optBoolean("has_profile", root.optBoolean("hasProfile", false)),
             aestheticTagsConfigured = root.optBoolean(
@@ -786,6 +927,8 @@ class UserRepository(
             ),
             serverCanAccessHome = serverGate,
             nextStep = root.optString("next_step", root.optString("nextStep", "")).trim().takeIf { it.isNotEmpty() },
+            passwordSet = passwordSet,
+            isChangePassword = isChangePassword,
         )
     }
 
@@ -825,17 +968,33 @@ data class UserAccessStatus(
     val sizingReferenceCompleted: Boolean,
     /** If present in JSON (`can_access_home`), overrides the four-flag AND for home access. */
     val serverCanAccessHome: Boolean? = null,
-    /** e.g. `onboard`, `style`, `profile` — hints first onboarding screen. */
+    /** e.g. `password`, `onboard`, `sizing_reference`, `none` — from setup-status. */
     val nextStep: String? = null,
+    /** `true` when `password_set_at` is set; `null` if JSON omitted (legacy clients assume no password gate). */
+    val passwordSet: Boolean? = null,
+    /** `true` when first-time password step still needed (same signal as `!password_set` when set). */
+    val isChangePassword: Boolean? = null,
 ) {
+    /** First-time password step: after username ([onboardingDone]), before home. */
+    fun needsPasswordSetup(): Boolean {
+        if (!onboardingDone) return false
+        if (passwordSet == true) return false
+        if (passwordSet == false) return true
+        if (isChangePassword == true) return true
+        if (nextStep?.trim()?.equals("password", ignoreCase = true) == true) return true
+        return false
+    }
+
     /**
      * Prefer [serverCanAccessHome] when the API sends `can_access_home` (authoritative).
      * If that key is absent but `next_step` is `none` and core profile steps are done, treat as home
      * (server may omit `can_access_home` or send `aesthetic_tags_configured: false` while still allowing home).
      * Otherwise require all four flags (legacy client-side gate).
+     * [needsPasswordSetup] blocks home until first password is set when API reports it.
      */
     val canAccessHome: Boolean
         get() {
+            if (needsPasswordSetup()) return false
             serverCanAccessHome?.let { return it }
             if (nextStep?.equals("none", ignoreCase = true) == true &&
                 hasProfile && onboardingDone && sizingReferenceCompleted

@@ -70,7 +70,6 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -116,6 +115,7 @@ import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
+import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
@@ -173,7 +173,7 @@ fun ChatDetailScreen(
 
     Scaffold(
         modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { FashSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -653,10 +653,6 @@ private fun DealBanner(
                     .padding(bottom = if (buyerNeedsToPay) 10.dp else 12.dp),
                 color = Color(0xFFFFF5E6),
                 shape = RoundedCornerShape(10.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Color(0xFFFFB74D).copy(alpha = 0.65f),
-                ),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),

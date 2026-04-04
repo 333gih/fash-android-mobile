@@ -1,5 +1,7 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,22 +9,30 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -34,10 +44,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.user.SellerFocusBrand
+import com.pc.fash_android_mobile.data.user.SellerFocusCategory
+import com.pc.fash_android_mobile.data.user.SellerFocusTag
+import com.pc.fash_android_mobile.data.user.SellerListingFocus
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -50,6 +65,15 @@ fun SellerProfileScreen(
     sellerUsername: String,
     onBack: () -> Unit,
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
+    /** Opens Explore → Posts with one filter + search text (shop focus chips). */
+    onNavigateToExploreFromProfile: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
@@ -58,6 +82,9 @@ fun SellerProfileScreen(
     val loadError by viewModel.loadError.collectAsState()
     val isFollowing by viewModel.isFollowing.collectAsState()
     val followInFlight by viewModel.followInFlight.collectAsState()
+    val sellerFocus by viewModel.sellerFocus.collectAsState()
+    val sellerFocusForbidden by viewModel.sellerFocusForbidden.collectAsState()
+    val sellerFocusLoading by viewModel.sellerFocusLoading.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
 
     val titleHandle = remember(sellerUsername) {
@@ -68,7 +95,7 @@ fun SellerProfileScreen(
         viewModel.loadForSeller(sellerUsername)
     }
 
-    val listState = rememberLazyListState()
+    val listState = remember(selectedTab) { LazyListState(0, 0) }
     val collapseProgress = rememberProfileHeaderCollapseProgress(listState)
 
     Scaffold(
@@ -141,7 +168,12 @@ fun SellerProfileScreen(
                         listState = listState,
                         expandedHeader = {
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                SellerProfileHeader(profile = profile)
+                                SellerProfileHeader(
+                                    profile = profile,
+                                    onAestheticTagClick = { name, id ->
+                                        onNavigateToExploreFromProfile(null, null, id, name, null, null)
+                                    },
+                                )
                                 if (profile != null && viewModel.canFollowSeller()) {
                                     SellerFollowRow(
                                         isFollowing = isFollowing,
@@ -150,6 +182,20 @@ fun SellerProfileScreen(
                                     )
                                 }
                                 ProfileStats(profile = profile)
+                                SellerListingFocusSection(
+                                    focus = sellerFocus,
+                                    forbidden = sellerFocusForbidden,
+                                    loading = sellerFocusLoading,
+                                    onCategoryClick = { categoryId, label ->
+                                        onNavigateToExploreFromProfile(categoryId, null, null, label, null, null)
+                                    },
+                                    onBrandClick = { brandId, name ->
+                                        onNavigateToExploreFromProfile(null, brandId, null, name, null, null)
+                                    },
+                                    onAestheticTagClick = { tagId, name ->
+                                        onNavigateToExploreFromProfile(null, null, tagId, name, null, null)
+                                    },
+                                )
                             }
                         },
                         compactHeader = {
@@ -158,11 +204,204 @@ fun SellerProfileScreen(
                         selectedTab = selectedTab,
                         onTabSelected = { selectedTab = it },
                         items = items,
-                        isSellingTab = selectedTab == 0,
-                        onListingClick = { id -> onListingClick(id, profile?.userId) },
+                        wishlistTabVisible = false,
+                        onListingClick = { item -> onListingClick(item.id, item.sellerId ?: profile?.userId) },
+                        showListingQuickActions = true,
+                        onListingLike = { viewModel.toggleLike(it) },
+                        onListingSave = { viewModel.toggleSave(it) },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SellerListingFocusSection(
+    focus: SellerListingFocus?,
+    forbidden: Boolean,
+    loading: Boolean,
+    onCategoryClick: (categoryId: String, label: String) -> Unit,
+    onBrandClick: (brandId: String, name: String) -> Unit,
+    onAestheticTagClick: (tagId: String, name: String) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val showContent = focus != null && !focus.isEmpty()
+    if (!forbidden && !loading && !showContent) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 4.dp, bottom = 8.dp),
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.padding(bottom = 12.dp),
+            color = scheme.outlineVariant.copy(alpha = 0.35f),
+        )
+        Text(
+            text = stringResource(R.string.seller_focus_section_title),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.seller_focus_section_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+        )
+        when {
+            forbidden -> {
+                Text(
+                    text = stringResource(R.string.seller_focus_forbidden),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            loading && !showContent -> {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = FashColors.Primary,
+                    trackColor = scheme.surfaceContainerHighest,
+                )
+            }
+            showContent && focus != null -> {
+                SellerFocusCategoryRow(
+                    label = stringResource(R.string.seller_focus_categories),
+                    categories = focus.categories,
+                    onCategoryClick = onCategoryClick,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SellerFocusBrandRow(
+                    label = stringResource(R.string.seller_focus_brands),
+                    brands = focus.brands,
+                    onBrandClick = onBrandClick,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SellerFocusAestheticRow(
+                    label = stringResource(R.string.seller_focus_aesthetics),
+                    tags = focus.aestheticTags,
+                    onAestheticTagClick = onAestheticTagClick,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SellerFocusCategoryRow(
+    label: String,
+    categories: List<SellerFocusCategory>,
+    onCategoryClick: (categoryId: String, label: String) -> Unit,
+) {
+    if (categories.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            itemsIndexed(
+                items = categories,
+                key = { i, c -> "${label}_cat_${c.id}_$i" },
+            ) { _, c ->
+                val text = c.displayLabel()
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+                        .background(scheme.surfaceContainerLow)
+                        .clickable(onClick = { onCategoryClick(c.id, text) })
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SellerFocusBrandRow(
+    label: String,
+    brands: List<SellerFocusBrand>,
+    onBrandClick: (brandId: String, name: String) -> Unit,
+) {
+    if (brands.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            itemsIndexed(
+                items = brands,
+                key = { i, b -> "${label}_brand_${b.id}_$i" },
+            ) { _, b ->
+                Text(
+                    text = b.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+                        .background(scheme.surfaceContainerLow)
+                        .clickable(onClick = { onBrandClick(b.id, b.name) })
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SellerFocusAestheticRow(
+    label: String,
+    tags: List<SellerFocusTag>,
+    onAestheticTagClick: (tagId: String, name: String) -> Unit,
+) {
+    if (tags.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            itemsIndexed(
+                items = tags,
+                key = { i, t -> "${label}_aes_${t.id}_$i" },
+            ) { _, t ->
+                Text(
+                    text = t.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+                        .background(scheme.surfaceContainerLow)
+                        .clickable(onClick = { onAestheticTagClick(t.id, t.name) })
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
             }
         }
     }
@@ -182,25 +421,55 @@ private fun SellerFollowRow(
             .padding(top = 8.dp, bottom = 8.dp),
     ) {
         if (isFollowing) {
-            OutlinedButton(
-                onClick = onToggle,
-                enabled = !inFlight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(FashTheme.spacing.buttonHeight),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = scheme.surfaceContainerLow,
             ) {
-                if (inFlight) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                        color = FashColors.Primary,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = FashColors.Primary,
+                        modifier = Modifier.size(26.dp),
                     )
-                } else {
-                    Text(
-                        text = stringResource(R.string.following_button),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.seller_following_status_title),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = scheme.onSurface,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.seller_following_status_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(
+                        onClick = onToggle,
+                        enabled = !inFlight,
+                    ) {
+                        if (inFlight) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = FashColors.Primary,
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.unfollow_action),
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    }
                 }
             }
         } else {

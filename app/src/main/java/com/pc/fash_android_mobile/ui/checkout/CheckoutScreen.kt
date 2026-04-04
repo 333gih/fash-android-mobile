@@ -664,11 +664,16 @@ private fun PaymentMethodSection(
                         .fillMaxWidth()
                         .clickable { onSelect(index) },
                     shape = SectionCorner,
-                    color = scheme.surface,
-                    border = BorderStroke(
-                        width = if (selected) 2.dp else 1.dp,
-                        color = if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.72f),
-                    ),
+                    color = if (selected) {
+                        FashColors.Primary.copy(alpha = 0.08f)
+                    } else {
+                        scheme.surfaceContainerLow
+                    },
+                    border = if (selected) {
+                        BorderStroke(1.5.dp, FashColors.Primary.copy(alpha = 0.85f))
+                    } else {
+                        null
+                    },
                 ) {
                     Row(
                         modifier = Modifier
@@ -746,7 +751,7 @@ private fun OrderSummarySection(
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart),
         shape = SectionCorner,
-        color = Color.White,
+        color = scheme.surfaceContainerHighest,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

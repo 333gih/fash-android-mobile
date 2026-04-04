@@ -57,6 +57,7 @@ fun ExploreTopBar(
 ) {
     val searchBarExpanded by viewModel.searchBarExpanded.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val explorePrimarySection by viewModel.primarySection.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -104,7 +105,16 @@ fun ExploreTopBar(
                             color = MaterialTheme.colorScheme.onSurface,
                         ),
                         placeholder = {
-                            ExploreSearchPlaceholder()
+                            if (explorePrimarySection == ExplorePrimarySection.Sellers) {
+                                val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                Text(
+                                    text = stringResource(R.string.explore_search_placeholder_sellers),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = muted,
+                                )
+                            } else {
+                                ExploreSearchPlaceholder()
+                            }
                         },
                         shape = RoundedCornerShape(22.dp),
                         colors = OutlinedTextFieldDefaults.colors(

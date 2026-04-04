@@ -158,7 +158,7 @@ fun ShippingAddressListScreen(
                 onClick = onAddNew,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, tint = FashColors.Primary)
                 Spacer(modifier = Modifier.size(8.dp))

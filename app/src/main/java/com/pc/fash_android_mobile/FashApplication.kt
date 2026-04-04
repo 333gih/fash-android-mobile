@@ -1,5 +1,8 @@
 package com.pc.fash_android_mobile
 
+import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
@@ -23,6 +26,7 @@ import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -30,11 +34,27 @@ import kotlinx.coroutines.launch
  * Every secured OkHttpClient passes [AppAuthManager.onSessionCleared] with the
  * server-supplied reason so the UI can show an explanation when the session is
  * force-expired (e.g. refresh token expired).
+ *
+ * Implements [ImageLoaderFactory] so Coil uses one app-wide [ImageLoader] (caching + consistent config).
+ * [java.io.InterruptedIOException] during decode often means the image request was cancelled (e.g. scrolling
+ * away); that is normal. Framework/HWUI may still log decode interruptions; `logger(null)` disables Coil logs.
  */
-class FashApplication : android.app.Application() {
+class FashApplication : Application(), ImageLoaderFactory {
+
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .logger(null)
+            .build()
 
     /** Global success/error/info dialogs; observe from [com.pc.fash_android_mobile.MainActivity]. */
     val uiDialog: UiDialogController by lazy { UiDialogController() }
+
+    /**
+     * Listing id from VIEW intent (share / deep link). Consumed when main shell opens product detail.
+     * Held on the app so Compose under [com.pc.fash_android_mobile.ui.locale.ProvideAppLocale] can
+     * read it via [applicationContext] without [androidx.activity.compose.LocalActivity] (null in that subtree).
+     */
+    val pendingDeepLinkListingId = MutableStateFlow<String?>(null)
 
     /**
      * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until

@@ -1,6 +1,5 @@
 package com.pc.fash_android_mobile.ui.post
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +40,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
  * Bottom notice card aligned with [com.pc.fash_android_mobile.ui.login.OtpHelpBottomCard]:
- * bordered surface, primary accent bar, info icon, title, and bullet lines (split on `\n`).
+ * tonal surface, primary accent bar, info icon, title, and bullet lines (split on `\n`).
  */
 @Composable
 fun PostFlowNoticeCard(
@@ -62,10 +61,9 @@ fun PostFlowNoticeCard(
             .padding(horizontal = horizontalPadding)
             .padding(top = 8.dp, bottom = 12.dp),
         shape = shape,
-        color = PostListingColors.fieldSurface(),
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.72f)),
     ) {
         Row(
             modifier = Modifier

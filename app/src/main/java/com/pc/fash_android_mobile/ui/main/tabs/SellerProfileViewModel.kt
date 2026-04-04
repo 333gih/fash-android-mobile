@@ -8,14 +8,19 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.user.ProfileInfo
+import com.pc.fash_android_mobile.data.user.SellerFocusForbiddenException
+import com.pc.fash_android_mobile.data.user.SellerFocusUnauthorizedException
+import com.pc.fash_android_mobile.data.user.SellerListingFocus
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -54,35 +59,97 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     private val _followInFlight = MutableStateFlow(false)
     val followInFlight: StateFlow<Boolean> = _followInFlight.asStateFlow()
 
+    /** From `GET …/users/{id}/seller-focus`; null until loaded or skipped (guest). */
+    private val _sellerFocus = MutableStateFlow<SellerListingFocus?>(null)
+    val sellerFocus: StateFlow<SellerListingFocus?> = _sellerFocus.asStateFlow()
+
+    private val _sellerFocusForbidden = MutableStateFlow(false)
+    val sellerFocusForbidden: StateFlow<Boolean> = _sellerFocusForbidden.asStateFlow()
+
+    private val _sellerFocusLoading = MutableStateFlow(false)
+    val sellerFocusLoading: StateFlow<Boolean> = _sellerFocusLoading.asStateFlow()
+
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
     private var activeKey: String? = null
 
+    private var loadForSellerJob: Job? = null
+
     fun loadForSeller(username: String) {
         val key = username.trim().removePrefix("@")
         if (key.isBlank()) return
-        viewModelScope.launch {
+        // Same seller already shown — skip duplicate network when the screen recomposes (e.g. after navigation).
+        if (key == activeKey && _profile.value != null) return
+        loadForSellerJob?.cancel()
+        loadForSellerJob = viewModelScope.launch {
             if (activeKey != key) {
                 activeKey = key
                 _profile.value = null
                 _sellingListings.value = emptyList()
                 _soldListings.value = emptyList()
                 _isFollowing.value = false
+                _sellerFocus.value = null
+                _sellerFocusForbidden.value = false
+                _sellerFocusLoading.value = false
             }
-            _isLoading.value = true
-            _loadError.value = false
+            // Same seller revisit: keep showing content; only first load / seller change uses blocking UI.
+            val showBlockingUi = _profile.value == null
+            if (showBlockingUi) _isLoading.value = true
+            try {
+                _loadError.value = false
+                withContext(Dispatchers.IO) {
+                    userRepository.getProfile(key).fold(
+                        onSuccess = { prof ->
+                            _profile.value = prof
+                            _isFollowing.value = prof.isFollowing ?: false
+                        },
+                        onFailure = { _loadError.value = true },
+                    )
+                }
+                _profile.value?.userId?.takeIf { it.isNotBlank() }?.let { loadListings(it) }
+                loadSellerFocus(key)
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private fun loadSellerFocus(key: String) {
+        viewModelScope.launch {
+            if (sessionStore.read() == null) {
+                _sellerFocus.value = null
+                _sellerFocusForbidden.value = false
+                _sellerFocusLoading.value = false
+                return@launch
+            }
+            _sellerFocusLoading.value = true
+            _sellerFocusForbidden.value = false
             withContext(Dispatchers.IO) {
-                userRepository.getProfile(key).fold(
-                    onSuccess = { prof ->
-                        _profile.value = prof
-                        _isFollowing.value = prof.isFollowing ?: false
-                    },
-                    onFailure = { _loadError.value = true },
-                )
-            }
-            _profile.value?.userId?.takeIf { it.isNotBlank() }?.let { loadListings(it) }
-            _isLoading.value = false
+                userRepository.getSellerListingFocus(key)
+            }.fold(
+                onSuccess = { focus ->
+                    _sellerFocus.value = focus
+                    _sellerFocusForbidden.value = false
+                },
+                onFailure = { e ->
+                    when (e) {
+                        is SellerFocusForbiddenException -> {
+                            _sellerFocus.value = null
+                            _sellerFocusForbidden.value = true
+                        }
+                        is SellerFocusUnauthorizedException -> {
+                            _sellerFocus.value = null
+                            _sellerFocusForbidden.value = false
+                        }
+                        else -> {
+                            _sellerFocus.value = null
+                            _sellerFocusForbidden.value = false
+                        }
+                    }
+                },
+            )
+            _sellerFocusLoading.value = false
         }
     }
 
@@ -154,6 +221,78 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
             ).fold(
                 onSuccess = { _soldListings.value = it },
                 onFailure = { _soldListings.value = emptyList() },
+            )
+        }
+    }
+
+    fun toggleLike(item: ListingFeedItem) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.toggleLike(item.id)
+            }
+            result.fold(
+                onSuccess = { liked ->
+                    fun patch(cur: ListingFeedItem): ListingFeedItem {
+                        val delta = when {
+                            liked && !cur.isLiked -> 1
+                            !liked && cur.isLiked -> -1
+                            else -> 0
+                        }
+                        return cur.copy(
+                            isLiked = liked,
+                            likeCount = (cur.likeCount + delta).coerceAtLeast(0),
+                        )
+                    }
+                    _sellingListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
+                    _soldListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
+                    _events.emit(
+                        getApplication<Application>().getString(
+                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
+                        ),
+                    )
+                },
+                onFailure = { e ->
+                    _events.emit(
+                        e.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun toggleSave(item: ListingFeedItem) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.toggleSave(item.id, item.isSaved)
+            }
+            result.fold(
+                onSuccess = { saved ->
+                    fun patch(cur: ListingFeedItem): ListingFeedItem {
+                        val delta = when {
+                            saved && !cur.isSaved -> 1
+                            !saved && cur.isSaved -> -1
+                            else -> 0
+                        }
+                        return cur.copy(
+                            isSaved = saved,
+                            saveCount = (cur.saveCount + delta).coerceAtLeast(0),
+                        )
+                    }
+                    _sellingListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
+                    _soldListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
+                    _events.emit(
+                        getApplication<Application>().getString(
+                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
+                        ),
+                    )
+                },
+                onFailure = { e ->
+                    _events.emit(
+                        e.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
             )
         }
     }

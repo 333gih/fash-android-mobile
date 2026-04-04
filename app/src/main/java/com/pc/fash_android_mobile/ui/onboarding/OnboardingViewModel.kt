@@ -25,6 +25,9 @@ enum class OnboardingStep {
     AestheticTags,
     SizingReference,
     UsernameOnboard,
+    SetupPassword,
+    /** All gates passed; host should hide onboarding (e.g. [UserAccessStatus.canAccessHome]). */
+    Completed,
 }
 
 class OnboardingViewModel(
@@ -51,6 +54,12 @@ class OnboardingViewModel(
 
     private val _username = MutableStateFlow("")
     val username: StateFlow<String> = _username.asStateFlow()
+
+    private val _setupPassword = MutableStateFlow("")
+    val setupPassword: StateFlow<String> = _setupPassword.asStateFlow()
+
+    private val _setupPasswordConfirm = MutableStateFlow("")
+    val setupPasswordConfirm: StateFlow<String> = _setupPasswordConfirm.asStateFlow()
 
     private val _referenceSize = MutableStateFlow("")
     val referenceSize: StateFlow<String> = _referenceSize.asStateFlow()
@@ -107,8 +116,12 @@ class OnboardingViewModel(
                 OnboardingStep.SizingReference
             !status.onboardingDone ->
                 OnboardingStep.UsernameOnboard
+            status.needsPasswordSetup() ->
+                OnboardingStep.SetupPassword
+            status.canAccessHome ->
+                OnboardingStep.Completed
             else ->
-                OnboardingStep.UsernameOnboard
+                OnboardingStep.AestheticTags
         }
     }
 
@@ -125,6 +138,10 @@ class OnboardingViewModel(
                     backStack.add(OnboardingStep.AestheticTags)
                 completedStep == OnboardingStep.SizingReference && next == OnboardingStep.UsernameOnboard ->
                     backStack.add(OnboardingStep.SizingReference)
+                completedStep == OnboardingStep.UsernameOnboard && next == OnboardingStep.SetupPassword ->
+                    backStack.add(OnboardingStep.UsernameOnboard)
+                completedStep == OnboardingStep.SetupPassword && next == OnboardingStep.Completed ->
+                    backStack.add(OnboardingStep.SetupPassword)
             }
         }
         _onboardingStep.value = next
@@ -179,6 +196,20 @@ class OnboardingViewModel(
             .lowercase()
             .replace(Regex("[^a-z0-9_.]"), "")
             .take(30)
+    }
+
+    fun onSetupPasswordChange(value: String) {
+        _setupPassword.value = value.take(72)
+    }
+
+    fun onSetupPasswordConfirmChange(value: String) {
+        _setupPasswordConfirm.value = value.take(72)
+    }
+
+    fun canSubmitSetupPassword(): Boolean {
+        val p = _setupPassword.value
+        val c = _setupPasswordConfirm.value
+        return p.length in 8..72 && p == c
     }
 
     fun onReferenceSizeChange(value: String) {
@@ -281,6 +312,8 @@ class OnboardingViewModel(
                                 aestheticTagsConfigured = true,
                                 onboardingDone = false,
                                 sizingReferenceCompleted = false,
+                                passwordSet = null,
+                                isChangePassword = null,
                             )
                         advanceAfterStatus(
                             base.copy(aestheticTagsConfigured = true),
@@ -340,6 +373,8 @@ class OnboardingViewModel(
                                 aestheticTagsConfigured = true,
                                 onboardingDone = false,
                                 sizingReferenceCompleted = true,
+                                passwordSet = null,
+                                isChangePassword = null,
                             )
                         advanceAfterStatus(
                             base.copy(sizingReferenceCompleted = true),
@@ -391,7 +426,22 @@ class OnboardingViewModel(
                     userRepository.onboard(u, selectedTags)
                 }
                 onboardResult.fold(
-                    onSuccess = { onSuccess() },
+                    onSuccess = {
+                        val status = withContext(Dispatchers.IO) {
+                            userRepository.getUserAccessStatus().getOrNull()
+                        }
+                        val base = status ?: lastAccessStatus?.copy(onboardingDone = true)
+                            ?: UserAccessStatus(
+                                hasProfile = false,
+                                aestheticTagsConfigured = true,
+                                onboardingDone = true,
+                                sizingReferenceCompleted = true,
+                                passwordSet = null,
+                                isChangePassword = null,
+                            )
+                        advanceAfterStatus(base, OnboardingStep.UsernameOnboard)
+                        onSuccess()
+                    },
                     onFailure = {
                         val msg = it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.onboarding_submit_error)
@@ -401,6 +451,57 @@ class OnboardingViewModel(
                             msg
                         }
                         _events.tryEmit(displayMsg)
+                    },
+                )
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    fun submitSetupPassword(onSuccess: () -> Unit) {
+        if (!canSubmitSetupPassword()) return
+        val pwd = _setupPassword.value
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                val putResult = withContext(Dispatchers.IO) {
+                    userRepository.putUserPassword(pwd, currentPassword = null)
+                }
+                putResult.fold(
+                    onSuccess = {
+                        _setupPassword.value = ""
+                        _setupPasswordConfirm.value = ""
+                        val status = withContext(Dispatchers.IO) {
+                            userRepository.getUserAccessStatus().getOrNull()
+                        }
+                        val base = status ?: lastAccessStatus?.copy(passwordSet = true, isChangePassword = false)
+                            ?: UserAccessStatus(
+                                hasProfile = true,
+                                aestheticTagsConfigured = true,
+                                onboardingDone = true,
+                                sizingReferenceCompleted = true,
+                                passwordSet = true,
+                                isChangePassword = false,
+                            )
+                        advanceAfterStatus(base, OnboardingStep.SetupPassword)
+                        onSuccess()
+                    },
+                    onFailure = { e ->
+                        val raw = e.message.orEmpty()
+                        val msg = when {
+                            raw.contains("PASSWORD_LENGTH") ->
+                                getApplication<Application>().getString(R.string.password_error_length)
+                            raw.contains("INVALID_CURRENT_PASSWORD") ->
+                                getApplication<Application>().getString(R.string.password_error_invalid_current)
+                            raw.contains("CURRENT_PASSWORD_REQUIRED") ->
+                                getApplication<Application>().getString(R.string.password_error_current_required)
+                            else ->
+                                raw.ifBlank {
+                                    getApplication<Application>().getString(R.string.password_change_error_generic)
+                                }
+                        }
+                        _events.tryEmit(msg)
                     },
                 )
             } finally {

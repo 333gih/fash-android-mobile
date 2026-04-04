@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -38,14 +39,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
@@ -63,6 +66,8 @@ import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
 import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
+import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
+import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -117,6 +122,8 @@ fun MainNavScreen(
     addressBookViewModel: AddressBookViewModel,
     profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel,
     chatViewModel: com.pc.fash_android_mobile.ui.chat.ChatViewModel,
+    changePasswordViewModel: ChangePasswordViewModel,
+    snackbarHostState: SnackbarHostState,
     /** Total unread messages for chat tab badge ([ChatRepository.getUnreadCount]). */
     chatUnreadCount: Int = 0,
     /** [sellerId] when known — used to open seller edit vs public detail. */
@@ -124,16 +131,44 @@ fun MainNavScreen(
     onEditProfile: () -> Unit = {},
     onShippingAddressesClick: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
-    /** [initialTab] 0 = people you follow, 1 = followers (e.g. Explore featured sellers “See all”). */
+    /** [initialTab] 0 = people you follow, 1 = followers. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
+    /** Explore featured sellers “See all” — full list from `GET /search/featured-sellers`. */
+    onOpenFeaturedSellersAll: () -> Unit = {},
     /** Featured seller chip on Explore — opens seller shop (`GET …/users/{username}`). */
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
+    /** Profile / seller shop: open Explore → Posts with filters + search + optional country. */
+    onNavigateToExploreFromProfile: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit = { _, _, _, _, _, _ -> },
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
 ) {
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
+    var showChangePasswordScreen by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val cpCurrent by changePasswordViewModel.currentPassword.collectAsState()
+    val cpNew by changePasswordViewModel.newPassword.collectAsState()
+    val cpConfirm by changePasswordViewModel.confirmPassword.collectAsState()
+    val cpSubmitting by changePasswordViewModel.isSubmitting.collectAsState()
+    val canSubmitPw = remember(cpCurrent, cpNew, cpConfirm) {
+        cpCurrent.isNotBlank() && cpNew.length in 8..72 && cpNew == cpConfirm
+    }
+    LaunchedEffect(Unit) {
+        changePasswordViewModel.events.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+            if (msg == context.getString(R.string.password_change_success)) {
+                showChangePasswordScreen = false
+            }
+        }
+    }
     val tabs = MainTab.entries
     val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val openExploreSearch: () -> Unit = {
@@ -252,7 +287,7 @@ fun MainNavScreen(
                         viewModel = exploreViewModel,
                         onListingClick = onListingClick,
                         onFeaturedSellerClick = onFeaturedSellerClick,
-                        onSeeAllFeaturedSellersClick = { onOpenFollowConnections(0) },
+                        onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
                     )
                     MainTab.Post -> CreateListingFlowScreen(
                         viewModel = postViewModel,
@@ -276,6 +311,7 @@ fun MainNavScreen(
                         onOrdersClick = onOrdersClick,
                         onListingClick = onListingClick,
                         onOpenFollowConnections = onOpenFollowConnections,
+                        onNavigateToExploreFromProfile = onNavigateToExploreFromProfile,
                     )
                 }
             }
@@ -308,6 +344,26 @@ fun MainNavScreen(
                 showSettingsScreen = false
                 onEditProfile()
             },
+            onOpenChangePassword = {
+                showSettingsScreen = false
+                showChangePasswordScreen = true
+            },
+        )
+    }
+    if (showChangePasswordScreen) {
+        BackHandler { showChangePasswordScreen = false }
+        ChangePasswordScreen(
+            modifier = Modifier.fillMaxSize(),
+            currentPassword = cpCurrent,
+            newPassword = cpNew,
+            confirmPassword = cpConfirm,
+            onCurrentPasswordChange = changePasswordViewModel::onCurrentPasswordChange,
+            onNewPasswordChange = changePasswordViewModel::onNewPasswordChange,
+            onConfirmPasswordChange = changePasswordViewModel::onConfirmPasswordChange,
+            canSubmit = canSubmitPw,
+            isSubmitting = cpSubmitting,
+            onSubmit = changePasswordViewModel::submit,
+            onBack = { showChangePasswordScreen = false },
         )
     }
     }

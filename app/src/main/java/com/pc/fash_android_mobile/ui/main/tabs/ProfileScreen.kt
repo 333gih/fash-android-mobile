@@ -1,8 +1,16 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,16 +20,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,19 +58,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -78,16 +95,26 @@ fun ProfileScreen(
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     /** 0 = Following tab, 1 = Followers — same as [com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen]. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
+    /** Opens Explore → Posts with filters + optional text search (from aesthetic tag chips). */
+    onNavigateToExploreFromProfile: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
     val soldListings by viewModel.soldListings.collectAsState()
+    val wishlistListings by viewModel.wishlistListings.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
-        viewModel.loadProfile()
+        viewModel.ensureProfileLoaded()
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -122,8 +149,12 @@ fun ProfileScreen(
                 }
             }
             else -> {
-                val listState = rememberLazyListState()
-                val items = if (selectedTab == 0) sellingListings else soldListings
+                val listState = remember(selectedTab) { LazyListState(0, 0) }
+                val items = when (selectedTab) {
+                    0 -> sellingListings
+                    1 -> soldListings
+                    else -> wishlistListings
+                }
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -137,6 +168,9 @@ fun ProfileScreen(
                                 ProfileHeader(
                                     profile = profile,
                                     onEditClick = onEditProfile,
+                                    onAestheticTagClick = { name, id ->
+                                        onNavigateToExploreFromProfile(null, null, id, name, null, null)
+                                    },
                                 )
                                 ProfileStats(
                                     profile = profile,
@@ -155,8 +189,11 @@ fun ProfileScreen(
                         selectedTab = selectedTab,
                         onTabSelected = { selectedTab = it },
                         items = items,
-                        isSellingTab = selectedTab == 0,
-                        onListingClick = { id -> onListingClick(id, profile?.userId) },
+                        wishlistTabVisible = true,
+                        onListingClick = { item -> onListingClick(item.id, item.sellerId) },
+                        showListingQuickActions = true,
+                        onListingLike = { viewModel.toggleLike(it) },
+                        onListingSave = { viewModel.toggleSave(it) },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -173,8 +210,7 @@ private fun ProfileShippingAddressesRow(onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .border(1.dp, scheme.outlineVariant.copy(alpha = 0.78f), RoundedCornerShape(12.dp)),
+            .clickable(onClick = onClick),
         color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -219,6 +255,7 @@ private fun ProfileShippingAddressesRow(onClick: () -> Unit) {
 private fun ProfileHeader(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
     onEditClick: () -> Unit,
+    onAestheticTagClick: (tagName: String, tagId: String?) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
     val coverUrl = profile?.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
@@ -330,23 +367,32 @@ private fun ProfileHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (!profile?.aestheticTags.isNullOrEmpty()) {
+        val aestheticChips = profile?.let { p ->
+            if (p.aestheticTagSnapshots.isNotEmpty()) {
+                p.aestheticTagSnapshots.map { it.name to it.id }
+            } else {
+                p.aestheticTags.map { it to null }
+            }
+        }.orEmpty()
+        if (aestheticChips.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                items(
-                    items = profile!!.aestheticTags,
-                    key = { it },
-                ) { tag ->
+                itemsIndexed(
+                    items = aestheticChips,
+                    key = { i, pair -> "${pair.first}_${pair.second}_$i" },
+                ) { _, pair ->
+                    val (tagName, tagId) = pair
                     Text(
-                        text = tag,
+                        text = tagName,
                         style = MaterialTheme.typography.labelSmall,
                         color = FashColors.Primary,
                         modifier = Modifier
                             .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
                             .background(FashColors.Primary.copy(alpha = 0.15f))
+                            .clickable(onClick = { onAestheticTagClick(tagName, tagId) })
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
@@ -361,6 +407,7 @@ private fun ProfileHeader(
 @Composable
 internal fun SellerProfileHeader(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
+    onAestheticTagClick: (tagName: String, tagId: String?) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
     val coverUrl = profile?.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
@@ -445,23 +492,32 @@ internal fun SellerProfileHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (!profile?.aestheticTags.isNullOrEmpty()) {
+        val sellerAestheticChips = profile?.let { p ->
+            if (p.aestheticTagSnapshots.isNotEmpty()) {
+                p.aestheticTagSnapshots.map { it.name to it.id }
+            } else {
+                p.aestheticTags.map { it to null }
+            }
+        }.orEmpty()
+        if (sellerAestheticChips.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                items(
-                    items = profile!!.aestheticTags,
-                    key = { it },
-                ) { tag ->
+                itemsIndexed(
+                    items = sellerAestheticChips,
+                    key = { i, pair -> "seller_${pair.first}_${pair.second}_$i" },
+                ) { _, pair ->
+                    val (tagName, tagId) = pair
                     Text(
-                        text = tag,
+                        text = tagName,
                         style = MaterialTheme.typography.labelSmall,
                         color = FashColors.Primary,
                         modifier = Modifier
                             .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
                             .background(FashColors.Primary.copy(alpha = 0.15f))
+                            .clickable(onClick = { onAestheticTagClick(tagName, tagId) })
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
@@ -480,20 +536,26 @@ internal fun ProfileStats(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ProfileStatItem(
             modifier = Modifier.weight(1f),
             value = formatCount(profile?.followerCount ?: 0),
             label = stringResource(R.string.profile_followers),
             onClick = onFollowersClick,
+            contentDescription = stringResource(R.string.profile_followers_open_cd),
+            showIdleHint = true,
+            idlePhaseOffsetMs = 0,
         )
         ProfileStatItem(
             modifier = Modifier.weight(1f),
             value = (profile?.followingCount ?: 0).toString(),
             label = stringResource(R.string.profile_following),
             onClick = onFollowingClick,
+            contentDescription = stringResource(R.string.profile_following_open_cd),
+            showIdleHint = true,
+            idlePhaseOffsetMs = 120,
         )
         ProfileStatItem(
             modifier = Modifier.weight(1f),
@@ -543,37 +605,162 @@ internal fun ProfileStats(
     }
 }
 
+/**
+ * One short “spotlight” pulse for followers/following (accent tint + micro-scale), then back to match products/sold.
+ * Only used from [ProfileStatItemWithFashionHint].
+ */
+@Composable
+private fun rememberProfileStatFashionHint(phaseOffsetMs: Int): Float {
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(phaseOffsetMs.toLong())
+        anim.animateTo(1f, tween(280, easing = FastOutSlowInEasing))
+        anim.animateTo(0f, tween(820, easing = FastOutSlowInEasing))
+    }
+    return anim.value
+}
+
 @Composable
 internal fun ProfileStatItem(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    contentDescription: String? = null,
+    /** Brief fashion hint animation for followers & following (tap affordance). */
+    showIdleHint: Boolean = false,
+    /** Stagger the two pulses (ms). */
+    idlePhaseOffsetMs: Int = 0,
 ) {
-    val m = if (onClick != null) {
-        modifier.clickable(onClick = onClick)
+    val showIdle = showIdleHint && onClick != null
+    if (showIdle) {
+        ProfileStatItemWithFashionHint(
+            value = value,
+            label = label,
+            modifier = modifier,
+            onClick = onClick!!,
+            contentDescription = contentDescription,
+            idlePhaseOffsetMs = idlePhaseOffsetMs,
+        )
     } else {
-        modifier
+        ProfileStatItemPlain(
+            value = value,
+            label = label,
+            modifier = modifier,
+            onClick = onClick,
+            contentDescription = contentDescription,
+        )
     }
+}
+
+@Composable
+private fun ProfileStatItemWithFashionHint(
+    value: String,
+    label: String,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    contentDescription: String?,
+    idlePhaseOffsetMs: Int,
+) {
+    val fashionHint = rememberProfileStatFashionHint(idlePhaseOffsetMs)
+    ProfileStatItemContent(
+        value = value,
+        label = label,
+        modifier = modifier,
+        onClick = onClick,
+        contentDescription = contentDescription,
+        fashionHint = fashionHint,
+    )
+}
+
+@Composable
+private fun ProfileStatItemPlain(
+    value: String,
+    label: String,
+    modifier: Modifier,
+    onClick: (() -> Unit)?,
+    contentDescription: String?,
+) {
+    ProfileStatItemContent(
+        value = value,
+        label = label,
+        modifier = modifier,
+        onClick = onClick,
+        contentDescription = contentDescription,
+        fashionHint = 0f,
+    )
+}
+
+@Composable
+private fun ProfileStatItemContent(
+    value: String,
+    label: String,
+    modifier: Modifier,
+    onClick: (() -> Unit)?,
+    contentDescription: String?,
+    /** 0 = static; brief pulse blends accent into value/label for tappable stats. */
+    fashionHint: Float,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val rippleIndication = LocalIndication.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (onClick != null && pressed) 0.96f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "profileStatPress",
+    )
+    val hintScale = 1f + 0.014f * fashionHint
+    val valueColor = lerp(scheme.onSurface, FashColors.Primary, fashionHint * 0.2f)
+    val labelColor = lerp(scheme.onSurfaceVariant, FashColors.Primary, fashionHint * 0.38f)
+
     Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .scale(pressScale * hintScale)
+            .semantics(mergeDescendants = true) {
+                contentDescription?.let { desc -> this.contentDescription = desc }
+            }
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = rippleIndication,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 2.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = m,
     ) {
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = valueColor,
+            maxLines = 1,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+            color = labelColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 34.dp),
         )
     }
 }
 
 @Composable
 internal fun ProfileTabs(
+    tabLabelResIds: List<Int>,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
 ) {
@@ -583,10 +770,7 @@ internal fun ProfileTabs(
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart),
     ) {
-        listOf(
-            R.string.profile_tab_selling,
-            R.string.profile_tab_sold,
-        ).forEachIndexed { index, resId ->
+        tabLabelResIds.forEachIndexed { index, resId ->
             val selected = selectedTab == index
             Box(
                 modifier = Modifier
@@ -660,66 +844,9 @@ internal fun ProfileProductGrid(
             items,
             key = { index, item -> stableLazyKey(item.id, index, "prof") },
         ) { _, item ->
-            ProfileProductCard(
+            ListingGridCard(
                 item = item,
                 onClick = { onItemClick(item.id) },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun ProfileProductCard(item: ListingFeedItem, onClick: () -> Unit) {
-    val imageUrl = resolveImageUrl(item.coverImageUrl)
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(3f / 4f)
-            .clip(shape)
-            .clickable(onClick = onClick),
-    ) {
-        if (imageUrl.isNotEmpty()) {
-            FashAsyncImage(
-                model = imageUrl,
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(scheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.no_image),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.72f),
-                        ),
-                    ),
-                )
-                .padding(8.dp),
-        ) {
-            Text(
-                text = formatPrice(item.priceVnd),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
             )
         }
     }
@@ -739,5 +866,3 @@ private fun formatCount(count: Int): String =
         else -> count.toString()
     }
 
-private fun formatPrice(vnd: Long): String =
-    "₫ ${"%,d".format(vnd).replace(',', '.')}"

@@ -59,7 +59,6 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Canvas = androidx.compose.ui.graphics.Color.White
 private val InputCorner = RoundedCornerShape(16.dp)
 private val AvatarSize = 72.dp
 
@@ -106,7 +105,7 @@ fun UsernameOnboardScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = Canvas,
+        color = scheme.surface,
     ) {
         Column(
             modifier = Modifier
@@ -224,8 +223,7 @@ fun UsernameOnboardScreen(
 
                 Surface(
                     shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
-                    color = scheme.surfaceContainerHighest,
-                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.75f)),
+                    color = scheme.surfaceContainerLow,
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -301,7 +299,7 @@ private fun UsernameInput(
         border = BorderStroke(
             width = if (isValid && value.isNotBlank()) 2.dp else 1.dp,
             color = if (isValid && value.isNotBlank()) FashColors.Primary.copy(alpha = 0.55f)
-            else scheme.outlineVariant.copy(alpha = 0.72f),
+            else scheme.outlineVariant.copy(alpha = 0.5f),
         ),
         shadowElevation = 0.dp,
     ) {

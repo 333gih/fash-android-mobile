@@ -21,8 +21,13 @@
     <string name="dialog_title_error">Lỗi</string>
     <string name="dialog_title_info">Thông tin</string>
 
+    <string name="splash_logo_cd">Logo Fash</string>
     <string name="splash_wordmark">FASH</string>
     <string name="splash_footer_gen_z">THẾ HỆ GEN Z</string>
+    <!-- Waiting / splash Compose screen (center copy; design-system typography in code) -->
+    <string name="waiting_screen_headline">Thời trang pre-loved, cho tủ đồ bền vững</string>
+    <string name="waiting_screen_line_2">Bán lại món bạn không còn mặc — để người khác tái sử dụng và thể hiện phong cách riêng.</string>
+    <string name="waiting_screen_line_3">Tái sử dụng. Làm mới. Giảm lãng phí thời trang.</string>
     <string name="brand_wordmark">FASH.</string>
     <!-- Main top bar: second line after wordmark (same scale as Explore). -->
     <string name="brand_header_suffix_home">Home</string>
@@ -81,6 +86,8 @@
     <string name="login_submit">Đăng nhập</string>
     <string name="login_password_label">Mật khẩu</string>
     <string name="login_password_placeholder">Nhập mật khẩu</string>
+    <string name="login_password_show_cd">Hiện mật khẩu</string>
+    <string name="login_password_hide_cd">Ẩn mật khẩu</string>
     <string name="login_password_invalid">Vui lòng nhập mật khẩu.</string>
     <string name="login_password_failed">Email hoặc mật khẩu không đúng.</string>
     <string name="home_welcome">Chào mừng</string>
@@ -99,6 +106,7 @@
     <string name="settings_row_orders">Đơn hàng của tôi</string>
     <string name="settings_section_profile">Hồ sơ</string>
     <string name="settings_row_edit_profile">Chỉnh sửa hồ sơ</string>
+    <string name="settings_row_change_password">Đổi mật khẩu</string>
     <string name="settings_section_notifications">Thông báo</string>
     <string name="settings_row_notification_settings">Cài đặt thông báo hệ thống</string>
     <string name="settings_row_notification_settings_sub">Bật hoặc tắt trong cài đặt Android</string>
@@ -110,6 +118,22 @@
     <string name="settings_footer_hint">Ngôn ngữ API (core-service) theo lựa chọn ngôn ngữ ứng dụng khi máy chủ bật tiền tố ngôn ngữ.</string>
     <string name="logout_success">Đã đăng xuất.</string>
     <string name="logout_failed">Đăng xuất thất bại.</string>
+
+    <string name="password_setup_title">Tạo mật khẩu</string>
+    <string name="password_setup_subtitle">Đặt mật khẩu từ 8–72 ký tự để bảo vệ tài khoản. Bạn sẽ dùng khi đăng nhập bằng mật khẩu.</string>
+    <string name="password_setup_continue">Lưu mật khẩu</string>
+    <string name="password_new_label">Mật khẩu mới</string>
+    <string name="password_confirm_label">Xác nhận mật khẩu</string>
+    <string name="password_current_label">Mật khẩu hiện tại</string>
+    <string name="password_mismatch">Hai mật khẩu không khớp.</string>
+    <string name="password_error_length">Mật khẩu phải từ 8 đến 72 ký tự.</string>
+    <string name="password_error_invalid_current">Mật khẩu hiện tại không đúng.</string>
+    <string name="password_error_current_required">Vui lòng nhập mật khẩu hiện tại.</string>
+    <string name="password_change_error_generic">Không đổi được mật khẩu. Thử lại.</string>
+    <string name="password_change_success">Đã cập nhật mật khẩu.</string>
+    <string name="change_password_title">Đổi mật khẩu</string>
+    <string name="change_password_subtitle">Nhập mật khẩu hiện tại và mật khẩu mới (8–72 ký tự).</string>
+    <string name="change_password_save">Cập nhật</string>
 
     <string name="onboarding_title">Chọn phong cách của bạn</string>
     <string name="onboarding_question">Phong cách của bạn?</string>
@@ -159,16 +183,31 @@
 
     <string name="follow_button">Theo dõi</string>
     <string name="following_button">Đang theo dõi</string>
+    <string name="seller_following_status_title">Bạn đang theo dõi người bán này</string>
+    <string name="seller_following_status_subtitle">Tin mới của họ có thể xuất hiện trên Trang chủ — bạn không bỏ lỡ món hợp gu.</string>
+    <string name="seller_focus_section_title">Gian hàng</string>
+    <string name="seller_focus_section_subtitle">Danh mục, thương hiệu và vibe từ tin đang bán</string>
+    <string name="seller_focus_categories">Danh mục</string>
+    <string name="seller_focus_brands">Thương hiệu</string>
+    <string name="seller_focus_aesthetics">Phong cách</string>
+    <string name="seller_focus_forbidden">Không thể hiển thị gợi ý shop do cài đặt chặn.</string>
+    <string name="unfollow_action">Bỏ theo dõi</string>
     <string name="like">Thích</string>
     <string name="save">Lưu</string>
     <string name="comment">Bình luận</string>
     <string name="share">Chia sẻ</string>
     <string name="no_image">Không có ảnh</string>
+    <string name="listing_card_photo_stack_a11y">Tin có %d ảnh</string>
+    <string name="listing_card_a11y_seller_role">Người bán</string>
     <string name="feed_load_error">Không tải được nội dung. Thử lại.</string>
     <string name="feed_empty_title">Chưa có tin nào</string>
     <string name="feed_empty_subtitle">Theo dõi người bán hoặc khám phá để xem sản phẩm mới.</string>
     <string name="feed_retry">Thử lại</string>
     <string name="feed_action_error">Thao tác thất bại. Thử lại.</string>
+    <string name="listing_like_added_snackbar">Đã thêm vào yêu thích.</string>
+    <string name="listing_like_removed_snackbar">Đã bỏ khỏi yêu thích.</string>
+    <string name="listing_save_added_snackbar">Đã lưu vào danh sách mong muốn.</string>
+    <string name="listing_save_removed_snackbar">Đã gỡ khỏi danh sách mong muốn.</string>
     <string name="home_journey_title">Hành trình của bạn</string>
     <string name="home_journey_delivering">Đang giao</string>
     <string name="home_journey_saved">Đã lưu</string>
@@ -189,6 +228,17 @@
     <string name="home_feed_empty_title">Chưa có món nào ở đây</string>
     <string name="home_feed_empty_subtitle">Theo dõi người bán để thấy tin mới trên Trang chủ — hoặc sang Khám phá để lướt toàn sàn.</string>
     <string name="home_empty_cta_explore">Đi tới Khám phá</string>
+    <string name="explore_section_listings">Tin đăng</string>
+    <string name="explore_section_sellers">Người bán</string>
+    <string name="explore_sellers_subtitle">Xem shop và vài tin mới nhất. Chạm dòng để mở shop, chạm ảnh để xem tin. Dùng ô tìm kiếm phía trên để tìm người bán.</string>
+    <string name="explore_sellers_search_placeholder">Tìm theo tên hoặc @username…</string>
+    <string name="explore_sellers_empty">Không tìm thấy người bán phù hợp. Thử từ khóa khác.</string>
+    <string name="explore_seller_no_listings_title">Chưa có tin đăng</string>
+    <string name="explore_seller_no_listings_subtitle">Shop này chưa có sản phẩm — bạn vẫn có thể vào hồ sơ để xem sau.</string>
+    <string name="profile_preview_slot_empty_label">Chưa có tin</string>
+    <string name="profile_preview_slot_empty_cd">Ô xem trước — không có tin trong ô này</string>
+    <string name="profile_preview_caption_all">Đang hiển thị cả %1$d tin trong phần xem trước.</string>
+    <string name="profile_preview_caption_partial">Đang hiển thị %1$d / %2$d tin — mở shop để xem đầy đủ.</string>
     <string name="explore_feed_subtitle">Lướt đồ hot, lọc theo phong cách (aesthetic)</string>
     <string name="explore_promo_badge">Mẹo</string>
     <string name="explore_promo_pager_cd">Mẹo và gợi ý, trang %1$d / %2$d</string>
@@ -199,14 +249,31 @@
     <string name="explore_promo_slide3_title">Mua bán an toàn hơn</string>
     <string name="explore_promo_slide3_subtitle">Thanh toán qua escrow; hỗ trợ khi đơn không khớp mô tả (theo chính sách).</string>
     <string name="explore_grid_empty_subtitle">Thử đổi bộ lọc hoặc thử lại sau.</string>
+    <string name="explore_empty_filtered_title">Không có kết quả</string>
+    <string name="explore_empty_edit_filters">Chỉnh bộ lọc</string>
+    <string name="explore_empty_clear_all">Xóa tìm kiếm &amp; bộ lọc</string>
     <string name="follow_success">Đã theo dõi.</string>
     <string name="notifications">Thông báo</string>
+    <string name="notification_empty_title">Chưa có thông báo</string>
+    <string name="notification_empty_subtitle">Khi có việc cần bạn xem — đơn hàng, tin nhắn hoặc hoạt động shop — sẽ hiển thị ở đây.</string>
+    <string name="notification_empty_hints_title">Bạn có thể thấy gì ở đây</string>
+    <string name="notification_empty_tip_1">Cập nhật đơn hàng và giao hàng</string>
+    <string name="notification_empty_tip_2">Tin nhắn chat giữa người mua và người bán</string>
+    <string name="notification_empty_tip_3">Theo dõi và hoạt động khác trên shop</string>
 
     <string name="explore_title">Khám phá</string>
     <string name="explore_featured_sellers">Người bán nổi bật</string>
     <string name="explore_see_all">Xem tất cả</string>
     <string name="explore_see_all_cd">Xem tất cả người bán nổi bật</string>
     <string name="explore_featured_seller_cd">Người bán %1$s</string>
+    <string name="featured_sellers_all_title">Người bán nổi bật</string>
+    <string name="featured_sellers_all_subtitle">Xếp hạng theo độ phổ biến. Chạm hồ sơ để mở shop, chạm ảnh để xem tin đăng.</string>
+    <string name="featured_sellers_no_bio">Chưa có tiểu sử</string>
+    <string name="featured_sellers_verified_cd">Người bán đã xác minh</string>
+    <string name="featured_sellers_stat_followers">%1$s người theo dõi</string>
+    <string name="featured_sellers_rating_value">★ %1$.1f</string>
+    <string name="featured_sellers_preview_heading">Tin mới nhất</string>
+    <string name="featured_sellers_preview_listing_cd">Mở tin %1$s</string>
     <string name="explore_all">Tất cả</string>
     <string name="explore_category_section_title">Danh mục</string>
     <string name="explore_category_all">Tất cả danh mục</string>
@@ -214,6 +281,10 @@
     <string name="explore_style_any">Mọi phong cách</string>
     <string name="explore_filter_brand_title">Thương hiệu</string>
     <string name="explore_filter_brand_any">Mọi thương hiệu</string>
+    <string name="explore_filter_country_title">Xuất xứ</string>
+    <string name="explore_filter_country_any">Mọi quốc gia</string>
+    <string name="explore_filter_country_search_placeholder">Tìm quốc gia…</string>
+    <string name="explore_filter_country_summary_cd">Bộ lọc xuất xứ: %1$s</string>
     <string name="explore_filter_sizing_title">Kích cỡ</string>
     <string name="explore_filter_sizing_all">Tất cả</string>
     <string name="explore_filter_sizing_match_profile">Khớp size của tôi</string>
@@ -255,10 +326,16 @@
     <string name="explore_search_trending_queries_title">Xu hướng tìm kiếm</string>
     <string name="explore_search_trending_tags_title">Tag phổ biến</string>
     <string name="explore_search_suggestions_title">Gợi ý</string>
+    <string name="explore_search_suggestions_title_listings">Tin đăng khớp</string>
+    <string name="explore_search_suggestions_title_sellers">Người bán khớp</string>
+    <string name="explore_search_placeholder_sellers">Tìm người bán theo tên hoặc @username</string>
     <string name="explore_search_idle_empty">Nhập từ khóa hoặc chọn gợi ý bên dưới.</string>
     <string name="explore_search_no_suggestions">Không có gợi ý phù hợp.</string>
     <string name="explore_search_row_cd">Tìm %1$s</string>
     <string name="explore_search_tag_cd">Lọc theo tag %1$s</string>
+    <string name="explore_search_active_label">Đang tìm</string>
+    <string name="explore_search_active_cd">Từ khóa tìm kiếm hiện tại</string>
+    <string name="explore_search_clear_active">Xóa</string>
 
     <string name="product_detail_error">Không tải được sản phẩm. Thử lại.</string>
     <string name="product_detail_title">Chi tiết sản phẩm</string>
@@ -271,6 +348,9 @@
     <string name="product_shipping_estimate">Vận chuyển dự kiến: %1$s</string>
     <string name="product_shipping_contact_seller">Liên hệ người bán</string>
     <string name="product_ship_from_upper">Gửi từ: %1$s</string>
+    <string name="product_shipping_info_cd">Thông tin vận chuyển</string>
+    <string name="product_shipping_info_title">Về phí vận chuyển</string>
+    <string name="product_shipping_info_body">Phí vận chuyển dự kiến chỉ mang tính tham khảo và có thể thay đổi tùy địa chỉ nhận và đơn vị vận chuyển. Người bán gửi hàng từ khu vực đang hiển thị. Phí chính xác được xác nhận trước khi bạn thanh toán ở bước thanh toán. Nhắn tin cho người bán nếu bạn cần thỏa thuận riêng.</string>
     <string name="product_meas_empty">—</string>
     <string name="product_total_payment">Tổng thanh toán</string>
     <string name="product_see_more">Xem thêm</string>
@@ -303,6 +383,8 @@
     <string name="product_action_like">Thích</string>
     <string name="product_action_save">Lưu</string>
     <string name="product_action_share">Chia sẻ</string>
+    <string name="share_listing_subject">Xem tin này trên Fash</string>
+    <string name="share_listing_text">%1$s\n\nMở trên web:\n%2$s\n\nMở trong ứng dụng:\n%3$s</string>
     <string name="product_listed_on">Đăng %1$s</string>
     <string name="product_seller_listings">%1$d tin</string>
     <string name="product_seller_followers">%1$d follower</string>
@@ -482,6 +564,8 @@
     <string name="profile_screen_title">Trang cá nhân</string>
     <string name="profile_edit">Chỉnh sửa hồ sơ</string>
     <string name="profile_followers">Người theo dõi</string>
+    <string name="profile_followers_open_cd">Mở danh sách người theo dõi</string>
+    <string name="profile_following_open_cd">Mở danh sách đang theo dõi</string>
     <string name="profile_following">Đang theo dõi</string>
     <string name="follow_connections_title">Kết nối</string>
     <string name="follow_list_empty_following_title">Chưa theo dõi ai</string>
@@ -498,10 +582,13 @@
     <string name="profile_fast_delivery">Giao nhanh</string>
     <string name="profile_tab_selling">Đang bán</string>
     <string name="profile_tab_sold">Đã bán</string>
+    <string name="profile_tab_wishlist">Đã lưu</string>
     <string name="profile_empty_selling_title">Chưa có sản phẩm đang bán</string>
     <string name="profile_empty_selling_subtitle">Nhấn Đăng bài ở thanh dưới để đăng tin đầu tiên.</string>
     <string name="profile_empty_sold_title">Chưa có sản phẩm đã bán</string>
     <string name="profile_empty_sold_subtitle">Sản phẩm đã bán sẽ hiển thị khi giao dịch hoàn tất.</string>
+    <string name="profile_empty_wishlist_title">Chưa có tin đã lưu</string>
+    <string name="profile_empty_wishlist_subtitle">Lưu tin từ Khám phá hoặc Trang chủ để xem lại ở đây.</string>
     <string name="profile_load_error">Không tải được hồ sơ.</string>
 
     <string name="edit_profile_title">Chỉnh sửa hồ sơ</string>

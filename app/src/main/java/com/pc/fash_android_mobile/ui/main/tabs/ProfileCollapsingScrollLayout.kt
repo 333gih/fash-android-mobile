@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.HorizontalDivider
@@ -34,13 +36,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +58,7 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -87,10 +94,27 @@ fun ProfileCollapsingScrollLayout(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     items: List<ListingFeedItem>,
-    isSellingTab: Boolean,
-    onListingClick: (String) -> Unit,
+    /** Own profile: Selling / Sold / Saved. Seller storefront: Selling / Sold only. */
+    wishlistTabVisible: Boolean = true,
+    onListingClick: (ListingFeedItem) -> Unit,
+    /** When true, shows like/save on grid cards (e.g. profile storefronts). */
+    showListingQuickActions: Boolean = false,
+    onListingLike: (ListingFeedItem) -> Unit = {},
+    onListingSave: (ListingFeedItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val tabLabelResIds: List<Int> = if (wishlistTabVisible) {
+        listOf(
+            R.string.profile_tab_selling,
+            R.string.profile_tab_sold,
+            R.string.profile_tab_wishlist,
+        )
+    } else {
+        listOf(
+            R.string.profile_tab_selling,
+            R.string.profile_tab_sold,
+        )
+    }
     val rawProgress = rememberProfileHeaderCollapseProgress(listState).value
     val progress by animateFloatAsState(
         targetValue = rawProgress,
@@ -100,6 +124,11 @@ fun ProfileCollapsingScrollLayout(
         ),
         label = "profileHeaderCollapse",
     )
+    val screenHeightDpInt = LocalConfiguration.current.screenHeightDp
+    // Extra scroll extent so short grids (1–2 cards) don’t hit hard overscroll / parent scroll fighting.
+    val bottomScrollPad = remember(screenHeightDpInt) {
+        (screenHeightDpInt * 0.28f).dp.coerceIn(120.dp, 280.dp)
+    }
 
     LazyColumn(
         state = listState,
@@ -119,32 +148,45 @@ fun ProfileCollapsingScrollLayout(
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
                 showSectionTitle = progress > 0.22f,
+                tabLabelResIds = tabLabelResIds,
             )
         }
         if (items.isEmpty()) {
             item(key = "empty") {
-                FashEmptyState(
-                    icon = if (isSellingTab) Icons.Outlined.Storefront else Icons.Outlined.CheckCircle,
-                    title = stringResource(
-                        if (isSellingTab) {
-                            R.string.profile_empty_selling_title
-                        } else {
-                            R.string.profile_empty_sold_title
-                        },
-                    ),
-                    subtitle = stringResource(
-                        if (isSellingTab) {
-                            R.string.profile_empty_selling_subtitle
-                        } else {
-                            R.string.profile_empty_sold_subtitle
-                        },
-                    ),
-                    scrollable = false,
+                val (emptyIcon, emptyTitle, emptySubtitle) = when (selectedTab) {
+                    0 -> Triple(
+                        Icons.Outlined.Storefront,
+                        R.string.profile_empty_selling_title,
+                        R.string.profile_empty_selling_subtitle,
+                    )
+                    1 -> Triple(
+                        Icons.Outlined.CheckCircle,
+                        R.string.profile_empty_sold_title,
+                        R.string.profile_empty_sold_subtitle,
+                    )
+                    else -> Triple(
+                        Icons.Outlined.BookmarkBorder,
+                        R.string.profile_empty_wishlist_title,
+                        R.string.profile_empty_wishlist_subtitle,
+                    )
+                }
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 220.dp, max = 520.dp)
-                        .padding(vertical = 24.dp),
-                )
+                        .padding(bottom = 8.dp),
+                ) {
+                    FashEmptyState(
+                        icon = emptyIcon,
+                        title = stringResource(emptyTitle),
+                        subtitle = stringResource(emptySubtitle),
+                        scrollable = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 280.dp, max = 560.dp)
+                            .padding(vertical = 24.dp),
+                    )
+                    Spacer(modifier = Modifier.height(bottomScrollPad))
+                }
             }
         } else {
             itemsIndexed(
@@ -164,9 +206,12 @@ fun ProfileCollapsingScrollLayout(
                 ) {
                     pair.forEach { item ->
                         Box(modifier = Modifier.weight(1f)) {
-                            ProfileProductCard(
+                            ListingGridCard(
                                 item = item,
-                                onClick = { onListingClick(item.id) },
+                                onClick = { onListingClick(item) },
+                                showQuickActions = showListingQuickActions,
+                                onLike = { onListingLike(item) },
+                                onSave = { onListingSave(item) },
                             )
                         }
                     }
@@ -174,6 +219,9 @@ fun ProfileCollapsingScrollLayout(
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }
+            }
+            item(key = "list_bottom_pad") {
+                Spacer(modifier = Modifier.height(bottomScrollPad))
             }
         }
     }
@@ -187,7 +235,15 @@ private fun CollapsingProfileHeaderSlot(
 ) {
     val scheme = MaterialTheme.colorScheme
     // One mode at a time — bottom-aligned compact over expanded caused overlapping text while scrolling.
-    val showCompactBar = progress > 0.45f
+    // Hysteresis: with few rows, elastic overscroll can oscillate progress around the old threshold and
+    // retrigger Crossfade (looks like a full reload). Keep state stable between ~0.35 and ~0.52.
+    var showCompactBar by remember { mutableStateOf(false) }
+    SideEffect {
+        when {
+            progress > 0.52f -> showCompactBar = true
+            progress < 0.35f -> showCompactBar = false
+        }
+    }
     Crossfade(
         targetState = showCompactBar,
         animationSpec = tween(durationMillis = 220),
@@ -215,6 +271,7 @@ private fun ProfileStickyTabsBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     showSectionTitle: Boolean,
+    tabLabelResIds: List<Int>,
 ) {
     val scheme = MaterialTheme.colorScheme
     // Single opaque surface for tabs + section title so list content scrolling underneath
@@ -227,6 +284,7 @@ private fun ProfileStickyTabsBar(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             ProfileTabs(
+                tabLabelResIds = tabLabelResIds,
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
             )
@@ -241,11 +299,7 @@ private fun ProfileStickyTabsBar(
                     )
                     Text(
                         text = stringResource(
-                            if (selectedTab == 0) {
-                                R.string.profile_tab_selling
-                            } else {
-                                R.string.profile_tab_sold
-                            },
+                            tabLabelResIds.getOrElse(selectedTab) { tabLabelResIds.first() },
                         ),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = scheme.onSurface,

@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
@@ -78,6 +78,7 @@ fun SettingsScreen(
     onOpenShippingAddresses: () -> Unit,
     onOpenOrders: () -> Unit,
     onOpenEditProfile: () -> Unit,
+    onOpenChangePassword: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -190,6 +191,19 @@ fun SettingsScreen(
                         },
                         title = stringResource(R.string.settings_row_edit_profile),
                         onClick = onOpenEditProfile,
+                    )
+                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
+                    SettingsClickRow(
+                        icon = {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = FashColors.Primary,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        },
+                        title = stringResource(R.string.settings_row_change_password),
+                        onClick = onOpenChangePassword,
                     )
                 }
 
@@ -310,13 +324,9 @@ private fun SettingsSectionTitle(text: String) {
 private fun SettingsNavCard(content: @Composable () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
-        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             content()

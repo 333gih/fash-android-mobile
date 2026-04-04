@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 
 /** Global trending query row from `GET /search/trending-queries`. */
 data class TrendingQueryItem(
@@ -47,6 +48,8 @@ class SearchRepository(
      * [aestheticTagIds] — comma-separated tag UUIDs (OR). Prefer over legacy [tags] names when both set.
      * [aestheticTagId] — single tag UUID (optional convenience).
      * [sizingMode] — `all` (omit) or `match_profile`.
+     * [countryId] — catalog UUID (`country_id`).
+     * [countryIso2] — two-letter A–Z (`country_iso2`).
      */
     fun searchListings(
         q: String = "",
@@ -56,6 +59,8 @@ class SearchRepository(
         aestheticTagId: String? = null,
         sizingMode: String? = null,
         brandId: String? = null,
+        countryId: String? = null,
+        countryIso2: String? = null,
         /** Legacy: comma-separated aesthetic tag names (server may still accept as `tags`). */
         tags: String? = null,
         minPrice: Long? = null,
@@ -82,6 +87,9 @@ class SearchRepository(
         sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
             ?.let { query.add("sizing_mode=${enc(it.trim().lowercase())}") }
         brandId?.takeIf { it.isNotBlank() }?.let { query.add("brand_id=${enc(it.trim())}") }
+        countryId?.takeIf { it.isNotBlank() }?.let { query.add("country_id=${enc(it.trim())}") }
+        countryIso2?.trim()?.uppercase(Locale.US)?.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } }
+            ?.let { query.add("country_iso2=${enc(it)}") }
         tags?.takeIf { it.isNotBlank() && idCsv == null }?.let { query.add("tags=${enc(it)}") }
         minPrice?.let { query.add("min_price=$it") }
         maxPrice?.let { query.add("max_price=$it") }
@@ -100,6 +108,16 @@ class SearchRepository(
         val url = "${AppEnvironment.apiPath("api/v1/search/autocomplete")}?q=${java.net.URLEncoder.encode(prefix, "UTF-8")}"
         val body = executeGet(url)
         parseStringArray(body)
+    }
+
+    /**
+     * `GET /search/featured-sellers` — ranked seller profiles with preview listing UUIDs (max [limit] 50).
+     */
+    fun getFeaturedSellers(limit: Int = 50): Result<List<FeaturedSellerItem>> = runCatching {
+        val capped = limit.coerceIn(1, 50)
+        val url = "${AppEnvironment.apiPath("api/v1/search/featured-sellers")}?limit=$capped"
+        val body = executeGet(url)
+        parseFeaturedSellersResponse(body)
     }
 
     private fun executeGet(url: String): String {

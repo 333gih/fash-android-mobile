@@ -1,7 +1,6 @@
 package com.pc.fash_android_mobile.ui.address
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,18 +57,15 @@ fun ShippingAddressSelectableCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         color = if (selected) {
-            FashColors.Primary.copy(alpha = 0.08f)
+            FashColors.Primary.copy(alpha = 0.10f)
         } else {
-            if (isSystemInDarkTheme()) scheme.surface else scheme.surfaceContainerHighest
+            scheme.surfaceContainerLow
         },
-        border = BorderStroke(
-            width = if (selected) 2.dp else 1.dp,
-            color = if (selected) {
-                FashColors.Primary
-            } else {
-                scheme.outlineVariant.copy(alpha = 0.72f)
-            },
-        ),
+        border = if (selected) {
+            BorderStroke(1.5.dp, FashColors.Primary.copy(alpha = 0.85f))
+        } else {
+            null
+        },
     ) {
         Row(
             modifier = Modifier

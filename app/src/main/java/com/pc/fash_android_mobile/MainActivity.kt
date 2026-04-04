@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +48,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
+import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
+import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
@@ -74,12 +75,15 @@ import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingStep
 import com.pc.fash_android_mobile.ui.onboarding.SizingReferenceScreen
+import com.pc.fash_android_mobile.ui.onboarding.SetupPasswordOnboardScreen
 import com.pc.fash_android_mobile.ui.onboarding.UsernameOnboardScreen
 import com.pc.fash_android_mobile.ui.login.LoginStep
 import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
+import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
+import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
 import com.pc.fash_android_mobile.ui.theme.FashLightAppearance
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -89,6 +93,8 @@ import com.pc.fash_android_mobile.ui.address.ShippingAddressListScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
@@ -146,7 +152,17 @@ class MainActivity : ComponentActivity() {
     private val orderDetailViewModel: OrderDetailViewModel by viewModels()
     private val addressBookViewModel: AddressBookViewModel by viewModels()
     private val followConnectionsViewModel: FollowConnectionsViewModel by viewModels()
+    private val featuredSellersViewModel: FeaturedSellersViewModel by viewModels()
+    private val changePasswordViewModel: ChangePasswordViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
+
+    private val fashApp get() = application as FashApplication
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
+    }
 
     private val googleSignInLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -162,6 +178,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
 
         LoginManager.getInstance().registerCallback(
             callbackManager,
@@ -198,6 +215,7 @@ class MainActivity : ComponentActivity() {
                 launch { orderDetailViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
                 launch { addressBookViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
                 launch { sellerProfileViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
+                launch { profileViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
             }
 
             val email by loginViewModel.email.collectAsState()
@@ -234,6 +252,8 @@ class MainActivity : ComponentActivity() {
             val onboardingMeasLength by onboardingViewModel.measurementLength.collectAsState()
             val onboardingMeasShoulders by onboardingViewModel.measurementShoulders.collectAsState()
             val onboardingMeasSleeve by onboardingViewModel.measurementSleeve.collectAsState()
+            val onboardingSetupPw by onboardingViewModel.setupPassword.collectAsState()
+            val onboardingSetupPwConfirm by onboardingViewModel.setupPasswordConfirm.collectAsState()
             val onboardingLoading by onboardingViewModel.isLoading.collectAsState()
             val onboardingSubmitting by onboardingViewModel.isSubmitting.collectAsState()
             val facebookOk = LoginViewModel.isFacebookConfigured()
@@ -367,7 +387,7 @@ class MainActivity : ComponentActivity() {
                                             isLoading = onboardingLoading,
                                             isSubmitting = onboardingSubmitting,
                                             progressStep = 1,
-                                            progressTotal = 3,
+                                            progressTotal = 4,
                                             onToggleSelection = onboardingViewModel::toggleSelection,
                                             onContinue = {
                                                 onboardingViewModel.submitAestheticTagsPut {
@@ -416,7 +436,7 @@ class MainActivity : ComponentActivity() {
                                                 canSubmit = canSizing,
                                                 isSubmitting = onboardingSubmitting,
                                                 progressStep = 2,
-                                                progressTotal = 3,
+                                                progressTotal = 4,
                                                 onComplete = {
                                                     onboardingViewModel.submitSizingOnly {
                                                         mainScope.launch {
@@ -454,7 +474,7 @@ class MainActivity : ComponentActivity() {
                                                 canSubmit = canUsername,
                                                 isSubmitting = onboardingSubmitting,
                                                 progressStep = 3,
-                                                progressTotal = 3,
+                                                progressTotal = 4,
                                                 onComplete = {
                                                     onboardingViewModel.submitUsernameOnboard {
                                                         authManager.sessionStore.read()?.let { s ->
@@ -479,10 +499,49 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
+                                        OnboardingStep.SetupPassword -> {
+                                            val canPw = remember(onboardingSetupPw, onboardingSetupPwConfirm) {
+                                                onboardingViewModel.canSubmitSetupPassword()
+                                            }
+                                            SetupPasswordOnboardScreen(
+                                                newPassword = onboardingSetupPw,
+                                                confirmPassword = onboardingSetupPwConfirm,
+                                                onNewPasswordChange = onboardingViewModel::onSetupPasswordChange,
+                                                onConfirmPasswordChange = onboardingViewModel::onSetupPasswordConfirmChange,
+                                                canSubmit = canPw,
+                                                isSubmitting = onboardingSubmitting,
+                                                progressStep = 4,
+                                                progressTotal = 4,
+                                                onComplete = {
+                                                    onboardingViewModel.submitSetupPassword {
+                                                        mainScope.launch {
+                                                            needsOnboarding = withContext(Dispatchers.IO) {
+                                                                resolveNeedsOnboardingAfterProfileSubmit(userRepoOnboarding)
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                onBack = {
+                                                    if (!onboardingViewModel.handleBack()) {
+                                                        authManager.sessionStore.clear()
+                                                        authManager.onSessionCleared()
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        OnboardingStep.Completed -> {
+                                            FashWaitingScreen()
+                                        }
                                     }
                                 }
                                 isAuthenticated -> {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    val pendingDeepLink by fashApp.pendingDeepLinkListingId.collectAsState()
+                                    LaunchedEffect(pendingDeepLink) {
+                                        val id = pendingDeepLink ?: return@LaunchedEffect
+                                        selectedListingId = id
+                                        fashApp.pendingDeepLinkListingId.value = null
+                                    }
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
@@ -499,6 +558,7 @@ class MainActivity : ComponentActivity() {
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
+                                    var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
                                     val context = LocalContext.current
@@ -536,6 +596,8 @@ class MainActivity : ComponentActivity() {
                                             addressBookViewModel = addressBookViewModel,
                                             profileViewModel = profileViewModel,
                                             chatViewModel = chatViewModel,
+                                            changePasswordViewModel = changePasswordViewModel,
+                                            snackbarHostState = snackbarHostState,
                                             chatUnreadCount = chatUnreadCount,
                                             onListingClick = { lid, sellerId ->
                                                 val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
@@ -556,6 +618,7 @@ class MainActivity : ComponentActivity() {
                                                 followConnectionsInitialTab = tab
                                                 showFollowConnections = true
                                             },
+                                            onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
                                             onFeaturedSellerClick = { seller ->
                                                 val u = seller.username.trim()
                                                 if (u.isNotEmpty()) sellerShopUsername = u
@@ -564,6 +627,18 @@ class MainActivity : ComponentActivity() {
                                                 selectedConversationItem = item
                                                 chatDetailViewModel.loadFromItem(item)
                                                 selectedConversationId = item.conversationId
+                                            },
+                                            onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
+                                                exploreViewModel.openExploreFromProfileFilter(
+                                                    categoryId = cat,
+                                                    brandId = brand,
+                                                    aestheticTagId = aes,
+                                                    searchQuery = q,
+                                                    countryId = countryId,
+                                                    countryIso2 = countryIso2,
+                                                )
+                                                selectedTab = MainTab.Explore.ordinal
+                                                sellerShopUsername = null
                                             },
                                             selectedTab = selectedTab,
                                             onTabChange = { selectedTab = it },
@@ -626,7 +701,24 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     }
                                                 },
-                                                onShare = { /* TODO: share */ },
+                                                onShare = { lid, title ->
+                                                    val web = AppEnvironment.listingShareUrl(lid)
+                                                    val fashUri = ListingDeepLinks.fashListingUri(lid).toString()
+                                                    val text = getString(
+                                                        R.string.share_listing_text,
+                                                        title.ifBlank { getString(R.string.product_detail_title) },
+                                                        web,
+                                                        fashUri,
+                                                    )
+                                                    val send = Intent(Intent.ACTION_SEND).apply {
+                                                        type = "text/plain"
+                                                        putExtra(Intent.EXTRA_SUBJECT, getString(R.string.share_listing_subject))
+                                                        putExtra(Intent.EXTRA_TEXT, text)
+                                                    }
+                                                    startActivity(
+                                                        Intent.createChooser(send, getString(R.string.share)),
+                                                    )
+                                                },
                                                 onListingClick = { lid, sellerId ->
                                                     val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
                                                     if (!sellerId.isNullOrBlank() && sellerId == myId) {
@@ -638,6 +730,18 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onVisitSellerShop = { username ->
                                                     sellerShopUsername = username
+                                                },
+                                                onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
+                                                    exploreViewModel.openExploreFromProfileFilter(
+                                                        categoryId = cat,
+                                                        brandId = brand,
+                                                        aestheticTagId = aes,
+                                                        searchQuery = q,
+                                                        countryId = countryId,
+                                                        countryIso2 = countryIso2,
+                                                    )
+                                                    selectedListingId = null
+                                                    selectedTab = MainTab.Explore.ordinal
                                                 },
                                             )
                                         }
@@ -660,6 +764,18 @@ class MainActivity : ComponentActivity() {
                                                         sellerShopUsername = null
                                                         selectedListingId = lid
                                                     }
+                                                },
+                                                onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
+                                                    exploreViewModel.openExploreFromProfileFilter(
+                                                        categoryId = cat,
+                                                        brandId = brand,
+                                                        aestheticTagId = aes,
+                                                        searchQuery = q,
+                                                        countryId = countryId,
+                                                        countryIso2 = countryIso2,
+                                                    )
+                                                    selectedTab = MainTab.Explore.ordinal
+                                                    sellerShopUsername = null
                                                 },
                                             )
                                         }
@@ -863,6 +979,32 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
+                                        if (showFeaturedSellersAll) {
+                                            BackHandler { showFeaturedSellersAll = false }
+                                            FeaturedSellersScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                viewModel = featuredSellersViewModel,
+                                                onBack = { showFeaturedSellersAll = false },
+                                                onSellerClick = { seller ->
+                                                    val u = seller.username.trim()
+                                                    if (u.isNotEmpty()) sellerShopUsername = u
+                                                    showFeaturedSellersAll = false
+                                                },
+                                                onListingClick = { lid, sellerId ->
+                                                    val myId =
+                                                        authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                    if (!sellerId.isNullOrBlank() && sellerId == myId) {
+                                                        selectedListingId = null
+                                                        editListingId = lid
+                                                    } else {
+                                                        selectedListingId = lid
+                                                    }
+                                                    showFeaturedSellersAll = false
+                                                },
+                                            )
+                                        }
                                     }
                                 }
                                 loginStep == LoginStep.Email -> LoginScreen(
@@ -918,10 +1060,10 @@ class MainActivity : ComponentActivity() {
                                     onBackClick = loginViewModel::backFromOtp,
                                     showOnboardingProgress = otpShowOnboardingProgress,
                                     onboardingProgressStep = 1,
-                                    onboardingProgressTotal = 3,
+                                    onboardingProgressTotal = 4,
                                 )
                             }
-                            SnackbarHost(
+                            FashSnackbarHost(
                                 hostState = snackbarHostState,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)

@@ -53,8 +53,6 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Canvas = androidx.compose.ui.graphics.Color.White
-
 @Composable
 fun SizingReferenceScreen(
     modifier: Modifier = Modifier,
@@ -99,7 +97,7 @@ fun SizingReferenceScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = Canvas,
+        color = scheme.surface,
     ) {
         Column(
             modifier = Modifier
@@ -358,11 +356,12 @@ private fun ProfileMeasurementUnitToggle(
             Surface(
                 modifier = Modifier.clickable { onSelect(u.lowercase()) },
                 shape = RoundedCornerShape(999.dp),
-                color = if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerHighest,
-                border = BorderStroke(
-                    1.dp,
-                    if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.72f),
-                ),
+                color = if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerLow,
+                border = if (selected) {
+                    BorderStroke(1.5.dp, FashColors.Primary.copy(alpha = 0.82f))
+                } else {
+                    null
+                },
             ) {
                 Text(
                     text = stringResource(labelRes),

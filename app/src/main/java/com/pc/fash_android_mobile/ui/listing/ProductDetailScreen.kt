@@ -5,7 +5,6 @@ package com.pc.fash_android_mobile.ui.listing
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +44,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
@@ -63,12 +64,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -88,17 +92,24 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.data.listing.ListingShippingAddress
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-/** Reference UI: primary red, label gray; surfaces follow [MaterialTheme.colorScheme]. */
+/** Brand accent on PDP; body/label text uses [ColorScheme.onSurface] / [ColorScheme.onSurfaceVariant]. */
 private val DetailPrimary = Color(0xFFE9334A)
-private val DetailLabelGray = Color(0xFF757575)
-private val DetailTextBlack = Color(0xFF000000)
-private val DetailConditionGreen = Color(0xFF2E7D32)
+private val DetailConditionGreenLight = Color(0xFF2E7D32)
+private val DetailConditionGreenDark = Color(0xFF81C784)
 private const val DEFAULT_EST_SHIPPING_VND = 30_000L
+
+@Composable
+private fun detailConditionValueColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.surface.luminance() < 0.4f) DetailConditionGreenDark else DetailConditionGreenLight
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -109,10 +120,20 @@ fun ProductDetailScreen(
     onBack: () -> Unit,
     onChat: (String) -> Unit = {},
     onBuyNow: (String) -> Unit = {},
-    onShare: (String) -> Unit = {},
+    /** Share sheet: [listingId] + [title] for message text. */
+    onShare: (listingId: String, title: String) -> Unit = { _, _ -> },
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     /** Seller username only — passed to `GET …/api/v1/users/{username}`. */
     onVisitSellerShop: (sellerUsername: String) -> Unit = {},
+    /** Same contract as profile / seller shop: opens Explore with filters + optional text search + country. */
+    onNavigateToExploreFromProfile: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val detail by viewModel.detail.collectAsState()
     val sellerProfile by viewModel.sellerProfile.collectAsState()
@@ -155,7 +176,7 @@ fun ProductDetailScreen(
                         Text(
                             text = err,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = DetailLabelGray,
+                            color = scheme.onSurfaceVariant,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { viewModel.retryLoad(listingId) }) {
@@ -189,20 +210,31 @@ fun ProductDetailScreen(
                                     onVisitShop = onVisitSellerShop,
                                 )
                                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.78f), thickness = 1.dp)
-                                DetailBreadcrumbPriceTitle(detail = d)
-                                DetailAttributeGrid(detail = d)
+                                DetailBreadcrumbPriceTitle(
+                                    detail = d,
+                                    onNavigateToExplore = onNavigateToExploreFromProfile,
+                                )
+                                DetailAttributeGrid(
+                                    detail = d,
+                                    onNavigateToExplore = onNavigateToExploreFromProfile,
+                                )
                                 if (detailHasMeasurements(d)) {
                                     DetailMeasurementsHeader()
                                     DetailMeasurementsTable(detail = d)
                                 }
                                 DetailShippingCard(detail = d)
-                                DetailDescriptionBlock(detail = d)
+                                DetailDescriptionBlock(
+                                    detail = d,
+                                    onNavigateToExplore = onNavigateToExploreFromProfile,
+                                )
                                 if (moreFromSeller.isNotEmpty()) {
                                     DetailMoreFromSeller(
                                         username = d.sellerUsername,
                                         items = moreFromSeller,
                                         excludeId = d.id,
                                         onItemClick = onListingClick,
+                                        onLike = { viewModel.toggleLikeMoreFromSeller(it) },
+                                        onSave = { viewModel.toggleSaveMoreFromSeller(it) },
                                     )
                                 }
                                 Spacer(Modifier.height(96.dp))
@@ -217,7 +249,7 @@ fun ProductDetailScreen(
                     }
                     DetailTopBar(
                         onBack = onBack,
-                        onShare = { onShare(d.id) },
+                        onShare = { onShare(d.id, d.title) },
                     )
                 }
             }
@@ -233,7 +265,7 @@ private fun DetailTopBar(onBack: () -> Unit, onShare: () -> Unit) {
             Text(
                 text = stringResource(R.string.product_detail_title),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = DetailTextBlack,
+                color = scheme.onSurface,
             )
         },
         navigationIcon = {
@@ -256,7 +288,7 @@ private fun DetailTopBar(onBack: () -> Unit, onShare: () -> Unit) {
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = scheme.surface,
-            titleContentColor = DetailTextBlack,
+            titleContentColor = scheme.onSurface,
             navigationIconContentColor = DetailPrimary,
             actionIconContentColor = DetailPrimary,
         ),
@@ -296,7 +328,7 @@ private fun DetailHeroImage(
                 ) {
                     Text(
                         stringResource(R.string.no_image),
-                        color = DetailLabelGray,
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
@@ -340,7 +372,7 @@ private fun DetailHeroImage(
                         haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                         onLike()
                     },
-                    tint = if (detail.isLiked) DetailPrimary else DetailTextBlack,
+                    tint = if (detail.isLiked) DetailPrimary else scheme.onSurface,
                 )
                 StatMini(
                     imageVector = if (detail.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -349,7 +381,7 @@ private fun DetailHeroImage(
                         haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                         onSave()
                     },
-                    tint = if (detail.isSaved) DetailPrimary else DetailTextBlack,
+                    tint = if (detail.isSaved) DetailPrimary else scheme.onSurface,
                 )
             }
         }
@@ -377,6 +409,7 @@ private fun StatMini(
     onClick: (() -> Unit)?,
     tint: Color?,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     Row(
         modifier = mod,
@@ -387,12 +420,12 @@ private fun StatMini(
             imageVector = imageVector,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = tint ?: DetailTextBlack,
+            tint = tint ?: scheme.onSurface,
         )
         Text(
             value,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = DetailTextBlack,
+            color = scheme.onSurface,
         )
     }
 }
@@ -438,7 +471,7 @@ private fun DetailSellerRow(
             Text(
                 name.ifBlank { "@$username" },
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = DetailTextBlack,
+                color = scheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -452,7 +485,7 @@ private fun DetailSellerRow(
             Text(
                 sub,
                 style = MaterialTheme.typography.bodySmall,
-                color = DetailLabelGray,
+                color = scheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -460,7 +493,7 @@ private fun DetailSellerRow(
         OutlinedButton(
             onClick = { shopUsername?.let(onVisitShop) },
             enabled = shopUsername != null,
-            border = BorderStroke(1.dp, DetailPrimary),
+            border = BorderStroke(1.dp, DetailPrimary.copy(alpha = 0.55f)),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             shape = RoundedCornerShape(20.dp),
@@ -474,9 +507,75 @@ private fun DetailSellerRow(
 }
 
 @Composable
-private fun DetailBreadcrumbPriceTitle(detail: ListingDetail) {
+private fun DetailCategoryBreadcrumb(
+    detail: ListingDetail,
+    onNavigateToExplore: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
-    val bread = buildBreadcrumb(detail)
+    val parent = detail.parentCategoryName?.trim()?.takeIf { it.isNotEmpty() }
+    val child = detail.category?.trim()?.takeIf { it.isNotEmpty() }
+    val parentId = detail.parentCategoryId?.takeIf { it.isNotBlank() }
+    val childId = detail.categoryId?.takeIf { it.isNotBlank() }
+    if (parent == null && child == null) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (parent != null) {
+            Text(
+                text = parent.uppercase(Locale.getDefault()),
+                style = MaterialTheme.typography.labelSmall,
+                color = FashColors.Primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onNavigateToExplore(parentId, null, null, parent, null, null) }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+            if (child != null) {
+                Text(
+                    text = "›",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (child != null) {
+            Text(
+                text = child.uppercase(Locale.getDefault()),
+                style = MaterialTheme.typography.labelSmall,
+                color = FashColors.Primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onNavigateToExplore(childId, null, null, child, null, null) }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailBreadcrumbPriceTitle(
+    detail: ListingDetail,
+    onNavigateToExplore: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
     val listPrice = detail.listPriceVnd?.takeIf { it > detail.priceVnd }
     Column(
         Modifier
@@ -484,14 +583,13 @@ private fun DetailBreadcrumbPriceTitle(detail: ListingDetail) {
             .background(scheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        bread?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.labelSmall,
-                color = DetailLabelGray,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+        DetailCategoryBreadcrumb(
+            detail = detail,
+            onNavigateToExplore = onNavigateToExplore,
+        )
+        val hasBread = detail.parentCategoryName?.isNotBlank() == true ||
+            detail.category?.isNotBlank() == true
+        if (hasBread) {
             Spacer(Modifier.height(8.dp))
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -504,7 +602,7 @@ private fun DetailBreadcrumbPriceTitle(detail: ListingDetail) {
                 Text(
                     formatPriceVnd(orig),
                     style = MaterialTheme.typography.titleMedium,
-                    color = DetailLabelGray,
+                    color = scheme.onSurfaceVariant,
                     textDecoration = TextDecoration.LineThrough,
                 )
             }
@@ -513,26 +611,55 @@ private fun DetailBreadcrumbPriceTitle(detail: ListingDetail) {
         Text(
             detail.title,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = DetailTextBlack,
+            color = scheme.onSurface,
         )
         detail.createdAtIso?.takeIf { it.isNotBlank() }?.let { iso ->
             Spacer(Modifier.height(4.dp))
             Text(
                 stringResource(R.string.product_listed_on, formatShortDate(iso)),
                 style = MaterialTheme.typography.labelSmall,
-                color = DetailLabelGray,
+                color = scheme.onSurfaceVariant,
             )
         }
     }
 }
 
 @Composable
-private fun DetailAttributeGrid(detail: ListingDetail) {
+private fun DetailAttributeGrid(
+    detail: ListingDetail,
+    onNavigateToExplore: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
+    val conditionColor = detailConditionValueColor()
     val brand = detail.brand?.takeIf { it.isNotBlank() } ?: "—"
     val origin = originLine(detail)
     val sizeLine = formatSizeEu(detail)
     val cond = formatConditionUi(detail.condition)
+    val brandClick =
+        if (detail.brandId != null && brand != "—") {
+            { onNavigateToExplore(null, detail.brandId, null, detail.brand?.trim().orEmpty(), null, null) }
+        } else {
+            null
+        }
+    val originQuery = detail.countryName?.trim()?.takeIf { it.isNotEmpty() }
+        ?: detail.countryIso2?.trim()?.takeIf { it.isNotEmpty() }
+    val countryIdWire = detail.countryId?.takeIf { it.isNotBlank() }
+    val countryIsoWire = detail.countryIso2?.trim()?.uppercase(Locale.US)
+        ?.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } }
+    val originClick: (() -> Unit)? = when {
+        countryIdWire != null || countryIsoWire != null ->
+            { { onNavigateToExplore(null, null, null, "", countryIdWire, countryIsoWire) } }
+        originQuery != null && origin != "—" ->
+            { { onNavigateToExplore(null, null, null, originQuery, null, null) } }
+        else -> null
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -546,14 +673,16 @@ private fun DetailAttributeGrid(detail: ListingDetail) {
                 Icons.Default.Storefront,
                 stringResource(R.string.product_brand).uppercase(Locale.getDefault()),
                 brand,
-                valueColor = DetailTextBlack,
+                valueColor = scheme.onSurface,
+                onValueClick = brandClick,
             )
             AttrCell(
                 Modifier.weight(1f),
                 Icons.Default.Public,
                 stringResource(R.string.product_spec_origin).uppercase(Locale.getDefault()),
                 origin,
-                valueColor = DetailTextBlack,
+                valueColor = scheme.onSurface,
+                onValueClick = originClick,
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -562,14 +691,14 @@ private fun DetailAttributeGrid(detail: ListingDetail) {
                 Icons.Default.Straighten,
                 stringResource(R.string.product_size_label_short).uppercase(Locale.getDefault()),
                 sizeLine,
-                valueColor = DetailTextBlack,
+                valueColor = scheme.onSurface,
             )
             AttrCell(
                 Modifier.weight(1f),
                 Icons.Default.Straighten,
                 stringResource(R.string.product_condition_label).uppercase(Locale.getDefault()),
                 "● $cond",
-                valueColor = DetailConditionGreen,
+                valueColor = conditionColor,
             )
         }
     }
@@ -582,13 +711,14 @@ private fun AttrCell(
     label: String,
     value: String,
     valueColor: Color,
+    onValueClick: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val clickable = onValueClick != null && value != "—"
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerHighest,
-        border = BorderStroke(1.dp, scheme.outlineVariant),
+        color = scheme.surfaceContainerLow,
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -596,16 +726,24 @@ private fun AttrCell(
                 Text(
                     label,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = DetailLabelGray,
+                    color = scheme.onSurfaceVariant,
                 )
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 value,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = valueColor,
+                color = if (clickable) FashColors.Primary else valueColor,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
+                modifier = if (clickable) {
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onValueClick!!)
+                        .padding(vertical = 2.dp, horizontal = 2.dp)
+                } else {
+                    Modifier
+                },
             )
         }
     }
@@ -627,7 +765,7 @@ private fun DetailMeasurementsHeader() {
         Text(
             stringResource(R.string.product_section_detailed_specs).uppercase(Locale.getDefault()),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = DetailTextBlack,
+            color = scheme.onSurface,
         )
     }
 }
@@ -651,8 +789,8 @@ private fun DetailMeasurementsTable(detail: ListingDetail) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(bottom = 16.dp)
-            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp)),
+            .clip(RoundedCornerShape(12.dp))
+            .background(scheme.surfaceContainerLow),
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             MeasCell(stringResource(R.string.product_meas_chest), chest)
@@ -670,13 +808,13 @@ private fun DetailMeasurementsTable(detail: ListingDetail) {
             Text(
                 stringResource(R.string.product_meas_hem),
                 style = MaterialTheme.typography.labelSmall,
-                color = DetailLabelGray,
+                color = scheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 hem,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = DetailTextBlack,
+                color = scheme.onSurface,
             )
         }
     }
@@ -684,13 +822,14 @@ private fun DetailMeasurementsTable(detail: ListingDetail) {
 
 @Composable
 private fun RowScope.MeasCell(label: String, value: String) {
+    val scheme = MaterialTheme.colorScheme
     Column(Modifier.weight(1f).padding(12.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = DetailLabelGray)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Text(
             value,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = DetailTextBlack,
+            color = scheme.onSurface,
         )
     }
 }
@@ -698,8 +837,35 @@ private fun RowScope.MeasCell(label: String, value: String) {
 @Composable
 private fun DetailShippingCard(detail: ListingDetail) {
     val scheme = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    var showShippingInfo by remember { mutableStateOf(false) }
     val feeVnd = detail.estimatedShippingVnd ?: DEFAULT_EST_SHIPPING_VND
     val region = shipFromRegion(detail.shippingAddress)
+    if (showShippingInfo) {
+        AlertDialog(
+            onDismissRequest = { showShippingInfo = false },
+            confirmButton = {
+                TextButton(onClick = { showShippingInfo = false }) {
+                    Text(stringResource(R.string.dialog_ok))
+                }
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.product_shipping_info_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.product_shipping_info_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = scheme.surface,
+        )
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -715,31 +881,53 @@ private fun DetailShippingCard(detail: ListingDetail) {
                 Icons.Default.LocalShipping,
                 null,
                 Modifier.size(28.dp),
-                tint = DetailLabelGray,
+                tint = scheme.onSurfaceVariant,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     stringResource(R.string.product_shipping_estimate, formatPriceVnd(feeVnd)),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = DetailTextBlack,
+                    color = scheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     stringResource(R.string.product_ship_from_upper, region),
                     style = MaterialTheme.typography.labelSmall,
-                    color = DetailLabelGray,
+                    color = scheme.onSurfaceVariant,
                 )
             }
-            Icon(Icons.Default.Info, null, Modifier.size(22.dp), tint = DetailLabelGray)
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                    showShippingInfo = true
+                },
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    stringResource(R.string.product_shipping_info_cd),
+                    Modifier.size(22.dp),
+                    tint = scheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DetailDescriptionBlock(detail: ListingDetail) {
+private fun DetailDescriptionBlock(
+    detail: ListingDetail,
+    onNavigateToExplore: (
+        categoryId: String?,
+        brandId: String?,
+        aestheticTagId: String?,
+        searchQuery: String,
+        countryId: String?,
+        countryIso2: String?,
+    ) -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
-    val tags = mergedTagLabels(detail)
+    val aestheticLower = detail.aestheticTagRefs.map { it.label.lowercase(Locale.getDefault()) }.toSet()
     Column(
         Modifier
             .fillMaxWidth()
@@ -749,28 +937,36 @@ private fun DetailDescriptionBlock(detail: ListingDetail) {
         Text(
             stringResource(R.string.product_section_description).uppercase(Locale.getDefault()),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = DetailTextBlack,
+            color = scheme.onSurface,
         )
         Spacer(Modifier.height(8.dp))
         if (detail.description.isNotBlank()) {
             Text(
                 detail.description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = DetailTextBlack,
+                color = scheme.onSurface,
             )
         }
-        if (tags.isNotEmpty()) {
+        val extraTags = detail.tags.mapNotNull { normalizeTag(it) }
+            .filter { it.lowercase(Locale.getDefault()) !in aestheticLower }
+        if (detail.aestheticTagRefs.isNotEmpty() || extraTags.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                tags.forEach { t ->
-                    Text(
-                        "#$t",
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(scheme.surfaceContainerLow)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = DetailLabelGray,
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                detail.aestheticTagRefs.forEach { ref ->
+                    DetailDescriptionTagChip(
+                        label = ref.label,
+                        onClick = {
+                            onNavigateToExplore(null, null, ref.id, ref.label, null, null)
+                        },
+                    )
+                }
+                extraTags.forEach { t ->
+                    DetailDescriptionTagChip(
+                        label = t,
+                        onClick = { onNavigateToExplore(null, null, null, t, null, null) },
                     )
                 }
             }
@@ -779,11 +975,30 @@ private fun DetailDescriptionBlock(detail: ListingDetail) {
 }
 
 @Composable
+private fun DetailDescriptionTagChip(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = "#$label",
+        style = MaterialTheme.typography.labelSmall,
+        color = FashColors.Primary,
+        modifier = Modifier
+            .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+            .background(FashColors.Primary.copy(alpha = 0.15f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
 private fun DetailMoreFromSeller(
     username: String?,
     items: List<ListingFeedItem>,
     excludeId: String,
     onItemClick: (String, String?) -> Unit,
+    onLike: (ListingFeedItem) -> Unit,
+    onSave: (ListingFeedItem) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val u = username ?: "user"
@@ -795,7 +1010,7 @@ private fun DetailMoreFromSeller(
         Text(
             stringResource(R.string.product_more_from_seller, "@$u"),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = DetailTextBlack,
+            color = scheme.onSurface,
         )
         Spacer(Modifier.height(12.dp))
         Row(
@@ -805,35 +1020,15 @@ private fun DetailMoreFromSeller(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items.filter { it.id != excludeId }.take(5).forEach { item ->
-                Column(
-                    Modifier
-                        .width(120.dp)
-                        .clickable { onItemClick(item.id, item.sellerId) },
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(3f / 4f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(scheme.surfaceVariant),
-                    ) {
-                        val url = resolveImageUrl(item.coverImageUrl)
-                        if (url.isNotEmpty()) {
-                            FashAsyncImage(
-                                model = url,
-                                contentDescription = item.title,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        formatPriceVnd(item.priceVnd),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = DetailPrimary,
-                    )
-                }
+                ListingGridCard(
+                    item = item,
+                    modifier = Modifier.width(120.dp),
+                    compactFooter = true,
+                    showQuickActions = true,
+                    onLike = { onLike(item) },
+                    onSave = { onSave(item) },
+                    onClick = { onItemClick(item.id, item.sellerId) },
+                )
             }
         }
     }
@@ -862,12 +1057,12 @@ private fun DetailBottomBar(
                     onClick = onChat,
                     enabled = !chatLoading,
                     modifier = Modifier.weight(1f).height(52.dp),
-                    border = BorderStroke(0.5.dp, scheme.outlineVariant),
+                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = DetailTextBlack,
-                        containerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = DetailLabelGray,
+                        contentColor = scheme.onSurface,
+                        containerColor = scheme.surfaceContainerLow,
+                        disabledContainerColor = scheme.surfaceContainerLow,
+                        disabledContentColor = scheme.onSurfaceVariant,
                     ),
                     shape = RoundedCornerShape(12.dp),
                 ) {
@@ -918,7 +1113,11 @@ private fun DetailBottomBar(
         }
         ProductBottomBarMode.ReservedOther -> StatusBar(stringResource(R.string.product_reserved_other), Color(0xFFFFF8E1), Color(0xFFF57C00))
         ProductBottomBarMode.ReservedBuyer -> StatusBar(stringResource(R.string.product_reserved_buyer), Color(0xFFE8F5E9), Color(0xFF2E7D32))
-        ProductBottomBarMode.Sold -> StatusBar(stringResource(R.string.product_listing_sold_bar), scheme.surfaceContainerHighest, DetailLabelGray)
+        ProductBottomBarMode.Sold -> StatusBar(
+            stringResource(R.string.product_listing_sold_bar),
+            scheme.surfaceContainerHighest,
+            scheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -953,16 +1152,6 @@ private fun detailHasMeasurements(d: ListingDetail): Boolean =
         d.measurementShoulders,
         d.measurementSleeveLength,
     ).any { it != null }
-
-private fun buildBreadcrumb(d: ListingDetail): String? {
-    val parts = buildList {
-        d.parentCategoryName?.trim()?.takeIf { it.isNotEmpty() }
-            ?.let { add(it.uppercase(Locale.getDefault())) }
-        d.category?.trim()?.takeIf { it.isNotEmpty() }?.let { add(it.uppercase(Locale.getDefault())) }
-    }
-    if (parts.isEmpty()) return null
-    return parts.joinToString(" > ")
-}
 
 private fun originLine(d: ListingDetail): String {
     val name = d.countryName?.trim()?.takeIf { it.isNotEmpty() }
@@ -1002,12 +1191,6 @@ private fun shipFromRegion(a: ListingShippingAddress?): String {
         cc.equals("VN", true) -> "VIETNAM"
         else -> cc.uppercase(Locale.US)
     }
-}
-
-private fun mergedTagLabels(d: ListingDetail): List<String> {
-    val fromTags = d.tags.mapNotNull { normalizeTag(it) }
-    val fromA = d.aestheticTags.map { it.trim() }.filter { it.isNotEmpty() }
-    return (fromTags + fromA).distinct()
 }
 
 private fun normalizeTag(raw: String): String? {

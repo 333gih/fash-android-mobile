@@ -31,7 +31,7 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
- * Pill selector for post flow: white fill + outline when unselected; [FashColors.Primary] fill when selected.
+ * Pill selector for post flow: tonal surface when unselected; [FashColors.Primary] fill when selected (no box frame).
  */
 @Composable
 fun PostSelectablePill(
@@ -42,16 +42,12 @@ fun PostSelectablePill(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
-    val borderColor =
-        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.75f)
-    val borderWidth = if (selected) 2.dp else 1.dp
     Surface(
         modifier = modifier
             .clip(shape)
             .clickable(onClick = onClick),
         shape = shape,
-        color = if (selected) FashColors.Primary else PostListingColors.fieldSurface(),
-        border = BorderStroke(borderWidth, borderColor),
+        color = if (selected) FashColors.Primary else scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -66,7 +62,7 @@ fun PostSelectablePill(
 
 /**
  * Full-width selectable row for searchable lists (brand, country, category search).
- * Matches checkout payment rows: [Surface] + border emphasis, leading avatar (emoji or initial),
+ * Matches checkout payment rows: tonal [Surface], primary border only when selected; leading avatar (emoji or initial),
  * and trailing radio indicator — consistent with the app design system.
  */
 @Composable
@@ -80,11 +76,8 @@ fun PostSelectableListRow(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
-    val borderColor =
-        if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.72f)
-    val borderWidth = if (selected) 2.dp else 1.dp
     val chipFill =
-        if (selected) FashColors.Primary.copy(alpha = 0.12f) else PostListingColors.fieldSurface()
+        if (selected) FashColors.Primary.copy(alpha = 0.12f) else scheme.surfaceContainerLow
 
     Surface(
         modifier = modifier
@@ -92,8 +85,12 @@ fun PostSelectableListRow(
             .clip(shape)
             .clickable(onClick = onClick),
         shape = shape,
-        color = PostListingColors.fieldSurface(),
-        border = BorderStroke(borderWidth, borderColor),
+        color = chipFill,
+        border = if (selected) {
+            BorderStroke(1.5.dp, FashColors.Primary.copy(alpha = 0.85f))
+        } else {
+            null
+        },
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {

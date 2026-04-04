@@ -58,41 +58,59 @@ fun HomeQuickActionsRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            QuickActionCell(
-                label = stringResource(R.string.home_quick_explore),
-                onClick = onExplore,
+            StaggeredEntrance(
+                index = 0,
+                baseDelayMs = 320L,
                 modifier = Modifier.weight(1f),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Explore,
-                    contentDescription = null,
-                    modifier = Modifier.size(26.dp),
-                    tint = FashColors.Primary,
-                )
+                QuickActionCell(
+                    label = stringResource(R.string.home_quick_explore),
+                    onClick = onExplore,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Explore,
+                        contentDescription = null,
+                        modifier = Modifier.size(26.dp),
+                        tint = FashColors.Primary,
+                    )
+                }
             }
-            QuickActionCell(
-                label = stringResource(R.string.home_quick_sell),
-                onClick = onSell,
+            StaggeredEntrance(
+                index = 1,
+                baseDelayMs = 320L,
                 modifier = Modifier.weight(1f),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(26.dp),
-                    tint = FashColors.Primary,
-                )
+                QuickActionCell(
+                    label = stringResource(R.string.home_quick_sell),
+                    onClick = onSell,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(26.dp),
+                        tint = FashColors.Primary,
+                    )
+                }
             }
-            QuickActionCell(
-                label = stringResource(R.string.home_quick_orders),
-                onClick = onOrders,
+            StaggeredEntrance(
+                index = 2,
+                baseDelayMs = 320L,
                 modifier = Modifier.weight(1f),
             ) {
-                Icon(
-                    imageVector = Icons.Default.LocalMall,
-                    contentDescription = null,
-                    modifier = Modifier.size(26.dp),
-                    tint = FashColors.Primary,
-                )
+                QuickActionCell(
+                    label = stringResource(R.string.home_quick_orders),
+                    onClick = onOrders,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalMall,
+                        contentDescription = null,
+                        modifier = Modifier.size(26.dp),
+                        tint = FashColors.Primary,
+                    )
+                }
             }
         }
     }

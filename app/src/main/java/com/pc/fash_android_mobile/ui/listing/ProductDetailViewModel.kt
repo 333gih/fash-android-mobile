@@ -110,6 +110,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 detailResult.fold(
                     onSuccess = { d ->
                         _detail.value = d
+                        d.sellerIsFollowing?.let { _isFollowing.value = it }
                         val sid = d.sellerId?.takeIf { it.isNotBlank() }
                             ?: d.sellerUsername?.takeIf { it.isNotBlank() }
                         sid?.let { loadSellerAndMore(it, listingId) }
@@ -203,7 +204,9 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         profileResult.fold(
             onSuccess = {
                 _sellerProfile.value = it
-                it.isFollowing?.let { following -> _isFollowing.value = following }
+                if (_detail.value?.sellerIsFollowing == null) {
+                    it.isFollowing?.let { following -> _isFollowing.value = following }
+                }
             },
             onFailure = { },
         )
@@ -229,6 +232,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             userRepository.follow(target).fold(
                 onSuccess = {
                     _isFollowing.update { true }
+                    _detail.update { it?.copy(sellerIsFollowing = true) }
                     _events.tryEmit(getApplication<Application>().getString(R.string.follow_success))
                 },
                 onFailure = {
@@ -246,7 +250,10 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         if (target.isNullOrBlank()) return
         viewModelScope.launch {
             userRepository.unfollow(target).fold(
-                onSuccess = { _isFollowing.update { false } },
+                onSuccess = {
+                    _isFollowing.update { false }
+                    _detail.update { it?.copy(sellerIsFollowing = false) }
+                },
                 onFailure = {
                     _events.tryEmit(
                         it.message?.takeIf { m -> m.isNotBlank() }
@@ -264,9 +271,17 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     fun toggleSave() {
         val d = _detail.value ?: return
         viewModelScope.launch {
-            listingRepository.toggleSave(d.id).fold(
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.toggleSave(d.id, d.isSaved)
+            }
+            result.fold(
                 onSuccess = { saved ->
                     _detail.update { it?.copy(isSaved = saved) }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
+                        ),
+                    )
                 },
                 onFailure = {
                     _events.tryEmit(
@@ -281,7 +296,10 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     fun toggleLike() {
         val d = _detail.value ?: return
         viewModelScope.launch {
-            listingRepository.toggleLike(d.id).fold(
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.toggleLike(d.id)
+            }
+            result.fold(
                 onSuccess = { liked ->
                     _detail.update { cur ->
                         val c = cur ?: return@update null
@@ -295,6 +313,85 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                             likeCount = (c.likeCount + delta).coerceAtLeast(0),
                         )
                     }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
+                        ),
+                    )
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun toggleLikeMoreFromSeller(item: ListingFeedItem) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.toggleLike(item.id)
+            }
+            result.fold(
+                onSuccess = { liked ->
+                    _moreFromSeller.update { list ->
+                        list.map {
+                            if (it.id != item.id) return@map it
+                            val delta = when {
+                                liked && !it.isLiked -> 1
+                                !liked && it.isLiked -> -1
+                                else -> 0
+                            }
+                            it.copy(
+                                isLiked = liked,
+                                likeCount = (it.likeCount + delta).coerceAtLeast(0),
+                            )
+                        }
+                    }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
+                        ),
+                    )
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun toggleSaveMoreFromSeller(item: ListingFeedItem) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.toggleSave(item.id, item.isSaved)
+            }
+            result.fold(
+                onSuccess = { saved ->
+                    _moreFromSeller.update { list ->
+                        list.map {
+                            if (it.id != item.id) return@map it
+                            val delta = when {
+                                saved && !it.isSaved -> 1
+                                !saved && it.isSaved -> -1
+                                else -> 0
+                            }
+                            it.copy(
+                                isSaved = saved,
+                                saveCount = (it.saveCount + delta).coerceAtLeast(0),
+                            )
+                        }
+                    }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
+                        ),
+                    )
                 },
                 onFailure = {
                     _events.tryEmit(

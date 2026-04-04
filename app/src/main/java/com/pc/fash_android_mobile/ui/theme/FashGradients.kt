@@ -34,4 +34,4 @@ fun rememberPrimaryCtaBrush(widthDp: Dp, heightDp: Dp): Brush {
 }
 
 /** Ghost border on elevated cards — tuned so the edge reads on the paper canvas. */
-fun ghostBorderColor(outlineVariant: Color): Color = outlineVariant.copy(alpha = 0.42f)
+fun ghostBorderColor(outlineVariant: Color): Color = outlineVariant.copy(alpha = 0.28f)

@@ -69,7 +69,6 @@ import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 
-private val OtpCanvas = Color.White
 private const val OTP_LENGTH = 6
 private val CellCorner = RoundedCornerShape(16.dp)
 private val CellHeight = 56.dp
@@ -108,7 +107,7 @@ fun OtpVerifyScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = OtpCanvas,
+        color = scheme.surface,
     ) {
         Column(
             modifier = Modifier
@@ -275,10 +274,9 @@ private fun OtpHelpBottomCard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
-        color = scheme.surfaceContainerHighest,
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.75f)),
     ) {
         Row(
             modifier = Modifier
@@ -345,7 +343,7 @@ private fun OtpSixCells(
     onImeDone: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val outline = scheme.outlineVariant.copy(alpha = 0.88f)
+    val outline = scheme.outlineVariant.copy(alpha = 0.52f)
     val activeIndex = when {
         otp.length >= OTP_LENGTH -> OTP_LENGTH - 1
         else -> otp.length
@@ -364,7 +362,7 @@ private fun OtpSixCells(
                         .weight(1f)
                         .height(CellHeight),
                     shape = CellCorner,
-                    color = scheme.surfaceContainerHighest,
+                    color = scheme.surfaceContainerLow,
                     border = BorderStroke(
                         width = if (isActive) 2.dp else 1.dp,
                         color = if (isActive) scheme.primary.copy(alpha = 0.85f) else outline,

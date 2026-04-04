@@ -55,7 +55,6 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val OnboardingCanvas = androidx.compose.ui.graphics.Color.White
 private val CardCorner = RoundedCornerShape(16.dp)
 
 private val STYLE_EMOJI = mapOf(
@@ -108,7 +107,7 @@ fun OnboardingScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = OnboardingCanvas,
+        color = scheme.surface,
     ) {
         Column(
             modifier = Modifier
@@ -294,12 +293,12 @@ private fun StyleCard(
             }
             .clickable(onClick = onClick),
         shape = CardCorner,
-        color = if (isSelected) scheme.primaryContainer else scheme.surfaceContainerHighest,
-        shadowElevation = if (isSelected) 6.dp else 0.dp,
+        color = if (isSelected) scheme.primaryContainer else scheme.surfaceContainerLow,
+        shadowElevation = if (isSelected) 4.dp else 0.dp,
         border = if (isSelected) {
-            BorderStroke(2.dp, FashColors.Primary.copy(alpha = 0.85f))
+            BorderStroke(1.5.dp, FashColors.Primary.copy(alpha = 0.82f))
         } else {
-            BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.72f))
+            null
         },
     ) {
         Box(modifier = Modifier.fillMaxSize()) {

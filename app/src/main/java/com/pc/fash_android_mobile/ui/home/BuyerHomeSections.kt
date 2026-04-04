@@ -1,5 +1,10 @@
 package com.pc.fash_android_mobile.ui.home
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,10 +13,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.LocalShipping
@@ -22,10 +25,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -35,7 +44,9 @@ import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.theme.editorialHorizontalPadding
 import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
+import kotlinx.coroutines.delay
 
 private fun formatJourneyCount(n: Int): String =
     when {
@@ -52,6 +63,14 @@ fun BuyerHomeJourneyRow(
     onMessagesClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var titleVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { titleVisible = true }
+    val titleAlpha by animateFloatAsState(
+        targetValue = if (titleVisible) 1f else 0f,
+        animationSpec = tween(420, easing = FastOutSlowInEasing),
+        label = "journeyTitleAlpha",
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -66,31 +85,62 @@ fun BuyerHomeJourneyRow(
             text = stringResource(R.string.home_journey_title),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.graphicsLayer { alpha = titleAlpha },
         )
         Row(
             modifier = Modifier
-                .padding(top = 12.dp)
-                .horizontalScroll(rememberScrollState()),
+                .fillMaxWidth()
+                .padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            JourneyStatCard(
-                icon = { Icon(Icons.Default.LocalShipping, contentDescription = null, tint = FashColors.Primary) },
-                label = stringResource(R.string.home_journey_delivering),
-                value = formatJourneyCount(stats.activeDeliveryOrders),
-                onClick = onDeliveringClick,
-            )
-            JourneyStatCard(
-                icon = { Icon(Icons.Outlined.BookmarkBorder, contentDescription = null, tint = FashColors.Primary) },
-                label = stringResource(R.string.home_journey_saved),
-                value = formatJourneyCount(stats.savedListingsCount),
-                onClick = onSavedClick,
-            )
-            JourneyStatCard(
-                icon = { Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = FashColors.Primary) },
-                label = stringResource(R.string.home_journey_messages),
-                value = formatJourneyCount(stats.unreadMessages),
-                onClick = onMessagesClick,
-            )
+            StaggeredEntrance(index = 0, modifier = Modifier.weight(1f)) {
+                JourneyStatCard(
+                    icon = {
+                        Icon(
+                            Icons.Default.LocalShipping,
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            tint = FashColors.Primary,
+                        )
+                    },
+                    label = stringResource(R.string.home_journey_delivering),
+                    value = formatJourneyCount(stats.activeDeliveryOrders),
+                    onClick = onDeliveringClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            StaggeredEntrance(index = 1, modifier = Modifier.weight(1f)) {
+                JourneyStatCard(
+                    icon = {
+                        Icon(
+                            Icons.Outlined.BookmarkBorder,
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            tint = FashColors.Primary,
+                        )
+                    },
+                    label = stringResource(R.string.home_journey_saved),
+                    value = formatJourneyCount(stats.savedListingsCount),
+                    onClick = onSavedClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            StaggeredEntrance(index = 2, modifier = Modifier.weight(1f)) {
+                JourneyStatCard(
+                    icon = {
+                        Icon(
+                            Icons.Default.ChatBubbleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            tint = FashColors.Primary,
+                        )
+                    },
+                    label = stringResource(R.string.home_journey_messages),
+                    value = formatJourneyCount(stats.unreadMessages),
+                    onClick = onMessagesClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
@@ -107,25 +157,24 @@ private fun JourneyStatCard(
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     Column(
         modifier = modifier
-            .widthIn(min = 108.dp, max = 132.dp)
             .clip(shape)
             .background(scheme.surfaceVariant)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 8.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         icon()
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 2,
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
@@ -136,47 +185,73 @@ fun HomeHeroBanner(
     onExploreClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var heroVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(160)
+        heroVisible = true
+    }
+    val heroAlpha by animateFloatAsState(
+        targetValue = if (heroVisible) 1f else 0f,
+        animationSpec = tween(480, easing = FastOutSlowInEasing),
+        label = "homeHeroAlpha",
+    )
+    val heroScale by animateFloatAsState(
+        targetValue = if (heroVisible) 1f else 0.94f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "homeHeroScale",
+    )
+
     val heroTextColor = listOf(FashColors.PrimaryDeep, FashColors.Primary).fashReadableOnGradient()
     val heroSubtitleColor = heroTextColor.copy(alpha = 0.95f)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = FashTheme.spacing.editorialStart,
-                vertical = 4.dp,
-            )
-            .clip(shape)
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(FashColors.PrimaryDeep, FashColors.Primary),
-                ),
-            )
-            .padding(20.dp),
+            .padding(FashTheme.spacing.editorialHorizontalPadding(vertical = 4.dp)),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = stringResource(R.string.home_hero_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = heroTextColor,
-            )
-            Text(
-                text = stringResource(R.string.home_hero_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = heroSubtitleColor,
-            )
-            OutlinedButton(
-                onClick = onExploreClick,
-                modifier = Modifier.padding(top = 4.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = FashColors.Primary,
-                ),
-            ) {
-                Text(
-                    text = stringResource(R.string.home_hero_cta),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    alpha = heroAlpha
+                    scaleX = heroScale
+                    scaleY = heroScale
+                }
+                .clip(shape)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(FashColors.PrimaryDeep, FashColors.Primary),
+                    ),
                 )
+                .padding(20.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = stringResource(R.string.home_hero_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = heroTextColor,
+                )
+                Text(
+                    text = stringResource(R.string.home_hero_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = heroSubtitleColor,
+                )
+                OutlinedButton(
+                    onClick = onExploreClick,
+                    modifier = Modifier.padding(top = 4.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = FashColors.Primary,
+                    ),
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_hero_cta),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
             }
         }
     }

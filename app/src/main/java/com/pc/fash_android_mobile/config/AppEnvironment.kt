@@ -138,4 +138,15 @@ object AppEnvironment {
         val lang = AppLocale.coreApiPathSegment()
         return "$base/$lang/$rel"
     }
+
+    /**
+     * Share / universal link for a listing ([BuildConfig.LISTING_SHARE_BASE_URL] + `/` + id).
+     * Also use [com.pc.fash_android_mobile.deeplink.ListingDeepLinks.fashListingUri] for the `fash://` fallback.
+     */
+    fun listingShareUrl(listingId: String): String {
+        val id = listingId.trim()
+        if (id.isEmpty()) return ""
+        val base = BuildConfig.LISTING_SHARE_BASE_URL.trimEnd('/')
+        return "$base/$id"
+    }
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  System splash (API 31+): hanger mark with safe inset so the circular mask shows the logo,
+  not a flat coral disk. Same vector as launcher foreground; PNG avoided for predictable scaling.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/fash_icon_fg"
+    android:insetLeft="18dp"
+    android:insetTop="18dp"
+    android:insetRight="18dp"
+    android:insetBottom="18dp" />

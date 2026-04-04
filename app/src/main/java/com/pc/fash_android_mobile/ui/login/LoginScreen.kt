@@ -36,24 +36,28 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -71,6 +75,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
@@ -84,13 +90,13 @@ import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.locale.LoginLanguageToggle
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-private val LoginCanvas = Color.White
 private val HeroCornerDp = 28.dp
 private val FieldCornerDp = 16.dp
 private val SocialCornerDp = 16.dp
@@ -147,7 +153,7 @@ fun LoginScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = LoginCanvas,
+        color = scheme.surface,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -336,7 +342,7 @@ fun LoginScreen(
             }
 
             if (showSnackbarHost) {
-                SnackbarHost(
+                FashSnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -574,6 +580,7 @@ private fun PasswordFieldWithRail(
 ) {
     val scheme = MaterialTheme.colorScheme
     val railShape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -610,7 +617,27 @@ private fun PasswordFieldWithRail(
                     )
                 }
             },
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = stringResource(
+                            if (passwordVisible) {
+                                R.string.login_password_hide_cd
+                            } else {
+                                R.string.login_password_show_cd
+                            },
+                        ),
+                        tint = scheme.onSurfaceVariant,
+                    )
+                }
+            },
             singleLine = true,
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation(mask = '*')
+            },
             shape = RoundedCornerShape(FieldCornerDp),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
@@ -626,6 +653,8 @@ private fun PasswordFieldWithRail(
                 cursorColor = scheme.primary,
                 focusedLeadingIconColor = scheme.onSurfaceVariant,
                 unfocusedLeadingIconColor = scheme.onSurfaceVariant,
+                focusedTrailingIconColor = scheme.onSurfaceVariant,
+                unfocusedTrailingIconColor = scheme.onSurfaceVariant,
             ),
         )
     }
@@ -666,7 +695,7 @@ private fun SocialOutlineButton(
             .fillMaxWidth()
             .height(FashTheme.spacing.buttonHeight),
         shape = RoundedCornerShape(SocialCornerDp),
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.52f)),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = scheme.surfaceContainerHighest,
             contentColor = scheme.onSurface,

@@ -8,20 +8,24 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CategoryTreeNode
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
+import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
+import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -29,11 +33,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 private const val ExploreFeedPageSize = 20
+
+/** Top-level Explore: product grid vs seller discovery (same tab, clear mental model). */
+enum class ExplorePrimarySection {
+    Listings,
+    Sellers,
+}
 
 class ExploreViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -66,12 +76,40 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedBrandId = MutableStateFlow<String?>(null)
     val selectedBrandId: StateFlow<String?> = _selectedBrandId.asStateFlow()
 
+    private val _countriesCatalog = MutableStateFlow<List<CommonCountryDto>>(emptyList())
+    val countriesCatalog: StateFlow<List<CommonCountryDto>> = _countriesCatalog.asStateFlow()
+
+    private val _selectedCountryId = MutableStateFlow<String?>(null)
+    val selectedCountryId: StateFlow<String?> = _selectedCountryId.asStateFlow()
+
+    private val _selectedCountryIso2 = MutableStateFlow<String?>(null)
+    val selectedCountryIso2: StateFlow<String?> = _selectedCountryIso2.asStateFlow()
+
     /** `all` (default) or `match_profile` — passed as `sizing_mode` when not `all`. */
     private val _sizingMode = MutableStateFlow("all")
     val sizingMode: StateFlow<String> = _sizingMode.asStateFlow()
 
-    private val _featuredSellers = MutableStateFlow<List<UserSearchResult>>(emptyList())
-    val featuredSellers: StateFlow<List<UserSearchResult>> = _featuredSellers.asStateFlow()
+    private val _featuredSellers = MutableStateFlow<List<FeaturedSellerItem>>(emptyList())
+    val featuredSellers: StateFlow<List<FeaturedSellerItem>> = _featuredSellers.asStateFlow()
+
+    private val _primarySection = MutableStateFlow(ExplorePrimarySection.Listings)
+    val primarySection: StateFlow<ExplorePrimarySection> = _primarySection.asStateFlow()
+
+    /** Seller tab: discover users (seed search) + storefront preview posts per seller. */
+    private val _sellerBrowseResults = MutableStateFlow<List<UserSearchResult>>(emptyList())
+    val sellerBrowseResults: StateFlow<List<UserSearchResult>> = _sellerBrowseResults.asStateFlow()
+
+    /** `user_id` → up to 3 active listings for TikTok-style preview strip. */
+    private val _sellerPreviewPosts = MutableStateFlow<Map<String, List<ListingFeedItem>>>(emptyMap())
+    val sellerPreviewPosts: StateFlow<Map<String, List<ListingFeedItem>>> = _sellerPreviewPosts.asStateFlow()
+
+    private val _sellersLoading = MutableStateFlow(false)
+    val sellersLoading: StateFlow<Boolean> = _sellersLoading.asStateFlow()
+
+    private val _sellersLoadError = MutableStateFlow(false)
+    val sellersLoadError: StateFlow<Boolean> = _sellersLoadError.asStateFlow()
+
+    private val sellersBrowseGeneration = AtomicInteger(0)
 
     private val _categories = MutableStateFlow<List<Category>>(emptyList())
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
@@ -118,6 +156,14 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /** True when the user ran a text search (non-browse). */
     private val _isSearchMode = MutableStateFlow(false)
     val isSearchMode: StateFlow<Boolean> = _isSearchMode.asStateFlow()
+
+    /** Last submitted **Posts** search text — survives collapsing the search bar (used for API + UI banner). */
+    private val _committedListingSearchQuery = MutableStateFlow("")
+    val committedListingSearchQuery: StateFlow<String> = _committedListingSearchQuery.asStateFlow()
+
+    /** Last submitted **Sellers** search text — survives collapsing the bar (used for API + UI banner). */
+    private val _committedSellerSearchQuery = MutableStateFlow("")
+    val committedSellerSearchQuery: StateFlow<String> = _committedSellerSearchQuery.asStateFlow()
 
     /** Search hub (expanded bar, no submitted query yet): recent / trending / tags from search endpoints. */
     private val _searchOverlayRecentQueries = MutableStateFlow<List<String>>(emptyList())
@@ -167,15 +213,175 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         loadAll()
         viewModelScope.launch {
             realtimeManager.events.collect { event ->
-                if (event is RealtimeEvent.FeedRefresh && !_isSearchMode.value) {
+                if (event is RealtimeEvent.FeedRefresh &&
+                    !_isSearchMode.value &&
+                    _primarySection.value == ExplorePrimarySection.Listings
+                ) {
                     fetchListingsFirstPage()
                 }
             }
         }
     }
 
+    fun setPrimarySection(section: ExplorePrimarySection) {
+        val prev = _primarySection.value
+        if (prev == section) return
+        _primarySection.value = section
+        _autocompleteSuggestions.value = emptyList()
+        if (section == ExplorePrimarySection.Sellers) {
+            viewModelScope.launch {
+                refreshSellerBrowse()
+            }
+        }
+    }
+
+    /**
+     * From profile / seller shop: switch to **Posts** (listings), apply at most one of category / brand / aesthetic tag,
+     * optionally commit text search [searchQuery] as `q`, then load results. Shows the same loading state as Explore.
+     * If only [searchQuery] is set (no ids), tries to match an aesthetic tag in the catalog by name.
+     */
+    fun openExploreFromProfileFilter(
+        categoryId: String? = null,
+        brandId: String? = null,
+        aestheticTagId: String? = null,
+        searchQuery: String,
+        countryId: String? = null,
+        countryIso2: String? = null,
+    ) {
+        viewModelScope.launch {
+            _primarySection.value = ExplorePrimarySection.Listings
+            setSearchBarExpanded(false)
+            _isLoading.value = true
+            _loadError.value = false
+            _listings.value = emptyList()
+            _hasMore.value = true
+            withContext(Dispatchers.IO) {
+                loadTags()
+                loadCategories()
+            }
+            val q = searchQuery.trim()
+            val cat = categoryId?.takeIf { it.isNotBlank() }
+            val brand = brandId?.takeIf { it.isNotBlank() }
+            var tag = aestheticTagId?.takeIf { it.isNotBlank() }
+            if (tag == null && cat == null && brand == null && q.isNotBlank()) {
+                tag = _aestheticTagsCatalog.value.firstOrNull { t ->
+                    t.name.equals(q, ignoreCase = true) ||
+                        t.displayName.equals(q, ignoreCase = true)
+                }?.id
+            }
+            when {
+                cat != null -> {
+                    _selectedCategoryId.value = cat
+                    _selectedBrandId.value = null
+                    _selectedAestheticTagIds.value = emptySet()
+                }
+                brand != null -> {
+                    _selectedCategoryId.value = null
+                    _selectedBrandId.value = brand
+                    _selectedAestheticTagIds.value = emptySet()
+                }
+                tag != null -> {
+                    _selectedCategoryId.value = null
+                    _selectedBrandId.value = null
+                    _selectedAestheticTagIds.value = setOf(tag)
+                }
+                else -> {
+                    _selectedCategoryId.value = null
+                    _selectedBrandId.value = null
+                    _selectedAestheticTagIds.value = emptySet()
+                }
+            }
+            _selectedCountryId.value = countryId?.takeIf { !it.isNullOrBlank() }
+            _selectedCountryIso2.value = normalizeCountryIso2(countryIso2)
+            _committedListingSearchQuery.value = q
+            _isSearchMode.value = q.isNotBlank()
+            _searchQuery.value = ""
+            if (_isSearchMode.value && _committedListingSearchQuery.value.isNotBlank()) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+            requestScrollExploreToTop()
+        }
+    }
+
+    private suspend fun refreshSellerBrowse() {
+        val gen = sellersBrowseGeneration.incrementAndGet()
+        _committedSellerSearchQuery.value = ""
+        _sellersLoading.value = true
+        _sellersLoadError.value = false
+        _sellerPreviewPosts.value = emptyMap()
+        val result = withContext(Dispatchers.IO) {
+            userRepository.searchUsers("a", limit = 40)
+        }
+        result.fold(
+            onSuccess = { users ->
+                if (gen != sellersBrowseGeneration.get()) return@fold
+                _sellerBrowseResults.value = users
+                _sellersLoadError.value = false
+            },
+            onFailure = {
+                if (gen != sellersBrowseGeneration.get()) return@fold
+                _sellerBrowseResults.value = emptyList()
+                _sellerPreviewPosts.value = emptyMap()
+                _sellersLoadError.value = true
+                _events.tryEmit(
+                    it.message?.takeIf { m -> m.isNotBlank() }
+                        ?: getApplication<Application>().getString(R.string.feed_load_error),
+                )
+            },
+        )
+        _sellersLoading.value = false
+        if (gen == sellersBrowseGeneration.get() && _sellerBrowseResults.value.isNotEmpty()) {
+            loadSellerListingPreviews(gen)
+        }
+    }
+
+    private fun loadSellerListingPreviews(expectedGen: Int) {
+        viewModelScope.launch {
+            _sellerPreviewPosts.value = emptyMap()
+            val sellers = _sellerBrowseResults.value
+            coroutineScope {
+                sellers.forEach { seller ->
+                    val key = seller.userId.trim().ifBlank { seller.username.trim() }
+                    if (key.isBlank()) return@forEach
+                    launch(Dispatchers.IO) {
+                        val listings = listingRepository.getListingsBySeller(
+                            sellerId = key,
+                            status = null,
+                            limit = 3,
+                            offset = 0,
+                        ).getOrElse { emptyList() }.take(3)
+                        if (expectedGen != sellersBrowseGeneration.get()) return@launch
+                        _sellerPreviewPosts.update { cur -> cur + (key to listings) }
+                        syncSellerFollowingFromListings(listings)
+                    }
+                }
+            }
+        }
+    }
+
+    fun retrySellerBrowse() {
+        viewModelScope.launch {
+            refreshSellerBrowse()
+        }
+    }
+
     fun requestSearchBarExpanded() {
         _searchBarExpanded.value = true
+        when (_primarySection.value) {
+            ExplorePrimarySection.Listings -> {
+                if (_isSearchMode.value && _committedListingSearchQuery.value.isNotBlank()) {
+                    _searchQuery.value = _committedListingSearchQuery.value
+                }
+            }
+            ExplorePrimarySection.Sellers -> {
+                if (_committedSellerSearchQuery.value.isNotBlank()) {
+                    _searchQuery.value = _committedSellerSearchQuery.value
+                }
+            }
+        }
         loadSearchOverlayData()
     }
 
@@ -186,15 +392,25 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _autocompleteSuggestions.value = emptyList()
             _autocompleteLoading.value = false
             _searchQuery.value = ""
-            if (_isSearchMode.value) {
-                _isSearchMode.value = false
-                viewModelScope.launch {
-                    _isLoading.value = true
-                    _loadError.value = false
-                    fetchListingsFirstPage()
-                    _isLoading.value = false
-                }
-            }
+        }
+    }
+
+    /** Clears active **Posts** text search and returns to browse. */
+    fun clearListingSearch() {
+        viewModelScope.launch {
+            _isSearchMode.value = false
+            _committedListingSearchQuery.value = ""
+            _isLoading.value = true
+            _loadError.value = false
+            fetchListingsFirstPage()
+            _isLoading.value = false
+        }
+    }
+
+    /** Clears active **Sellers** text search and reloads default seller browse. */
+    fun clearSellerSearch() {
+        viewModelScope.launch {
+            refreshSellerBrowse()
         }
     }
 
@@ -211,11 +427,29 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         autocompleteJob = viewModelScope.launch {
             try {
                 delay(280)
-                val result = withContext(Dispatchers.IO) {
-                    searchRepository.autocompleteListingTitles(snapshot)
+                if (_searchQuery.value.trim() != snapshot) return@launch
+                val suggestions = withContext(Dispatchers.IO) {
+                    when (_primarySection.value) {
+                        ExplorePrimarySection.Listings ->
+                            searchRepository.autocompleteListingTitles(snapshot).getOrElse { emptyList() }
+                        ExplorePrimarySection.Sellers ->
+                            userRepository.searchUsers(snapshot, limit = 8).fold(
+                                onSuccess = { list ->
+                                    list.mapNotNull { u ->
+                                        val uu = u.username.trim()
+                                        when {
+                                            uu.isNotBlank() -> "@$uu"
+                                            u.displayName.isNotBlank() -> u.displayName.trim()
+                                            else -> null
+                                        }
+                                    }.distinct()
+                                },
+                                onFailure = { emptyList() },
+                            )
+                    }
                 }
                 if (_searchQuery.value.trim() != snapshot) return@launch
-                _autocompleteSuggestions.value = result.getOrElse { emptyList() }
+                _autocompleteSuggestions.value = suggestions
             } finally {
                 if (isActive && _searchQuery.value.trim() == snapshot) {
                     _autocompleteLoading.value = false
@@ -254,6 +488,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     fun selectSearchOverlayTrendingTag(tag: String) {
         val cleaned = tag.trim()
         if (cleaned.isBlank()) return
+        if (_primarySection.value == ExplorePrimarySection.Sellers) {
+            selectSearchSuggestionAndSubmit(cleaned)
+            return
+        }
         val match = _aestheticTagsCatalog.value.firstOrNull { t ->
             t.name.equals(cleaned, ignoreCase = true) ||
                 t.displayName.equals(cleaned, ignoreCase = true)
@@ -276,14 +514,58 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Runs `GET /search/listings` with current query + category + aesthetic tag (first page). */
+    /**
+     * Submit from the Explore search bar: [ExplorePrimarySection.Listings] → `GET /search/listings`;
+     * [ExplorePrimarySection.Sellers] → `GET …/users/search` (user search), then storefront previews.
+     */
     fun submitSearch() {
         viewModelScope.launch {
-            _isLoading.value = true
-            _loadError.value = false
-            _isSearchMode.value = true
-            runSearchWithCurrentFilters()
-            _isLoading.value = false
+            val q = _searchQuery.value.trim()
+            if (q.isBlank()) return@launch
+            when (_primarySection.value) {
+                ExplorePrimarySection.Listings -> {
+                    _isLoading.value = true
+                    _loadError.value = false
+                    _committedListingSearchQuery.value = q
+                    _isSearchMode.value = true
+                    runSearchWithCurrentFilters()
+                    _isLoading.value = false
+                    setSearchBarExpanded(false)
+                }
+                ExplorePrimarySection.Sellers -> {
+                    val gen = sellersBrowseGeneration.incrementAndGet()
+                    _sellersLoading.value = true
+                    _sellersLoadError.value = false
+                    _sellerPreviewPosts.value = emptyMap()
+                    val result = withContext(Dispatchers.IO) {
+                        userRepository.searchUsers(q, limit = 50)
+                    }
+                    result.fold(
+                        onSuccess = { users ->
+                            if (gen != sellersBrowseGeneration.get()) return@fold
+                            _sellerBrowseResults.value = users
+                            _sellersLoadError.value = false
+                            _committedSellerSearchQuery.value = q
+                        },
+                        onFailure = {
+                            if (gen != sellersBrowseGeneration.get()) return@fold
+                            _sellerBrowseResults.value = emptyList()
+                            _sellerPreviewPosts.value = emptyMap()
+                            _committedSellerSearchQuery.value = ""
+                            _sellersLoadError.value = true
+                            _events.tryEmit(
+                                it.message?.takeIf { m -> m.isNotBlank() }
+                                    ?: getApplication<Application>().getString(R.string.feed_load_error),
+                            )
+                        },
+                    )
+                    _sellersLoading.value = false
+                    if (gen == sellersBrowseGeneration.get() && _sellerBrowseResults.value.isNotEmpty()) {
+                        loadSellerListingPreviews(gen)
+                    }
+                    setSearchBarExpanded(false)
+                }
+            }
         }
     }
 
@@ -307,6 +589,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 result.fold(
                     onSuccess = { page ->
                         _listings.update { existing -> dedupeAppend(existing, page) }
+                        syncSellerFollowingFromListings(page)
                         _hasMore.value = page.size >= ExploreFeedPageSize
                         _loadError.value = false
                     },
@@ -377,6 +660,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             onSuccess = { page -> _brands.value = page.items.sortedBy { it.name.lowercase() } },
             onFailure = { _brands.value = emptyList() },
         )
+        commonServiceRepository.getCountries(all = true).fold(
+            onSuccess = { list ->
+                _countriesCatalog.value = list
+                    .filter { it.id.isNotBlank() }
+                    .distinctBy { it.id }
+                    .sortedBy { it.name.lowercase(Locale.getDefault()) }
+            },
+            onFailure = { _countriesCatalog.value = emptyList() },
+        )
     }
 
     private fun flattenCategoryLeaves(nodes: List<CategoryTreeNode>): List<CategoryTreeNode> {
@@ -392,7 +684,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFeaturedSellers() {
-        userRepository.searchUsers("a", limit = 10).fold(
+        searchRepository.getFeaturedSellers(limit = 10).fold(
             onSuccess = { _featuredSellers.value = it },
             onFailure = { _featuredSellers.value = emptyList() },
         )
@@ -411,6 +703,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         result.fold(
             onSuccess = { page ->
                 _listings.value = page
+                syncSellerFollowingFromListings(page)
                 _hasMore.value = page.size >= ExploreFeedPageSize
                 _loadError.value = false
             },
@@ -439,8 +732,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         return result
     }
 
+    private fun listingSearchQueryForApi(): String =
+        _committedListingSearchQuery.value.trim().ifBlank { _searchQuery.value.trim() }
+
     private fun searchListingsPage(offset: Int, isSearch: Boolean): Result<List<ListingFeedItem>> {
-        val q = if (isSearch) _searchQuery.value.trim() else ""
+        val q = if (isSearch) listingSearchQueryForApi() else ""
         val categoryId = _selectedCategoryId.value
         val sort = if (isSearch && q.isNotEmpty()) _sortOption.value else "popular"
         val (minP, maxP) = normalizedPriceBounds()
@@ -451,6 +747,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
             sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
             brandId = _selectedBrandId.value,
+            countryId = _selectedCountryId.value,
+            countryIso2 = normalizeCountryIso2(_selectedCountryIso2.value),
             minPrice = minP,
             maxPrice = maxP,
             condition = _selectedConditionFilter.value,
@@ -459,6 +757,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             sort = sort,
         )
     }
+
+    private fun normalizeCountryIso2(raw: String?): String? =
+        raw?.trim()?.uppercase(Locale.US)?.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } }
 
     private fun parsePriceDigits(raw: String): Long? {
         val digits = raw.filter { it.isDigit() }
@@ -532,7 +833,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         if (!valid || sort == _sortOption.value) return
         _sortOption.value = sort
         if (!_isSearchMode.value) return
-        val q = _searchQuery.value.trim()
+        val q = listingSearchQueryForApi()
         if (q.isEmpty()) return
         viewModelScope.launch {
             _isLoading.value = true
@@ -612,6 +913,25 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Single-select country (made in); pass both id and iso2 from catalog, or nulls to clear. */
+    fun selectCountryFilter(countryId: String?, countryIso2: String?) {
+        val nextId = countryId?.takeIf { it.isNotBlank() }
+        val nextIso = normalizeCountryIso2(countryIso2)
+        if (nextId == _selectedCountryId.value && nextIso == _selectedCountryIso2.value) return
+        _selectedCountryId.value = nextId
+        _selectedCountryIso2.value = nextIso
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadError.value = false
+            if (_isSearchMode.value) {
+                runSearchWithCurrentFilters()
+            } else {
+                fetchListingsFirstPage()
+            }
+            _isLoading.value = false
+        }
+    }
+
     fun setSizingModeFilter(mode: String) {
         val m = if (mode.equals("match_profile", ignoreCase = true)) "match_profile" else "all"
         if (m == _sizingMode.value) return
@@ -644,12 +964,47 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Resets marketplace filters, search text, and reloads the listings browse feed.
+     * Used from the Explore empty state when filters/search yield no results.
+     */
+    fun clearExploreConstraints() {
+        viewModelScope.launch {
+            priceFilterDebounceJob?.cancel()
+            _minPriceText.value = ""
+            _maxPriceText.value = ""
+            _selectedCategoryId.value = null
+            _selectedBrandId.value = null
+            _selectedAestheticTagIds.value = emptySet()
+            _selectedCountryId.value = null
+            _selectedCountryIso2.value = null
+            _selectedConditionFilter.value = null
+            _sizingMode.value = "all"
+            _isSearchMode.value = false
+            _committedListingSearchQuery.value = ""
+            _searchQuery.value = ""
+            _isLoading.value = true
+            _loadError.value = false
+            _listings.value = emptyList()
+            _hasMore.value = true
+            fetchListingsFirstPage()
+            _isLoading.value = false
+        }
+    }
+
     fun onExploreTabSelected() {
         viewModelScope.launch {
-            if (_isSearchMode.value) {
-                runSearchWithCurrentFilters()
-            } else {
-                fetchListingsFirstPage()
+            when (_primarySection.value) {
+                ExplorePrimarySection.Listings -> {
+                    if (_isSearchMode.value) {
+                        runSearchWithCurrentFilters()
+                    } else {
+                        fetchListingsFirstPage()
+                    }
+                }
+                ExplorePrimarySection.Sellers -> {
+                    refreshSellerBrowse()
+                }
             }
         }
     }
@@ -677,10 +1032,17 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 loadFeaturedSellers()
                 loadCategories()
             }
-            if (_isSearchMode.value) {
-                runSearchWithCurrentFilters()
-            } else {
-                fetchListingsFirstPage()
+            when (_primarySection.value) {
+                ExplorePrimarySection.Listings -> {
+                    if (_isSearchMode.value) {
+                        runSearchWithCurrentFilters()
+                    } else {
+                        fetchListingsFirstPage()
+                    }
+                }
+                ExplorePrimarySection.Sellers -> {
+                    refreshSellerBrowse()
+                }
             }
             _isRefreshing.value = false
         }
@@ -715,6 +1077,93 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             withContext(Dispatchers.IO) {
                 listingRepository.recordView(item.id)
             }
+        }
+    }
+
+    /** Applies `seller.is_following` from listing payloads to [followingIds] (viewer batched flags). */
+    private fun syncSellerFollowingFromListings(items: List<ListingFeedItem>) {
+        if (items.isEmpty()) return
+        _followingIds.update { cur ->
+            val m = cur.toMutableSet()
+            for (item in items) {
+                val sid = item.sellerId?.takeIf { it.isNotBlank() } ?: continue
+                if (item.sellerIsFollowing) m.add(sid) else m.remove(sid)
+            }
+            m
+        }
+    }
+
+    /** Updates the same listing in the main grid and in seller preview strips (IDs may overlap). */
+    private fun patchListingEverywhere(listingId: String, transform: (ListingFeedItem) -> ListingFeedItem) {
+        _listings.update { list -> list.map { if (it.id == listingId) transform(it) else it } }
+        _sellerPreviewPosts.update { map ->
+            map.mapValues { (_, items) ->
+                items.map { if (it.id == listingId) transform(it) else it }
+            }
+        }
+    }
+
+    fun toggleLike(item: ListingFeedItem) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { listingRepository.toggleLike(item.id) }
+            result.fold(
+                onSuccess = { liked ->
+                    patchListingEverywhere(item.id) { cur ->
+                        val delta = when {
+                            liked && !cur.isLiked -> 1
+                            !liked && cur.isLiked -> -1
+                            else -> 0
+                        }
+                        cur.copy(
+                            isLiked = liked,
+                            likeCount = (cur.likeCount + delta).coerceAtLeast(0),
+                        )
+                    }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
+                        ),
+                    )
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun toggleSave(item: ListingFeedItem) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { listingRepository.toggleSave(item.id, item.isSaved) }
+            result.fold(
+                onSuccess = { saved ->
+                    patchListingEverywhere(item.id) { cur ->
+                        val delta = when {
+                            saved && !cur.isSaved -> 1
+                            !saved && cur.isSaved -> -1
+                            else -> 0
+                        }
+                        cur.copy(
+                            isSaved = saved,
+                            saveCount = (cur.saveCount + delta).coerceAtLeast(0),
+                        )
+                    }
+                    _events.tryEmit(
+                        getApplication<Application>().getString(
+                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
+                        ),
+                    )
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_action_error),
+                    )
+                },
+            )
         }
     }
 }

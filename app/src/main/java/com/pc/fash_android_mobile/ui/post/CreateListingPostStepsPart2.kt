@@ -3,7 +3,6 @@ package com.pc.fash_android_mobile.ui.post
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -178,8 +177,7 @@ private fun PostMeasureSectionCard(content: @Composable ColumnScope.() -> Unit) 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        color = PostListingColors.fieldSurface(),
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.68f)),
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -291,8 +289,8 @@ private fun PostAddPhotoBox(onClick: () -> Unit) {
             .aspectRatio(1.5f)
             .clip(RoundedCornerShape(16.dp))
             .border(
-                width = 2.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(16.dp),
             )
             .background(PostListingColors.fieldSurface())
@@ -383,8 +381,8 @@ private fun PostImagePreviewRow(
                     .clip(RoundedCornerShape(12.dp))
                     .background(PostListingColors.fieldSurface())
                     .border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                         shape = RoundedCornerShape(12.dp),
                     )
                     .clickable(onClick = onAddMore),

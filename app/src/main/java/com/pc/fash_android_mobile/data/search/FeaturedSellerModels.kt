@@ -1,0 +1,112 @@
+package com.pc.fash_android_mobile.data.search
+
+import com.pc.fash_android_mobile.data.user.UserSearchResult
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * One row from `GET /api/v1/search/featured-sellers` (ranked sellers + preview listing UUIDs).
+ */
+data class FeaturedSellerItem(
+    val userId: String,
+    val username: String,
+    val displayName: String,
+    val bio: String,
+    val avatarUrl: String,
+    val followerCount: Int,
+    val listingCount: Int,
+    /** Null when the backend sends no rating yet. */
+    val averageRating: Float?,
+    val verified: Boolean,
+    /** Up to 3 active listing UUIDs for horizontal previews. */
+    val previewListingIds: List<String>,
+)
+
+fun FeaturedSellerItem.toUserSearchResult(): UserSearchResult =
+    UserSearchResult(
+        userId = userId,
+        username = username,
+        displayName = displayName,
+        avatarUrl = avatarUrl,
+        followerCount = followerCount,
+        verified = verified,
+        followingCount = 0,
+        listingCount = listingCount,
+        followedAtIso = null,
+        coverUrl = "",
+    )
+
+internal fun parseFeaturedSellersResponse(json: String): List<FeaturedSellerItem> {
+    val raw = json.trim()
+    if (raw.isEmpty()) return emptyList()
+
+    val arr: JSONArray = when {
+        raw.startsWith("[") -> try {
+            JSONArray(raw)
+        } catch (_: Exception) {
+            JSONArray("[]")
+        }
+        else -> try {
+            val obj = JSONObject(raw)
+            val keys = listOf(
+                "data",
+                "items",
+                "featured_sellers",
+                "featuredSellers",
+                "sellers",
+                "results",
+                "users",
+            )
+            var found: JSONArray? = null
+            for (k in keys) {
+                val a = obj.optJSONArray(k)
+                if (a != null) {
+                    found = a
+                    break
+                }
+            }
+            found ?: JSONArray("[]")
+        } catch (_: Exception) {
+            JSONArray("[]")
+        }
+    }
+
+    return (0 until arr.length()).mapNotNull { i ->
+        val o = arr.optJSONObject(i) ?: return@mapNotNull null
+        val previewArr = o.optJSONArray("preview_listing_ids")
+            ?: o.optJSONArray("PreviewListingIDs")
+            ?: o.optJSONArray("previewListingIds")
+            ?: JSONArray("[]")
+        val previewIds = (0 until previewArr.length()).map { j ->
+            previewArr.optString(j, "").trim()
+        }.filter { it.isNotBlank() }.take(3)
+
+        val avgRating = o.optNullableFloat("average_rating", "AverageRating")
+
+        val userId = listOf("user_id", "UserID", "userId", "userID").firstNotNullOfOrNull { key ->
+            o.optString(key, "").trim().takeIf { it.isNotEmpty() }
+        }.orEmpty()
+
+        FeaturedSellerItem(
+            userId = userId,
+            username = o.optString("username", o.optString("Username", "")).trim(),
+            displayName = o.optString("display_name", o.optString("DisplayName", "")).trim(),
+            bio = o.optString("bio", o.optString("Bio", "")).trim(),
+            avatarUrl = o.optString("avatar_url", o.optString("AvatarURL", "")).trim(),
+            followerCount = o.optInt("follower_count", o.optInt("FollowerCount", 0)),
+            listingCount = o.optInt("listing_count", o.optInt("ListingCount", 0)),
+            averageRating = avgRating,
+            verified = o.optBoolean("verified", o.optBoolean("Verified", false)),
+            previewListingIds = previewIds,
+        ).takeIf { it.userId.isNotBlank() || it.username.isNotBlank() }
+    }
+}
+
+private fun JSONObject.optNullableFloat(vararg keys: String): Float? {
+    for (k in keys) {
+        if (!has(k) || isNull(k)) continue
+        val v = optDouble(k, Double.NaN)
+        if (!v.isNaN()) return v.toFloat()
+    }
+    return null
+}

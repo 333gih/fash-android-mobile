@@ -1,6 +1,5 @@
 package com.pc.fash_android_mobile.ui.explore
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +51,7 @@ fun ExploreSearchOverlay(
     viewModel: ExploreViewModel,
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val explorePrimarySection by viewModel.primarySection.collectAsState()
     val recent by viewModel.searchOverlayRecentQueries.collectAsState()
     val trendingQueries by viewModel.searchOverlayTrendingQueries.collectAsState()
     val trendingTags by viewModel.searchOverlayTrendingTags.collectAsState()
@@ -96,7 +96,12 @@ fun ExploreSearchOverlay(
                         ) {
                             item {
                                 ExploreSearchSectionTitle(
-                                    text = stringResource(R.string.explore_search_suggestions_title),
+                                    text = when (explorePrimarySection) {
+                                        ExplorePrimarySection.Listings ->
+                                            stringResource(R.string.explore_search_suggestions_title_listings)
+                                        ExplorePrimarySection.Sellers ->
+                                            stringResource(R.string.explore_search_suggestions_title_sellers)
+                                    },
                                 )
                             }
                             if (autocompleteLoading && suggestions.isEmpty()) {
@@ -329,8 +334,7 @@ private fun ExploreSearchAdPanel(
     Surface(
         modifier = modifier,
         shape = shape,
-        color = scheme.surface,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.85f)),
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {

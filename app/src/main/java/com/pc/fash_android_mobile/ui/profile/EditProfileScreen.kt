@@ -46,7 +46,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -74,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.onboarding.ProfileSetupSizingSection
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -177,7 +177,7 @@ fun EditProfileScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = scheme.surfaceContainerLow,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { FashSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -468,7 +468,6 @@ private fun AestheticStylesSection(
                     Surface(
                         shape = ChipCorner,
                         color = FashColors.Primary.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.35f)),
                     ) {
                         Row(
                             modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
@@ -699,7 +698,7 @@ private fun UsernameInput(
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.dp,
                 color = if (isValid && value.isNotBlank()) FashColors.Success.copy(alpha = 0.5f)
-                else scheme.outlineVariant.copy(alpha = 0.75f),
+                else scheme.outlineVariant.copy(alpha = 0.5f),
             ),
         ) {
             Row(

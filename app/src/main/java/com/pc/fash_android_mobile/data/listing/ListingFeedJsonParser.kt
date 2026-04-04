@@ -18,12 +18,12 @@ internal object ListingFeedJsonParser {
             else -> try {
                 val obj = JSONObject(raw)
                 when {
-                    !obj.has("data") -> JSONArray("[]")
-                    else -> when (val d = obj.get("data")) {
+                    obj.has("data") -> when (val d = obj.get("data")) {
                         is JSONArray -> d
                         is JSONObject -> extractListingsArray(d)
                         else -> JSONArray("[]")
                     }
+                    else -> extractListingsArray(obj)
                 }
             } catch (_: Exception) {
                 JSONArray("[]")
@@ -40,6 +40,18 @@ internal object ListingFeedJsonParser {
             val seller = o.optJSONObject("seller") ?: o.optJSONObject("Seller")
             val tagsNode = seller?.optJSONArray("aesthetic_tags") ?: seller?.optJSONArray("AestheticTags")
             val firstTag = tagsNode?.optJSONObject(0)
+            val listingAestheticArr = o.optJSONArray("aesthetic_tags") ?: o.optJSONArray("AestheticTags")
+            val firstListingAesthetic = listingAestheticArr?.optJSONObject(0)?.let { tag ->
+                tag.optString("display_name", "")
+                    .ifBlank { tag.optString("DisplayName", "") }
+                    .ifBlank { tag.optString("name", "") }
+                    .ifBlank { tag.optString("Name", "") }
+            }?.ifBlank { null }
+            val categoryObj = o.optJSONObject("category") ?: o.optJSONObject("Category")
+            val categoryName = categoryObj?.optString("name", "")?.ifBlank { null }
+                ?: categoryObj?.optString("Name", "")?.ifBlank { null }
+                ?: o.optString("category_name", "").ifBlank { null }
+                ?: o.optString("CategoryName", "").ifBlank { null }
             val imageUrlsArr = o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs")
             list.add(
                 ListingFeedItem(
@@ -50,6 +62,16 @@ internal object ListingFeedJsonParser {
                         .ifBlank { imageUrlsArr?.optString(0) ?: "" },
                     imageUrls = parseStringArray(imageUrlsArr),
                     priceVnd = o.optLong("price", o.optLong("Price", 0L)),
+                    brand = o.optString("brand", "")
+                        .ifBlank { o.optString("Brand", "") }
+                        .takeIf { it.isNotBlank() }
+                        ?: o.optJSONObject("brand")?.optString("name", "")?.takeIf { it.isNotBlank() }
+                        ?: o.optJSONObject("Brand")?.optString("name", "")?.takeIf { it.isNotBlank() },
+                    size = o.optString("size", "")
+                        .ifBlank { o.optString("Size", "") }
+                        .ifBlank { null },
+                    categoryName = categoryName,
+                    listingAestheticTag = firstListingAesthetic,
                     condition = o.optString("condition", o.optString("Condition", "")),
                     likeCount = o.optInt("like_count", o.optInt("LikeCount", 0)),
                     saveCount = o.optInt("save_count", o.optInt("SaveCount", 0)),
@@ -71,10 +93,28 @@ internal object ListingFeedJsonParser {
                     createdAt = o.optString("created_at", "")
                         .ifBlank { o.optString("CreatedAt", "") }
                         .ifBlank { null },
+                    isLiked = listingWireBool(o, "is_liked", "IsLiked"),
+                    isSaved = listingWireBool(o, "is_saved", "IsSaved"),
+                    sellerIsFollowing = sellerFollowingWireBool(seller),
                 ),
             )
         }
         return list
+    }
+
+    private fun listingWireBool(o: JSONObject, snake: String, pascal: String): Boolean = when {
+        o.has(snake) -> o.optBoolean(snake, false)
+        o.has(pascal) -> o.optBoolean(pascal, false)
+        else -> false
+    }
+
+    private fun sellerFollowingWireBool(seller: JSONObject?): Boolean {
+        if (seller == null) return false
+        return when {
+            seller.has("is_following") -> seller.optBoolean("is_following", false)
+            seller.has("IsFollowing") -> seller.optBoolean("IsFollowing", false)
+            else -> false
+        }
     }
 
     /** When `data` is an object, find the first JSONArray of listing-like objects. */
