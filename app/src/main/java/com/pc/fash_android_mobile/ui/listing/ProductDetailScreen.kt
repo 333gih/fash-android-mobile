@@ -25,6 +25,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,8 +73,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,14 +86,21 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -126,6 +143,12 @@ fun ProductDetailScreen(
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     /** Seller username only — passed to `GET …/api/v1/users/{username}`. */
     onVisitSellerShop: (sellerUsername: String) -> Unit = {},
+    /**
+     * When false, category/brand/tag taps on this screen do not apply [ExploreViewModel] filters
+     * (e.g. while a seller shop overlay is shown above PDP, or briefly after it closes to avoid
+     * duplicate pointer handling updating Explore state).
+     */
+    profileExploreNavigationEnabled: Boolean = true,
     /** Same contract as profile / seller shop: opens Explore with filters + optional text search + country. */
     onNavigateToExploreFromProfile: (
         categoryId: String?,
@@ -136,6 +159,16 @@ fun ProductDetailScreen(
         countryIso2: String?,
     ) -> Unit = { _, _, _, _, _, _ -> },
 ) {
+    val onExploreFromProfile: (
+        String?,
+        String?,
+        String?,
+        String,
+        String?,
+        String?,
+    ) -> Unit = { c, b, a, q, cid, iso ->
+        if (profileExploreNavigationEnabled) onNavigateToExploreFromProfile(c, b, a, q, cid, iso)
+    }
     val detail by viewModel.detail.collectAsState()
     val sellerProfile by viewModel.sellerProfile.collectAsState()
     val moreFromSeller by viewModel.moreFromSeller.collectAsState()
@@ -188,12 +221,39 @@ fun ProductDetailScreen(
             }
             detail != null -> {
                 val d = requireNotNull(detail)
+                val scrollState = rememberScrollState()
+                val density = LocalDensity.current
+                val configuration = LocalConfiguration.current
+                // Hero is square (aspect 1:1); seller row sits directly below it.
+                val heroHeightPx = remember(configuration.screenWidthDp, density) {
+                    with(density) { configuration.screenWidthDp.dp.toPx() }
+                }
+                val topBarPx = remember(density) { with(density) { 56.dp.toPx() } }
+                val defaultSellerRowPx = remember(density) { with(density) { 88.dp.toPx() } }
+                var measuredSellerRowHeightPx by remember { mutableStateOf<Float?>(null) }
+                val sellerRowHeightPx = measuredSellerRowHeightPx ?: defaultSellerRowPx
+                // Pinned strip appears only after the in-content seller row has scrolled off above the area below the top bar.
+                val pinnedRevealScrollPx = remember(heroHeightPx, sellerRowHeightPx, topBarPx) {
+                    (heroHeightPx + sellerRowHeightPx - topBarPx).coerceAtLeast(0f)
+                }
+                val hysteresisPx = remember(density) { with(density) { 32.dp.toPx() } }
+                var showPinnedSellerStrip by remember { mutableStateOf(false) }
+                // Read scroll every frame so this block recomposes while scrolling (SideEffect alone missed updates).
+                val scrollY = scrollState.value
+                LaunchedEffect(scrollY) {
+                    val y = scrollY.toFloat()
+                    when {
+                        y > pinnedRevealScrollPx + 8f -> showPinnedSellerStrip = true
+                        y < pinnedRevealScrollPx - hysteresisPx -> showPinnedSellerStrip = false
+                    }
+                }
+                val scrollScope = rememberCoroutineScope()
                 Box(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize()) {
                         Box(
                             Modifier
                                 .weight(1f)
-                                .verticalScroll(rememberScrollState()),
+                                .verticalScroll(scrollState),
                         ) {
                             Column(
                                 Modifier
@@ -205,19 +265,25 @@ fun ProductDetailScreen(
                                     onLike = { viewModel.toggleLike() },
                                     onSave = { viewModel.toggleSave() },
                                 )
-                                DetailSellerRow(
-                                    detail = d,
-                                    profile = sellerProfile,
-                                    onVisitShop = onVisitSellerShop,
-                                )
+                                Box(
+                                    Modifier.onGloballyPositioned { coords ->
+                                        measuredSellerRowHeightPx = coords.size.height.toFloat()
+                                    },
+                                ) {
+                                    DetailSellerRow(
+                                        detail = d,
+                                        profile = sellerProfile,
+                                        onVisitShop = onVisitSellerShop,
+                                    )
+                                }
                                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.78f), thickness = 1.dp)
                                 DetailBreadcrumbPriceTitle(
                                     detail = d,
-                                    onNavigateToExplore = onNavigateToExploreFromProfile,
+                                    onNavigateToExplore = onExploreFromProfile,
                                 )
                                 DetailAttributeGrid(
                                     detail = d,
-                                    onNavigateToExplore = onNavigateToExploreFromProfile,
+                                    onNavigateToExplore = onExploreFromProfile,
                                 )
                                 if (detailHasMeasurements(d)) {
                                     DetailMeasurementsHeader()
@@ -226,7 +292,7 @@ fun ProductDetailScreen(
                                 DetailShippingCard(detail = d)
                                 DetailDescriptionBlock(
                                     detail = d,
-                                    onNavigateToExplore = onNavigateToExploreFromProfile,
+                                    onNavigateToExplore = onExploreFromProfile,
                                 )
                                 if (moreFromSeller.isNotEmpty()) {
                                     DetailMoreFromSeller(
@@ -248,10 +314,77 @@ fun ProductDetailScreen(
                             onBuyNow = { onBuyNow(d.id) },
                         )
                     }
-                    DetailTopBar(
-                        onBack = onBack,
-                        onShare = { onShare(d.id, d.title) },
-                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .zIndex(1f),
+                    ) {
+                        DetailTopBar(
+                            onBack = onBack,
+                            onShare = { onShare(d.id, d.title) },
+                        )
+                        AnimatedVisibility(
+                            visible = showPinnedSellerStrip,
+                            enter = fadeIn(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
+                            ) +
+                                slideInVertically(
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                                    initialOffsetY = { -it / 5 },
+                                ),
+                            exit = fadeOut(animationSpec = tween(180)) +
+                                slideOutVertically(
+                                    animationSpec = tween(180),
+                                    targetOffsetY = { -it / 6 },
+                                ),
+                        ) {
+                            Column(Modifier.fillMaxWidth()) {
+                                HorizontalDivider(
+                                    thickness = 1.dp,
+                                    color = scheme.outlineVariant.copy(alpha = 0.45f),
+                                )
+                                Surface(
+                                    color = scheme.surfaceContainerHighest,
+                                    tonalElevation = 0.dp,
+                                    shadowElevation = 3.dp,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    DetailSellerRowMini(
+                                        detail = d,
+                                        profile = sellerProfile,
+                                        onVisitShop = onVisitSellerShop,
+                                        onBriefClick = {
+                                            scrollScope.launch {
+                                                val target =
+                                                    heroHeightPx.toInt().coerceIn(0, scrollState.maxValue)
+                                                val start = scrollState.value
+                                                val end = target
+                                                if (start == end) return@launch
+                                                val durationMs = 320
+                                                val steps = 28
+                                                for (i in 1..steps) {
+                                                    val t = i / steps.toFloat()
+                                                    val eased = FastOutSlowInEasing.transform(t)
+                                                    val v = (start + (end - start) * eased).toInt()
+                                                    scrollState.scrollTo(v)
+                                                    delay((durationMs / steps).toLong())
+                                                }
+                                                scrollState.scrollTo(end)
+                                            }
+                                        },
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -294,6 +427,103 @@ private fun DetailTopBar(onBack: () -> Unit, onShare: () -> Unit) {
             actionIconContentColor = DetailPrimary,
         ),
     )
+}
+
+@Composable
+private fun DetailSellerRowMini(
+    detail: ListingDetail,
+    profile: ProfileInfo?,
+    onVisitShop: (sellerUsername: String) -> Unit,
+    modifier: Modifier = Modifier,
+    /** Tap avatar + text to scroll the in-page seller card back into view (sticky bar). */
+    onBriefClick: (() -> Unit)? = null,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shopUsername = detail.sellerUsername?.takeIf { it.isNotBlank() }
+    val avatarUrl = resolveImageUrl(profile?.avatarUrl ?: detail.sellerAvatarUrl.orEmpty())
+    val avatarForUi = avatarUrl.takeIf { it.isNotEmpty() }
+    val name = profile?.displayName?.ifBlank { null }
+        ?: detail.sellerDisplayName?.ifBlank { null }
+        ?: detail.sellerUsername.orEmpty()
+    val username = detail.sellerUsername ?: "user"
+    val count = detail.sellerListingCount ?: profile?.productCount
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (onBriefClick != null) {
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(onClick = onBriefClick)
+                    } else {
+                        Modifier
+                    },
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(scheme.surfaceVariant),
+            ) {
+                FashProfileAvatarImage(
+                    imageUrl = avatarForUi,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = name.ifBlank { "@$username" },
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                    ),
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val sub = buildString {
+                    count?.takeIf { it >= 0 }?.let {
+                        append(stringResource(R.string.product_seller_products_count, it))
+                        append(" • ")
+                    }
+                    append("@$username")
+                }
+                Text(
+                    text = sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        OutlinedButton(
+            onClick = { shopUsername?.let(onVisitShop) },
+            enabled = shopUsername != null,
+            border = BorderStroke(1.dp, DetailPrimary.copy(alpha = 0.55f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Text(
+                stringResource(R.string.product_visit_shop),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable

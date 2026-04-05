@@ -54,6 +54,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
@@ -322,6 +324,7 @@ fun ProfileScreen(
             }
             else -> {
                 val listState = remember(selectedTab) { LazyListState(0, 0) }
+                val scrollScope = rememberCoroutineScope()
                 val items = when (selectedTab) {
                     0 -> sellingListings
                     1 -> soldListings
@@ -355,7 +358,11 @@ fun ProfileScreen(
                         compactHeader = {
                             ProfileCompactHeaderBar(
                                 profile = profile,
-                                onClick = onEditProfile,
+                                onClick = {
+                                    scrollScope.launch {
+                                        listState.animateScrollToItem(0)
+                                    }
+                                },
                             )
                         },
                         selectedTab = selectedTab,

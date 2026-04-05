@@ -64,7 +64,8 @@ fun FashAsyncImage(
 
 /**
  * Remote or local profile photo: uses Coil with center-crop for URLs; brand default vector otherwise
- * (sharp at all sizes — do not pass [R.drawable.fash_default_profile_avatar] through Coil).
+ * (sharp at all sizes — use [FashDefaultProfileAvatar] when there is no URL; do not pass the old
+ * default drawable through Coil).
  */
 @Composable
 fun FashProfileAvatarImage(

@@ -12,6 +12,7 @@
     <string name="search_placeholder">Search your style…</string>
     <string name="cd_back">Back</string>
     <string name="cd_overflow_menu">More options</string>
+    <string name="profile_cd_brief_scroll_to_top">Scroll to profile top</string>
     <string name="settings_language">Language</string>
     <string name="language_vietnamese">Tiếng Việt</string>
     <string name="language_english">English</string>
@@ -571,6 +572,9 @@
     <string name="profile_empty_sold_subtitle">Sold listings will appear here when you complete a sale.</string>
     <string name="profile_empty_wishlist_title">No saved listings yet</string>
     <string name="profile_empty_wishlist_subtitle">Save items from Explore or Home to find them here.</string>
+    <string name="profile_empty_pinned_footer_selling">Add new listings anytime from Post in the bottom bar.</string>
+    <string name="profile_empty_pinned_footer_sold">Completed sales will appear here.</string>
+    <string name="profile_empty_pinned_footer_wishlist">Explore more—save items from the Explore tab to fill this list.</string>
     <string name="profile_load_error">Could not load profile.</string>
     <string name="edit_profile_title">Edit profile</string>
     <string name="edit_profile_close_cd">Close</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+ system splash: white bg + vector hanger (inset) — avoids solid-circle PNG scaling. -->
+    <!-- Android 12+ system splash: white bg + entry mark (ic_fash_splash_entry, coral hanger on white). Launcher icon is separate (ic_launcher_brand). -->
     <style name="Theme.Fashandroidmobile" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowSplashScreenBackground">#FFFFFF</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_fash_splash_logo</item>

@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -26,11 +29,15 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /**
  * Bottom promo strip (title, subtitle, Explore) — same pattern as chat inbox and orders screen.
+ *
+ * @param extendToBottomEdge When true, the [Surface] sits flush with the bottom of the screen and
+ *   system navigation insets apply to the inner row (avoids a dead gap below the strip).
  */
 @Composable
 fun FashBottomPromoAdStrip(
     modifier: Modifier = Modifier,
     onExploreClick: () -> Unit,
+    extendToBottomEdge: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
@@ -43,8 +50,19 @@ fun FashBottomPromoAdStrip(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+                .fillMaxWidth()
+                .then(
+                    if (extendToBottomEdge) {
+                        Modifier
+                            .padding(horizontal = FashTheme.spacing.editorialStart)
+                            .padding(top = 8.dp, bottom = 8.dp)
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                    } else {
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp)
+                    },
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {

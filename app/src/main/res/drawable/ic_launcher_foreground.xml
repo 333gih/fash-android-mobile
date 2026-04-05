@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Foreground layer for the adaptive icon (API 26+). Brand hanger on white background layer. -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_fash_brand_hanger"
-    android:insetLeft="19dp"
-    android:insetTop="19dp"
-    android:insetRight="19dp"
-    android:insetBottom="19dp" />
+<!--
+  Adaptive icon foreground (API 26+): app-list / launcher only — magenta field + white hanger (ic_launcher_brand.png).
+  Entry splash uses ic_fash_splash_entry.png via ic_fash_splash_logo.xml (API 31+ theme).
+-->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:gravity="fill"
+    android:src="@drawable/ic_launcher_brand" />

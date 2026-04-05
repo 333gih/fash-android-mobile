@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -110,7 +111,11 @@ fun ChatScreen(
     val showGroupedInbox =
         sellerHasActiveListings && sellerInboxGroupMode == SellerInboxGroupMode.ByProduct
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(scheme.background),
+    ) {
         InboxFilterBar(
             selectedFilter = selectedFilter,
             onFilterClick = viewModel::setFilter,
@@ -188,7 +193,7 @@ fun ChatScreen(
             !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint()
             showGroupedInbox -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 displayGroups.forEach { group ->
                     item(key = "h-group-${group.listingId}") {
@@ -220,7 +225,7 @@ fun ChatScreen(
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(
                     conversations,
@@ -396,78 +401,90 @@ private fun ListingGroupHeader(
     val groupUnreadTotal = group.conversations.sumOf { it.unreadCount }
     val groupUnreadCd = stringResource(R.string.chat_group_unread_cd, groupUnreadTotal)
     val thumb = group.coverImageUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
-    Row(
+    val groupShape = RoundedCornerShape(FashTheme.spacing.radiusCard)
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 4.dp)
+            .clip(groupShape)
+            .clickable(onClick = onToggle),
+        shape = groupShape,
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.10f)),
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(scheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (thumb != null) {
-                FashAsyncImage(
-                    model = thumb,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    contentScale = ContentScale.Crop,
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(FashTheme.spacing.radiusSoftMin))
+                    .background(scheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (thumb != null) {
+                    FashAsyncImage(
+                        model = thumb,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.title.ifBlank { "—" },
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = formatPrice(group.priceVnd),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.primary,
                 )
             }
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = group.title.ifBlank { "—" },
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = formatPrice(group.priceVnd),
-                style = MaterialTheme.typography.labelMedium,
-                color = FashColors.Primary,
-            )
-        }
-        if (groupUnreadTotal > 0) {
+            if (groupUnreadTotal > 0) {
+                Surface(
+                    shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+                    color = scheme.primary,
+                    modifier = Modifier.semantics { contentDescription = groupUnreadCd },
+                ) {
+                    Text(
+                        text = formatUnreadBadgeCount(groupUnreadTotal),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+            }
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = FashColors.Primary,
-                modifier = Modifier.semantics { contentDescription = groupUnreadCd },
+                shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+                color = scheme.primaryContainer.copy(alpha = 0.55f),
             ) {
                 Text(
-                    text = formatUnreadBadgeCount(groupUnreadTotal),
+                    text = group.conversationCountBadge.coerceAtLeast(0).toString(),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = FashColors.Primary.fashReadableOn(),
+                    color = scheme.onPrimaryContainer,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
-            Spacer(modifier = Modifier.width(6.dp))
-        }
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = FashColors.Primary.copy(alpha = 0.12f),
-        ) {
-            Text(
-                text = group.conversationCountBadge.coerceAtLeast(0).toString(),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = FashColors.Primary,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
             )
         }
-        Spacer(modifier = Modifier.width(4.dp))
-        Icon(
-            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = null,
-            tint = scheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -482,140 +499,149 @@ private fun ConversationRow(
     val scheme = MaterialTheme.colorScheme
     val avatarUrl = item.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val thumbUrl = item.productThumbnailUrl.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
-    val rowShape = RoundedCornerShape(14.dp)
+    val rowShape = RoundedCornerShape(FashTheme.spacing.radiusCard)
+    val rowColor = if (item.hasUnread) {
+        scheme.primaryContainer.copy(alpha = 0.42f)
+    } else {
+        scheme.surfaceContainerLow
+    }
+    val rowBorder = BorderStroke(
+        width = 1.dp,
+        color = if (item.hasUnread) {
+            scheme.primary.copy(alpha = 0.14f)
+        } else {
+            scheme.outlineVariant.copy(alpha = 0.10f)
+        },
+    )
+    val thumbShape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
 
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 4.dp)
             .clip(rowShape)
-            .background(
-                when {
-                    item.hasUnread -> scheme.surfaceContainerLow.copy(alpha = 0.78f)
-                    else -> scheme.surfaceContainerLow.copy(alpha = 0.42f)
-                },
-                rowShape,
-            )
-            .border(
-                width = 1.dp,
-                color = if (item.hasUnread) {
-                    FashColors.Primary.copy(alpha = 0.18f)
-                } else {
-                    scheme.outlineVariant.copy(alpha = 0.68f)
-                },
-                shape = rowShape,
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onClick),
+        shape = rowShape,
+        color = rowColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = rowBorder,
     ) {
-        if (item.hasUnread) {
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(52.dp)
-                    .background(FashColors.Primary, RoundedCornerShape(2.dp)),
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-        }
-        ChatConversationAvatarWithUnread(
-            hasUnread = item.hasUnread,
-            unreadCount = item.unreadCount,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            FashAvatarCircle(
-                imageUrl = avatarUrl,
-                contentDescription = null,
-                modifier = Modifier,
-                size = AvatarSize,
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = item.displayName.ifBlank { "@${item.username.ifBlank { "user" }}" },
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = if (item.hasUnread) FontWeight.ExtraBold else FontWeight.Bold,
-                    ),
-                    color = if (item.hasUnread) scheme.onSurface else scheme.onSurface.copy(alpha = 0.85f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+            if (item.hasUnread) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.primary),
                 )
-                Text(
-                    text = formatTimestamp(item.timestamp),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Medium,
-                    ),
-                    color = if (item.hasUnread) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.92f),
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            ChatConversationAvatarWithUnread(
+                hasUnread = item.hasUnread,
+                unreadCount = item.unreadCount,
+            ) {
+                FashAvatarCircle(
+                    imageUrl = avatarUrl,
+                    contentDescription = null,
+                    modifier = Modifier,
+                    size = AvatarSize,
                 )
             }
-            if (previewIsPlaceholder) {
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ChatBubbleOutline,
-                        contentDescription = null,
-                        modifier = Modifier.size(17.dp),
-                        tint = FashColors.Primary.copy(alpha = 0.7f),
+                    Text(
+                        text = item.displayName.ifBlank { "@${item.username.ifBlank { "user" }}" },
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = if (item.hasUnread) FontWeight.ExtraBold else FontWeight.Bold,
+                        ),
+                        color = if (item.hasUnread) scheme.onSurface else scheme.onSurface.copy(alpha = 0.88f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Text(
+                        text = formatTimestamp(item.timestamp),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Medium,
+                        ),
+                        color = if (item.hasUnread) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.90f),
+                    )
+                }
+                if (previewIsPlaceholder) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(17.dp),
+                            tint = scheme.primary.copy(alpha = 0.72f),
+                        )
+                        Text(
+                            text = previewLine,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Normal,
+                                fontStyle = FontStyle.Italic,
+                            ),
+                            color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                } else {
                     Text(
                         text = previewLine,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Normal,
-                            fontStyle = FontStyle.Italic,
+                            fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
                         ),
-                        color = scheme.onSurfaceVariant.copy(alpha = 0.92f),
+                        color = if (item.hasUnread) scheme.onSurface else scheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
                     )
                 }
-            } else {
-                Text(
-                    text = previewLine,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = if (item.hasUnread) FontWeight.SemiBold else FontWeight.Normal,
-                    ),
-                    color = if (item.hasUnread) scheme.onSurface else scheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
-        }
 
-        Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-        Box(
-            modifier = Modifier
-                .size(ProductThumbSize)
-                .clip(RoundedCornerShape(8.dp))
-                .background(scheme.surfaceContainerHigh)
-                .border(
-                    width = 1.dp,
-                    color = FashColors.Primary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(8.dp),
-                ),
-        ) {
-            if (thumbUrl != null) {
-                FashAsyncImage(
-                    model = thumbUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
+            Box(
+                modifier = Modifier
+                    .size(ProductThumbSize)
+                    .clip(thumbShape)
+                    .background(scheme.surfaceContainerHigh)
+                    .border(
+                        width = 1.dp,
+                        color = scheme.outlineVariant.copy(alpha = 0.18f),
+                        shape = thumbShape,
+                    ),
+            ) {
+                if (thumbUrl != null) {
+                    FashAsyncImage(
+                        model = thumbUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
             }
         }
     }

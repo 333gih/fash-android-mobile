@@ -636,7 +636,7 @@ private fun PasswordFieldWithRail(
             visualTransformation = if (passwordVisible) {
                 VisualTransformation.None
             } else {
-                PasswordVisualTransformation(mask = '*')
+                PasswordVisualTransformation(mask = '.')
             },
             shape = RoundedCornerShape(FieldCornerDp),
             keyboardOptions = KeyboardOptions(

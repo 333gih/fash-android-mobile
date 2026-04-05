@@ -1,9 +1,16 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,9 +45,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,8 +62,23 @@ import com.pc.fash_android_mobile.data.user.SellerFocusBrand
 import com.pc.fash_android_mobile.data.user.SellerFocusCategory
 import com.pc.fash_android_mobile.data.user.SellerFocusTag
 import com.pc.fash_android_mobile.data.user.SellerListingFocus
+import com.pc.fash_android_mobile.ui.components.FashBottomPromoAdStrip
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import kotlinx.coroutines.launch
+
+/** Divider + [FashPromoSliderBlock] (~padding + card). */
+private val SellerProfilePromoSliderApproxHeight = 124.dp
+
+/**
+ * Explore strip on seller profile: shorter than [com.pc.fash_android_mobile.ui.orders.OrdersScreen]
+ * so more of the grid stays visible while the bottom promo is pinned.
+ */
+private const val SellerProfileBottomAdHeightFraction = 0.10f
+private val SellerProfileBottomAdMinHeight = 56.dp
+private val SellerProfileBottomAdMaxHeight = 64.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +89,11 @@ fun SellerProfileScreen(
     sellerUsername: String,
     onBack: () -> Unit,
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
-    /** Opens Explore → Posts with one filter + search text (shop focus chips). */
+    /**
+     * Category / brand / aesthetic chips (and header aesthetic tags).
+     * Host should call [com.pc.fash_android_mobile.ui.explore.ExploreViewModel.openExploreFromProfileFilter],
+     * switch to Explore, and dismiss the seller overlay (same as main profile → Explore).
+     */
     onNavigateToExploreFromProfile: (
         categoryId: String?,
         brandId: String?,
@@ -74,6 +102,11 @@ fun SellerProfileScreen(
         countryId: String?,
         countryIso2: String?,
     ) -> Unit = { _, _, _, _, _, _ -> },
+    /** Same default promo deck as Orders / Explore; tap usually opens Explore. */
+    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    promoSlides: List<FashPromoSlideDef>? = null,
+    /** Bottom strip below the promo slider — same as Orders / Notifications. */
+    onExploreClick: () -> Unit = {},
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
@@ -96,6 +129,7 @@ fun SellerProfileScreen(
     }
 
     val listState = remember(selectedTab) { LazyListState(0, 0) }
+    val scrollScope = rememberCoroutineScope()
     val collapseProgress = rememberProfileHeaderCollapseProgress(listState)
 
     Scaffold(
@@ -166,53 +200,99 @@ fun SellerProfileScreen(
                 }
                 else -> {
                     val items = if (selectedTab == 0) sellingListings else soldListings
-                    ProfileCollapsingScrollLayout(
-                        listState = listState,
-                        expandedHeader = {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                SellerProfileHeader(
-                                    profile = profile,
-                                    onAestheticTagClick = { name, id ->
-                                        onNavigateToExploreFromProfile(null, null, id, name, null, null)
-                                    },
-                                )
-                                ProfileStats(profile = profile)
-                                if (profile != null && viewModel.canFollowSeller()) {
-                                    SellerFollowRow(
-                                        isFollowing = isFollowing,
-                                        inFlight = followInFlight,
-                                        onToggle = { viewModel.toggleFollow() },
+                    val tabsPinned by remember {
+                        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+                    }
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val adHeight =
+                            (maxHeight * SellerProfileBottomAdHeightFraction)
+                                .coerceAtLeast(SellerProfileBottomAdMinHeight)
+                                .coerceAtMost(SellerProfileBottomAdMaxHeight)
+                        val pinnedBottomInset =
+                            1.dp + SellerProfilePromoSliderApproxHeight + adHeight
+                        ProfileCollapsingScrollLayout(
+                            listState = listState,
+                            expandedHeader = {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    SellerProfileHeader(
+                                        profile = profile,
+                                        onAestheticTagClick = { name, id ->
+                                            onNavigateToExploreFromProfile(null, null, id, name, null, null)
+                                        },
+                                    )
+                                    ProfileStats(profile = profile)
+                                    if (profile != null && viewModel.canFollowSeller()) {
+                                        SellerFollowRow(
+                                            isFollowing = isFollowing,
+                                            inFlight = followInFlight,
+                                            onToggle = { viewModel.toggleFollow() },
+                                        )
+                                    }
+                                    SellerListingFocusSection(
+                                        focus = sellerFocus,
+                                        forbidden = sellerFocusForbidden,
+                                        loading = sellerFocusLoading,
+                                        onCategoryClick = { categoryId, label ->
+                                            onNavigateToExploreFromProfile(categoryId, null, null, label, null, null)
+                                        },
+                                        onBrandClick = { brandId, name ->
+                                            onNavigateToExploreFromProfile(null, brandId, null, name, null, null)
+                                        },
+                                        onAestheticTagClick = { tagId, name ->
+                                            onNavigateToExploreFromProfile(null, null, tagId, name, null, null)
+                                        },
                                     )
                                 }
-                                SellerListingFocusSection(
-                                    focus = sellerFocus,
-                                    forbidden = sellerFocusForbidden,
-                                    loading = sellerFocusLoading,
-                                    onCategoryClick = { categoryId, label ->
-                                        onNavigateToExploreFromProfile(categoryId, null, null, label, null, null)
-                                    },
-                                    onBrandClick = { brandId, name ->
-                                        onNavigateToExploreFromProfile(null, brandId, null, name, null, null)
-                                    },
-                                    onAestheticTagClick = { tagId, name ->
-                                        onNavigateToExploreFromProfile(null, null, tagId, name, null, null)
+                            },
+                            compactHeader = {
+                                ProfileCompactHeaderBar(
+                                    profile = profile,
+                                    onClick = {
+                                        scrollScope.launch {
+                                            listState.animateScrollToItem(0)
+                                        }
                                     },
                                 )
+                            },
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it },
+                            items = items,
+                            wishlistTabVisible = false,
+                            onListingClick = { item -> onListingClick(item.id, item.sellerId ?: profile?.userId) },
+                            showListingQuickActions = true,
+                            onListingLike = { viewModel.toggleLike(it) },
+                            onListingSave = { viewModel.toggleSave(it) },
+                            additionalBottomInset = if (tabsPinned) pinnedBottomInset else 0.dp,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        AnimatedVisibility(
+                            visible = tabsPinned,
+                            enter = fadeIn(animationSpec = tween(240)) +
+                                slideInVertically(animationSpec = tween(240)) { full -> full / 3 },
+                            exit = fadeOut(animationSpec = tween(200)) +
+                                slideOutVertically(animationSpec = tween(200)) { full -> full / 4 },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                HorizontalDivider(
+                                    thickness = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                )
+                                FashPromoSliderBlock(
+                                    slides = promoSlides,
+                                    onSlideClick = onPromoSlideClick,
+                                )
+                                FashBottomPromoAdStrip(
+                                    modifier = Modifier
+                                        .height(adHeight)
+                                        .fillMaxWidth(),
+                                    onExploreClick = onExploreClick,
+                                )
                             }
-                        },
-                        compactHeader = {
-                            ProfileCompactHeaderBar(profile = profile)
-                        },
-                        selectedTab = selectedTab,
-                        onTabSelected = { selectedTab = it },
-                        items = items,
-                        wishlistTabVisible = false,
-                        onListingClick = { item -> onListingClick(item.id, item.sellerId ?: profile?.userId) },
-                        showListingQuickActions = true,
-                        onListingLike = { viewModel.toggleLike(it) },
-                        onListingSave = { viewModel.toggleSave(it) },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                        }
+                    }
                 }
             }
         }

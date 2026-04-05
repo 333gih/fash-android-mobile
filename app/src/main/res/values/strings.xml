@@ -12,6 +12,7 @@
     <string name="search_placeholder">Tìm kiếm phong cách của bạn…</string>
     <string name="cd_back">Quay lại</string>
     <string name="cd_overflow_menu">Thêm tùy chọn</string>
+    <string name="profile_cd_brief_scroll_to_top">Cuộn lên đầu hồ sơ</string>
     <string name="settings_language">Ngôn ngữ</string>
     <string name="language_vietnamese">Tiếng Việt</string>
     <string name="language_english">English</string>
@@ -592,6 +593,9 @@
     <string name="profile_empty_sold_subtitle">Sản phẩm đã bán sẽ hiển thị khi giao dịch hoàn tất.</string>
     <string name="profile_empty_wishlist_title">Chưa có tin đã lưu</string>
     <string name="profile_empty_wishlist_subtitle">Lưu tin từ Khám phá hoặc Trang chủ để xem lại ở đây.</string>
+    <string name="profile_empty_pinned_footer_selling">Đăng tin mới bất cứ lúc nào từ mục Đăng bài ở thanh dưới.</string>
+    <string name="profile_empty_pinned_footer_sold">Đơn đã bán sẽ hiển thị khi giao dịch hoàn tất.</string>
+    <string name="profile_empty_pinned_footer_wishlist">Khám phá thêm—lưu tin yêu thích ở mục Khám phá.</string>
     <string name="profile_load_error">Không tải được hồ sơ.</string>
 
     <string name="edit_profile_title">Chỉnh sửa hồ sơ</string>

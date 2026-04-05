@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  System splash (API 31+): brand hanger PNG with inset so the circular mask doesn’t clip the hook.
-  (Legacy vector fash_icon_fg looked like a dress silhouette — replaced by art-provided mark.)
+  Android 12+ system splash only ([values-v31/themes]): coral hanger on white (ic_fash_splash_entry.png).
+  Not used for the home-screen launcher icon — that stays [ic_launcher_brand].
 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_fash_brand_hanger"
+    android:drawable="@drawable/ic_fash_splash_entry"
     android:insetLeft="18dp"
     android:insetTop="18dp"
     android:insetRight="18dp"

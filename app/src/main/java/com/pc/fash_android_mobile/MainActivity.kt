@@ -47,6 +47,7 @@ import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
+import com.pc.fash_android_mobile.ui.explore.ExplorePrimarySection
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
@@ -107,6 +108,13 @@ private const val SPLASH_DISPLAY_MS = 2_500L
 /** Delay between access-status polls after onboard + sizing (eventual consistency on server). */
 private const val ACCESS_STATUS_POLL_MS = 350L
 private const val ACCESS_STATUS_POLL_ATTEMPTS = 5
+
+/** How the seller shop overlay was opened — restores the correct screen when closing (e.g. tag taps). */
+private enum class SellerShopEntrySource {
+    None,
+    ProductDetail,
+    Explore,
+}
 
 /**
  * After [UserRepository.onboard] (username step) succeeds, the access-status endpoint can briefly still
@@ -543,6 +551,11 @@ class MainActivity : ComponentActivity() {
                                         fashApp.pendingDeepLinkListingId.value = null
                                     }
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var sellerShopEntrySource by remember { mutableStateOf(SellerShopEntrySource.None) }
+                                    /** Snapshot [ExploreViewModel.primarySection] when opening seller from Explore (Listings vs Sellers). */
+                                    var exploreSectionWhenSellerOpened by remember { mutableStateOf<ExplorePrimarySection?>(null) }
+                                    /** True briefly after closing seller shop to block PDP from applying Explore filters (pointer replay). */
+                                    var suppressPdpExploreNav by remember { mutableStateOf(false) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -561,6 +574,36 @@ class MainActivity : ComponentActivity() {
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val scope = rememberCoroutineScope()
+                                    /**
+                                     * Closes the seller storefront overlay. Does **not** clear [selectedListingId];
+                                     * if the user opened the shop from PDP, the listing detail stays on screen (back behavior).
+                                     */
+                                    val dismissSellerShopOverlay: () -> Unit = {
+                                        val entry = sellerShopEntrySource
+                                        val exploreSection = exploreSectionWhenSellerOpened
+                                        suppressPdpExploreNav = true
+                                        sellerShopUsername = null
+                                        sellerShopEntrySource = SellerShopEntrySource.None
+                                        exploreSectionWhenSellerOpened = null
+                                        if (entry == SellerShopEntrySource.Explore) {
+                                            selectedTab = MainTab.Explore.ordinal
+                                            exploreSection?.let { exploreViewModel.setPrimarySection(it) }
+                                        }
+                                        scope.launch {
+                                            delay(100)
+                                            suppressPdpExploreNav = false
+                                        }
+                                    }
+                                    /**
+                                     * Leave seller shop and show Explore. Must clear [selectedListingId] first: PDP is
+                                     * composed above main nav but below the seller overlay, so dismissing only the shop
+                                     * would otherwise reveal the previous listing screen instead of Explore.
+                                     */
+                                    val navigateToExploreFromSellerShop: () -> Unit = {
+                                        selectedListingId = null
+                                        dismissSellerShopOverlay()
+                                        selectedTab = MainTab.Explore.ordinal
+                                    }
                                     val context = LocalContext.current
                                     LaunchedEffect(Unit) {
                                         editListingViewModel.events.collect { msg ->
@@ -621,7 +664,11 @@ class MainActivity : ComponentActivity() {
                                             onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
                                             onFeaturedSellerClick = { seller ->
                                                 val u = seller.username.trim()
-                                                if (u.isNotEmpty()) sellerShopUsername = u
+                                                if (u.isNotEmpty()) {
+                                                    sellerShopEntrySource = SellerShopEntrySource.Explore
+                                                    exploreSectionWhenSellerOpened = exploreViewModel.primarySection.value
+                                                    sellerShopUsername = u
+                                                }
                                             },
                                             onConversationClick = { item ->
                                                 selectedConversationItem = item
@@ -637,8 +684,11 @@ class MainActivity : ComponentActivity() {
                                                     countryId = countryId,
                                                     countryIso2 = countryIso2,
                                                 )
+                                                selectedListingId = null
                                                 selectedTab = MainTab.Explore.ordinal
                                                 sellerShopUsername = null
+                                                sellerShopEntrySource = SellerShopEntrySource.None
+                                                exploreSectionWhenSellerOpened = null
                                             },
                                             selectedTab = selectedTab,
                                             onTabChange = { selectedTab = it },
@@ -650,6 +700,8 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 listingId = selectedListingId!!,
                                                 viewModel = productDetailViewModel,
+                                                profileExploreNavigationEnabled = sellerShopUsername == null &&
+                                                    !suppressPdpExploreNav,
                                                 onBack = { selectedListingId = null },
                                                 onChat = { listingId ->
                                                     scope.launch {
@@ -729,6 +781,8 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 },
                                                 onVisitSellerShop = { username ->
+                                                    sellerShopEntrySource = SellerShopEntrySource.ProductDetail
+                                                    exploreSectionWhenSellerOpened = null
                                                     sellerShopUsername = username
                                                 },
                                                 onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
@@ -746,22 +800,22 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         if (sellerShopUsername != null) {
-                                            BackHandler { sellerShopUsername = null }
+                                            BackHandler { dismissSellerShopOverlay() }
                                             SellerProfileScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 viewModel = sellerProfileViewModel,
                                                 sellerUsername = sellerShopUsername!!,
-                                                onBack = { sellerShopUsername = null },
+                                                onBack = dismissSellerShopOverlay,
                                                 onListingClick = { lid, sellerId ->
                                                     val myId =
                                                         authManager.sessionStore.read()?.userId?.trim().orEmpty()
                                                     if (!sellerId.isNullOrBlank() && sellerId == myId) {
-                                                        sellerShopUsername = null
+                                                        dismissSellerShopOverlay()
                                                         editListingId = lid
                                                     } else {
-                                                        sellerShopUsername = null
+                                                        dismissSellerShopOverlay()
                                                         selectedListingId = lid
                                                     }
                                                 },
@@ -774,8 +828,17 @@ class MainActivity : ComponentActivity() {
                                                         countryId = countryId,
                                                         countryIso2 = countryIso2,
                                                     )
+                                                    selectedListingId = null
                                                     selectedTab = MainTab.Explore.ordinal
                                                     sellerShopUsername = null
+                                                    sellerShopEntrySource = SellerShopEntrySource.None
+                                                    exploreSectionWhenSellerOpened = null
+                                                },
+                                                onPromoSlideClick = { _, _ ->
+                                                    navigateToExploreFromSellerShop()
+                                                },
+                                                onExploreClick = {
+                                                    navigateToExploreFromSellerShop()
                                                 },
                                             )
                                         }
@@ -993,7 +1056,11 @@ class MainActivity : ComponentActivity() {
                                                 onBack = { showFeaturedSellersAll = false },
                                                 onSellerClick = { seller ->
                                                     val u = seller.username.trim()
-                                                    if (u.isNotEmpty()) sellerShopUsername = u
+                                                    if (u.isNotEmpty()) {
+                                                        sellerShopEntrySource = SellerShopEntrySource.Explore
+                                                        exploreSectionWhenSellerOpened = exploreViewModel.primarySection.value
+                                                        sellerShopUsername = u
+                                                    }
                                                     showFeaturedSellersAll = false
                                                 },
                                                 onListingClick = { lid, sellerId ->

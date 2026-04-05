@@ -1,16 +1,19 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +22,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -46,10 +49,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -58,11 +65,11 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
-import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-/** Scroll distance (first list item) over which the profile header fully collapses. */
+/** Scroll distance (first list item) used to derive collapse progress for the hero item only. */
 private val ProfileHeaderCollapseScrollDp: Dp = 280.dp
 
 @Composable
@@ -82,8 +89,8 @@ fun rememberProfileHeaderCollapseProgress(listState: LazyListState): androidx.co
 }
 
 /**
- * Single scroll: profile block collapses with animation, sticky tabs, then product rows.
- * [expandedHeader] is the full hero + stats block; [compactHeader] is the slim bar when scrolled.
+ * Single scroll: full hero in the first item (does not shrink — avoids tabs sticking too early),
+ * then one sticky block: optional compact identity + tabs + section title, then product rows.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -101,6 +108,8 @@ fun ProfileCollapsingScrollLayout(
     showListingQuickActions: Boolean = false,
     onListingLike: (ListingFeedItem) -> Unit = {},
     onListingSave: (ListingFeedItem) -> Unit = {},
+    /** Extra space at list end (e.g. seller profile bottom promo overlay). */
+    additionalBottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val tabLabelResIds: List<Int> = if (wishlistTabVisible) {
@@ -125,10 +134,10 @@ fun ProfileCollapsingScrollLayout(
         label = "profileHeaderCollapse",
     )
     val screenHeightDpInt = LocalConfiguration.current.screenHeightDp
-    // Extra scroll extent so short grids (1–2 cards) don’t hit hard overscroll / parent scroll fighting.
     val bottomScrollPad = remember(screenHeightDpInt) {
         (screenHeightDpInt * 0.28f).dp.coerceIn(120.dp, 280.dp)
     }
+    val totalBottomPad = bottomScrollPad + additionalBottomInset
 
     val listBg = MaterialTheme.colorScheme.background
     LazyColumn(
@@ -139,22 +148,26 @@ fun ProfileCollapsingScrollLayout(
             .background(listBg),
     ) {
         item(key = "profile_header") {
-            CollapsingProfileHeaderSlot(
-                progress = progress,
-                expandedHeader = expandedHeader,
-                compactHeader = compactHeader,
-            )
+            // Only the expanded hero + stats — never swap to compact here (that was shrinking item 0 and
+            // making the sticky tabs pin while the user was still in the hero).
+            Column(modifier = Modifier.fillMaxWidth()) {
+                expandedHeader()
+            }
         }
-        stickyHeader(key = "tabs_and_title") {
-            ProfileStickyTabsBar(
+        stickyHeader(key = "profile_sticky_chrome") {
+            ProfileStickyProfileChrome(
+                listState = listState,
+                progress = progress,
+                compactHeader = compactHeader,
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
-                showSectionTitle = progress > 0.22f,
                 tabLabelResIds = tabLabelResIds,
             )
         }
         if (items.isEmpty()) {
             item(key = "empty") {
+                val scheme = MaterialTheme.colorScheme
+                val tabsPinnedToTop = listState.firstVisibleItemIndex > 0
                 val (emptyIcon, emptyTitle, emptySubtitle) = when (selectedTab) {
                     0 -> Triple(
                         Icons.Outlined.Storefront,
@@ -187,7 +200,29 @@ fun ProfileCollapsingScrollLayout(
                             .heightIn(min = 280.dp, max = 560.dp)
                             .padding(vertical = 24.dp),
                     )
-                    Spacer(modifier = Modifier.height(bottomScrollPad))
+                    if (tabsPinnedToTop && wishlistTabVisible) {
+                        val footerRes = when (selectedTab) {
+                            0 -> R.string.profile_empty_pinned_footer_selling
+                            1 -> R.string.profile_empty_pinned_footer_sold
+                            else -> R.string.profile_empty_pinned_footer_wishlist
+                        }
+                        HorizontalDivider(
+                            color = scheme.outlineVariant.copy(alpha = 0.45f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
+                        )
+                        Text(
+                            text = stringResource(footerRes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(totalBottomPad))
                 }
             }
         } else {
@@ -223,68 +258,61 @@ fun ProfileCollapsingScrollLayout(
                 }
             }
             item(key = "list_bottom_pad") {
-                Spacer(modifier = Modifier.height(bottomScrollPad))
+                Spacer(modifier = Modifier.height(totalBottomPad))
             }
         }
     }
 }
 
+/**
+ * Sticky block: brief profile (when hero has scrolled away) + tabs + section title.
+ * Sticks as one unit under the status bar area once the user scrolls past the tall hero item.
+ */
 @Composable
-private fun CollapsingProfileHeaderSlot(
+private fun ProfileStickyProfileChrome(
+    listState: LazyListState,
     progress: Float,
-    expandedHeader: @Composable () -> Unit,
     compactHeader: @Composable () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    // One mode at a time — bottom-aligned compact over expanded caused overlapping text while scrolling.
-    // Hysteresis: with few rows, elastic overscroll can oscillate progress around the old threshold and
-    // retrigger Crossfade (looks like a full reload). Keep state stable between ~0.35 and ~0.52.
-    var showCompactBar by remember { mutableStateOf(false) }
-    SideEffect {
-        when {
-            progress > 0.52f -> showCompactBar = true
-            progress < 0.35f -> showCompactBar = false
-        }
-    }
-    Crossfade(
-        targetState = showCompactBar,
-        animationSpec = tween(durationMillis = 220),
-        label = "profileHeaderCollapseMode",
-    ) { compact ->
-        if (compact) {
-            Surface(
-                color = scheme.surface,
-                tonalElevation = 0.dp,
-                shadowElevation = if (progress > 0.35f) 2.dp else 0.dp,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                compactHeader()
-            }
-        } else {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                expandedHeader()
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileStickyTabsBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    showSectionTitle: Boolean,
     tabLabelResIds: List<Int>,
 ) {
     val scheme = MaterialTheme.colorScheme
-    // Single opaque surface for tabs + section title so list content scrolling underneath
-    // does not hide labels (e.g. dark rows under a transparent sticky header).
+    val headerScrolledOff by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+    // Hysteresis so elastic scroll doesn't flash the brief row.
+    var showBriefBar by remember { mutableStateOf(false) }
+    SideEffect {
+        when {
+            headerScrolledOff || progress > 0.52f -> showBriefBar = true
+            progress < 0.36f && !headerScrolledOff -> showBriefBar = false
+        }
+    }
+    // "Selling" / "Sold" label under tabs: after hero has scrolled away or user has scrolled most of the hero.
+    // (Do not tie to grid item index — while the sticky bar is index 1, firstVisibleItemIndex often stays 1.)
+    val showSectionTitle = headerScrolledOff || progress > 0.55f
+
     Surface(
         color = scheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 1.dp,
+        shadowElevation = if (showBriefBar || headerScrolledOff) 3.dp else 1.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            AnimatedVisibility(
+                visible = showBriefBar,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    compactHeader()
+                    HorizontalDivider(
+                        color = scheme.outlineVariant.copy(alpha = 0.45f),
+                        thickness = 1.dp,
+                    )
+                }
+            }
             ProfileTabs(
                 tabLabelResIds = tabLabelResIds,
                 selectedTab = selectedTab,
@@ -326,18 +354,42 @@ fun ProfileCompactHeaderBar(
     onClick: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val scrollToTopCd = stringResource(R.string.profile_cd_brief_scroll_to_top)
     val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { resolveProfileImageUrl(it) }
     val display = profile?.displayName?.ifBlank { profile.username ?: "—" } ?: "—"
     val handle = profile?.username?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "—"
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (onClick != null && pressed) 0.98f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "profileBriefPressScale",
+    )
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .then(
                 if (onClick != null) {
+                    Modifier.semantics { contentDescription = scrollToTopCd }
+                } else {
+                    Modifier
+                },
+            )
+            .scale(pressScale)
+            .then(
+                if (onClick != null) {
                     Modifier
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable(onClick = onClick)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = LocalIndication.current,
+                            onClick = onClick,
+                        )
                 } else {
                     Modifier
                 },
