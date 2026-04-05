@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.orders.pendingPaymentSliderAnchor
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
 import kotlinx.coroutines.delay
@@ -88,12 +89,14 @@ fun defaultFashPromoSlides(scheme: ColorScheme): List<FashPromoSlideDef> = listO
  * Orders, Notifications, Home, Explore, and Chat — pass [slides] only when overriding (e.g. CMS).
  *
  * @param slides When null, uses [defaultFashPromoSlides]. Pass a non-null list from ViewModel when admin API is ready.
+ * @param reportPendingPaymentAnchor When true, registers bounds for global pending-payment banner placement (above slider).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FashPromoSlider(
     modifier: Modifier = Modifier,
     slides: List<FashPromoSlideDef>? = null,
+    reportPendingPaymentAnchor: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,
     ),
@@ -117,7 +120,8 @@ fun FashPromoSlider(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 6.dp, bottom = 4.dp),
+            .padding(top = 6.dp, bottom = 4.dp)
+            .then(if (reportPendingPaymentAnchor) Modifier.pendingPaymentSliderAnchor() else Modifier),
     ) {
         HorizontalPager(
             state = pagerState,
@@ -160,6 +164,7 @@ fun FashPromoSlider(
 fun FashPromoSliderBlock(
     modifier: Modifier = Modifier,
     slides: List<FashPromoSlideDef>? = null,
+    reportPendingPaymentAnchor: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,
     ),
@@ -173,6 +178,7 @@ fun FashPromoSliderBlock(
         FashPromoSlider(
             modifier = Modifier.fillMaxWidth(),
             slides = slides,
+            reportPendingPaymentAnchor = reportPendingPaymentAnchor,
             contentPadding = contentPadding,
             onSlideClick = onSlideClick,
         )

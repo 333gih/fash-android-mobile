@@ -75,6 +75,12 @@ class ChatViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            ChatUnreadRefreshHub.signals.collect {
+                silentRefreshConversations()
+                refreshUnreadCount()
+            }
+        }
     }
 
     /** Full unfiltered list returned by the API (flat). */
@@ -390,6 +396,29 @@ class ChatViewModel(
         return item.lastMessageText.trim().ifBlank {
             app.getString(R.string.chat_inbox_preview_placeholder)
         }
+    }
+
+    /**
+     * Unread count for [conversationId] from the last inbox fetch (flat or grouped seller inbox).
+     */
+    fun unreadCountForConversation(conversationId: String): Int {
+        val cid = conversationId.trim()
+        if (cid.isEmpty()) return 0
+        _allConversations.value.find { it.conversationId == cid }?.unreadCount?.let { return it }
+        return _conversationGroups.value
+            .asSequence()
+            .flatMap { it.conversations }
+            .find { it.conversationId == cid }
+            ?.unreadCount ?: 0
+    }
+
+    /**
+     * Total global unread minus this thread’s row unread — for badges while viewing another conversation.
+     */
+    fun unreadCountExcludingConversation(conversationId: String): Int {
+        val total = _unreadBadgeCount.value
+        val here = unreadCountForConversation(conversationId)
+        return maxOf(0, total - here)
     }
 
     /** True when the inbox row shows [conversationPreviewLine] placeholder (no real last message). */

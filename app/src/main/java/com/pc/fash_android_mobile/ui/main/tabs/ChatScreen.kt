@@ -44,7 +44,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -103,10 +102,6 @@ fun ChatScreen(
     val inboxUnreadTotal by viewModel.unreadBadgeCount.collectAsState()
     val scheme = MaterialTheme.colorScheme
     val pullState = rememberPullToRefreshState()
-
-    LaunchedEffect(Unit) {
-        viewModel.loadConversationsWhenNeeded()
-    }
 
     val showGroupedInbox =
         sellerHasActiveListings && sellerInboxGroupMode == SellerInboxGroupMode.ByProduct

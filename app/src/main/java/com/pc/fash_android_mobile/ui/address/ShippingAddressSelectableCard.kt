@@ -44,12 +44,9 @@ fun ShippingAddressSelectableCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val fallbackName = stringResource(R.string.shipping_address_row_untitled)
-    val detail = listOf(address.line1, address.ward, address.district, address.city)
-        .filter { it.isNotBlank() }
-        .joinToString(", ")
-        .ifBlank { address.formattedSingleLine() }
+    val addressLine = address.formattedAddressLine().ifBlank { address.formattedSingleLine() }
     val nameOrLabel = address.recipientName.trim().ifBlank { address.label.trim() }
-    val titleText = nameOrLabel.ifBlank { detail }.ifBlank { fallbackName }
+    val titleText = nameOrLabel.ifBlank { addressLine }.ifBlank { fallbackName }
 
     Surface(
         modifier = modifier
@@ -115,7 +112,7 @@ fun ShippingAddressSelectableCard(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = address.formattedSingleLine(),
+                    text = addressLine,
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurface,
                 )

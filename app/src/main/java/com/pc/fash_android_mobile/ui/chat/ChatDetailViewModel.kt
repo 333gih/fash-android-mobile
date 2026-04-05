@@ -117,6 +117,12 @@ class ChatDetailViewModel(
     private var typingTimeoutJob: Job? = null
     private var silentPollDebounceJob: Job? = null
 
+    /**
+     * Server may still return [ConversationDetail.orderId] briefly after cancel; once we know the order is
+     * `cancelled`, we ignore that id until GET conversation clears it — avoids hiding the offer button.
+     */
+    private val dismissedConversationOrderIds = mutableSetOf<String>()
+
     override fun onCleared() {
         super.onCleared()
         wsJob?.cancel()
@@ -432,6 +438,7 @@ class ChatDetailViewModel(
             _messages.value = emptyList()
             _orderId.value = null
             _orderStatus.value = null
+            dismissedConversationOrderIds.clear()
 
             val myUserId = sessionStore.read()?.userId?.trim().orEmpty()
             val isBuyer = when {
@@ -473,7 +480,9 @@ class ChatDetailViewModel(
                     syncDetailClosedStateFromMessages(msgs)
                 }
                 withContext(Dispatchers.IO) {
-                    runCatching { chatRepository.markConversationRead(item.conversationId) }
+                    chatRepository.markConversationRead(item.conversationId).onSuccess {
+                        ChatUnreadRefreshHub.notifyMarkedRead()
+                    }
                 }
             }
 
@@ -503,7 +512,10 @@ class ChatDetailViewModel(
         }
         val existing = _detail.value
         if (existing?.conversationId == conversationId) {
-            // Already showing this thread (e.g. after [loadFromItem]); WS + polling refresh messages.
+            // Spec: after cancel / expiry, reload GET /chat/conversations/{id} so order_id and listing match server.
+            viewModelScope.launch {
+                runCatching { silentPoll(conversationId) }
+            }
             return
         }
         pollingJob?.cancel()
@@ -515,6 +527,7 @@ class ChatDetailViewModel(
             _messages.value = emptyList()
             _orderId.value = null
             _orderStatus.value = null
+            dismissedConversationOrderIds.clear()
 
             val result = withContext(Dispatchers.IO) {
                 chatRepository.getConversationDetail(conversationId)
@@ -529,7 +542,9 @@ class ChatDetailViewModel(
                         syncDetailClosedStateFromMessages(msgs)
                     }
                     withContext(Dispatchers.IO) {
-                        runCatching { chatRepository.markConversationRead(conversationId) }
+                        chatRepository.markConversationRead(conversationId).onSuccess {
+                            ChatUnreadRefreshHub.notifyMarkedRead()
+                        }
                     }
                     _isLoading.value = false
                     startRealtimeAndPolling(conversationId)
@@ -732,9 +747,10 @@ class ChatDetailViewModel(
                 otherUser = mergedOther,
                 product = mergedProduct,
                 isBuyer = d.isBuyer,
-                orderId = d.orderId ?: current.orderId,
+                orderId = d.orderId,
                 offerCount = d.offerCount,
                 isClosed = d.isClosed,
+                pendingOffer = d.pendingOffer,
             )
         } else {
             d
@@ -744,10 +760,29 @@ class ChatDetailViewModel(
         } else {
             _detail.value = merged
         }
-        val newOrderId = d.orderId
-        if (newOrderId != null && _orderId.value == null) {
-            _orderId.value = newOrderId
-            viewModelScope.launch { fetchOrderStatus(newOrderId) }
+        syncOrderIdStateFromConversationDetail(d)
+    }
+
+    /** When the server clears [ConversationDetail.orderId] (e.g. buyer cancelled unpaid order), drop local order state. */
+    private fun syncOrderIdStateFromConversationDetail(d: ConversationDetail) {
+        val oid = d.orderId?.trim()?.takeIf { it.isNotEmpty() }
+        when {
+            oid == null -> {
+                dismissedConversationOrderIds.clear()
+                if (_orderId.value != null) {
+                    _orderId.value = null
+                    _orderStatus.value = null
+                }
+            }
+            oid in dismissedConversationOrderIds -> {
+                if (_orderId.value != null) _orderId.value = null
+                _orderStatus.value = "cancelled"
+                _detail.value = _detail.value?.copy(orderId = null)
+            }
+            _orderId.value != oid -> {
+                _orderId.value = oid
+                viewModelScope.launch { fetchOrderStatus(oid) }
+            }
         }
     }
 
@@ -806,7 +841,14 @@ class ChatDetailViewModel(
 
     private suspend fun fetchOrderStatus(orderId: String) {
         val result = withContext(Dispatchers.IO) { orderRepository.getOrder(orderId) }
-        result.getOrNull()?.let { order -> _orderStatus.value = order.status }
+        val order = result.getOrNull() ?: return
+        val st = order.status.trim().lowercase()
+        _orderStatus.value = order.status
+        if (st == "cancelled") {
+            dismissedConversationOrderIds.add(orderId)
+            _orderId.value = null
+            _detail.value = _detail.value?.copy(orderId = null)
+        }
     }
 
     /** Refreshes the message list silently; resets loading flags on completion. */
@@ -814,13 +856,14 @@ class ChatDetailViewModel(
         _isMessagesLoading.value = true
         val result = withContext(Dispatchers.IO) { chatRepository.getMessages(conversationId) }
         _isMessagesLoading.value = false
-        _isCreatingOffer.value = false
         result.getOrNull()?.takeIf { it.isNotEmpty() }?.let { msgs ->
             val merged = mergeServerWithPendingLocal(msgs, _messages.value)
             _messages.value = merged
             syncPendingOfferFromMessages(merged, conversationId)
             syncDetailClosedStateFromMessages(merged)
         }
+        // Clear after messages are applied so the offer bubble replaces the sending placeholder without a blank gap.
+        _isCreatingOffer.value = false
     }
 
     /**
@@ -868,7 +911,10 @@ class ChatDetailViewModel(
         }
     }
 
-    /** Maps HTTP error codes from the offer endpoints to user-facing Vietnamese strings. */
+    /**
+     * Maps offer POST errors to UI strings (409 codes: OFFER_LIMIT_REACHED, PENDING_OFFER_EXISTS,
+     * CONVERSATION_ORDER_EXISTS, CONVERSATION_CLOSED — see core-service chat/order docs).
+     */
     private fun mapOfferError(e: Throwable): String {
         val msg = e.message.orEmpty()
         return when {
@@ -881,6 +927,10 @@ class ChatDetailViewModel(
                 getApplication<Application>().getString(R.string.chat_error_pending_offer)
             msg.contains("409") && msg.contains("pending offer", ignoreCase = true) ->
                 getApplication<Application>().getString(R.string.chat_error_pending_offer)
+            msg.contains("409") && msg.contains("CONVERSATION_CLOSED", ignoreCase = true) ->
+                getApplication<Application>().getString(R.string.chat_error_conversation_closed)
+            msg.contains("409") && msg.contains("CONVERSATION_ORDER_EXISTS", ignoreCase = true) ->
+                getApplication<Application>().getString(R.string.chat_error_conversation_order_exists)
             msg.contains("409") ->
                 getApplication<Application>().getString(R.string.chat_error_order_exists)
             msg.contains("403") ->

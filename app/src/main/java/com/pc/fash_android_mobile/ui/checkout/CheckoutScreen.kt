@@ -4,6 +4,18 @@ import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +35,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,28 +42,36 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,14 +79,15 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-private val InputCorner = RoundedCornerShape(12.dp)
 private val SectionCorner = RoundedCornerShape(16.dp)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,8 +115,15 @@ fun CheckoutScreen(
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val orderDetail by viewModel.orderDetail.collectAsState()
+    val shippingAddressForDisplay by viewModel.shippingAddressForDisplay.collectAsState()
     val awaitingGateway by viewModel.awaitingGatewayReturn.collectAsState()
+    val isCancelling by viewModel.isCancelling.collectAsState()
     val scheme = MaterialTheme.colorScheme
+    var showCancelConfirm by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val canCancelPendingOrder =
+        existingOrderId != null &&
+            orderDetail?.status?.trim()?.equals("payment_pending", ignoreCase = true) == true
 
     LaunchedEffect(listingId, overridePriceVnd, existingOrderId) {
         viewModel.loadListing(listingId, overridePriceVnd, existingOrderId)
@@ -113,6 +140,10 @@ fun CheckoutScreen(
                 }
             }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
     }
 
     BackHandler { onBack() }
@@ -140,43 +171,54 @@ fun CheckoutScreen(
         }
         detail != null -> {
             val d = detail!!
-            Scaffold(
-                modifier = modifier.fillMaxSize(),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = stringResource(R.string.checkout_title),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = scheme.onSurface,
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = null,
-                                    tint = FashColors.Primary,
+            val canPay = viewModel.canSubmit() && !awaitingGateway
+            Box(modifier = modifier.fillMaxSize()) {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    snackbarHost = { FashSnackbarHost(snackbarHostState) },
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = stringResource(R.string.checkout_title),
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = scheme.onSurface,
                                 )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = scheme.surface,
-                            titleContentColor = scheme.onSurface,
-                        ),
-                    )
-                },
-            ) { paddingValues ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                ) {
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = null,
+                                        tint = FashColors.Primary,
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = scheme.surface,
+                                titleContentColor = scheme.onSurface,
+                            ),
+                        )
+                    },
+                    bottomBar = {
+                        CheckoutBottomBar(
+                            grandTotalVnd = viewModel.grandTotalVnd,
+                            isSubmitting = isSubmitting,
+                            awaitingGateway = awaitingGateway,
+                            enabled = canPay,
+                            onClick = { viewModel.submitPayment(onSuccess) },
+                            showCancelPendingOrder = canCancelPendingOrder,
+                            onCancelPendingOrder = { showCancelConfirm = true },
+                            isCancelling = isCancelling,
+                        )
+                    },
+                ) { paddingValues ->
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .padding(paddingValues)
                             .verticalScroll(rememberScrollState())
-                            .padding(bottom = 120.dp),
+                            .padding(bottom = 8.dp),
                     ) {
                         val negotiated =
                             overridePriceVnd > 0L || orderDetail != null
@@ -191,17 +233,14 @@ fun CheckoutScreen(
                             OrderSnapshotCard(order = od)
                         }
                         Spacer(modifier = Modifier.height(20.dp))
-                        AddressSection(
+                        ShippingReadOnlySection(
                             fullName = fullName,
-                            onFullNameChange = viewModel::onFullNameChange,
                             phone = phone,
-                            onPhoneChange = viewModel::onPhoneChange,
-                            address = address,
-                            onAddressChange = viewModel::onAddressChange,
+                            addressLine = address,
                             district = district,
-                            onDistrictChange = viewModel::onDistrictChange,
                             city = city,
-                            onCityChange = viewModel::onCityChange,
+                            canSubmit = viewModel.canSubmit(),
+                            savedAddress = shippingAddressForDisplay,
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         PaymentMethodSection(
@@ -219,55 +258,34 @@ fun CheckoutScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .navigationBarsPadding(),
-                    ) {
-                        if (awaitingGateway) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = scheme.primaryContainer.copy(alpha = 0.35f),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.checkout_awaiting_gateway),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = scheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
-                                )
-                            }
-                        }
-                        CheckoutButton(
-                            grandTotalVnd = viewModel.grandTotalVnd,
-                            isSubmitting = isSubmitting,
-                            enabled = viewModel.canSubmit() && !awaitingGateway,
-                            onClick = { viewModel.submitPayment(onSuccess) },
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = scheme.onSurfaceVariant,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.checkout_secured_fash_pay),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = scheme.onSurfaceVariant,
-                            )
-                        }
-                    }
                 }
+                CheckoutProcessingOverlay(visible = isSubmitting || isCancelling)
             }
         }
+    }
+
+    if (showCancelConfirm && detail != null && existingOrderId != null) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            title = { Text(stringResource(R.string.order_cancel_confirm_title)) },
+            text = { Text(stringResource(R.string.order_cancel_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCancelConfirm = false
+                        viewModel.cancelPendingOrder(onBack)
+                    },
+                    enabled = !isCancelling,
+                ) {
+                    Text(stringResource(R.string.order_cancel_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) {
+                    Text(stringResource(R.string.order_cancel_confirm_dismiss))
+                }
+            },
+        )
     }
 }
 
@@ -526,17 +544,14 @@ private fun shortOrderId(id: String): String {
 }
 
 @Composable
-private fun AddressSection(
+private fun ShippingReadOnlySection(
     fullName: String,
-    onFullNameChange: (String) -> Unit,
     phone: String,
-    onPhoneChange: (String) -> Unit,
-    address: String,
-    onAddressChange: (String) -> Unit,
+    addressLine: String,
     district: String,
-    onDistrictChange: (String) -> Unit,
     city: String,
-    onCityChange: (String) -> Unit,
+    canSubmit: Boolean,
+    savedAddress: ShippingAddress?,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(
@@ -549,80 +564,264 @@ private fun AddressSection(
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = scheme.onSurface,
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.checkout_shipping_readonly_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        AddressInput(
-            value = fullName,
-            onValueChange = onFullNameChange,
-            placeholder = stringResource(R.string.checkout_full_name),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        AddressInput(
-            value = phone,
-            onValueChange = onPhoneChange,
-            placeholder = stringResource(R.string.checkout_phone),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        AddressInput(
-            value = address,
-            onValueChange = onAddressChange,
-            placeholder = stringResource(R.string.checkout_address),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        AnimatedVisibility(
+            visible = !canSubmit,
+            enter = fadeIn(tween(280)),
+            exit = fadeOut(tween(180)),
         ) {
-            AddressInput(
-                value = district,
-                onValueChange = onDistrictChange,
-                placeholder = stringResource(R.string.checkout_district),
-                modifier = Modifier.weight(1f),
-            )
-            AddressInput(
-                value = city,
-                onValueChange = onCityChange,
-                placeholder = stringResource(R.string.checkout_city),
-                modifier = Modifier.weight(1f),
-            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = scheme.errorContainer.copy(alpha = 0.35f),
+            ) {
+                Text(
+                    text = stringResource(R.string.checkout_missing_address_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = SectionCorner,
+            color = scheme.surfaceContainerLow,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ShippingReadOnlyRow(
+                        label = stringResource(R.string.checkout_full_name),
+                        value = fullName.ifBlank { "—" },
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (savedAddress?.isDefault == true) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = FashColors.Primary.copy(alpha = 0.12f),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.address_badge_default),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = FashColors.Primary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                }
+                if (savedAddress?.label?.isNotBlank() == true) {
+                    ShippingReadOnlyRow(
+                        label = stringResource(R.string.address_field_label_optional),
+                        value = savedAddress.label,
+                    )
+                }
+                ShippingReadOnlyRow(
+                    label = stringResource(R.string.checkout_phone),
+                    value = phone.ifBlank { "—" },
+                )
+                ShippingReadOnlyRow(
+                    label = stringResource(R.string.checkout_address),
+                    value = addressLine.ifBlank { "—" },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ShippingReadOnlyRow(
+                        label = stringResource(R.string.checkout_district),
+                        value = district.ifBlank { "—" },
+                        modifier = Modifier.weight(1f),
+                    )
+                    ShippingReadOnlyRow(
+                        label = stringResource(R.string.checkout_city),
+                        value = city.ifBlank { "—" },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun AddressInput(
+private fun ShippingReadOnlyRow(
+    label: String,
     value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = scheme.onSurface,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun CheckoutBottomBar(
+    grandTotalVnd: Long,
+    isSubmitting: Boolean,
+    awaitingGateway: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    showCancelPendingOrder: Boolean,
+    onCancelPendingOrder: () -> Unit,
+    isCancelling: Boolean,
+) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
-        modifier = modifier,
-        shape = InputCorner,
-        color = scheme.surfaceContainerHighest,
+        modifier = Modifier.fillMaxWidth(),
+        color = scheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
     ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
-            singleLine = true,
-            cursorBrush = SolidColor(FashColors.Primary),
-            decorationBox = { inner ->
-                Box {
-                    if (value.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        )
-                    }
-                    inner()
+                .navigationBarsPadding(),
+        ) {
+            if (showCancelPendingOrder && !awaitingGateway) {
+                OutlinedButton(
+                    onClick = onCancelPendingOrder,
+                    enabled = !isCancelling && !isSubmitting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, scheme.error.copy(alpha = 0.55f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.error),
+                ) {
+                    Text(
+                        stringResource(R.string.order_cancel_order),
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
-            },
-        )
+            }
+            if (awaitingGateway) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = scheme.primaryContainer.copy(alpha = 0.35f),
+                ) {
+                    Text(
+                        text = stringResource(R.string.checkout_awaiting_gateway),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart, vertical = 10.dp),
+                    )
+                }
+            }
+            CheckoutButton(
+                grandTotalVnd = grandTotalVnd,
+                isSubmitting = isSubmitting,
+                enabled = enabled,
+                onClick = onClick,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, bottom = 0.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.checkout_secured_fash_pay),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CheckoutProcessingOverlay(visible: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    val infinite = rememberInfiniteTransition(label = "checkoutPulse")
+    val pulseAlpha by infinite.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseAlpha",
+    )
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(220)),
+        exit = fadeOut(tween(180)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.48f))
+                .clickable(enabled = false) {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                tonalElevation = 6.dp,
+                shadowElevation = 12.dp,
+                color = scheme.surfaceContainerHigh,
+                modifier = Modifier.padding(horizontal = 28.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    CircularProgressIndicator(
+                        color = FashColors.Primary,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(44.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.checkout_processing_overlay),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.graphicsLayer { alpha = pulseAlpha },
+                    )
+                    Text(
+                        text = stringResource(R.string.checkout_processing_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -659,9 +858,18 @@ private fun PaymentMethodSection(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             methods.forEachIndexed { index, method ->
                 val selected = index == selectedIndex
+                val rowScale by animateFloatAsState(
+                    targetValue = if (selected) 1.02f else 1f,
+                    animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+                    label = "paymentRowScale",
+                )
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .graphicsLayer {
+                            scaleX = rowScale
+                            scaleY = rowScale
+                        }
                         .clickable { onSelect(index) },
                     shape = SectionCorner,
                     color = if (selected) {
@@ -687,19 +895,14 @@ private fun PaymentMethodSection(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = paymentMethodChipColor(method.id).copy(alpha = 0.2f),
-                                modifier = Modifier.size(40.dp),
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = paymentMethodInitial(method.id),
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = paymentMethodChipColor(method.id),
-                                    )
-                                }
-                            }
+                            Image(
+                                painter = painterResource(paymentMethodIconRes(method.id)),
+                                contentDescription = method.name,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
                             Text(
                                 text = method.name,
                                 style = MaterialTheme.typography.bodyLarge,
@@ -719,21 +922,11 @@ private fun PaymentMethodSection(
     }
 }
 
-private fun paymentMethodInitial(id: String): String = when (id.lowercase()) {
-    "momo" -> "M"
-    "zalopay" -> "Z"
-    "shopeepay" -> "S"
-    "tpbank" -> "B"
-    else -> id.take(1).uppercase()
-}
-
-@Composable
-private fun paymentMethodChipColor(id: String): Color = when (id.lowercase()) {
-    "momo" -> Color(0xFFE91E8C)
-    "zalopay" -> Color(0xFF0068FF)
-    "shopeepay" -> Color(0xFFEE4D2D)
-    "tpbank" -> Color(0xFF757575)
-    else -> FashColors.Primary
+private fun paymentMethodIconRes(id: String): Int = when (id.lowercase()) {
+    "momo" -> R.drawable.ic_payment_momo
+    "vnpay" -> R.drawable.ic_payment_vnpay
+    "tpbank" -> R.drawable.ic_payment_tpbank
+    else -> R.drawable.ic_payment_generic
 }
 
 @Composable
@@ -854,56 +1047,51 @@ private fun CheckoutButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp,
+    androidx.compose.material3.Button(
+        onClick = onClick,
+        enabled = enabled && !isSubmitting,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 12.dp, bottom = 10.dp),
+        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = FashColors.Primary,
+            contentColor = FashColors.Primary.fashReadableOn(),
+        ),
+        shape = RoundedCornerShape(14.dp),
     ) {
-        androidx.compose.material3.Button(
-            onClick = onClick,
-            enabled = enabled && !isSubmitting,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 16.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = FashColors.Primary,
-                contentColor = FashColors.Primary.fashReadableOn(),
-            ),
-            shape = RoundedCornerShape(12.dp),
-        ) {
-            if (isSubmitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = FashColors.Primary.fashReadableOn(),
-                    strokeWidth = 2.dp,
-                )
-            } else {
+        if (isSubmitting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = FashColors.Primary.fashReadableOn(),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.checkout_confirm_pay),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        )
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = FashColors.Primary.fashReadableOn(),
-                        )
-                    }
                     Text(
-                        text = formatPrice(grandTotalVnd),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = FashColors.Primary.fashReadableOn().copy(alpha = 0.95f),
+                        text = stringResource(R.string.checkout_confirm_pay),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = FashColors.Primary.fashReadableOn(),
                     )
                 }
+                Text(
+                    text = formatPrice(grandTotalVnd),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary.fashReadableOn().copy(alpha = 0.95f),
+                )
             }
         }
     }

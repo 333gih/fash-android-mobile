@@ -42,6 +42,12 @@ class OrderRepository(
         }
     }
 
+    /** `GET /orders/pending-payment` — buyer orders awaiting payment (auth). */
+    fun getPendingPaymentOrders(): Result<PendingPaymentApiResponse> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/pending-payment")
+        parsePendingPaymentResponse(executeGet(url))
+    }
+
     /** `GET /orders/{order_id}` — list card shape. */
     fun getOrder(orderId: String): Result<OrderItem> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}")
@@ -71,6 +77,53 @@ class OrderRepository(
         val id = primary.ifBlank { fallback }
         if (id.isBlank()) error("No order id in response")
         id
+    }
+
+    /**
+     * Buyer cancels an unpaid order.
+     * `POST /orders/{order_id}/cancel` — 403 if not buyer, 404 if missing, 409 + `ORDER_NOT_CANCELLABLE` if not `payment_pending`.
+     */
+    fun cancelOrder(orderId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/cancel")
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post(ByteArray(0).toRequestBody(null))
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val code = try {
+                    JSONObject(b).optString("code", "")
+                } catch (_: Exception) {
+                    ""
+                }
+                when (response.code) {
+                    403 -> error("FORBIDDEN")
+                    404 -> error("NOT_FOUND")
+                    409 -> if (code == "ORDER_NOT_CANCELLABLE") {
+                        error("ORDER_NOT_CANCELLABLE")
+                    } else {
+                        val msg = try {
+                            JSONObject(b).optString("error", JSONObject(b).optString("message", b))
+                        } catch (_: Exception) {
+                            b
+                        }
+                        error(msg.ifBlank { "HTTP 409" })
+                    }
+                    else -> {
+                        val msg = try {
+                            JSONObject(b).optString("error", JSONObject(b).optString("message", b))
+                        } catch (_: Exception) {
+                            b
+                        }
+                        error(msg.ifBlank { "HTTP ${response.code}" })
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -334,6 +387,47 @@ class OrderRepository(
         return mapOrderJson(o)
     }
 
+    private fun parsePendingPaymentResponse(json: String): PendingPaymentApiResponse {
+        val raw = json.trim()
+        val o = when {
+            raw.startsWith("{") -> try {
+                val obj = JSONObject(raw)
+                if (obj.has("data")) obj.getJSONObject("data") else obj
+            } catch (_: Exception) {
+                JSONObject(raw)
+            }
+            else -> JSONObject("{}")
+        }
+        val minutes = o.optInt("payment_window_minutes", o.optInt("PaymentWindowMinutes", 15))
+        val arr = o.optJSONArray("orders") ?: o.optJSONArray("Orders") ?: JSONArray()
+        val orders = (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { parsePendingOrderRow(it) }
+        }
+        return PendingPaymentApiResponse(paymentWindowMinutes = minutes, orders = orders)
+    }
+
+    private fun parsePendingOrderRow(o: JSONObject): PendingPaymentOrderDto {
+        fun s(vararg keys: String): String {
+            for (k in keys) {
+                val v = o.optString(k, "").trim()
+                if (v.isNotBlank()) return v
+            }
+            return ""
+        }
+        return PendingPaymentOrderDto(
+            orderId = s("order_id", "OrderID", "id", "ID"),
+            listingId = s("listing_id", "ListingID"),
+            amountVnd = o.optLong("amount_vnd", o.optLong("AmountVND", 0L)),
+            status = s("status", "Status").ifBlank { "payment_pending" },
+            createdAt = s("created_at", "CreatedAt"),
+            paymentDeadlineAt = s("payment_deadline_at", "PaymentDeadlineAt"),
+            remainingSeconds = o.optInt("remaining_seconds", o.optInt("RemainingSeconds", 0)),
+            expired = o.optBoolean("expired", o.optBoolean("Expired", false)),
+            listingTitle = s("listing_title", "ListingTitle", "title", "Title"),
+            coverImageUrl = s("cover_image_url", "CoverImageURL", "image_url", "ImageURL"),
+        )
+    }
+
     private fun parseOrders(json: String): List<OrderItem> {
         val raw = json.trim()
         val arr = when {
@@ -368,6 +462,7 @@ class OrderRepository(
             status = rawStatus,
             canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit"),
             canReview = o.optBoolean("can_review", rawStatus == "delivered_confirmed"),
+            createdAt = o.optIsoFirst("created_at", "CreatedAt", "createdAt"),
         )
     }
 }
@@ -382,4 +477,6 @@ data class OrderItem(
     val status: String,
     val canConfirm: Boolean,
     val canReview: Boolean,
+    /** ISO-8601 from API when present — used for payment countdown. */
+    val createdAt: String = "",
 )

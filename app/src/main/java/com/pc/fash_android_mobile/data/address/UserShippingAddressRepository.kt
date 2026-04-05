@@ -9,8 +9,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
-
 /**
  * Core-service user shipping addresses ([android-shipping-addresses-api.md]).
  * Paths: `GET/POST …/users/me/shipping-addresses`, `PATCH …/{id}/default`.
@@ -39,7 +37,7 @@ class UserShippingAddressRepository(
             val json = request.toJson()
             val responseBody = executePostJson(baseListUrl(), json.toString())
             val o = unwrapDataObject(JSONObject(responseBody.trim()))
-            parseShippingAddress(o)
+            parseShippingAddressJson(o)
         }
 
     /** `PATCH /users/me/shipping-addresses/{id}/default` */
@@ -107,7 +105,7 @@ class UserShippingAddressRepository(
             }
         }
         return (0 until arr.length()).mapNotNull { i ->
-            arr.optJSONObject(i)?.let { parseShippingAddress(it) }
+            arr.optJSONObject(i)?.let { parseShippingAddressJson(it) }
         }
     }
 
@@ -156,36 +154,3 @@ data class CreateUserShippingAddressRequest(
     }
 }
 
-internal fun parseShippingAddress(o: JSONObject): ShippingAddress {
-    fun s(vararg keys: String): String {
-        for (k in keys) {
-            val v = o.optString(k, "")
-            if (v.isNotBlank()) return v
-        }
-        return ""
-    }
-    val provinceName = s("province_name", "provinceName")
-    val districtName = s("district_name", "districtName")
-    val wardName = s("ward_name", "wardName")
-    val city = s("city").ifBlank { provinceName }
-    val district = districtName.ifBlank { s("district") }
-    val ward = wardName.ifBlank { s("ward") }
-    return ShippingAddress(
-        id = s("id", "ID").ifBlank { UUID.randomUUID().toString() },
-        recipientName = s("recipient_name", "recipientName"),
-        phone = s("phone"),
-        city = city,
-        district = district,
-        ward = ward,
-        line1 = s("line1", "line_1", "address_line1", "address_line_1", "street", "street_address"),
-        isDefault = o.optBoolean("is_default", o.optBoolean("isDefault", false)),
-        label = s("label"),
-        line2 = s("line2", "line_2"),
-        region = s("region"),
-        postalCode = s("postal_code", "postalCode"),
-        countryCode = s("country_code", "countryCode").ifBlank { "VN" },
-        provinceId = s("province_id", "provinceId").takeIf { it.isNotBlank() },
-        districtId = s("district_id", "districtId").takeIf { it.isNotBlank() },
-        wardId = s("ward_id", "wardId").takeIf { it.isNotBlank() },
-    )
-}

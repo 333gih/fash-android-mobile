@@ -12,7 +12,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/**
+ * Approximate vertical space used by [StickyBottomPromoBar] + [FashPromoSlider] (divider, slider padding,
+ * 112dp card, page dots). Use when positioning global overlays above the bottom nav so they clear the
+ * sticky promo dock (Home / Explore / Chat).
+ */
+val FashStickyPromoDockHeight: Dp = 144.dp
 
 /**
  * Bottom dock for promo content; when [elevated] is true, animates shadow and divider emphasis

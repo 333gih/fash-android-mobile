@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.data.address.ShippingAddress
@@ -92,6 +93,7 @@ fun OrderDetailScreen(
     var showShipDialog by remember { mutableStateOf(false) }
     var trackingInput by remember { mutableStateOf("") }
     var carrierInput by remember { mutableStateOf("") }
+    var showCancelConfirm by remember { mutableStateOf(false) }
     var showOpenDisputeDialog by remember { mutableStateOf(false) }
     var showEvidenceDialog by remember { mutableStateOf(false) }
     var openDisputeDesc by remember { mutableStateOf("") }
@@ -310,6 +312,18 @@ fun OrderDetailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         OrderTimelineSection(d = d, formatDate = formatDate)
                         Spacer(modifier = Modifier.height(12.dp))
+                        if (role == OrderViewerRole.Buyer && d.status.trim().lowercase() == "cancelled") {
+                            BuyerCancelledNegotiationHint(
+                                listingStatus = d.listingStatus,
+                                maxOffersPerConversation = BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION,
+                                conversationId = d.conversationId,
+                                onOpenChat = {
+                                    val cid = d.conversationId.trim()
+                                    if (cid.isNotEmpty()) onNavigateToChat(cid)
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
 
                         when (role) {
                             OrderViewerRole.Buyer -> {
@@ -383,6 +397,7 @@ fun OrderDetailScreen(
                             onPay = {
                                 onNavigateToPayment(d.listingId, d.amountVnd, d.orderId)
                             },
+                            onCancelOrder = { showCancelConfirm = true },
                             onConfirmReceipt = { viewModel.confirmReceipt(d.orderId) },
                             onReview = { showReviewDialog = true },
                             onShip = {
@@ -459,6 +474,31 @@ fun OrderDetailScreen(
             confirmButton = {
                 TextButton(onClick = { showHelpDialog = false }) {
                     Text(stringResource(R.string.order_detail_help_close))
+                }
+            },
+        )
+    }
+
+    if (showCancelConfirm && detail != null) {
+        val d = detail!!
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            title = { Text(stringResource(R.string.order_cancel_confirm_title)) },
+            text = { Text(stringResource(R.string.order_cancel_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCancelConfirm = false
+                        viewModel.cancelOrder(d.orderId)
+                    },
+                    enabled = !isWorking,
+                ) {
+                    Text(stringResource(R.string.order_cancel_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) {
+                    Text(stringResource(R.string.order_cancel_confirm_dismiss))
                 }
             },
         )

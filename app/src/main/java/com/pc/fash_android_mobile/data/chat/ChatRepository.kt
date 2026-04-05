@@ -12,7 +12,36 @@ import org.json.JSONObject
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
 /**
+ * Builds a throwable message that includes JSON `code` when present so UI can map
+ * `CONVERSATION_ORDER_EXISTS`, `CONVERSATION_CLOSED`, `PENDING_OFFER_EXISTS`, `OFFER_LIMIT_REACHED`, etc.
+ */
+private fun buildHttpErrorMessage(responseCode: Int, body: String): String {
+    val trimmed = body.trim()
+    val code = try {
+        JSONObject(trimmed).optString("code", "").trim()
+    } catch (_: Exception) {
+        ""
+    }
+    val msg = try {
+        val o = JSONObject(trimmed)
+        o.optString("error", o.optString("message", trimmed)).ifBlank { trimmed }
+    } catch (_: Exception) {
+        trimmed
+    }
+    return if (code.isNotBlank()) {
+        "HTTP $responseCode: $msg code=$code"
+    } else {
+        "HTTP $responseCode: $msg"
+    }
+}
+
+/**
  * Chat/conversations API client.
+ *
+ * Endpoints match core-service under [com.pc.fash_android_mobile.config.AppEnvironment.apiPath]:
+ * `POST api/v1/chat/conversations` (listing_id), `GET api/v1/chat/conversations/{id}`,
+ * `POST api/v1/chat/offers`, `POST api/v1/chat/offers/accept|decline`, etc.
+ * Optional locale segment (`{vi|en}`) is applied when `CORE_API_USE_LANGUAGE_PREFIX` is true in env.
  *
  * Parses PascalCase responses from the backend:
  *   Conversation: ID, BuyerID, SellerID, LastMessage (string), LastMessageAt, Listing, Buyer, Seller
@@ -62,8 +91,7 @@ class ChatRepository(
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 val b = response.body?.string().orEmpty()
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                error(buildHttpErrorMessage(response.code, b))
             }
             response.body?.string().orEmpty()
         }
@@ -127,8 +155,7 @@ class ChatRepository(
             ).execute().use { response ->
                 if (!response.isSuccessful) {
                     val b = response.body?.string().orEmpty()
-                    val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                    error("HTTP ${response.code}: $msg")
+                    error(buildHttpErrorMessage(response.code, b))
                 }
                 response.body?.string().orEmpty()
             }
@@ -155,8 +182,7 @@ class ChatRepository(
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 val b = response.body?.string().orEmpty()
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                error(buildHttpErrorMessage(response.code, b))
             }
             response.body?.string().orEmpty()
         }
@@ -180,8 +206,7 @@ class ChatRepository(
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 val b = response.body?.string().orEmpty()
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                error(buildHttpErrorMessage(response.code, b))
             }
             response.body?.string().orEmpty()
         }
@@ -203,8 +228,7 @@ class ChatRepository(
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 val b = response.body?.string().orEmpty()
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                error(buildHttpErrorMessage(response.code, b))
             }
         }
     }
@@ -291,8 +315,7 @@ class ChatRepository(
         ).execute().use { response ->
             val b = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(b).optString("error", b).ifBlank { b } } catch (_: Exception) { b }
-                error("HTTP ${response.code}: $msg")
+                error(buildHttpErrorMessage(response.code, b))
             }
             b
         }

@@ -27,9 +27,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,6 +55,8 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +75,7 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTooltipState
@@ -112,6 +115,7 @@ import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
+import com.pc.fash_android_mobile.data.chat.parseOrderCancelledEmbeddedMessage
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAvatar
@@ -120,6 +124,7 @@ import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
+import com.pc.fash_android_mobile.ui.theme.fashShimmer
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +149,13 @@ fun ChatDetailScreen(
     onOrderDetails: (orderId: String) -> Unit = {},
     /** Legacy callback kept for backward compat; not triggered by the offer→order flow. */
     onCheckout: (listingId: String, acceptedAmountVnd: Long) -> Unit = { _, _ -> },
+    /**
+     * Unread count in **other** conversations (global inbox minus this thread’s unread row).
+     * Shown on the back control and as a subtitle in the title area when non-zero.
+     */
+    otherInboxUnreadCount: Int = 0,
+    /** Open the counterparty’s public seller profile (by username). */
+    onOtherUserProfileClick: (username: String) -> Unit = {},
 ) {
     val detail by viewModel.detail.collectAsState()
     val messages by viewModel.messages.collectAsState()
@@ -179,20 +191,47 @@ fun ChatDetailScreen(
             TopAppBar(
                 title = {
                     if (detail != null) {
+                        val d0 = detail!!
+                        val profileUsername = d0.otherUser.username.trim()
                         ChatDetailHeader(
-                            displayName = detail!!.otherUser.displayName
-                                .ifBlank { "@${detail!!.otherUser.username}" },
-                            avatarUrl = detail!!.otherUser.avatarUrl,
+                            displayName = d0.otherUser.displayName
+                                .ifBlank { "@${d0.otherUser.username}" },
+                            avatarUrl = d0.otherUser.avatarUrl,
+                            otherInboxUnreadCount = otherInboxUnreadCount,
+                            profileUsername = profileUsername,
+                            onProfileClick = {
+                                if (profileUsername.isNotEmpty()) {
+                                    onOtherUserProfileClick(profileUsername)
+                                }
+                            },
                         )
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
+                    val backCd = if (otherInboxUnreadCount > 0) {
+                        stringResource(R.string.chat_detail_back_inbox_unread_cd, otherInboxUnreadCount)
+                    } else {
+                        stringResource(R.string.chat_detail_back_cd)
+                    }
+                    BadgedBox(
+                        badge = {
+                            if (otherInboxUnreadCount > 0) {
+                                Badge(containerColor = FashColors.Primary) {
+                                    Text(
+                                        text = if (otherInboxUnreadCount > 99) "99+" else otherInboxUnreadCount.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
+                            }
+                        },
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = backCd,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -232,13 +271,20 @@ fun ChatDetailScreen(
                 val d = detail!!
                 val maxOffers = BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION
                 val hasPendingOfferFromMe = d.pendingOffer?.proposedByMe == true
+                val orderStatusNorm = orderStatus?.trim()?.lowercase().orEmpty()
+                /**
+                 * Aligns with server rules: no new offers while an order is in pipeline (e.g. payment_pending);
+                 * after cancel/expiry, [orderId] clears / status cancelled and offers can resume (subject to
+                 * is_closed, offer_count, pending offer — see [OfferLimitPolicyBanner] and [offerBlocked]).
+                 */
+                val hasOrderBlockingOffer = orderId != null && orderStatusNorm != "cancelled"
                 val hasOrder = orderId != null
                 val composerReadOnly =
                     d.isClosed || d.product?.listingStatus == "sold"
                 val offerBlocked =
                     d.isClosed ||
                         d.product?.listingStatus == "sold" ||
-                        d.product?.listingStatus == "reserved"
+                        (d.product?.listingStatus == "reserved" && orderStatusNorm != "cancelled")
                 val offerLimitReached = d.offerCount >= maxOffers
                 val sortedMessages = messages.sortedBy { it.timestamp }
 
@@ -288,7 +334,7 @@ fun ChatDetailScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
                     }
 
-                    if (d.isBuyer && !hasOrder && !offerBlocked) {
+                    if (d.isBuyer && !hasOrderBlockingOffer && !offerBlocked) {
                         OfferLimitPolicyBanner(
                             usedCount = d.offerCount,
                             maxOffers = maxOffers,
@@ -314,8 +360,12 @@ fun ChatDetailScreen(
 
                     // Only snap to newest when the user is already at the bottom (index 0 in reverse list).
                     // Scrolling on every list update was fighting the user when reading older messages.
-                    LaunchedEffect(sortedMessages.size, sortedMessages.lastOrNull()?.messageId) {
-                        if (sortedMessages.isEmpty()) return@LaunchedEffect
+                    LaunchedEffect(
+                        sortedMessages.size,
+                        sortedMessages.lastOrNull()?.messageId,
+                        isCreatingOffer,
+                    ) {
+                        if (sortedMessages.isEmpty() && !isCreatingOffer) return@LaunchedEffect
                         if (listState.firstVisibleItemIndex == 0) {
                             listState.animateScrollToItem(0)
                         }
@@ -363,22 +413,43 @@ fun ChatDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                if (isMessagesLoading) {
-                                    item {
-                                        Box(
-                                            modifier = Modifier
-                                                .animateItem(
-                                                    fadeInSpec = tween(200, easing = FastOutSlowInEasing),
-                                                    fadeOutSpec = tween(160),
-                                                    placementSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow,
-                                                    ),
-                                                )
-                                                .fillMaxWidth(),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            LoadingMessageIndicator()
+                                when {
+                                    isCreatingOffer -> {
+                                        item(key = "offer_sending_placeholder") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .animateItem(
+                                                        fadeInSpec = tween(220, easing = FastOutSlowInEasing),
+                                                        fadeOutSpec = tween(160),
+                                                        placementSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            stiffness = Spring.StiffnessMediumLow,
+                                                        ),
+                                                    )
+                                                    .fillMaxWidth(),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                OfferSendingPlaceholder()
+                                            }
+                                        }
+                                    }
+                                    isMessagesLoading -> {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .animateItem(
+                                                        fadeInSpec = tween(200, easing = FastOutSlowInEasing),
+                                                        fadeOutSpec = tween(160),
+                                                        placementSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            stiffness = Spring.StiffnessMediumLow,
+                                                        ),
+                                                    )
+                                                    .fillMaxWidth(),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                LoadingMessageIndicator()
+                                            }
                                         }
                                     }
                                 }
@@ -461,11 +532,24 @@ fun ChatDetailScreen(
                                                 formatTime = viewModel::formatTime,
                                             )
                                             else -> if (msg.text.isNotBlank()) {
-                                                MessageBubble(
-                                                    message = msg,
-                                                    formatTime = viewModel::formatTime,
-                                                    onDeleteRequest = { viewModel.deleteMessage(msg) },
-                                                )
+                                                val cancelledPair = remember(msg.messageId, msg.text) {
+                                                    parseOrderCancelledEmbeddedMessage(msg.text)
+                                                }
+                                                if (cancelledPair != null) {
+                                                    OrderCancelledNoticeBubble(
+                                                        message = msg,
+                                                        displayText = cancelledPair.second,
+                                                        formatTime = viewModel::formatTime,
+                                                        onViewOrder = { onOrderDetails(cancelledPair.first) },
+                                                        onDeleteRequest = { viewModel.deleteMessage(msg) },
+                                                    )
+                                                } else {
+                                                    MessageBubble(
+                                                        message = msg,
+                                                        formatTime = viewModel::formatTime,
+                                                        onDeleteRequest = { viewModel.deleteMessage(msg) },
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -495,9 +579,9 @@ fun ChatDetailScreen(
                             onTextChange = viewModel::onInputChange,
                             onSend = { viewModel.sendMessage() },
                             isSending = isSending,
-                            showOfferButton = d.isBuyer && !hasOrder,
+                            showOfferButton = d.isBuyer && !hasOrderBlockingOffer,
                             offerButtonEnabled = !hasPendingOfferFromMe && !offerLimitReached && !offerBlocked,
-                            offerShowLimitTooltip = d.isBuyer && !hasOrder && offerLimitReached && !offerBlocked,
+                            offerShowLimitTooltip = d.isBuyer && !hasOrderBlockingOffer && offerLimitReached && !offerBlocked,
                             offerLimitMax = maxOffers,
                             onOfferClick = { viewModel.onSetPriceClick() },
                         )
@@ -870,6 +954,86 @@ private fun ProductReferenceCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Offer sending placeholder (matches offer card chrome while POST /chat/offers is in flight)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OfferSendingPlaceholder() {
+    val scheme = MaterialTheme.colorScheme
+    val pulse = rememberInfiniteTransition(label = "offer_send_border")
+    val borderAlpha by pulse.animateFloat(
+        initialValue = 0.38f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "offer_border_pulse",
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.surfaceContainerLow)
+                .border(
+                    width = 1.5.dp,
+                    color = FashColors.Primary.copy(alpha = borderAlpha),
+                    shape = RoundedCornerShape(16.dp),
+                )
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LocalOffer,
+                    contentDescription = null,
+                    tint = FashColors.Primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = stringResource(R.string.chat_offer_label),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.62f)
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(scheme.surfaceContainerHighest)
+                    .fashShimmer(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = FashColors.Primary,
+                )
+                Text(
+                    text = stringResource(R.string.chat_offer_sending),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Offer message bubble (full-width card with status badge)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1088,6 +1252,126 @@ private fun SystemMessageBubble(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Buyer-cancel notice (machine-readable first line stripped for display + view order)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OrderCancelledNoticeBubble(
+    message: ChatMessage,
+    displayText: String,
+    formatTime: (String) -> String,
+    onViewOrder: () -> Unit,
+    onDeleteRequest: () -> Unit = {},
+) {
+    val scheme = MaterialTheme.colorScheme
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(stringResource(R.string.chat_delete_message_title)) },
+            text = { Text(stringResource(R.string.chat_delete_message_confirm)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDeleteRequest()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = scheme.error),
+                ) {
+                    Text(stringResource(R.string.chat_delete_message_confirm))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteDialog = false }) {
+                    Text(stringResource(R.string.create_listing_cancel))
+                }
+            },
+        )
+    }
+
+    val isMe = message.isFromMe
+    val textOnPrimary = FashColors.Primary.fashReadableOn()
+    val bubbleShape = RoundedCornerShape(
+        topStart = 18.dp,
+        topEnd = 18.dp,
+        bottomStart = if (isMe) 18.dp else 4.dp,
+        bottomEnd = if (isMe) 4.dp else 18.dp,
+    )
+    val incomingUnread = !isMe && !message.isRead
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .then(
+                    if (incomingUnread) {
+                        Modifier.border(2.dp, FashColors.Primary.copy(alpha = 0.5f), bubbleShape)
+                    } else {
+                        Modifier
+                    },
+                )
+                .clip(bubbleShape)
+                .background(if (isMe) FashColors.Primary else scheme.surfaceContainerHigh)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = {
+                            if (isMe && !message.messageId.startsWith("local-")) showDeleteDialog = true
+                        },
+                    )
+                }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isMe) textOnPrimary else scheme.onSurface,
+            )
+            TextButton(
+                onClick = onViewOrder,
+                modifier = Modifier.align(if (isMe) Alignment.End else Alignment.Start),
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_deal_banner_view_order),
+                    color = if (isMe) textOnPrimary else FashColors.Primary,
+                )
+            }
+            Row(
+                modifier = Modifier.align(Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (isMe && message.outboundState != OutboundSendState.NONE) {
+                    when (message.outboundState) {
+                        OutboundSendState.SENDING -> CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = textOnPrimary.copy(alpha = 0.75f),
+                            strokeWidth = 2.dp,
+                        )
+                        OutboundSendState.FAILED -> Icon(
+                            imageVector = Icons.Filled.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = textOnPrimary.copy(alpha = 0.85f),
+                        )
+                        OutboundSendState.NONE -> Unit
+                    }
+                }
+                Text(
+                    text = formatTime(message.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isMe) textOnPrimary.copy(alpha = 0.65f) else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Normal text message bubble
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1203,9 +1487,26 @@ private fun MessageBubble(
 private fun ChatDetailHeader(
     displayName: String,
     avatarUrl: String,
+    otherInboxUnreadCount: Int = 0,
+    profileUsername: String = "",
+    onProfileClick: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
+    val canOpenProfile = profileUsername.isNotBlank()
+    val profileClickLabel = stringResource(R.string.chat_detail_header_profile_cd)
     Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (canOpenProfile) {
+                    Modifier.clickable(
+                        onClick = onProfileClick,
+                        onClickLabel = profileClickLabel,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -1229,13 +1530,27 @@ private fun ChatDetailHeader(
                 )
             }
         }
-        Text(
-            text = displayName,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = scheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (otherInboxUnreadCount > 0) {
+                Text(
+                    text = stringResource(R.string.chat_detail_other_inbox_unread, otherInboxUnreadCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

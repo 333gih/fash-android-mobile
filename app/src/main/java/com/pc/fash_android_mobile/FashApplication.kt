@@ -12,6 +12,7 @@ import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
 import com.pc.fash_android_mobile.data.onboarding.OnboardingLocalStore
 import com.pc.fash_android_mobile.data.address.UserShippingAddressRepository
+import com.pc.fash_android_mobile.data.order.OrderCancelCoordinator
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
 import com.pc.fash_android_mobile.data.payment.MockPaymentService
@@ -130,6 +131,10 @@ class FashApplication : Application(), ImageLoaderFactory {
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
         )
+    }
+
+    val orderCancelCoordinator: OrderCancelCoordinator by lazy {
+        OrderCancelCoordinator(orderRepository, chatRepository)
     }
 
     /** Local shipping address book + per-order selection (sync with core when API is available). */

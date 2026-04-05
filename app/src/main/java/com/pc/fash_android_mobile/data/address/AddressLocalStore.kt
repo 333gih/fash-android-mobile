@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 
 /**
  * Persists shipping addresses and per-order selections on device (per logged-in user).
@@ -100,25 +99,7 @@ class AddressLocalStore(
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                ShippingAddress(
-                    id = o.optString("id", "").ifBlank { UUID.randomUUID().toString() },
-                    recipientName = o.optString("recipient_name", o.optString("recipientName", "")),
-                    phone = o.optString("phone", ""),
-                    city = o.optString("city", ""),
-                    district = o.optString("district", ""),
-                    ward = o.optString("ward", ""),
-                    line1 = o.optString("line1", o.optString("line_1", "")),
-                    isDefault = o.optBoolean("is_default", o.optBoolean("isDefault", false)),
-                    label = o.optString("label", ""),
-                    line2 = o.optString("line2", ""),
-                    region = o.optString("region", ""),
-                    postalCode = o.optString("postal_code", o.optString("postalCode", "")),
-                    countryCode = o.optString("country_code", o.optString("countryCode", "VN")).ifBlank { "VN" },
-                    provinceId = o.optString("province_id", o.optString("provinceId", "")).takeIf { it.isNotBlank() },
-                    districtId = o.optString("district_id", o.optString("districtId", "")).takeIf { it.isNotBlank() },
-                    wardId = o.optString("ward_id", o.optString("wardId", "")).takeIf { it.isNotBlank() },
-                )
+                arr.optJSONObject(i)?.let { parseShippingAddressJson(it) }
             }
         } catch (_: Exception) {
             emptyList()

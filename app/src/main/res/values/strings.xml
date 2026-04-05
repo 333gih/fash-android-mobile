@@ -678,6 +678,10 @@
     <string name="chat_day_sun">Chủ nhật</string>
 
     <string name="chat_detail_active">Đang hoạt động</string>
+    <string name="chat_detail_header_profile_cd">Xem trang người bán</string>
+    <string name="chat_detail_back_cd">Quay lại</string>
+    <string name="chat_detail_back_inbox_unread_cd">Quay lại hộp thư · %d tin nhắn chưa đọc ở các cuộc trò chuyện khác</string>
+    <string name="chat_detail_other_inbox_unread">%d tin nhắn chưa đọc ở các cuộc trò chuyện khác</string>
     <string name="chat_detail_view_product">Xem sản phẩm</string>
     <string name="chat_detail_read">Đã xem</string>
     <string name="chat_detail_set_price">Đặt giá</string>
@@ -736,6 +740,7 @@
 
     <!-- Buyer waiting subtext in offer bubble -->
     <string name="chat_offer_waiting_seller">Chờ phản hồi từ người bán…</string>
+    <string name="chat_offer_sending">Đang gửi đề xuất…</string>
     <!-- Offer button when buyer already has a pending offer -->
     <string name="chat_pending_offer_button_waiting">Đang chờ…</string>
 
@@ -744,7 +749,9 @@
 
     <!-- Error messages mapped from HTTP codes -->
     <string name="chat_error_pending_offer">Vui lòng chờ người bán phản hồi đề xuất hiện tại</string>
-    <string name="chat_error_order_exists">Giao dịch đã được thực hiện cho sản phẩm này</string>
+    <string name="chat_error_order_exists">Không thể đặt giá lúc này (giao dịch đã tồn tại hoặc tin không khả dụng).</string>
+    <string name="chat_error_conversation_order_exists">Đã có đơn hàng cho cuộc trò chuyện này — hãy thanh toán hoặc hủy đơn trước khi đặt giá mới.</string>
+    <string name="chat_error_conversation_closed">Cuộc trò chuyện đã đóng (ví dụ tin đã được giữ bởi người mua khác).</string>
     <string name="chat_error_forbidden">Bạn không có quyền truy cập</string>
     <string name="chat_error_not_found">Không tìm thấy cuộc trò chuyện</string>
     <string name="chat_error_offer_limit">Đã đạt giới hạn đặt giá (tối đa %1$d lần).</string>
@@ -752,7 +759,7 @@
     <string name="chat_offer_policy_intro">Mỗi cuộc trò chuyện cho sản phẩm này được tối đa %1$d lần đặt giá.</string>
     <string name="chat_offer_policy_progress">Đã dùng %1$d/%2$d lần đặt giá (tối đa %2$d lần cho cuộc trò chuyện và sản phẩm này).</string>
     <string name="chat_offer_policy_last">Bạn còn 1 lần đặt giá (tối đa %1$d lần mỗi cuộc trò chuyện).</string>
-    <string name="chat_offer_policy_at_limit">Đã đạt %1$d/%2$d lần đặt giá — không thể gửi thêm.</string>
+    <string name="chat_offer_policy_at_limit">Đã đạt %1$d/%2$d lần đặt giá — không thể gửi thêm. Nếu người bán cập nhật giá tin, bạn có thể đặt giá lại.</string>
     <string name="chat_offer_limit_reset_banner">Giá sản phẩm đã thay đổi — %1$s</string>
     <string name="chat_reopened_snackbar">Sản phẩm này hiện đã có thể mua lại — bạn có thể tiếp tục nhắn tin.</string>
     <string name="chat_conversation_ended_readonly">Cuộc trò chuyện đã kết thúc</string>
@@ -798,12 +805,21 @@
     <string name="checkout_total">Tổng cộng</string>
     <string name="checkout_security_note">Tiền được giữ an toàn đến khi bạn xác nhận nhận hàng</string>
     <string name="checkout_confirm_pay">Xác nhận &amp; Thanh toán</string>
+    <string name="checkout_shipping_readonly_subtitle">Lấy từ địa chỉ đã lưu hoặc đơn hàng — không cần nhập lại.</string>
+    <string name="checkout_missing_address_hint">Thêm địa chỉ nhận hàng trong Hồ sơ (Địa chỉ giao hàng) để thanh toán.</string>
+    <string name="checkout_processing_overlay">Đang xử lý thanh toán…</string>
+    <string name="checkout_processing_subtitle">Vui lòng không đóng ứng dụng. Bạn sẽ được chuyển tới cổng thanh toán.</string>
     <string name="checkout_load_error">Không tải được thông tin sản phẩm.</string>
     <string name="checkout_payment_error">Thanh toán thất bại. Thử lại.</string>
     <string name="checkout_success">Thanh toán thành công.</string>
     <string name="checkout_payment_init_failed">Không khởi tạo được thanh toán. Kiểm tra API core (orders/…/payments/initiate) hoặc thử lại.</string>
     <string name="checkout_payment_poll_timeout">Chưa nhận được xác nhận thanh toán. Kiểm tra Đơn hàng hoặc thử lại.</string>
     <string name="checkout_payment_cancelled_or_dispute">Đơn hàng đã hủy hoặc đang tranh chấp.</string>
+    <string name="pending_payment_banner_title">Chờ thanh toán</string>
+    <string name="pending_payment_banner_countdown_hint">còn lại</string>
+    <string name="pending_payment_banner_cta">Tiếp tục thanh toán</string>
+    <string name="pending_payment_expired_label">Hết hạn</string>
+    <string name="pending_payment_expired_snackbar">Hết thời thanh toán. Đơn hàng có thể đã bị hủy — vui lòng kiểm tra mục Đơn hàng.</string>
 
     <string name="orders_title">Đơn hàng của tôi</string>
     <string name="orders_back">Quay lại</string>
@@ -853,6 +869,21 @@
     <string name="order_detail_status_caption">Trạng thái đơn hàng</string>
     <string name="order_detail_load_error">Không tải được đơn hàng.</string>
     <string name="order_detail_pay">Thanh toán</string>
+    <string name="order_cancel_order">Hủy đơn</string>
+    <string name="order_cancel_confirm_title">Hủy đơn hàng?</string>
+    <string name="order_cancel_confirm_body">Đơn ở trạng thái chờ thanh toán sẽ bị hủy. Bạn có chắc chắn?</string>
+    <string name="order_cancel_confirm_action">Hủy đơn</string>
+    <string name="order_cancel_confirm_dismiss">Để sau</string>
+    <string name="order_cancel_success">Đã hủy đơn. Bạn có thể trò chuyện để thương lượng lại nếu sản phẩm vẫn còn bán.</string>
+    <string name="order_cancel_error_generic">Không hủy được đơn. Thử lại sau.</string>
+    <string name="order_cancel_error_not_cancellable">Đơn không thể hủy ở trạng thái này.</string>
+    <string name="order_cancel_error_forbidden">Bạn không thể hủy đơn này.</string>
+    <string name="order_cancel_error_not_found">Không tìm thấy đơn hàng.</string>
+    <!-- Shown in chat after buyer cancels an unpaid order (plain text message). -->
+    <string name="chat_message_order_cancelled_by_buyer">Tôi đã hủy đơn hàng này (chưa thanh toán).</string>
+    <string name="order_cancelled_buyer_hint_active">Nếu tin đăng vẫn còn, bạn có thể vào chat để thương lượng giá — tối đa %1$d lần đặt giá mỗi cuộc trò chuyện. Nếu người bán cập nhật giá tin, hệ thống có thể cho phép đặt giá lại.</string>
+    <string name="order_cancelled_buyer_hint_sold">Sản phẩm đã được bán; bạn không thể tiếp tục đơn này.</string>
+    <string name="order_cancelled_buyer_open_chat">Mở chat</string>
     <string name="order_detail_party_buyer">Người mua</string>
     <string name="order_detail_party_seller">Người bán</string>
     <string name="order_detail_product">Sản phẩm</string>

@@ -170,6 +170,14 @@ fun MainNavScreen(
         }
     }
     val tabs = MainTab.entries
+    LaunchedEffect(Unit) {
+        chatViewModel.refreshUnreadCount()
+    }
+    LaunchedEffect(selectedTab) {
+        if (tabs.getOrNull(selectedTab) == MainTab.Home) {
+            chatViewModel.refreshUnreadCount()
+        }
+    }
     val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val openExploreSearch: () -> Unit = {
         exploreViewModel.requestSearchBarExpanded()
@@ -229,6 +237,10 @@ fun MainNavScreen(
                         onTabChange(index)
                     },
                     onExploreReselected = { exploreViewModel.requestScrollExploreToTop() },
+                    onChatReselected = {
+                        chatViewModel.loadConversations()
+                        chatViewModel.refreshUnreadCount()
+                    },
                 )
             }
         },
@@ -243,6 +255,10 @@ fun MainNavScreen(
                     exploreViewModel.onExploreTabSelected()
                 } else {
                     exploreViewModel.setSearchBarExpanded(false)
+                }
+                if (selectedTab in tabs.indices && tabs[selectedTab] == MainTab.Chat) {
+                    chatViewModel.loadConversations()
+                    chatViewModel.refreshUnreadCount()
                 }
             }
             if (!showNotificationScreen &&

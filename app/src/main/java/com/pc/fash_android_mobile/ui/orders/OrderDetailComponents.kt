@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.orders
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,6 +58,64 @@ internal enum class OrderViewerRole {
     Seller,
     /** Neither buyer nor seller matched session — read-only. */
     Viewer,
+}
+
+/** After a buyer-cancelled order: explains chat negotiation + offer limit; optional shortcut to thread. */
+@Composable
+internal fun BuyerCancelledNegotiationHint(
+    listingStatus: String,
+    maxOffersPerConversation: Int,
+    conversationId: String,
+    onOpenChat: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val sold = listingStatus.trim().equals("sold", ignoreCase = true)
+    val scheme = MaterialTheme.colorScheme
+    val (container, onContainer) = when {
+        sold -> scheme.surfaceContainerHighest to scheme.onSurfaceVariant
+        else -> scheme.primaryContainer.copy(alpha = 0.38f) to scheme.onPrimaryContainer
+    }
+    val text = if (sold) {
+        stringResource(R.string.order_cancelled_buyer_hint_sold)
+    } else {
+        stringResource(R.string.order_cancelled_buyer_hint_active, maxOffersPerConversation)
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = container,
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                    contentDescription = null,
+                    tint = onContainer,
+                    modifier = Modifier.size(22.dp),
+                )
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onContainer,
+                )
+            }
+            if (!sold && conversationId.isNotBlank()) {
+                TextButton(onClick = onOpenChat) {
+                    Text(
+                        text = stringResource(R.string.order_cancelled_buyer_open_chat),
+                        color = FashColors.Primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -496,10 +555,40 @@ internal fun BuyerShippingAddressCard(
             Spacer(modifier = Modifier.height(8.dp))
             when {
                 selectedLocal != null -> {
-                    Text(
-                        text = selectedLocal.recipientName,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    )
+                    val nameOrLabel = selectedLocal.recipientName.trim()
+                        .ifBlank { selectedLocal.label.trim() }
+                        .ifBlank { stringResource(R.string.shipping_address_row_untitled) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = nameOrLabel,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (selectedLocal.isDefault) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = FashColors.Primary.copy(alpha = 0.12f),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.address_badge_default),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = FashColors.Primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (selectedLocal.label.isNotBlank() && selectedLocal.recipientName.isNotBlank()) {
+                        Text(
+                            text = selectedLocal.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (selectedLocal.phone.isNotBlank()) {
                         Text(
                             text = selectedLocal.phone,
@@ -509,7 +598,7 @@ internal fun BuyerShippingAddressCard(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = selectedLocal.formattedSingleLine(),
+                        text = selectedLocal.formattedAddressLine().ifBlank { selectedLocal.formattedSingleLine() },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -866,6 +955,7 @@ internal fun OrderStickyBottomBar(
     role: OrderViewerRole,
     isWorking: Boolean,
     onPay: () -> Unit,
+    onCancelOrder: () -> Unit = {},
     onConfirmReceipt: () -> Unit,
     onReview: () -> Unit,
     onShip: () -> Unit,
@@ -960,6 +1050,21 @@ internal fun OrderStickyBottomBar(
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text(stringResource(R.string.order_detail_pay), fontWeight = FontWeight.SemiBold)
+            }
+            OutlinedButton(
+                onClick = onCancelOrder,
+                enabled = !isWorking,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.55f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text(
+                    text = stringResource(R.string.order_cancel_order),
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
         if (showConfirm) {

@@ -22,6 +22,8 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     private val orderRepository: OrderRepository =
         (application as FashApplication).orderRepository
+    private val orderCancelCoordinator =
+        (application as FashApplication).orderCancelCoordinator
     private val listingRepository: ListingRepository =
         (application as FashApplication).listingRepository
     private val sessionStore = (application as FashApplication).authManager.sessionStore
@@ -274,6 +276,42 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 },
             )
+        }
+    }
+
+    /** Buyer cancels a `payment_pending` order (`POST /orders/{id}/cancel`). */
+    fun cancelOrder(orderId: String) {
+        if (orderId.isBlank()) return
+        viewModelScope.launch {
+            _isWorking.value = true
+            val app = getApplication<Application>()
+            val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(orderId) }
+            _isWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(app.getString(R.string.order_cancel_success))
+                    withContext(Dispatchers.IO) {
+                        orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
+                            orderId,
+                            app.getString(R.string.chat_message_order_cancelled_by_buyer),
+                        )
+                    }
+                    load(orderId)
+                },
+                onFailure = { e ->
+                    _events.tryEmit(mapCancelOrderError(e))
+                },
+            )
+        }
+    }
+
+    private fun mapCancelOrderError(e: Throwable): String {
+        val app = getApplication<Application>()
+        return when (e.message) {
+            "ORDER_NOT_CANCELLABLE" -> app.getString(R.string.order_cancel_error_not_cancellable)
+            "FORBIDDEN" -> app.getString(R.string.order_cancel_error_forbidden)
+            "NOT_FOUND" -> app.getString(R.string.order_cancel_error_not_found)
+            else -> e.message?.takeIf { it.isNotBlank() } ?: app.getString(R.string.order_cancel_error_generic)
         }
     }
 }

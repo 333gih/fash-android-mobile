@@ -19,11 +19,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import com.pc.fash_android_mobile.R
 import androidx.compose.ui.unit.dp
@@ -92,6 +100,13 @@ import com.pc.fash_android_mobile.ui.address.AddEditAddressScreen
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.address.ShippingAddressListScreen
 import com.pc.fash_android_mobile.ui.orders.OrderDetailScreen
+import com.pc.fash_android_mobile.ui.orders.LocalPendingPaymentRootCoordinates
+import com.pc.fash_android_mobile.ui.orders.LocalPendingPaymentSliderRegistry
+import com.pc.fash_android_mobile.ui.orders.PendingPaymentBanner
+import com.pc.fash_android_mobile.ui.orders.PendingPaymentEvent
+import com.pc.fash_android_mobile.ui.orders.PendingPaymentOrderRow
+import com.pc.fash_android_mobile.ui.orders.PendingPaymentSliderRegistry
+import com.pc.fash_android_mobile.ui.orders.PendingPaymentViewModel
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
@@ -114,6 +129,8 @@ private enum class SellerShopEntrySource {
     None,
     ProductDetail,
     Explore,
+    /** Opened from chat header; closing shop restores [conversationIdToRestoreAfterSellerShop]. */
+    Chat,
 }
 
 /**
@@ -157,6 +174,7 @@ class MainActivity : ComponentActivity() {
     private val chatDetailViewModel: ChatDetailViewModel by viewModels()
     private val checkoutViewModel: CheckoutViewModel by viewModels()
     private val ordersViewModel: com.pc.fash_android_mobile.ui.orders.OrdersViewModel by viewModels()
+    private val pendingPaymentViewModel: PendingPaymentViewModel by viewModels()
     private val orderDetailViewModel: OrderDetailViewModel by viewModels()
     private val addressBookViewModel: AddressBookViewModel by viewModels()
     private val followConnectionsViewModel: FollowConnectionsViewModel by viewModels()
@@ -552,6 +570,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
                                     var sellerShopEntrySource by remember { mutableStateOf(SellerShopEntrySource.None) }
+                                    /** When opening seller shop from chat, restore this conversation on shop back. */
+                                    var conversationIdToRestoreAfterSellerShop by rememberSaveable {
+                                        mutableStateOf<String?>(null)
+                                    }
                                     /** Snapshot [ExploreViewModel.primarySection] when opening seller from Explore (Listings vs Sellers). */
                                     var exploreSectionWhenSellerOpened by remember { mutableStateOf<ExplorePrimarySection?>(null) }
                                     /** True briefly after closing seller shop to block PDP from applying Explore filters (pointer replay). */
@@ -581,13 +603,18 @@ class MainActivity : ComponentActivity() {
                                     val dismissSellerShopOverlay: () -> Unit = {
                                         val entry = sellerShopEntrySource
                                         val exploreSection = exploreSectionWhenSellerOpened
+                                        val restoreChatId = conversationIdToRestoreAfterSellerShop
                                         suppressPdpExploreNav = true
                                         sellerShopUsername = null
                                         sellerShopEntrySource = SellerShopEntrySource.None
                                         exploreSectionWhenSellerOpened = null
+                                        conversationIdToRestoreAfterSellerShop = null
                                         if (entry == SellerShopEntrySource.Explore) {
                                             selectedTab = MainTab.Explore.ordinal
                                             exploreSection?.let { exploreViewModel.setPrimarySection(it) }
+                                        }
+                                        if (entry == SellerShopEntrySource.Chat && !restoreChatId.isNullOrBlank()) {
+                                            selectedConversationId = restoreChatId
                                         }
                                         scope.launch {
                                             delay(100)
@@ -627,9 +654,68 @@ class MainActivity : ComponentActivity() {
                                         (context.applicationContext as FashApplication).orderRepository
                                     }
                                     val chatUnreadCount by chatViewModel.unreadBadgeCount.collectAsState()
+                                    val chatConversations by chatViewModel.conversations.collectAsState()
+                                    val chatDisplayGroups by chatViewModel.displayGroups.collectAsState()
+                                    val otherInboxUnread = remember(
+                                        selectedConversationId,
+                                        chatUnreadCount,
+                                        chatConversations,
+                                        chatDisplayGroups,
+                                    ) {
+                                        val cid = selectedConversationId
+                                            ?: return@remember 0
+                                        chatViewModel.unreadCountExcludingConversation(cid)
+                                    }
                                     val chatOrderId by chatDetailViewModel.orderId.collectAsState()
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        MainNavScreen(
+                                    val pendingPaymentBanner by pendingPaymentViewModel.banner.collectAsState()
+                                    var pendingCancelPaymentOrder by remember { mutableStateOf<PendingPaymentOrderRow?>(null) }
+                                    val pendingPaymentSliderRegistry = remember { PendingPaymentSliderRegistry() }
+                                    var rootLayoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+                                    val pendingPaymentBannerExpanded =
+                                        pendingPaymentBanner != null &&
+                                            selectedOrderId == null &&
+                                            selectedCheckoutListingId == null
+                                    val anchorTopPx = remember(pendingPaymentSliderRegistry.sliders, rootLayoutCoordinates) {
+                                        val coords = rootLayoutCoordinates ?: return@remember null
+                                        val h = coords.size.height.toFloat()
+                                        if (h <= 0f) null else pendingPaymentSliderRegistry.topmostAnchorEligibleSliderTop(h)
+                                    }
+                                    val usePendingPaymentAnchorPlacement =
+                                        anchorTopPx != null && pendingPaymentBannerExpanded
+                                    LaunchedEffect(Unit) {
+                                        pendingPaymentViewModel.startMonitoring()
+                                    }
+                                    LaunchedEffect(Unit) {
+                                        pendingPaymentViewModel.events.collect { ev ->
+                                            when (ev) {
+                                                is PendingPaymentEvent.Expired -> {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = context.getString(R.string.pending_payment_expired_snackbar),
+                                                        duration = SnackbarDuration.Long,
+                                                    )
+                                                }
+                                                PendingPaymentEvent.CancelSuccess -> {
+                                                    snackbarHostState.showSnackbar(
+                                                        context.getString(R.string.order_cancel_success),
+                                                    )
+                                                }
+                                                is PendingPaymentEvent.CancelFailed -> {
+                                                    snackbarHostState.showSnackbar(ev.message)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .onGloballyPositioned { rootLayoutCoordinates = it },
+                                    ) {
+                                        CompositionLocalProvider(
+                                            LocalPendingPaymentRootCoordinates provides rootLayoutCoordinates,
+                                            LocalPendingPaymentSliderRegistry provides pendingPaymentSliderRegistry,
+                                        ) {
+                                            Box(Modifier.fillMaxSize()) {
+                                            MainNavScreen(
                                             onLogout = loginViewModel::logout,
                                             onLogoutAll = loginViewModel::logoutAll,
                                             isLoggingOut = isLoggingOut,
@@ -689,10 +775,63 @@ class MainActivity : ComponentActivity() {
                                                 sellerShopUsername = null
                                                 sellerShopEntrySource = SellerShopEntrySource.None
                                                 exploreSectionWhenSellerOpened = null
+                                                conversationIdToRestoreAfterSellerShop = null
                                             },
                                             selectedTab = selectedTab,
                                             onTabChange = { selectedTab = it },
+                                            )
+                                        PendingPaymentBanner(
+                                            data = pendingPaymentBanner,
+                                            expanded = pendingPaymentBannerExpanded,
+                                            anchorTopInRootPx = if (usePendingPaymentAnchorPlacement) anchorTopPx else null,
+                                            onPayClick = { row ->
+                                                selectedCheckoutListingId = row.listingId
+                                                selectedCheckoutOfferPrice = row.amountVnd
+                                                checkoutExistingOrderId = row.orderId
+                                            },
+                                            onCancelOrder = { row -> pendingCancelPaymentOrder = row },
+                                            onDeadlineElapsed = pendingPaymentViewModel::onDeadlineElapsed,
+                                            modifier = if (usePendingPaymentAnchorPlacement) {
+                                                Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .fillMaxWidth()
+                                            } else {
+                                                Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .fillMaxWidth()
+                                                    .navigationBarsPadding()
+                                                    // Above bottom nav only; sticky promo (when shown) sits in content — do not
+                                                    // reserve FashStickyPromoDockHeight or the banner floats too high.
+                                                    .padding(bottom = 80.dp)
+                                            },
                                         )
+                                        val rowToCancel = pendingCancelPaymentOrder
+                                        if (rowToCancel != null) {
+                                            AlertDialog(
+                                                onDismissRequest = { pendingCancelPaymentOrder = null },
+                                                title = {
+                                                    Text(context.getString(R.string.order_cancel_confirm_title))
+                                                },
+                                                text = {
+                                                    Text(context.getString(R.string.order_cancel_confirm_body))
+                                                },
+                                                confirmButton = {
+                                                    TextButton(
+                                                        onClick = {
+                                                            pendingCancelPaymentOrder = null
+                                                            pendingPaymentViewModel.cancelOrder(rowToCancel.orderId)
+                                                        },
+                                                    ) {
+                                                        Text(context.getString(R.string.order_cancel_confirm_action))
+                                                    }
+                                                },
+                                                dismissButton = {
+                                                    TextButton(onClick = { pendingCancelPaymentOrder = null }) {
+                                                        Text(context.getString(R.string.order_cancel_confirm_dismiss))
+                                                    }
+                                                },
+                                            )
+                                        }
                                         if (selectedListingId != null) {
                                             ProductDetailScreen(
                                                 modifier = Modifier
@@ -796,6 +935,7 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                     selectedListingId = null
                                                     selectedTab = MainTab.Explore.ordinal
+                                                    conversationIdToRestoreAfterSellerShop = null
                                                 },
                                             )
                                         }
@@ -833,6 +973,7 @@ class MainActivity : ComponentActivity() {
                                                     sellerShopUsername = null
                                                     sellerShopEntrySource = SellerShopEntrySource.None
                                                     exploreSectionWhenSellerOpened = null
+                                                    conversationIdToRestoreAfterSellerShop = null
                                                 },
                                                 onPromoSlideClick = { _, _ ->
                                                     navigateToExploreFromSellerShop()
@@ -875,12 +1016,17 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 conversationId = selectedConversationId!!,
                                                 viewModel = chatDetailViewModel,
+                                                otherInboxUnreadCount = otherInboxUnread,
                                                 onBack = {
                                                     selectedConversationId = null
                                                     selectedConversationItem = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
                                                 },
                                                 onProductClick = {
                                                     selectedConversationId = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
                                                     selectedListingId = it
                                                 },
                                                 onCheckout = { listingId, offerAmount ->
@@ -891,12 +1037,29 @@ class MainActivity : ComponentActivity() {
                                                 onPayNow = { orderId, _, _ ->
                                                     selectedConversationId = null
                                                     selectedConversationItem = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
                                                     selectedOrderId = orderId
                                                 },
                                                 onOrderDetails = { orderId ->
                                                     selectedConversationId = null
                                                     selectedConversationItem = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
                                                     selectedOrderId = orderId
+                                                },
+                                                onOtherUserProfileClick = { username ->
+                                                    val u = username.trim()
+                                                    if (u.isNotEmpty()) {
+                                                        conversationIdToRestoreAfterSellerShop = selectedConversationId
+                                                        selectedConversationId = null
+                                                        selectedConversationItem = null
+                                                        chatViewModel.loadConversations()
+                                                        chatViewModel.refreshUnreadCount()
+                                                        exploreSectionWhenSellerOpened = null
+                                                        sellerShopEntrySource = SellerShopEntrySource.Chat
+                                                        sellerShopUsername = u
+                                                    }
                                                 },
                                             )
                                         }
@@ -1075,6 +1238,8 @@ class MainActivity : ComponentActivity() {
                                                     showFeaturedSellersAll = false
                                                 },
                                             )
+                                        }
+                                            }
                                         }
                                     }
                                 }

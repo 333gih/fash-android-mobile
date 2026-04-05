@@ -14,6 +14,7 @@ import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
 import com.pc.fash_android_mobile.data.payment.CheckoutAddress
 import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
+import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -48,6 +49,10 @@ class CheckoutViewModel(
         (application as FashApplication).orderRepository
     private val corePaymentRepository: CorePaymentRepository =
         (application as FashApplication).corePaymentRepository
+    private val userRepository: UserRepository =
+        (application as FashApplication).userRepository
+    private val orderCancelCoordinator =
+        (application as FashApplication).orderCancelCoordinator
 
     private val _detail = MutableStateFlow<ListingDetail?>(null)
     val detail: StateFlow<ListingDetail?> = _detail.asStateFlow()
@@ -67,6 +72,10 @@ class CheckoutViewModel(
     private val _city = MutableStateFlow("")
     val city: StateFlow<String> = _city.asStateFlow()
 
+    /** When checkout was prefilled from the saved-address book; used for label/default badge in UI. */
+    private val _shippingAddressForDisplay = MutableStateFlow<ShippingAddress?>(null)
+    val shippingAddressForDisplay: StateFlow<ShippingAddress?> = _shippingAddressForDisplay.asStateFlow()
+
     private val _selectedPaymentIndex = MutableStateFlow(0)
     val selectedPaymentIndex: StateFlow<Int> = _selectedPaymentIndex.asStateFlow()
 
@@ -75,6 +84,9 @@ class CheckoutViewModel(
 
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
+
+    private val _isCancelling = MutableStateFlow(false)
+    val isCancelling: StateFlow<Boolean> = _isCancelling.asStateFlow()
 
     /** True after gateway URL opened until paid, cancelled, or poll timeout. */
     private val _awaitingGatewayReturn = MutableStateFlow(false)
@@ -106,13 +118,12 @@ class CheckoutViewModel(
 
     /**
      * Channel ids must match backend / payment-service enabled gateways (lowercase).
-     * See ADDING_PAYMENT_PROVIDER.md — e.g. momo, zalopay, shopeepay, tpbank.
+     * See ADDING_PAYMENT_PROVIDER.md — e.g. momo, vnpay, tpbank.
      */
     val paymentMethods = listOf(
         PaymentMethodOption("momo", "Ví MoMo"),
-        PaymentMethodOption("zalopay", "ZaloPay"),
-        PaymentMethodOption("shopeepay", "ShopeePay"),
-        PaymentMethodOption("tpbank", "Chuyển khoản ngân hàng"),
+        PaymentMethodOption("vnpay", "VNPay"),
+        PaymentMethodOption("tpbank", "Chuyển khoản TPBank"),
     )
 
     fun loadListing(listingId: String, overridePriceVnd: Long = 0L, existingOrderId: String? = null) {
@@ -129,6 +140,7 @@ class CheckoutViewModel(
             _loadError.value = null
             _detail.value = null
             _orderDetail.value = null
+            _shippingAddressForDisplay.value = null
             coroutineScope {
                 val listingAsync = async(Dispatchers.IO) { listingRepository.getListingDetail(listingId) }
                 val orderAsync = oid?.let { id ->
@@ -154,11 +166,26 @@ class CheckoutViewModel(
                     }
                 }
                 applySavedAddressPrefill()
+                applyProfileNamePrefill()
             }
         }
     }
 
-    /** Fills empty checkout fields from the local address book (order-linked or default). */
+    /** Fills display name from GET /users/me when address book left name empty. */
+    private suspend fun applyProfileNamePrefill() {
+        if (_fullName.value.isNotBlank()) return
+        val profile = withContext(Dispatchers.IO) {
+            userRepository.getMeProfile()
+        }.getOrNull() ?: return
+        val name = profile.displayName.trim()
+        if (name.isNotEmpty()) _fullName.value = name
+    }
+
+    /**
+     * Fills checkout fields from the local address book (order-linked or default).
+     * When the user linked a saved address to this order on [OrderDetailScreen], that mapping wins
+     * over partial shipping text from the order API row.
+     */
     private fun applySavedAddressPrefill() {
         val app = getApplication<Application>() as FashApplication
         val uid = app.authManager.sessionStore.read()?.userId?.trim()?.takeIf { it.isNotEmpty() }
@@ -166,13 +193,23 @@ class CheckoutViewModel(
         val store = app.addressLocalStore
         val orderId = _existingOrderId.value?.trim()?.takeIf { it.isNotEmpty() }
         val list = store.listAddresses(uid)
+        val mappedId = orderId?.let { store.getOrderAddressId(uid, it) }
         val picked: ShippingAddress? = if (orderId != null) {
-            val mapped = store.getOrderAddressId(uid, orderId)?.let { id -> list.find { it.id == id } }
+            val mapped = mappedId?.let { id -> list.find { it.id == id } }
             mapped ?: list.firstOrNull { it.isDefault } ?: list.firstOrNull()
         } else {
             store.getDefaultOrFirst(uid)
         }
+        _shippingAddressForDisplay.value = picked
         val c = picked?.toCheckoutAddress() ?: return
+        if (orderId != null && mappedId != null) {
+            _fullName.value = c.fullName
+            _phone.value = c.phone
+            _address.value = c.address
+            _district.value = c.district
+            _city.value = c.city
+            return
+        }
         if (_fullName.value.isBlank()) _fullName.value = c.fullName
         if (_phone.value.isBlank()) _phone.value = c.phone
         if (_address.value.isBlank()) _address.value = c.address
@@ -244,6 +281,45 @@ class CheckoutViewModel(
      * Creates or reuses order, calls core **proxied** payment initiate (returns gateway URL), opens URL in UI,
      * then polls order status until **payment_held** or terminal state.
      */
+    /** Cancels an existing `payment_pending` order (buyer); used when resuming checkout for an unpaid order. */
+    fun cancelPendingOrder(onSuccess: () -> Unit) {
+        val oid = _existingOrderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val st = _orderDetail.value?.status?.trim()?.lowercase().orEmpty()
+        if (st != "payment_pending") return
+        if (_isCancelling.value || _isSubmitting.value) return
+        viewModelScope.launch {
+            _isCancelling.value = true
+            val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(oid) }
+            _isCancelling.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    withContext(Dispatchers.IO) {
+                        orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
+                            oid,
+                            app.getString(R.string.chat_message_order_cancelled_by_buyer),
+                        )
+                    }
+                    _events.tryEmit(app.getString(R.string.order_cancel_success))
+                    onSuccess()
+                },
+                onFailure = { e ->
+                    _events.tryEmit(mapCancelOrderError(e))
+                },
+            )
+        }
+    }
+
+    private fun mapCancelOrderError(e: Throwable): String {
+        val app = getApplication<Application>()
+        return when (e.message) {
+            "ORDER_NOT_CANCELLABLE" -> app.getString(R.string.order_cancel_error_not_cancellable)
+            "FORBIDDEN" -> app.getString(R.string.order_cancel_error_forbidden)
+            "NOT_FOUND" -> app.getString(R.string.order_cancel_error_not_found)
+            else -> e.message?.takeIf { it.isNotBlank() } ?: app.getString(R.string.order_cancel_error_generic)
+        }
+    }
+
     fun submitPayment(onSuccess: (orderId: String) -> Unit) {
         if (!canSubmit() || _isSubmitting.value) return
         val d = _detail.value ?: return
