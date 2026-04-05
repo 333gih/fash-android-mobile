@@ -98,9 +98,28 @@ class ListingRepository(
         update.condition?.let { json.put("condition", it) }
         update.priceVnd?.let { json.put("price", it) }
         update.description?.let { json.put("description", it) }
-        update.brand?.let { json.put("brand", it) }
+        if (update.brandId != null || update.brandName != null) {
+            val brandObj = JSONObject()
+            update.brandId?.takeIf { it.isNotBlank() }?.let { brandObj.put("id", it) }
+            if (update.brandName != null) brandObj.put("name", update.brandName)
+            json.put("brand", brandObj)
+        }
         update.size?.let { json.put("size", it) }
         update.aestheticTags?.let { json.put("aesthetic_tags", JSONArray(it)) }
+        update.acceptOffers?.let { json.put("accept_offers", it) }
+        update.autoPriceDropEnabled?.let { json.put("auto_price_drop_enabled", it) }
+        update.floorPriceVnd?.let { json.put("floor_price", it) }
+        update.priceDropPercent?.let { json.put("price_drop_percent", it) }
+        update.countryOfOrigin?.let { json.put("country_of_origin", it) }
+        update.countryId?.let { json.put("country_id", it) }
+        update.countryName?.let { json.put("country_name", it) }
+        update.measurementUnit?.let { json.put("measurement_unit", it) }
+        update.measurementHem?.let { json.put("measurement_hem", it) }
+        update.measurementChest?.let { json.put("measurement_chest", it) }
+        update.measurementLength?.let { json.put("measurement_length", it) }
+        update.measurementShoulders?.let { json.put("measurement_shoulders", it) }
+        update.measurementSleeveLength?.let { json.put("measurement_sleeve_length", it) }
+        update.shippingAddressId?.let { json.put("shipping_address_id", it) }
         if (json.length() == 0) return@runCatching
         executePutJson(url, json.toString())
     }
@@ -702,10 +721,26 @@ data class UpdateListingRequest(
     val condition: String? = null,
     val priceVnd: Long? = null,
     val description: String? = null,
-    val brand: String? = null,
+    val brandId: String? = null,
+    val brandName: String? = null,
     val size: String? = null,
     /** Tag names (not ids); `[]` clears when explicitly replacing tags. */
     val aestheticTags: List<String>? = null,
+    val acceptOffers: Boolean? = null,
+    val autoPriceDropEnabled: Boolean? = null,
+    val floorPriceVnd: Long? = null,
+    val priceDropPercent: Int? = null,
+    /** ISO-3166 alpha-2 (e.g. `VN`). */
+    val countryOfOrigin: String? = null,
+    val countryId: String? = null,
+    val countryName: String? = null,
+    val measurementUnit: String? = null,
+    val measurementHem: Double? = null,
+    val measurementChest: Double? = null,
+    val measurementLength: Double? = null,
+    val measurementShoulders: Double? = null,
+    val measurementSleeveLength: Double? = null,
+    val shippingAddressId: String? = null,
 )
 
 data class CreateListingResponse(val id: String)

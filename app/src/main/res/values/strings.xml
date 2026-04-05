@@ -564,6 +564,21 @@
     <string name="edit_listing_delete_body">Tin sẽ ẩn khỏi bảng tin. Không thể xóa nếu đã có đơn hàng hoặc đã có hội thoại với người mua.</string>
     <string name="edit_listing_delete_confirm">Xóa</string>
     <string name="edit_listing_description_label">Mô tả</string>
+    <string name="edit_listing_bottom_hint">Bạn có thể cập nhật tiêu đề, giá, mô tả, thương hiệu, size, tình trạng, thẻ phong cách, quốc gia xuất xứ, số đo, chấp nhận thương lượng và giảm giá tự động. Ảnh, danh mục và địa chỉ giao hàng không đổi tại đây.</string>
+    <string name="edit_listing_readonly_section_title">Giao hàng từ tin đăng</string>
+    <string name="edit_listing_readonly_section_subtitle">Địa chỉ đã chọn khi đăng — không thể chỉnh sửa trên màn hình này.</string>
+    <string name="edit_listing_photos_section">Ảnh</string>
+    <string name="edit_listing_photos_note">Không thể thay ảnh sau khi đăng.</string>
+    <string name="edit_listing_brand_dropdown_placeholder">Chọn thương hiệu</string>
+    <string name="edit_listing_tags_dropdown_placeholder">Chạm để chọn thẻ phong cách</string>
+    <string name="edit_listing_tags_count_fmt">Đã chọn %1$d / %2$d</string>
+    <string name="edit_listing_tags_done">Xong</string>
+    <string name="edit_listing_brand_dropdown_empty">Không tìm thấy thương hiệu</string>
+    <string name="edit_listing_country_dropdown_placeholder">Chọn quốc gia</string>
+    <string name="edit_listing_country_dropdown_empty">Không tìm thấy quốc gia</string>
+    <string name="edit_listing_clear_country">Bỏ quốc gia</string>
+    <string name="edit_listing_offers_section">Ưu đãi &amp; giảm giá</string>
+    <string name="edit_listing_offers_section_hint">Áp dụng cùng quy tắc với lúc đăng tin (giá sàn, % giảm mỗi lần).</string>
 
     <string name="profile_screen_title">Trang cá nhân</string>
     <string name="profile_edit">Chỉnh sửa hồ sơ</string>

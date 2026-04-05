@@ -176,8 +176,8 @@ fun PostListingSearchField(
     onValueChange: (String) -> Unit,
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
-    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     OutlinedTextField(
         value = value,
@@ -185,6 +185,7 @@ fun PostListingSearchField(
         modifier = modifier.fillMaxWidth(),
         label = label,
         singleLine = true,
+        enabled = enabled,
         shape = shape,
         colors = postListingOutlinedFieldColors(),
     )
@@ -201,6 +202,7 @@ fun PostListingOutlinedTextField(
     maxLines: Int = if (singleLine) 1 else 12,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     suffix: @Composable (() -> Unit)? = null,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     OutlinedTextField(
@@ -211,6 +213,7 @@ fun PostListingOutlinedTextField(
         singleLine = singleLine,
         minLines = minLines,
         maxLines = maxLines,
+        enabled = enabled,
         shape = shape,
         keyboardOptions = keyboardOptions,
         suffix = suffix,

@@ -381,8 +381,6 @@ private fun CategoryNodeBlock(
     }
 }
 
-private val conditionValues = listOf("New", "Like new", "Good", "Fair", "Worn")
-
 @Composable
 fun CreateListingPostStep3(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
     val draft by viewModel.draft.collectAsState()
@@ -599,7 +597,7 @@ fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                conditionValues.forEach { cond ->
+                ListingConditionOptions.uiValues.forEach { cond ->
                     PostSelectablePill(
                         text = cond,
                         selected = draft.condition == cond,
