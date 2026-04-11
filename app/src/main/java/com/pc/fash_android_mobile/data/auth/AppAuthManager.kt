@@ -81,9 +81,13 @@ class AppAuthManager(
             return true
         }
         for (attempt in 0 until REFRESH_ATTEMPTS) {
-            val result = authRepository.refresh(session.refreshToken)
-            result.getOrNull()?.let { newSession ->
-                sessionStore.save(newSession)
+            val snapshot = sessionStore.read() ?: return false
+            val result = AuthTokenRefreshCoordinator.refreshIfStillCurrent(
+                sessionStore,
+                authRepository,
+                snapshot.accessToken,
+            )
+            result.getOrNull()?.let {
                 onSessionSaved()
                 return true
             }

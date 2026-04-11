@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -91,8 +92,8 @@ fun OrderDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
-    val isWorking by viewModel.isWorking.collectAsState()
-    val checkInInFlight by viewModel.checkInInFlight.collectAsState()
+    val busy by viewModel.busyAction.collectAsState()
+    val isBlocking = busy != OrderDetailBusyAction.None
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -222,6 +223,11 @@ fun OrderDetailScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
     }
+    LaunchedEffect(detail?.status, showOpenDisputeDialog) {
+        if (showOpenDisputeDialog && detail?.status?.trim()?.lowercase() == "disputed") {
+            showOpenDisputeDialog = false
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -328,7 +334,7 @@ fun OrderDetailScreen(
                             .verticalScroll(scrollState)
                             .padding(horizontal = FashTheme.spacing.editorialStart)
                             .padding(top = FashTheme.spacing.spacing4)
-                            .padding(bottom = 140.dp),
+                            .padding(bottom = OrderDetailStickyScrollBottomInset),
                     ) {
                         AnimatedVisibility(
                             visible = true,
@@ -354,8 +360,7 @@ fun OrderDetailScreen(
                             OrderMeetingGraceSection(
                                 grace = grace,
                                 appointmentId = apptId,
-                                isWorking = isWorking,
-                                checkInLoading = checkInInFlight,
+                                busy = busy,
                                 onCheckIn = { appointmentId ->
                                     when {
                                         ContextCompat.checkSelfPermission(
@@ -497,6 +502,15 @@ fun OrderDetailScreen(
                             }
                         }
 
+                        d.buyerReview?.let { review ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OrderBuyerReviewSection(
+                                role = role,
+                                review = review,
+                                formatDate = formatDate,
+                            )
+                        }
+
                         if (d.trackingNumber.isNotBlank() || d.carrier.isNotBlank()) {
                             Spacer(modifier = Modifier.height(12.dp))
                             OrderTrackingCard(d = d)
@@ -512,7 +526,7 @@ fun OrderDetailScreen(
                         OrderStickyBottomBar(
                             d = d,
                             role = role,
-                            isWorking = isWorking,
+                            busy = busy,
                             onPay = {
                                 onNavigateToPayment(d.listingId, d.amountVnd, d.orderId)
                             },
@@ -611,7 +625,7 @@ fun OrderDetailScreen(
                         showCancelConfirm = false
                         viewModel.cancelOrder(d.orderId)
                     },
-                    enabled = !isWorking,
+                    enabled = !isBlocking,
                 ) {
                     Text(stringResource(R.string.order_cancel_confirm_action))
                 }
@@ -653,7 +667,7 @@ fun OrderDetailScreen(
                         showShipDialog = false
                         viewModel.shipOrder(d.orderId, trackingInput, carrierInput)
                     },
-                    enabled = !isWorking && trackingInput.isNotBlank(),
+                    enabled = !isBlocking && trackingInput.isNotBlank(),
                 ) {
                     Text(stringResource(R.string.order_detail_ship_confirm))
                 }
@@ -669,7 +683,9 @@ fun OrderDetailScreen(
     if (
         showReviewDialog &&
         detail != null &&
-        detail!!.orderId.equals(orderId.trim(), ignoreCase = true)
+        detail!!.orderId.equals(orderId.trim(), ignoreCase = true) &&
+        detail!!.canReview &&
+        detail!!.buyerReview == null
     ) {
         val d = detail!!
         AlertDialog(
@@ -713,6 +729,7 @@ fun OrderDetailScreen(
                         val c = reviewComment.trim().ifBlank { null }
                         viewModel.submitReview(d.orderId, reviewRating.roundToInt(), c)
                     },
+                    enabled = !isBlocking,
                 ) {
                     Text(stringResource(R.string.order_detail_review_submit))
                 }
@@ -739,11 +756,11 @@ fun OrderDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 8,
-                        enabled = !isWorking,
+                        enabled = !isBlocking,
                     )
                     OutlinedButton(
                         onClick = { pickOpenDisputeImage.launch("image/*") },
-                        enabled = !isWorking && openDisputePhotoUrls.size < 10,
+                        enabled = !isBlocking && openDisputePhotoUrls.size < 10,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.order_detail_dispute_add_photo, openDisputePhotoUrls.size))
@@ -751,14 +768,22 @@ fun OrderDetailScreen(
                 }
             },
             confirmButton = {
+                val openDisputeBusy = busy == OrderDetailBusyAction.OpenDispute
                 TextButton(
                     onClick = {
-                        showOpenDisputeDialog = false
                         viewModel.openDispute(d.orderId, openDisputeDesc, openDisputePhotoUrls.toList())
                     },
-                    enabled = !isWorking && openDisputeDesc.isNotBlank(),
+                    enabled = openDisputeDesc.isNotBlank() && busy == OrderDetailBusyAction.None,
                 ) {
-                    Text(stringResource(R.string.order_detail_dispute_submit))
+                    if (openDisputeBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = FashColors.Primary,
+                        )
+                    } else {
+                        Text(stringResource(R.string.order_detail_dispute_submit))
+                    }
                 }
             },
             dismissButton = {
@@ -783,11 +808,11 @@ fun OrderDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 8,
-                        enabled = !isWorking,
+                        enabled = !isBlocking,
                     )
                     OutlinedButton(
                         onClick = { pickEvidenceImage.launch("image/*") },
-                        enabled = !isWorking && evidencePhotoUrls.size < 10,
+                        enabled = !isBlocking && evidencePhotoUrls.size < 10,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.order_detail_dispute_add_photo, evidencePhotoUrls.size))
@@ -795,14 +820,22 @@ fun OrderDetailScreen(
                 }
             },
             confirmButton = {
+                val evidenceBusy = busy == OrderDetailBusyAction.SubmitEvidence
                 TextButton(
                     onClick = {
-                        showEvidenceDialog = false
                         viewModel.submitDisputeEvidence(d.orderId, evidenceDesc, evidencePhotoUrls.toList())
                     },
-                    enabled = !isWorking && evidenceDesc.isNotBlank(),
+                    enabled = evidenceDesc.isNotBlank() && busy == OrderDetailBusyAction.None,
                 ) {
-                    Text(stringResource(R.string.order_detail_dispute_submit))
+                    if (evidenceBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = FashColors.Primary,
+                        )
+                    } else {
+                        Text(stringResource(R.string.order_detail_dispute_submit))
+                    }
                 }
             },
             dismissButton = {

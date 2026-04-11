@@ -80,6 +80,11 @@ class AuthRepository(
         parseLoginResponse(body)
     }
 
+    /**
+     * `POST` refresh body per core-service contract. Call sites that may run concurrently (HTTP 401,
+     * WebSocket, FCM) should use [AuthTokenRefreshCoordinator.refreshIfStillCurrent] so only one refresh
+     * runs at a time when the backend rotates refresh tokens.
+     */
     fun refresh(refreshToken: String): Result<AuthSession> = runCatching {
         val rel = AppEnvironment.authRefreshPath.trim().trimStart('/')
         // Same language segment as core API (`.../en/api/v1/...`) when CORE_API_USE_LANGUAGE_PREFIX is true.
@@ -171,7 +176,12 @@ class AuthRepository(
 
     private fun logRefreshTokenResponseSuccess(rawBody: String) {
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "refresh token HTTP 200, response: $rawBody")
+            val hint = runCatching {
+                val o = JSONObject(rawBody)
+                val exp = o.optLong("expires_in", -1L)
+                "expires_in=$exp"
+            }.getOrElse { "parse skipped" }
+            Log.d(TAG, "refresh token HTTP 200 ($hint)")
         }
     }
 
@@ -182,17 +192,31 @@ class AuthRepository(
     }
 
     private fun parseLoginResponse(json: String): AuthSession {
-        val o = JSONObject(json)
+        val root = JSONObject(json.trim())
+        val o = when {
+            root.has("data") && root.get("data") is JSONObject -> root.getJSONObject("data")
+            else -> root
+        }
         return AuthSession(
             accessToken = o.getString("access_token"),
             refreshToken = o.getString("refresh_token"),
             tokenType = o.optString("token_type", "Bearer").ifBlank { "Bearer" },
-            expiresInSeconds = o.optLong("expires_in", 0L),
+            expiresInSeconds = parseExpiresIn(o),
             isNewUser = o.optBoolean("is_new_user", false),
             userId = o.optString("user_id", "").takeIf { it.isNotBlank() },
             unreadCount = o.optLong("unread_count", 0L),
         )
     }
+
+    private fun parseExpiresIn(o: JSONObject): Long = runCatching {
+        if (!o.has("expires_in")) return@runCatching 0L
+        val v = o.get("expires_in")
+        when (v) {
+            is Number -> v.toLong()
+            is String -> v.trim().toLongOrNull() ?: 0L
+            else -> 0L
+        }.coerceAtLeast(0L)
+    }.getOrDefault(0L)
 
     companion object {
         private const val TAG = "AuthRepository"

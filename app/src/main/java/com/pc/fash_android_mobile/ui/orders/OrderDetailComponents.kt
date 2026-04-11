@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -58,9 +60,11 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.address.ShippingAddress
+import com.pc.fash_android_mobile.data.order.OrderBuyerReview
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderMeetingAppointment
 import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
+import com.pc.fash_android_mobile.data.order.sellerShowsConfirmHandoffCta
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -73,6 +77,12 @@ internal enum class OrderViewerRole {
     /** Neither buyer nor seller matched session — read-only. */
     Viewer,
 }
+
+/**
+ * Bottom padding for the scroll column so the last cards (tracking, product, etc.) sit fully above
+ * the sticky action bar (primary + secondary rows + safe area).
+ */
+internal val OrderDetailStickyScrollBottomInset = 232.dp
 
 /** After a buyer-cancelled order: explains chat negotiation + offer limit; optional shortcut to thread. */
 @Composable
@@ -624,6 +634,27 @@ internal fun OrderMeetingSection(
                     color = scheme.onSurfaceVariant,
                 )
             }
+            meeting.buyerCheckInAt.takeIf { it.isNotBlank() }?.let { raw ->
+                Text(
+                    text = stringResource(R.string.order_detail_meetup_buyer_check_in, formatDate(raw)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            meeting.sellerCheckInAt.takeIf { it.isNotBlank() }?.let { raw ->
+                Text(
+                    text = stringResource(R.string.order_detail_meetup_seller_check_in, formatDate(raw)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (meeting.buyerCheckInAt.isNotBlank() || meeting.sellerCheckInAt.isNotBlank()) {
+                Text(
+                    text = stringResource(R.string.order_detail_meetup_check_in_note),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.9f),
+                )
+            }
             if (meeting.locationUrl.isNotBlank()) {
                 OutlinedButton(
                     onClick = { runCatching { uriHandler.openUri(meeting.locationUrl) } },
@@ -677,14 +708,14 @@ internal fun OrderMeetingSection(
 internal fun OrderMeetingGraceSection(
     grace: OrderMeetingGrace,
     appointmentId: String?,
-    isWorking: Boolean,
-    checkInLoading: Boolean = false,
+    busy: OrderDetailBusyAction,
     onCheckIn: (String) -> Unit,
     onReportNoShow: (reason: String, note: String?) -> Unit,
     showAcknowledgeCash: Boolean,
     onAcknowledgeCash: () -> Unit,
     formatDate: (String) -> String,
 ) {
+    val idle = busy == OrderDetailBusyAction.None
     var showNoShowPicker by remember { mutableStateOf(false) }
     var noShowNote by remember { mutableStateOf("") }
     val hasAny =
@@ -725,14 +756,14 @@ internal fun OrderMeetingGraceSection(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
                         maxLines = 4,
-                        enabled = !isWorking,
+                        enabled = idle,
                     )
                     TextButton(
                         onClick = {
                             onReportNoShow("other_absent", noShowNote.trim().ifBlank { null })
                             showNoShowPicker = false
                         },
-                        enabled = !isWorking,
+                        enabled = idle,
                     ) {
                         Text(stringResource(R.string.order_detail_no_show_other_absent))
                     }
@@ -741,7 +772,7 @@ internal fun OrderMeetingGraceSection(
                             onReportNoShow("other_late", noShowNote.trim().ifBlank { null })
                             showNoShowPicker = false
                         },
-                        enabled = !isWorking,
+                        enabled = idle,
                     ) {
                         Text(stringResource(R.string.order_detail_no_show_other_late))
                     }
@@ -750,7 +781,7 @@ internal fun OrderMeetingGraceSection(
                             onReportNoShow("mutual_cancel", noShowNote.trim().ifBlank { null })
                             showNoShowPicker = false
                         },
-                        enabled = !isWorking,
+                        enabled = idle,
                     ) {
                         Text(stringResource(R.string.order_detail_no_show_mutual_cancel))
                     }
@@ -843,21 +874,23 @@ internal fun OrderMeetingGraceSection(
                 )
             }
             if (grace.canCheckIn && !appointmentId.isNullOrBlank()) {
+                val checkInBusy = busy == OrderDetailBusyAction.CheckIn
+                val checkInOn = FashColors.Primary.fashReadableOn()
                 Button(
                     onClick = { onCheckIn(appointmentId) },
-                    enabled = !isWorking,
+                    enabled = idle,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = FashColors.Primary,
-                        contentColor = FashColors.Primary.fashReadableOn(),
+                        contentColor = checkInOn,
                     ),
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    if (checkInLoading) {
+                    if (checkInBusy) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.dp,
-                            color = FashColors.Primary.fashReadableOn(),
+                            color = checkInOn,
                         )
                     } else {
                         Text(
@@ -868,31 +901,49 @@ internal fun OrderMeetingGraceSection(
                 }
             }
             if (grace.canReportNoShow) {
+                val reportBusy = busy == OrderDetailBusyAction.ReportNoShow
                 OutlinedButton(
                     onClick = { showNoShowPicker = true },
-                    enabled = !isWorking,
+                    enabled = idle,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.45f)),
                 ) {
-                    Text(
-                        stringResource(R.string.order_detail_report_no_show_cta),
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    if (reportBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = FashColors.Primary,
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.order_detail_report_no_show_cta),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
             if (showAcknowledgeCash) {
+                val ackBusy = busy == OrderDetailBusyAction.AcknowledgeCash
                 OutlinedButton(
                     onClick = onAcknowledgeCash,
-                    enabled = !isWorking,
+                    enabled = idle,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.45f)),
                 ) {
-                    Text(
-                        stringResource(R.string.order_detail_ack_offline_cash),
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    if (ackBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = FashColors.Primary,
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.order_detail_ack_offline_cash),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }
@@ -1250,6 +1301,72 @@ internal fun CounterpartyCard(
 }
 
 @Composable
+internal fun OrderBuyerReviewSection(
+    role: OrderViewerRole,
+    review: OrderBuyerReview,
+    formatDate: (String) -> String,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val heading = when (role) {
+        OrderViewerRole.Buyer -> stringResource(R.string.order_detail_buyer_review_heading_buyer)
+        OrderViewerRole.Seller -> stringResource(R.string.order_detail_buyer_review_heading_seller)
+        OrderViewerRole.Viewer -> stringResource(R.string.order_detail_buyer_review_heading_viewer)
+    }
+    val stars = review.rating.coerceIn(0, 5)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = scheme.surface,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = heading,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(5) { i ->
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = if (i < stars) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.45f),
+                    )
+                }
+                if (stars in 1..5) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "$stars/5",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                    )
+                }
+            }
+            val comment = review.comment.trim()
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = comment.ifBlank { stringResource(R.string.order_detail_buyer_review_no_comment) },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (comment.isNotBlank()) scheme.onSurface else scheme.onSurfaceVariant,
+            )
+            val at = review.createdAt.trim()
+            if (at.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.order_detail_buyer_review_submitted_at, formatDate(at)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun OrderTrackingCard(d: OrderDetail) {
     if (d.trackingNumber.isBlank() && d.carrier.isBlank()) return
     val scheme = MaterialTheme.colorScheme
@@ -1290,7 +1407,7 @@ internal fun OrderTrackingCard(d: OrderDetail) {
 internal fun OrderStickyBottomBar(
     d: OrderDetail,
     role: OrderViewerRole,
-    isWorking: Boolean,
+    busy: OrderDetailBusyAction,
     onPay: () -> Unit,
     onCancelOrder: () -> Unit = {},
     onConfirmReceipt: () -> Unit,
@@ -1306,7 +1423,7 @@ internal fun OrderStickyBottomBar(
     val showPay = role == OrderViewerRole.Buyer && st == "payment_pending"
     val showConfirm = role == OrderViewerRole.Buyer && d.canConfirm
     val showReview = role == OrderViewerRole.Buyer && d.canReview
-    val showConfirmHandoff = role == OrderViewerRole.Seller && d.canConfirmHandoff
+    val showConfirmHandoff = role == OrderViewerRole.Seller && d.sellerShowsConfirmHandoffCta()
     val showShip = role == OrderViewerRole.Seller && st == "payment_held" && d.canShip && !showConfirmHandoff
     val showChat =
         d.conversationId.isNotBlank() &&
@@ -1318,158 +1435,289 @@ internal fun OrderStickyBottomBar(
     val showDisputeEvidence =
         role != OrderViewerRole.Viewer && st == "disputed"
 
-    if (!showPay && !showConfirm && !showReview && !showShip && !showConfirmHandoff && !showChat &&
-        !showOpenDispute && !showDisputeEvidence
-    ) {
-        return
-    }
+    val idle = busy == OrderDetailBusyAction.None
+    val hasPrimary = showConfirmHandoff || showShip || showPay || showConfirm
+    val hasSecondary = showOpenDispute || showDisputeEvidence || showReview || showChat
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .navigationBarsPadding()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 8.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    if (!hasPrimary && !hasSecondary) return
+
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
+    val rowGap = FashTheme.spacing.spacing2
+    val stickyOutline = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f))
+    val labelStyle = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
+    val flatElevation = ButtonDefaults.buttonElevation(
+        defaultElevation = 0.dp,
+        pressedElevation = 0.dp,
+        focusedElevation = 0.dp,
+        hoveredElevation = 0.dp,
+        disabledElevation = 0.dp,
+    )
+    val compactPad = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
-        if (showConfirmHandoff) {
-            Button(
-                onClick = onConfirmHandoff,
-                enabled = !isWorking,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = FashTheme.spacing.editorialStart)
+                .padding(top = FashTheme.spacing.spacing3, bottom = FashTheme.spacing.spacing2),
+            verticalArrangement = Arrangement.spacedBy(rowGap),
+        ) {
+            HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FashColors.Primary,
-                    contentColor = FashColors.Primary.fashReadableOn(),
-                ),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Icon(Icons.Filled.Handshake, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.order_detail_confirm_handoff),
-                    fontWeight = FontWeight.SemiBold,
+                color = scheme.outlineVariant.copy(alpha = 0.35f),
+            )
+
+            // ── Primary (checkout / fulfilment) ─────────────────────────────────
+            if (showConfirmHandoff) {
+                val handoffBusy = busy == OrderDetailBusyAction.ConfirmHandoff
+                val handoffOn = FashColors.Primary.fashReadableOn()
+                Button(
+                    onClick = onConfirmHandoff,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = handoffOn,
+                    ),
+                    shape = shape,
+                    elevation = flatElevation,
+                    contentPadding = compactPad,
+                ) {
+                    if (handoffBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = handoffOn,
+                        )
+                    } else {
+                        Icon(Icons.Filled.Handshake, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.order_detail_confirm_handoff), style = labelStyle)
+                    }
+                }
+            }
+            if (showShip) {
+                val shipBusy = busy == OrderDetailBusyAction.Ship
+                val shipOn = FashColors.Primary.fashReadableOn()
+                Button(
+                    onClick = onShip,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = shipOn,
+                    ),
+                    shape = shape,
+                    elevation = flatElevation,
+                    contentPadding = compactPad,
+                ) {
+                    if (shipBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = shipOn,
+                        )
+                    } else {
+                        Icon(Icons.Default.LocalShipping, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.order_detail_action_ship), style = labelStyle)
+                    }
+                }
+            }
+            if (showPay) {
+                Button(
+                    onClick = onPay,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = FashColors.Primary.fashReadableOn(),
+                    ),
+                    shape = shape,
+                    elevation = flatElevation,
+                    contentPadding = compactPad,
+                ) {
+                    Text(stringResource(R.string.order_detail_pay), style = labelStyle)
+                }
+                val cancelBusy = busy == OrderDetailBusyAction.CancelOrder
+                OutlinedButton(
+                    onClick = onCancelOrder,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    shape = shape,
+                    border = BorderStroke(1.dp, scheme.error.copy(alpha = 0.4f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.error),
+                    contentPadding = compactPad,
+                ) {
+                    if (cancelBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = scheme.error,
+                        )
+                    } else {
+                        Text(stringResource(R.string.order_cancel_order), style = labelStyle)
+                    }
+                }
+            }
+            if (showConfirm) {
+                val confirmRecvBusy = busy == OrderDetailBusyAction.ConfirmReceipt
+                val confirmOn = FashColors.Primary.fashReadableOn()
+                Button(
+                    onClick = onConfirmReceipt,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = confirmOn,
+                    ),
+                    shape = shape,
+                    elevation = flatElevation,
+                    contentPadding = compactPad,
+                ) {
+                    if (confirmRecvBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = confirmOn,
+                        )
+                    } else {
+                        Text(stringResource(R.string.orders_confirm_received), style = labelStyle)
+                    }
+                }
+            }
+
+            if (hasPrimary && hasSecondary) {
+                Spacer(modifier = Modifier.height(FashTheme.spacing.spacing1))
+                HorizontalDivider(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = scheme.outlineVariant.copy(alpha = 0.22f),
                 )
+                Spacer(modifier = Modifier.height(FashTheme.spacing.spacing1))
             }
-        }
-        if (showShip) {
-            Button(
-                onClick = onShip,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FashColors.Primary,
-                    contentColor = FashColors.Primary.fashReadableOn(),
-                ),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Icon(Icons.Default.LocalShipping, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.order_detail_action_ship),
-                    fontWeight = FontWeight.SemiBold,
-                )
+
+            // ── Secondary (post-purchase / support) — even rhythm, softer chrome ──
+            if (showReview) {
+                val reviewBusy = busy == OrderDetailBusyAction.SubmitReview
+                val reviewOn = FashColors.Primary.fashReadableOn()
+                Button(
+                    onClick = onReview,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = reviewOn,
+                    ),
+                    shape = shape,
+                    elevation = flatElevation,
+                    contentPadding = compactPad,
+                ) {
+                    if (reviewBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = reviewOn,
+                        )
+                    } else {
+                        Text(stringResource(R.string.orders_review), style = labelStyle)
+                    }
+                }
             }
-        }
-        if (showOpenDispute) {
-            OutlinedButton(
-                onClick = onOpenDispute,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.order_detail_dispute_open),
-                    fontWeight = FontWeight.SemiBold,
-                    color = FashColors.Primary,
-                )
+            if (showOpenDispute) {
+                val disputeOpenBusy = busy == OrderDetailBusyAction.OpenDispute
+                OutlinedButton(
+                    onClick = onOpenDispute,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    shape = shape,
+                    border = stickyOutline,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface),
+                    contentPadding = compactPad,
+                ) {
+                    if (disputeOpenBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = scheme.primary,
+                        )
+                    } else {
+                        Text(stringResource(R.string.order_detail_dispute_open), style = labelStyle)
+                    }
+                }
             }
-        }
-        if (showDisputeEvidence) {
-            OutlinedButton(
-                onClick = onSubmitDisputeEvidence,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.order_detail_dispute_evidence),
-                    fontWeight = FontWeight.SemiBold,
-                    color = FashColors.Primary,
-                )
+            if (showDisputeEvidence) {
+                val evidenceBusy = busy == OrderDetailBusyAction.SubmitEvidence
+                OutlinedButton(
+                    onClick = onSubmitDisputeEvidence,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    shape = shape,
+                    border = stickyOutline,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface),
+                    contentPadding = compactPad,
+                ) {
+                    if (evidenceBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = scheme.primary,
+                        )
+                    } else {
+                        Text(stringResource(R.string.order_detail_dispute_evidence), style = labelStyle)
+                    }
+                }
             }
-        }
-        if (showPay) {
-            Button(
-                onClick = onPay,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FashColors.Primary,
-                    contentColor = FashColors.Primary.fashReadableOn(),
-                ),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text(stringResource(R.string.order_detail_pay), fontWeight = FontWeight.SemiBold)
-            }
-            OutlinedButton(
-                onClick = onCancelOrder,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.55f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-            ) {
-                Text(
-                    text = stringResource(R.string.order_cancel_order),
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-        if (showConfirm) {
-            Button(
-                onClick = onConfirmReceipt,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FashColors.Primary,
-                    contentColor = FashColors.Primary.fashReadableOn(),
-                ),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text(stringResource(R.string.orders_confirm_received), fontWeight = FontWeight.SemiBold)
-            }
-        }
-        if (showReview) {
-            OutlinedButton(
-                onClick = onReview,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.orders_review))
-            }
-        }
-        if (showChat) {
-            OutlinedButton(
-                onClick = onChat,
-                enabled = !isWorking,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(
-                    Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = FashColors.Primary,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = when (role) {
-                        OrderViewerRole.Seller -> stringResource(R.string.order_detail_chat_buyer)
-                        else -> stringResource(R.string.order_detail_chat_seller)
-                    },
-                    color = FashColors.Primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            if (showChat) {
+                OutlinedButton(
+                    onClick = onChat,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    shape = shape,
+                    border = stickyOutline,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface),
+                    contentPadding = compactPad,
+                ) {
+                    Icon(
+                        Icons.Outlined.ChatBubbleOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = scheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = when (role) {
+                            OrderViewerRole.Seller -> stringResource(R.string.order_detail_chat_buyer)
+                            else -> stringResource(R.string.order_detail_chat_seller)
+                        },
+                        style = labelStyle,
+                        color = scheme.onSurface,
+                    )
+                }
             }
         }
     }

@@ -14,6 +14,9 @@ data class OrderMeetingAppointment(
     val reminderSentAt: String = "",
     val createdAt: String = "",
     val updatedAt: String = "",
+    /** From `GET /orders/:id` → `meeting_appointment` after `POST …/check-in` (RFC3339). */
+    val buyerCheckInAt: String = "",
+    val sellerCheckInAt: String = "",
 )
 
 /**
@@ -30,6 +33,14 @@ data class OrderMeetingGrace(
     val buyerCheckedInAt: String = "",
     val sellerCheckedInAt: String = "",
     val phase: String = "",
+)
+
+/** Buyer review on a completed order (`buyer_review` / `BuyerReview` on GET order). */
+data class OrderBuyerReview(
+    val id: String = "",
+    val rating: Int = 0,
+    val comment: String = "",
+    val createdAt: String = "",
 )
 
 /**
@@ -59,6 +70,7 @@ data class OrderDetail(
     val sellerAvatarUrl: String,
     val canConfirm: Boolean,
     val canReview: Boolean,
+    val buyerReview: OrderBuyerReview? = null,
     /** Shipping / checkout — buyer-facing. */
     val shippingFeeVnd: Long = 0L,
     /** Promotion / coupon (positive number = amount off). */
@@ -111,3 +123,33 @@ fun OrderDetail.effectiveBuyerTotal(): Long =
         buyerTotalVnd > 0L -> buyerTotalVnd
         else -> (amountVnd + shippingFeeVnd - discountVnd).coerceAtLeast(0L)
     }
+
+/**
+ * Seller-only: show «Confirm handoff» when the API allows it, or when both parties checked in
+ * (`meeting_grace.sos_unlocked`) while the order is still in a meetup handoff state — some backends
+ * omit `can_confirm_handoff` for `cash_meetup_open`. Server still validates time/role on POST.
+ */
+fun sellerConfirmHandoffCtaVisible(
+    canConfirmHandoff: Boolean,
+    meetupBothPartiesCheckedIn: Boolean,
+    orderStatusRaw: String?,
+): Boolean {
+    if (canConfirmHandoff) return true
+    if (!meetupBothPartiesCheckedIn) return false
+    val st = orderStatusRaw?.trim()?.lowercase().orEmpty()
+    return st == "payment_held" || st == "cash_meetup_open"
+}
+
+fun OrderDetail.sellerShowsConfirmHandoffCta(): Boolean {
+    val g = meetingGrace
+    val bothCheckedIn = when {
+        g == null -> false
+        g.sosUnlocked -> true
+        else -> g.buyerCheckedInAt.isNotBlank() && g.sellerCheckedInAt.isNotBlank()
+    }
+    return sellerConfirmHandoffCtaVisible(
+        canConfirmHandoff = canConfirmHandoff,
+        meetupBothPartiesCheckedIn = bothCheckedIn,
+        orderStatusRaw = status,
+    )
+}

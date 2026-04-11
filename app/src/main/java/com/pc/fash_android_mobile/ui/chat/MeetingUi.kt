@@ -42,6 +42,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -64,6 +65,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.MeetingAppointmentPayload
@@ -358,6 +360,10 @@ private fun MeetingMutationButtonContent(
 fun MeetingProposalMessageCard(
     message: ChatMessage,
     meeting: MeetingAppointmentPayload,
+    /** Current user is buyer in this thread (drives check-in column + copy). */
+    isViewerBuyer: Boolean,
+    /** Escrow / linked order — show handoff / confirm next-step hints (check-in ≠ order done). */
+    hasLinkedEscrowOrder: Boolean,
     formatTime: (String) -> String,
     mutationInFlight: Boolean,
     onConfirm: () -> Unit,
@@ -365,7 +371,7 @@ fun MeetingProposalMessageCard(
     onWithdrawOrReject: () -> Unit,
     /** C2C: after both sides confirmed, optional entry to `POST /deals`. */
     onRecordOfflineDeal: (() -> Unit)? = null,
-    /** Confirmed meetup: `POST …/check-in` (±30m of scheduled time). */
+    /** Confirmed meetup: `POST …/check-in` within `scheduled_at ± 30m`; does not change appointment.status. */
     onCheckIn: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -374,6 +380,9 @@ fun MeetingProposalMessageCard(
     val st = meeting.status.lowercase()
     val showConfirm = st == "pending" && !meeting.isProposerMe
     val showCancel = st == "pending" && meeting.isProposerMe
+    val myCheckInAt = if (isViewerBuyer) meeting.buyerCheckInAt else meeting.sellerCheckInAt
+    val otherCheckInAt = if (isViewerBuyer) meeting.sellerCheckInAt else meeting.buyerCheckInAt
+    val showCheckInCta = st == "confirmed" && onCheckIn != null && myCheckInAt.isBlank()
 
     Column(
         modifier = Modifier
@@ -406,10 +415,23 @@ fun MeetingProposalMessageCard(
                 )
             }
 
+            Surface(
+                color = meetingStatusChipBackground(st),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(
+                    text = stringResource(meetingStatusLabel(st)),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = meetingStatusChipOnColor(st),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+
             Text(
-                text = stringResource(meetingStatusLabel(st)),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = scheme.onSurface,
+                text = stringResource(meetingStateDescriptionRes(st)),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                lineHeight = 18.sp,
             )
 
             if (whenText.isNotBlank()) {
@@ -434,6 +456,13 @@ fun MeetingProposalMessageCard(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.chat_meeting_open_maps))
                 }
+            } else if (st == "confirmed") {
+                Text(
+                    text = stringResource(R.string.chat_meeting_confirmed_no_maps_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.9f),
+                    lineHeight = 18.sp,
+                )
             }
 
             if (st == "confirmed" && onRecordOfflineDeal != null) {
@@ -448,10 +477,62 @@ fun MeetingProposalMessageCard(
                 }
             }
 
-            if (st == "confirmed" && onCheckIn != null) {
+            if (st == "confirmed" && (otherCheckInAt.isNotBlank() || myCheckInAt.isNotBlank())) {
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
+                if (otherCheckInAt.isNotBlank()) {
+                    Text(
+                        text = stringResource(
+                            R.string.chat_meeting_other_checked_in_at,
+                            formatTime(otherCheckInAt),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        lineHeight = 18.sp,
+                    )
+                }
+                if (myCheckInAt.isNotBlank()) {
+                    Text(
+                        text = stringResource(
+                            R.string.chat_meeting_you_checked_in_at,
+                            formatTime(myCheckInAt),
+                        ),
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = scheme.onSurface,
+                        lineHeight = 18.sp,
+                    )
+                }
+            }
+
+            if (st == "confirmed" && hasLinkedEscrowOrder) {
+                Text(
+                    text = stringResource(R.string.chat_meeting_check_in_not_order_complete),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    lineHeight = 18.sp,
+                )
+                Text(
+                    text = stringResource(
+                        if (isViewerBuyer) {
+                            R.string.chat_meeting_next_steps_buyer_after_check_in
+                        } else {
+                            R.string.chat_meeting_next_steps_seller_after_check_in
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    lineHeight = 18.sp,
+                )
+            }
+
+            if (st == "confirmed" && showCheckInCta) {
+                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
+                Text(
+                    text = stringResource(R.string.chat_meeting_check_in_window_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.85f),
+                )
                 Button(
-                    onClick = onCheckIn,
+                    onClick = { onCheckIn?.invoke() },
                     enabled = !mutationInFlight,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
@@ -610,10 +691,28 @@ private fun formatSelectedDateTime(
     return zdt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy · HH:mm"))
 }
 
-private fun meetingStatusLabel(status: String): Int = when (status) {
+private fun meetingStatusLabel(status: String): Int = when (status.lowercase()) {
     "confirmed" -> R.string.chat_meeting_status_confirmed
     "cancelled" -> R.string.chat_meeting_status_cancelled
     else -> R.string.chat_meeting_status_pending
+}
+
+private fun meetingStateDescriptionRes(status: String): Int = when (status.lowercase()) {
+    "confirmed" -> R.string.chat_meeting_state_desc_confirmed
+    "cancelled" -> R.string.chat_meeting_state_desc_cancelled
+    else -> R.string.chat_meeting_state_desc_pending
+}
+
+private fun meetingStatusChipBackground(status: String): Color = when (status.lowercase()) {
+    "confirmed" -> Color(0xFFE8F5E9)
+    "cancelled" -> Color(0xFFFFEBEE)
+    else -> Color(0xFFFFF8E1)
+}
+
+private fun meetingStatusChipOnColor(status: String): Color = when (status.lowercase()) {
+    "confirmed" -> Color(0xFF1B5E20)
+    "cancelled" -> Color(0xFFB71C1C)
+    else -> Color(0xFF856404)
 }
 
 private fun formatMeetingWhen(iso: String): String {

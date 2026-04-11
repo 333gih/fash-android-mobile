@@ -379,29 +379,71 @@ class ChatRepository(
     }
 
     /**
-     * `POST /chat/meetings/:appointment_id/check-in` — optional GPS in ±30m window.
+     * `POST /chat/meetings/:appointment_id/check-in` — optional GPS in `scheduled_at ± 30m`.
+     * Request body uses role-specific keys when coordinates are sent: `buyer_check_in_lat` /
+     * `buyer_check_in_lng` or `seller_check_in_lat` / `seller_check_in_lng`.
      *
-     * Many deployments only expose `…/confirm` and `…/cancel`. If check-in is not implemented,
-     * the server returns 404/405/501 — we surface [Result.success] with `false` so the UI can
-     * refresh order/chat without claiming a persisted check-in.
+     * Response (typical): `meeting_appointment`, `already_checked_in`, `role`, optional `your_check_in_at`.
+     * Appointment [MeetingAppointmentPayload.status] is unchanged by this call (still confirmed, etc.).
      *
-     * @return `true` if the HTTP check-in call succeeded; `false` if the route is missing (refresh-only).
+     * If the route is missing (404/405/501), returns [MeetingCheckInResult.endpointAvailable] `false`.
      */
-    fun checkInMeeting(appointmentId: String, lat: Double? = null, lng: Double? = null): Result<Boolean> {
+    fun checkInMeeting(
+        appointmentId: String,
+        isBuyer: Boolean,
+        lat: Double? = null,
+        lng: Double? = null,
+    ): Result<MeetingCheckInResult> {
         val id = appointmentId.trim()
         if (id.isEmpty()) return Result.failure(IllegalArgumentException("appointment id required"))
         val json = JSONObject()
         if (lat != null && lng != null) {
-            json.put("lat", lat)
-            json.put("lng", lng)
+            if (isBuyer) {
+                json.put("buyer_check_in_lat", lat)
+                json.put("buyer_check_in_lng", lng)
+            } else {
+                json.put("seller_check_in_lat", lat)
+                json.put("seller_check_in_lng", lng)
+            }
         }
         val payload = if (json.length() == 0) "{}" else json.toString()
         return try {
-            postJson(AppEnvironment.apiPath("api/v1/chat/meetings/$id/check-in"), payload)
-            Result.success(true)
+            val body = postJson(AppEnvironment.apiPath("api/v1/chat/meetings/$id/check-in"), payload)
+            Result.success(parseMeetingCheckInResponse(body))
         } catch (e: Exception) {
-            if (isMeetupCheckInEndpointMissing(e)) Result.success(false) else Result.failure(e)
+            if (isMeetupCheckInEndpointMissing(e)) {
+                Result.success(
+                    MeetingCheckInResult(endpointAvailable = false),
+                )
+            } else {
+                Result.failure(e)
+            }
         }
+    }
+
+    private fun parseMeetingCheckInResponse(body: String): MeetingCheckInResult {
+        val o = JSONObject(body.trim())
+        val root: JSONObject = when {
+            o.has("data") && o.get("data") is JSONObject -> o.getJSONObject("data")
+            else -> o
+        }
+        val already = root.optBoolean("already_checked_in", root.optBoolean("AlreadyCheckedIn", false))
+        val yourAt = root.optString("your_check_in_at", root.optString("YourCheckInAt", ""))
+            .trim()
+            .takeIf { it.isNotEmpty() }
+        val role = root.optString("role", root.optString("Role", ""))
+            .trim()
+            .takeIf { it.isNotEmpty() }
+        val apptObj = root.optJSONObject("meeting_appointment")
+            ?: root.optJSONObject("MeetingAppointment")
+        val appt = apptObj?.let { meetingAppointmentJsonToPayload(it) }
+        return MeetingCheckInResult(
+            endpointAvailable = true,
+            alreadyCheckedIn = already,
+            yourCheckInAt = yourAt,
+            role = role,
+            meetingAppointment = appt,
+        )
     }
 
     private fun isMeetupCheckInEndpointMissing(e: Exception): Boolean {
@@ -820,6 +862,10 @@ class ChatRepository(
         val o = m.optJSONObject("meeting_appointment")
             ?: m.optJSONObject("MeetingAppointment")
             ?: return null
+        return meetingAppointmentJsonToPayload(o)
+    }
+
+    private fun meetingAppointmentJsonToPayload(o: JSONObject): MeetingAppointmentPayload? {
         val proposerId = o.optString("proposer_id", o.optString("ProposerID", ""))
         val myId = currentUserId
         val id = o.optString("id", o.optString("ID", "")).trim()
@@ -833,7 +879,17 @@ class ChatRepository(
             reminderEnabled = o.optBoolean("reminder_enabled", o.optBoolean("ReminderEnabled", true)),
             proposerId = proposerId,
             isProposerMe = myId.isNotBlank() && proposerId.isNotBlank() && proposerId == myId,
+            buyerCheckInAt = appointmentOptIso(o, "buyer_check_in_at", "BuyerCheckInAt"),
+            sellerCheckInAt = appointmentOptIso(o, "seller_check_in_at", "SellerCheckInAt"),
         )
+    }
+
+    private fun appointmentOptIso(o: JSONObject, vararg keys: String): String {
+        for (k in keys) {
+            val v = o.optString(k, "").trim()
+            if (v.isNotEmpty()) return v
+        }
+        return ""
     }
 
     private fun parseMessagesArray(json: String): List<ChatMessage> {
@@ -899,6 +955,20 @@ data class MeetingCancelResult(
     val suggestSellerReopenListing: Boolean = false,
 )
 
+/**
+ * Parsed `POST /chat/meetings/:appointment_id/check-in` body.
+ * Does not change `meeting_appointment.status` (stays pending / confirmed / cancelled).
+ */
+data class MeetingCheckInResult(
+    /** False when the route is missing (404/405/501) — caller should refresh chat/order only. */
+    val endpointAvailable: Boolean,
+    /** Server did not write again — this party had already checked in. */
+    val alreadyCheckedIn: Boolean = false,
+    val yourCheckInAt: String? = null,
+    val role: String? = null,
+    val meetingAppointment: MeetingAppointmentPayload? = null,
+)
+
 /** Embedded on [ChatMessage] when [ChatMessage.messageType] is `meeting_proposal` and API sends `meeting_appointment`. */
 data class MeetingAppointmentPayload(
     val id: String,
@@ -909,6 +979,8 @@ data class MeetingAppointmentPayload(
     val reminderEnabled: Boolean,
     val proposerId: String,
     val isProposerMe: Boolean,
+    val buyerCheckInAt: String = "",
+    val sellerCheckInAt: String = "",
 )
 
 data class ConversationDetail(

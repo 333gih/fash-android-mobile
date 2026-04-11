@@ -56,12 +56,8 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
 
-    private val _isWorking = MutableStateFlow(false)
-    val isWorking: StateFlow<Boolean> = _isWorking.asStateFlow()
-
-    /** True while meetup check-in (`I've arrived`) is in flight — drives button loading indicator. */
-    private val _checkInInFlight = MutableStateFlow(false)
-    val checkInInFlight: StateFlow<Boolean> = _checkInInFlight.asStateFlow()
+    private val _busyAction = MutableStateFlow(OrderDetailBusyAction.None)
+    val busyAction: StateFlow<OrderDetailBusyAction> = _busyAction.asStateFlow()
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
@@ -106,21 +102,52 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         val oid = _detail.value?.orderId?.trim().orEmpty()
         if (oid.isBlank()) return
         viewModelScope.launch {
-            _isWorking.value = true
-            _checkInInFlight.value = true
+            _busyAction.value = OrderDetailBusyAction.CheckIn
             val app = getApplication<Application>()
             try {
+                val isBuyerRole = when {
+                    isCurrentUserBuyer() -> true
+                    isCurrentUserSeller() -> false
+                    else -> true
+                }
                 val result = withContext(Dispatchers.IO) {
-                    chatRepository.checkInMeeting(aid, lat, lng)
+                    chatRepository.checkInMeeting(aid, isBuyer = isBuyerRole, lat = lat, lng = lng)
                 }
                 result.fold(
-                    onSuccess = { persisted ->
-                        if (persisted) {
-                            _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_ok))
-                            applyOptimisticMeetupCheckInTimestamp()
-                        } else {
-                            _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_refresh_only))
+                    onSuccess = { r ->
+                        when {
+                            !r.endpointAvailable ->
+                                _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_refresh_only))
+                            r.alreadyCheckedIn ->
+                                _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_already))
+                            else -> {
+                                _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_ok))
+                                applyOptimisticMeetupCheckInTimestamp()
+                            }
                         }
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(mapOrderMeetingCheckInError(it, app))
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
+            }
+        }
+    }
+
+    fun acknowledgeOfflineCash(orderId: String) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        viewModelScope.launch {
+            _busyAction.value = OrderDetailBusyAction.AcknowledgeCash
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.acknowledgeOfflineCash(oid) }
+                val app = getApplication<Application>()
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(app.getString(R.string.order_detail_ack_cash_ok))
                         load(oid)
                     },
                     onFailure = {
@@ -130,31 +157,8 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                     },
                 )
             } finally {
-                _checkInInFlight.value = false
-                _isWorking.value = false
+                _busyAction.value = OrderDetailBusyAction.None
             }
-        }
-    }
-
-    fun acknowledgeOfflineCash(orderId: String) {
-        val oid = orderId.trim()
-        if (oid.isBlank()) return
-        viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) { orderRepository.acknowledgeOfflineCash(oid) }
-            _isWorking.value = false
-            val app = getApplication<Application>()
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(app.getString(R.string.order_detail_ack_cash_ok))
-                    load(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: app.getString(R.string.order_detail_load_error),
-                    )
-                },
-            )
         }
     }
 
@@ -164,23 +168,26 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         val r = reason.trim()
         if (r.isEmpty()) return
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) {
-                orderRepository.reportMeetingNoShow(oid, r, emptyList(), note?.trim().orEmpty())
+            _busyAction.value = OrderDetailBusyAction.ReportNoShow
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    orderRepository.reportMeetingNoShow(oid, r, emptyList(), note?.trim().orEmpty())
+                }
+                val app = getApplication<Application>()
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(app.getString(R.string.order_detail_report_no_show_ok))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: app.getString(R.string.order_detail_load_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
             }
-            _isWorking.value = false
-            val app = getApplication<Application>()
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(app.getString(R.string.order_detail_report_no_show_ok))
-                    load(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: app.getString(R.string.order_detail_load_error),
-                    )
-                },
-            )
         }
     }
 
@@ -188,20 +195,23 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         val oid = orderId.trim()
         if (oid.isBlank()) return
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) { orderRepository.confirmHandoff(oid) }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_confirm_handoff_success))
-                    load(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.order_detail_confirm_handoff_error),
-                    )
-                },
-            )
+            _busyAction.value = OrderDetailBusyAction.ConfirmHandoff
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.confirmHandoff(oid) }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_confirm_handoff_success))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.order_detail_confirm_handoff_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
+            }
         }
     }
 
@@ -215,22 +225,25 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) {
-                orderRepository.shipOrder(oid, tn, c)
+            _busyAction.value = OrderDetailBusyAction.Ship
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    orderRepository.shipOrder(oid, tn, c)
+                }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_ship_success))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.order_detail_ship_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
             }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_ship_success))
-                    load(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.order_detail_ship_error),
-                    )
-                },
-            )
         }
     }
 
@@ -252,6 +265,7 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         val switchedOrder = prior == null || !prior.equals(clean, ignoreCase = true)
         if (switchedOrder) {
             _detail.value = null
+            _busyAction.value = OrderDetailBusyAction.None
             _isLoading.value = true
             _isRefreshing.value = false
         } else {
@@ -287,42 +301,48 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
     fun confirmReceipt(orderId: String) {
         if (orderId.isBlank()) return
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) { orderRepository.confirmReceipt(orderId) }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.orders_confirm_success))
-                    load(orderId)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.orders_confirm_error),
-                    )
-                },
-            )
+            _busyAction.value = OrderDetailBusyAction.ConfirmReceipt
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.confirmReceipt(orderId) }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.orders_confirm_success))
+                        load(orderId)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.orders_confirm_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
+            }
         }
     }
 
     fun submitReview(orderId: String, rating: Int, comment: String?) {
         if (orderId.isBlank()) return
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) {
-                orderRepository.submitReview(orderId, rating, comment)
+            _busyAction.value = OrderDetailBusyAction.SubmitReview
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    orderRepository.submitReview(orderId, rating, comment)
+                }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_review_sent))
+                        load(orderId)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.order_detail_review_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
             }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_review_sent))
-                    load(orderId)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.order_detail_review_error),
-                    )
-                },
-            )
         }
     }
 
@@ -353,22 +373,25 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) {
-                orderRepository.openDispute(oid, description, photoUrls)
+            _busyAction.value = OrderDetailBusyAction.OpenDispute
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    orderRepository.openDispute(oid, description, photoUrls)
+                }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_open_success))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.order_detail_dispute_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
             }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_open_success))
-                    load(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.order_detail_dispute_error),
-                    )
-                },
-            )
         }
     }
 
@@ -380,22 +403,25 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
         viewModelScope.launch {
-            _isWorking.value = true
-            val result = withContext(Dispatchers.IO) {
-                orderRepository.submitDisputeEvidence(oid, description, photoUrls)
+            _busyAction.value = OrderDetailBusyAction.SubmitEvidence
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    orderRepository.submitDisputeEvidence(oid, description, photoUrls)
+                }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_evidence_success))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.order_detail_dispute_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
             }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_dispute_evidence_success))
-                    load(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.order_detail_dispute_error),
-                    )
-                },
-            )
         }
     }
 
@@ -403,25 +429,28 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
     fun cancelOrder(orderId: String) {
         if (orderId.isBlank()) return
         viewModelScope.launch {
-            _isWorking.value = true
+            _busyAction.value = OrderDetailBusyAction.CancelOrder
             val app = getApplication<Application>()
-            val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(orderId) }
-            _isWorking.value = false
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(app.getString(R.string.order_cancel_success))
-                    withContext(Dispatchers.IO) {
-                        orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
-                            orderId,
-                            app.getString(R.string.chat_message_order_cancelled_by_buyer),
-                        )
-                    }
-                    load(orderId)
-                },
-                onFailure = { e ->
-                    _events.tryEmit(mapCancelOrderError(e))
-                },
-            )
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(orderId) }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(app.getString(R.string.order_cancel_success))
+                        withContext(Dispatchers.IO) {
+                            orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
+                                orderId,
+                                app.getString(R.string.chat_message_order_cancelled_by_buyer),
+                            )
+                        }
+                        load(orderId)
+                    },
+                    onFailure = { e ->
+                        _events.tryEmit(mapCancelOrderError(e))
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
+            }
         }
     }
 
@@ -457,7 +486,7 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             ?: return fresh
         val pGrace = prev.meetingGrace
         val fGrace = fresh.meetingGrace
-        return when {
+        val merged = when {
             fGrace == null && pGrace != null -> fresh.copy(meetingGrace = pGrace)
             fGrace != null && pGrace != null -> {
                 val mg = fGrace.copy(
@@ -470,6 +499,11 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             }
             else -> fresh
         }
+        val review = merged.buyerReview ?: prev.buyerReview
+        return merged.copy(
+            buyerReview = review,
+            canReview = merged.canReview && review == null,
+        )
     }
 
     private fun mapCancelOrderError(e: Throwable): String {
@@ -479,6 +513,19 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             "FORBIDDEN" -> app.getString(R.string.order_cancel_error_forbidden)
             "NOT_FOUND" -> app.getString(R.string.order_cancel_error_not_found)
             else -> e.message?.takeIf { it.isNotBlank() } ?: app.getString(R.string.order_cancel_error_generic)
+        }
+    }
+
+    private fun mapOrderMeetingCheckInError(t: Throwable, app: Application): String {
+        val m = t.message.orEmpty()
+        return when {
+            m.contains("MEETING_CHECK_IN_WINDOW", ignoreCase = true) ->
+                app.getString(R.string.chat_meeting_check_in_window_error)
+            m.contains("400", ignoreCase = true) &&
+                m.contains("WINDOW", ignoreCase = true) &&
+                (m.contains("MEETING", ignoreCase = true) || m.contains("check", ignoreCase = true)) ->
+                app.getString(R.string.chat_meeting_check_in_window_error)
+            else -> m.ifBlank { app.getString(R.string.order_detail_load_error) }
         }
     }
 }

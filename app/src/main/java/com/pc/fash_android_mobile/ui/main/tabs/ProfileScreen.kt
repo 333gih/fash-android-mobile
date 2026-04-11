@@ -7,6 +7,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,6 +16,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -77,6 +80,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
@@ -89,6 +93,7 @@ import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /** Cover height; avatar overlaps content below by [ProfileHeroAvatarOverlap]. */
@@ -216,11 +221,29 @@ private fun ProfileIdentityBlock(
             .padding(horizontal = FashTheme.spacing.editorialStart)
             .padding(top = 44.dp, bottom = 16.dp),
     ) {
-        Text(
-            text = profile?.displayName?.ifBlank { profile.username ?: "—" } ?: "—",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = profile?.displayName?.ifBlank { profile.username ?: "—" } ?: "—",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (profile?.verified == true) {
+                Icon(
+                    imageVector = Icons.Outlined.CheckCircle,
+                    contentDescription = stringResource(R.string.profile_verified_cd),
+                    tint = FashColors.Primary,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(22.dp),
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "@${profile?.username ?: "—"}",
@@ -253,6 +276,102 @@ private fun ProfileIdentityBlock(
             )
         }
         ProfileAestheticChipsRow(profile = profile, onAestheticTagClick = onAestheticTagClick)
+        ProfileSizingReferenceStrip(profile = profile)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProfileSizingReferenceStrip(profile: ProfileInfo?) {
+    val p = profile ?: return
+    val unit = p.referenceMeasurementUnit?.trim()?.takeIf { it.isNotEmpty() }
+        ?: stringResource(R.string.profile_sizing_ref_unit_default)
+    val measurementLabels = buildList {
+        p.referenceMeasurementChest?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_chest, it, unit))
+        }
+        p.referenceMeasurementHem?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_hem, it, unit))
+        }
+        p.referenceMeasurementLength?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_length, it, unit))
+        }
+        p.referenceMeasurementShoulders?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_shoulders, it, unit))
+        }
+        p.referenceMeasurementSleeveLength?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_sleeve, it, unit))
+        }
+    }
+    val refSizeLine = p.referenceSize?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        stringResource(R.string.profile_sizing_ref_size, it)
+    }
+    val fallbackOnly = measurementLabels.isEmpty() && refSizeLine == null && p.sizingReferenceCompleted
+    if (measurementLabels.isEmpty() && refSizeLine == null && !fallbackOnly) return
+    Spacer(modifier = Modifier.height(12.dp))
+    val scheme = MaterialTheme.colorScheme
+    val chipShape = RoundedCornerShape(10.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(
+                text = stringResource(R.string.profile_sizing_ref_title),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            if (fallbackOnly) {
+                Text(
+                    text = stringResource(R.string.profile_sizing_ref_completed_only),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurface,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                refSizeLine?.let { line ->
+                    Surface(
+                        shape = chipShape,
+                        color = scheme.primaryContainer.copy(alpha = 0.45f),
+                    ) {
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = scheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                    if (measurementLabels.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+                if (measurementLabels.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        measurementLabels.forEach { label ->
+                            Surface(
+                                shape = chipShape,
+                                color = scheme.surfaceContainerHighest,
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = scheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -571,11 +690,225 @@ internal fun SellerProfileHeader(
     )
 }
 
+/**
+ * Prominent trust block for **seller storefront** — placed under the hero/identity, above follower stats.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ProfileSellerTrustBanner(profile: ProfileInfo?) {
+    val p = profile ?: return
+    val scheme = MaterialTheme.colorScheme
+    val hasShop = (p.productCount ?: 0) > 0
+    val ratingVal = p.rating
+    val reviewCount = p.reviewCount
+    val hasRatingScore = ratingVal != null && ratingVal > 0f
+    val showNewShopLine = hasShop && !hasRatingScore
+    val rep = p.reputationPoints?.takeIf { it > 0 }
+    val fast = p.hasFastDelivery
+    if (!hasRatingScore && !showNewShopLine && rep == null && !fast) return
+
+    val starTint = if (hasRatingScore) {
+        Color(0xFFFFC107)
+    } else {
+        scheme.onSurfaceVariant.copy(alpha = 0.4f)
+    }
+
+    val showRatingBlock = hasRatingScore || showNewShopLine
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = scheme.primaryContainer.copy(alpha = 0.28f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.4f)),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+            if (showRatingBlock) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(44.dp),
+                        tint = starTint,
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        when {
+                            hasRatingScore && reviewCount != null && reviewCount >= 0 -> {
+                                val r = ratingVal!!
+                                Text(
+                                    text = String.format(Locale.getDefault(), "%.1f", r),
+                                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = scheme.onSurface,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.profile_seller_trust_reviews_count, reviewCount),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                            }
+                            hasRatingScore -> {
+                                val r = ratingVal!!
+                                Text(
+                                    text = String.format(Locale.getDefault(), "%.1f", r),
+                                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = scheme.onSurface,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.profile_seller_trust_subtitle_score_only),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = stringResource(R.string.profile_rating_none_seller),
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = scheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            if (showRatingBlock && (rep != null || fast)) {
+                Spacer(modifier = Modifier.height(14.dp))
+            }
+            if (rep != null || fast) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    rep?.let { pts ->
+                        Text(
+                            text = stringResource(R.string.profile_reputation_points, pts),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(scheme.primaryContainer.copy(alpha = 0.5f))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                    if (fast) {
+                        Text(
+                            text = stringResource(R.string.profile_fast_delivery),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = FashColors.Success,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(FashColors.Success.copy(alpha = 0.18f))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileTrustAndBadgesRow(profile: ProfileInfo?) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 4.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val p = profile
+        val ratingVal = p?.rating
+        val reviewCount = p?.reviewCount
+        val hasShop = (p?.productCount ?: 0) > 0
+        var placedSomething = false
+
+        when {
+            ratingVal != null && ratingVal > 0f && reviewCount != null && reviewCount >= 0 -> {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.profile_rating_format, ratingVal, reviewCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                placedSomething = true
+            }
+            ratingVal != null && ratingVal > 0f -> {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.profile_rating_score_only, ratingVal),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                placedSomething = true
+            }
+            hasShop && (ratingVal == null || ratingVal <= 0f) -> {
+                Text(
+                    text = stringResource(R.string.profile_rating_none_seller),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                placedSomething = true
+            }
+        }
+
+        p?.reputationPoints?.takeIf { it > 0 }?.let { pts ->
+            if (placedSomething) Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = stringResource(R.string.profile_reputation_points, pts),
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(scheme.primaryContainer.copy(alpha = 0.35f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+            placedSomething = true
+        }
+
+        if (p?.hasFastDelivery == true) {
+            if (placedSomething) Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = stringResource(R.string.profile_fast_delivery),
+                style = MaterialTheme.typography.labelSmall,
+                color = FashColors.Success,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(FashColors.Success.copy(alpha = 0.15f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
 @Composable
 internal fun ProfileStats(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
     onFollowersClick: () -> Unit = {},
     onFollowingClick: () -> Unit = {},
+    /** When false (e.g. seller storefront), trust/rating is shown in [ProfileSellerTrustBanner] instead. */
+    showTrustAndBadgesRow: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     Surface(
@@ -623,40 +956,10 @@ internal fun ProfileStats(
             )
         }
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 4.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        profile?.rating?.takeIf { it > 0 }?.let { rating ->
-            val reviews = profile.reviewCount ?: 0
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = stringResource(R.string.profile_rating_format, rating, reviews),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-            )
-        }
-        if (profile?.hasFastDelivery == true) {
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = stringResource(R.string.profile_fast_delivery),
-                style = MaterialTheme.typography.labelSmall,
-                color = FashColors.Success,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FashColors.Success.copy(alpha = 0.15f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
+    if (showTrustAndBadgesRow) {
+        ProfileTrustAndBadgesRow(profile = profile)
+    } else {
+        Spacer(modifier = Modifier.height(8.dp))
     }
     if (profile?.meetingNoShowWarning == true) {
         Row(

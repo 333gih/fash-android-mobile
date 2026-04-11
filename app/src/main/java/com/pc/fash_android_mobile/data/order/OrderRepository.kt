@@ -337,7 +337,18 @@ class OrderRepository(
             .ifBlank { imageUrlsArr?.optString(0) ?: "" }
         val rawStatus = o.optString("status", o.optString("Status", "payment_pending")).lowercase()
         val canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit")
-        val canReview = o.optBoolean("can_review", rawStatus == "delivered_confirmed")
+        val buyerReview = parseBuyerReview(o)
+        val apiCanReviewExplicit = when {
+            o.has("can_review") -> o.optBoolean("can_review", false)
+            o.has("CanReview") -> o.optBoolean("CanReview", false)
+            else -> null
+        }
+        val defaultReviewEligible = rawStatus == "delivered_confirmed"
+        val canReview = when {
+            buyerReview != null -> false
+            apiCanReviewExplicit != null -> apiCanReviewExplicit
+            else -> defaultReviewEligible
+        }
         val trackingNumber = o.optString("tracking_number", o.optString("TrackingNumber", ""))
         val shippingFee = o.optLong("shipping_fee_vnd", o.optLong("ShippingFeeVND", o.optLong("shipping_fee", 0L)))
         val discountVnd = o.optLong("discount_vnd", o.optLong("DiscountVND", o.optLong("discount_amount_vnd", 0L)))
@@ -360,7 +371,12 @@ class OrderRepository(
         val meetingAppointment = parseOrderMeetingAppointment(o)
         val meetingGrace = parseOrderMeetingGrace(o)
         val meetupDeadlineAt = o.optIsoFirst("meetup_deadline_at", "MeetupDeadlineAt")
-        val canConfirmHandoff = o.optBoolean("can_confirm_handoff", o.optBoolean("CanConfirmHandoff", false))
+        val canConfirmHandoff = when {
+            o.has("can_confirm_handoff") -> o.optBoolean("can_confirm_handoff", false)
+            o.has("CanConfirmHandoff") -> o.optBoolean("CanConfirmHandoff", false)
+            o.has("canConfirmHandoff") -> o.optBoolean("canConfirmHandoff", false)
+            else -> false
+        }
         val canAcknowledgeOfflineCash = o.optBoolean(
             "can_acknowledge_offline_cash",
             o.optBoolean("CanAcknowledgeOfflineCash", false),
@@ -392,6 +408,7 @@ class OrderRepository(
             sellerAvatarUrl = seller.optString("AvatarURL", seller.optString("avatar_url", "")),
             canConfirm = canConfirm,
             canReview = canReview,
+            buyerReview = buyerReview,
             shippingFeeVnd = shippingFee,
             discountVnd = discountVnd,
             buyerTotalVnd = buyerTotal,
@@ -416,6 +433,24 @@ class OrderRepository(
             meetupDeadlineAt = meetupDeadlineAt,
             canConfirmHandoff = canConfirmHandoff,
             canAcknowledgeOfflineCash = canAcknowledgeOfflineCash,
+        )
+    }
+
+    private fun parseBuyerReview(order: JSONObject): OrderBuyerReview? {
+        val br = order.optJSONObject("buyer_review")
+            ?: order.optJSONObject("BuyerReview")
+            ?: order.optJSONObject("buyerReview")
+            ?: return null
+        val id = br.optString("id", br.optString("ID", "")).trim()
+        val rating = br.optInt("rating", br.optInt("Rating", 0))
+        val comment = br.optString("comment", br.optString("Comment", "")).trim()
+        val createdAt = br.optIsoFirst("created_at", "CreatedAt", "createdAt")
+        if (id.isEmpty() && rating <= 0) return null
+        return OrderBuyerReview(
+            id = id,
+            rating = rating.coerceIn(0, 5),
+            comment = comment,
+            createdAt = createdAt,
         )
     }
 
@@ -475,6 +510,8 @@ class OrderRepository(
             reminderSentAt = meetingOptIso(m, "reminder_sent_at", "ReminderSentAt"),
             createdAt = meetingOptIso(m, "created_at", "CreatedAt"),
             updatedAt = meetingOptIso(m, "updated_at", "UpdatedAt"),
+            buyerCheckInAt = meetingOptIso(m, "buyer_check_in_at", "BuyerCheckInAt"),
+            sellerCheckInAt = meetingOptIso(m, "seller_check_in_at", "SellerCheckInAt"),
         )
     }
 

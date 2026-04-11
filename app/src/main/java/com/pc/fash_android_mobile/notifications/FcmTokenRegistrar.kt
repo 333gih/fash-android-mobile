@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.data.auth.AuthHttpException
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSession
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
+import com.pc.fash_android_mobile.data.auth.AuthTokenRefreshCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,12 +66,14 @@ class FcmTokenRegistrar(
             logE("registerFcm: backend failed — ${err.message}", err)
             return
         }
-        val refreshed = authRepository.refresh(session.refreshToken)
-        val newSession = refreshed.getOrElse {
+        val newSession = AuthTokenRefreshCoordinator.refreshIfStillCurrent(
+            sessionStore,
+            authRepository,
+            session.accessToken,
+        ).getOrElse {
             logW("registerFcm: access token expired; refresh failed — ${it.message}")
             return
         }
-        sessionStore.save(newSession)
         val second = authRepository.registerFcm(newSession.accessToken, fcmToken)
         second.fold(
             onSuccess = { logD("registerFcm: backend OK after token refresh") },

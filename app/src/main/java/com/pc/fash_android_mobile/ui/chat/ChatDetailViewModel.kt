@@ -148,11 +148,27 @@ class ChatDetailViewModel(
     val orderMeetingSosUnlocked: StateFlow<Boolean> = _orderMeetingSosUnlocked.asStateFlow()
 
     /**
+     * True when the server signals both parties checked in at the meetup: `sos_unlocked` and/or
+     * both `buyer_checked_in_at` + `seller_checked_in_at` on [OrderMeetingGrace].
+     */
+    private val _orderMeetupBothPartiesCheckedIn = MutableStateFlow(false)
+    val orderMeetupBothPartiesCheckedIn: StateFlow<Boolean> =
+        _orderMeetupBothPartiesCheckedIn.asStateFlow()
+
+    /**
      * Lowercase `meeting_appointment.status` from [OrderDetail] when the linked order has a meetup row.
      * Used to hide the deal-banner "Schedule meeting" CTA while a meetup is pending or confirmed.
      */
     private val _orderMeetingAppointmentStatus = MutableStateFlow<String?>(null)
     val orderMeetingAppointmentStatus: StateFlow<String?> = _orderMeetingAppointmentStatus.asStateFlow()
+
+    /** ISO `meeting_appointment.scheduled_at` from [OrderDetail] when linked to the open order. */
+    private val _orderMeetingScheduledAt = MutableStateFlow<String?>(null)
+    val orderMeetingScheduledAt: StateFlow<String?> = _orderMeetingScheduledAt.asStateFlow()
+
+    /** True while `POST …/confirm-handoff` is in flight (deal banner button). */
+    private val _confirmHandoffInFlight = MutableStateFlow(false)
+    val confirmHandoffInFlight: StateFlow<Boolean> = _confirmHandoffInFlight.asStateFlow()
 
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
@@ -514,8 +530,11 @@ class ChatDetailViewModel(
             _orderStatus.value = null
             _orderMeetupDeadlineAt.value = null
             _orderMeetingAppointmentStatus.value = null
+            _orderMeetingScheduledAt.value = null
             _orderCanConfirmHandoff.value = false
             _orderMeetingSosUnlocked.value = false
+            _orderMeetupBothPartiesCheckedIn.value = false
+            _confirmHandoffInFlight.value = false
         } else {
             if (preservedOrderId != null) _orderId.value = preservedOrderId
             if (preservedOrderStatus != null) _orderStatus.value = preservedOrderStatus
@@ -610,8 +629,11 @@ class ChatDetailViewModel(
             _orderStatus.value = null
             _orderMeetupDeadlineAt.value = null
             _orderMeetingAppointmentStatus.value = null
+            _orderMeetingScheduledAt.value = null
             _orderCanConfirmHandoff.value = false
             _orderMeetingSosUnlocked.value = false
+            _orderMeetupBothPartiesCheckedIn.value = false
+            _confirmHandoffInFlight.value = false
             _activeDeal.value = null
             _pendingDealReviewDealId.value = null
             _counterOfferSheet.value = null
@@ -713,17 +735,29 @@ class ChatDetailViewModel(
 
     fun createOffer(amountVnd: Long) {
         val d = _detail.value ?: return
+        val app = getApplication<Application>()
         if (d.pendingOffer != null) {
-            _events.tryEmit(getApplication<Application>().getString(R.string.chat_error_pending_offer))
+            _events.tryEmit(app.getString(R.string.chat_error_pending_offer))
             return
         }
         if (_orderId.value != null) {
-            _events.tryEmit(getApplication<Application>().getString(R.string.chat_error_order_exists))
+            _events.tryEmit(app.getString(R.string.chat_error_order_exists))
+            return
+        }
+        if (shouldBlockBuyerNewPriceOffer(
+                messages = _messages.value,
+                viewerIsBuyer = d.isBuyer,
+                orderStatus = _orderStatus.value,
+                orderApptStatus = _orderMeetingAppointmentStatus.value,
+                orderApptScheduledAt = _orderMeetingScheduledAt.value,
+            )
+        ) {
+            _events.tryEmit(app.getString(R.string.chat_offer_blocked_active_meetup))
             return
         }
         if (d.offerCount >= BusinessFlowConfig.maxOffersPerConversation) {
             _events.tryEmit(
-                getApplication<Application>().getString(
+                app.getString(
                     R.string.chat_error_offer_limit,
                     BusinessFlowConfig.maxOffersPerConversation,
                 ),
@@ -1010,27 +1044,63 @@ class ChatDetailViewModel(
 
     fun checkInMeeting(appointmentId: String, lat: Double? = null, lng: Double? = null) {
         val convId = _detail.value?.conversationId ?: return
+        val isBuyer = _detail.value?.isBuyer ?: return
         val app = getApplication<Application>()
         viewModelScope.launch {
             _meetingMutationInFlight.value = true
             val result = withContext(Dispatchers.IO) {
-                chatRepository.checkInMeeting(appointmentId, lat, lng)
+                chatRepository.checkInMeeting(appointmentId, isBuyer = isBuyer, lat = lat, lng = lng)
             }
             _meetingMutationInFlight.value = false
             result.fold(
-                onSuccess = { persisted ->
-                    if (persisted) {
-                        _events.tryEmit(app.getString(R.string.chat_meeting_check_in_ok))
-                    } else {
-                        _events.tryEmit(app.getString(R.string.chat_meeting_check_in_refresh_only))
+                onSuccess = { r ->
+                    when {
+                        !r.endpointAvailable ->
+                            _events.tryEmit(app.getString(R.string.chat_meeting_check_in_refresh_only))
+                        r.alreadyCheckedIn ->
+                            _events.tryEmit(app.getString(R.string.chat_meeting_check_in_already))
+                        else ->
+                            _events.tryEmit(app.getString(R.string.chat_meeting_check_in_ok))
+                    }
+                    r.meetingAppointment?.let { ap ->
+                        _messages.value = _messages.value.map { m ->
+                            val cur = m.meetingAppointment
+                            if (cur == null || !cur.id.equals(ap.id, ignoreCase = true)) {
+                                m
+                            } else {
+                                m.copy(
+                                    meetingAppointment = ap.copy(
+                                        buyerCheckInAt = ap.buyerCheckInAt.ifBlank { cur.buyerCheckInAt },
+                                        sellerCheckInAt = ap.sellerCheckInAt.ifBlank { cur.sellerCheckInAt },
+                                        proposerId = ap.proposerId.ifBlank { cur.proposerId },
+                                        isProposerMe = cur.isProposerMe,
+                                    ),
+                                )
+                            }
+                        }
                     }
                     refreshMessages(convId)
                     _orderId.value?.trim()?.takeIf { it.isNotEmpty() }?.let { fetchOrderStatus(it) }
                 },
                 onFailure = {
-                    _events.tryEmit(it.message ?: app.getString(R.string.chat_meeting_error))
+                    _events.tryEmit(mapMeetingCheckInError(it, app))
                 },
             )
+        }
+    }
+
+    private fun mapMeetingCheckInError(t: Throwable, app: Application): String {
+        val m = t.message.orEmpty()
+        return when {
+            m.contains("MEETING_CHECK_IN_WINDOW", ignoreCase = true) ->
+                app.getString(R.string.chat_meeting_check_in_window_error)
+            m.contains("400", ignoreCase = true) &&
+                (m.contains("MEETING_CHECK_IN", ignoreCase = true) ||
+                    m.contains("check-in", ignoreCase = true) ||
+                    m.contains("check_in", ignoreCase = true)) &&
+                m.contains("WINDOW", ignoreCase = true) ->
+                app.getString(R.string.chat_meeting_check_in_window_error)
+            else -> m.ifBlank { app.getString(R.string.chat_meeting_error) }
         }
     }
 
@@ -1228,8 +1298,11 @@ class ChatDetailViewModel(
                     _orderStatus.value = null
                     _orderMeetupDeadlineAt.value = null
                     _orderMeetingAppointmentStatus.value = null
+                    _orderMeetingScheduledAt.value = null
                     _orderCanConfirmHandoff.value = false
                     _orderMeetingSosUnlocked.value = false
+                    _orderMeetupBothPartiesCheckedIn.value = false
+                    _confirmHandoffInFlight.value = false
                 }
             }
             _orderId.value != oid -> {
@@ -1299,9 +1372,18 @@ class ChatDetailViewModel(
         val deadline = detail.meetupDeadlineAt.trim().takeIf { it.isNotEmpty() }
         _orderMeetupDeadlineAt.value = deadline
         _orderCanConfirmHandoff.value = detail.canConfirmHandoff
-        _orderMeetingSosUnlocked.value = detail.meetingGrace?.sosUnlocked == true
+        val grace = detail.meetingGrace
+        _orderMeetingSosUnlocked.value = grace?.sosUnlocked == true
+        _orderMeetupBothPartiesCheckedIn.value = when {
+            grace == null -> false
+            grace.sosUnlocked -> true
+            else ->
+                grace.buyerCheckedInAt.isNotBlank() && grace.sellerCheckedInAt.isNotBlank()
+        }
         _orderMeetingAppointmentStatus.value =
             detail.meetingAppointment?.status?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        _orderMeetingScheduledAt.value =
+            detail.meetingAppointment?.scheduledAt?.trim()?.takeIf { it.isNotEmpty() }
         // Keep [orderId] on detail so the deal row / order overlay stay available for cancelled orders too.
     }
 
@@ -1311,19 +1393,24 @@ class ChatDetailViewModel(
     fun confirmHandoff() {
         val oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { orderRepository.confirmHandoff(oid) }
-            val app = getApplication<Application>()
-            result.fold(
-                onSuccess = {
-                    _events.tryEmit(app.getString(R.string.order_detail_confirm_handoff_success))
-                    fetchOrderStatus(oid)
-                },
-                onFailure = {
-                    _events.tryEmit(
-                        it.message ?: app.getString(R.string.order_detail_confirm_handoff_error),
-                    )
-                },
-            )
+            _confirmHandoffInFlight.value = true
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.confirmHandoff(oid) }
+                val app = getApplication<Application>()
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(app.getString(R.string.order_detail_confirm_handoff_success))
+                        fetchOrderStatus(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: app.getString(R.string.order_detail_confirm_handoff_error),
+                        )
+                    },
+                )
+            } finally {
+                _confirmHandoffInFlight.value = false
+            }
         }
     }
 

@@ -220,7 +220,11 @@ fun SellerProfileScreen(
                                             onNavigateToExploreFromProfile(null, null, id, name, null, null)
                                         },
                                     )
-                                    ProfileStats(profile = profile)
+                                    ProfileSellerTrustBanner(profile = profile)
+                                    ProfileStats(
+                                        profile = profile,
+                                        showTrustAndBadgesRow = false,
+                                    )
                                     if (profile != null && viewModel.canFollowSeller()) {
                                         SellerFollowRow(
                                             isFollowing = isFollowing,

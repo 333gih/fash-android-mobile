@@ -19,6 +19,7 @@ internal fun Throwable.isTransientRefreshFailure(): Boolean {
     var t: Throwable? = this
     while (t != null) {
         when (t) {
+            is AuthSessionMissingException -> return false
             is JSONException -> return true
             is SocketTimeoutException -> return false
             is IOException -> return true

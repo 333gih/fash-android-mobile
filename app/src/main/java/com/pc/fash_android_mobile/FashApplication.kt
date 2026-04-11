@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
+import com.pc.fash_android_mobile.data.auth.AuthTokenRefreshCoordinator
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.chat.ChatRepository
@@ -197,13 +198,11 @@ class FashApplication : Application(), ImageLoaderFactory {
             // the access token before retrying so we never loop with a stale token.
             tokenRefresher = {
                 val session = authManager.sessionStore.read() ?: return@RealtimeManager null
-                authManager.authRepository.refresh(session.refreshToken)
-                    .getOrNull()
-                    ?.also { newSession ->
-                        authManager.sessionStore.save(newSession)
-                        authManager.onSessionSaved()
-                    }
-                    ?.accessToken
+                AuthTokenRefreshCoordinator.refreshIfStillCurrent(
+                    authManager.sessionStore,
+                    authManager.authRepository,
+                    session.accessToken,
+                ).getOrNull()?.also { authManager.onSessionSaved() }?.accessToken
             },
         )
     }

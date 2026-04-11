@@ -800,6 +800,11 @@ class UserRepository(
                 "meeting_no_show_warning",
                 o.optBoolean("MeetingNoShowWarning", false),
             ),
+            verified = o.optBoolean("verified", o.optBoolean("Verified", false)),
+            sizingReferenceCompleted = o.optBoolean(
+                "sizing_reference_completed",
+                o.optBoolean("SizingReferenceCompleted", false),
+            ),
         )
     }
 
@@ -1157,4 +1162,8 @@ data class ProfileInfo(
     val reputationPoints: Int? = null,
     /** Public warning flag from core-service (meetup reliability). */
     val meetingNoShowWarning: Boolean = false,
+    /** Account verified badge when API sends `Verified` / `verified`. */
+    val verified: Boolean = false,
+    /** Onboarding / profile sizing step completed (`sizing_reference_completed`). */
+    val sizingReferenceCompleted: Boolean = false,
 )

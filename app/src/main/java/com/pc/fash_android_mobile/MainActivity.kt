@@ -1113,6 +1113,9 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 },
                                                 onOrdersClick = { showOrdersScreen = true },
+                                                onSellerSuggestNewListing = {
+                                                    selectedTab = MainTab.Post.ordinal
+                                                },
                                                 orderDetailOverlayOrderId = chatOrderDetailOverlayId,
                                                 onDismissOrderDetailOverlay = { chatOrderDetailOverlayId = null },
                                                 orderDetailViewModel = orderDetailViewModel,
