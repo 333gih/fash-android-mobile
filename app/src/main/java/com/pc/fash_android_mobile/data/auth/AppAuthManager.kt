@@ -71,7 +71,8 @@ class AppAuthManager(
      * When the access token is still within [AuthSession.expiresInSeconds] of [AuthSessionStore]
      * issue time, skips the network call so a flaky refresh or misclassified 4xx cannot log
      * the user out. On transient refresh failures, keeps the session (retries a few times).
-     * Only clears on definitive OAuth-style failures (400/401/403 from the auth service).
+     * Clears the session on definitive OAuth-style failures (400/401/403) or refresh
+     * [java.net.SocketTimeoutException] (OkHttp read/connect timeout, e.g. 20s).
      */
     suspend fun validateOrClearSession(): Boolean {
         val session = sessionStore.read() ?: return false
@@ -117,20 +118,22 @@ class AppAuthManager(
         private const val ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000L
     }
 
-    fun logout(accessToken: String): Result<Unit> =
-        authRepository.logout(accessToken).also { result ->
-            result.onSuccess {
-                sessionStore.clear()
-                // Intentional logout — no reason message
-                _isAuthenticated.value = false
-            }
-        }
+    /**
+     * Calls the auth service to revoke the session, then **always** clears local tokens and sets
+     * [isAuthenticated] to false so the UI returns to login even if the HTTP call fails (offline,
+     * 5xx, or misconfigured path).
+     */
+    fun logout(accessToken: String): Result<Unit> {
+        val result = authRepository.logout(accessToken)
+        sessionStore.clear()
+        _isAuthenticated.value = false
+        return result
+    }
 
-    fun logoutAll(accessToken: String): Result<Unit> =
-        authRepository.logoutAll(accessToken).also { result ->
-            result.onSuccess {
-                sessionStore.clear()
-                _isAuthenticated.value = false
-            }
-        }
+    fun logoutAll(accessToken: String): Result<Unit> {
+        val result = authRepository.logoutAll(accessToken)
+        sessionStore.clear()
+        _isAuthenticated.value = false
+        return result
+    }
 }

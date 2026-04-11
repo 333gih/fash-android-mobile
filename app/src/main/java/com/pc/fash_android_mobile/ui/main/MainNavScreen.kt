@@ -213,10 +213,16 @@ fun MainNavScreen(
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
                 )
-                MainTab.Post, MainTab.Chat -> MainTopBar(
+                MainTab.Post -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
+                )
+                MainTab.Chat -> MainTopBar(
+                    suffixRes = tab.headerSuffixRes,
+                    onSearchClick = openExploreSearch,
+                    onNotificationsClick = { showNotificationScreen = true },
+                    onOrdersClick = onOrdersClick,
                 )
                 else -> MainTopBar(
                     suffixRes = MainTab.Home.headerSuffixRes,

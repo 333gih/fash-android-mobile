@@ -8,6 +8,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.user.ProfileInfo
+import com.pc.fash_android_mobile.data.user.UserAccessStatus
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,6 +52,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    private val _meetingSchedulingReverifyRequired = MutableStateFlow(false)
+    val meetingSchedulingReverifyRequired: StateFlow<Boolean> = _meetingSchedulingReverifyRequired.asStateFlow()
+
+    private val _meetingSchedulingSuspendedUntil = MutableStateFlow<String?>(null)
+    val meetingSchedulingSuspendedUntil: StateFlow<String?> = _meetingSchedulingSuspendedUntil.asStateFlow()
+
+    private val _ackMeetingReverifyInFlight = MutableStateFlow(false)
+    val ackMeetingReverifyInFlight: StateFlow<Boolean> = _ackMeetingReverifyInFlight.asStateFlow()
+
     private var loadProfileJob: Job? = null
 
     /** First load when profile is missing. Skips refetch when the Profile tab recomposes but data is already in memory. */
@@ -72,6 +82,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         onSuccess = { _profile.value = it },
                         onFailure = { _loadError.value = true },
                     )
+                    userRepository.getUserAccessStatus().getOrNull()?.let { applyMeetingTrustFromStatus(it) }
                 }
                 _profile.value?.userId?.let { sellerId ->
                     withContext(Dispatchers.IO) {
@@ -110,6 +121,46 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun retryLoad() = loadProfile()
+
+    private fun applyMeetingTrustFromStatus(status: UserAccessStatus) {
+        _meetingSchedulingReverifyRequired.value = status.meetingSchedulingReverifyRequired
+        _meetingSchedulingSuspendedUntil.value = status.meetingSchedulingSuspendedUntil
+    }
+
+    fun refreshMeetingTrustFlags() {
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) {
+                userRepository.getUserAccessStatus().getOrNull()
+            }
+            status?.let { applyMeetingTrustFromStatus(it) }
+        }
+    }
+
+    fun ackMeetingIdentityReverify() {
+        if (_ackMeetingReverifyInFlight.value) return
+        viewModelScope.launch {
+            _ackMeetingReverifyInFlight.value = true
+            val result = withContext(Dispatchers.IO) {
+                userRepository.ackMeetingIdentityReverify()
+            }
+            _ackMeetingReverifyInFlight.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _meetingSchedulingReverifyRequired.value = false
+                    _meetingSchedulingSuspendedUntil.value = null
+                    refreshMeetingTrustFlags()
+                    _events.tryEmit(app.getString(R.string.meeting_identity_reverify_ack_ok))
+                },
+                onFailure = { e ->
+                    _events.tryEmit(
+                        e.message?.takeIf { m -> m.isNotBlank() }
+                            ?: app.getString(R.string.meeting_identity_reverify_ack_error),
+                    )
+                },
+            )
+        }
+    }
 
     fun toggleLike(item: ListingFeedItem) {
         viewModelScope.launch {

@@ -4,9 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
-import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.data.chat.ChatMessage
+import com.pc.fash_android_mobile.data.chat.ChatMapsUrlRules
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ConversationDetail
@@ -14,9 +15,13 @@ import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.data.chat.OtherUser
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
+import com.pc.fash_android_mobile.data.deal.DealRecord
+import com.pc.fash_android_mobile.data.deal.DealRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.data.user.MeetingTrustErrorCodes
+import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -50,10 +55,14 @@ class ChatDetailViewModel(
         (application as FashApplication).chatRepository
     private val orderRepository: OrderRepository =
         (application as FashApplication).orderRepository
+    private val dealRepository: DealRepository =
+        (application as FashApplication).dealRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
     private val sessionStore =
         (application as FashApplication).authManager.sessionStore
+    private val userRepository: UserRepository =
+        (application as FashApplication).userRepository
 
     // ── UI state ──────────────────────────────────────────────────────────
 
@@ -81,6 +90,40 @@ class ChatDetailViewModel(
     private val _isCreatingOffer = MutableStateFlow(false)
     val isCreatingOffer: StateFlow<Boolean> = _isCreatingOffer.asStateFlow()
 
+    private val _isCreatingCounterOffer = MutableStateFlow(false)
+    val isCreatingCounterOffer: StateFlow<Boolean> = _isCreatingCounterOffer.asStateFlow()
+
+    private val _isDealWorking = MutableStateFlow(false)
+    val isDealWorking: StateFlow<Boolean> = _isDealWorking.asStateFlow()
+
+    /** Seller counter-offer sheet: buyer's offer [messageId] and amount for subtitle. */
+    private val _counterOfferSheet = MutableStateFlow<CounterOfferSheetArgs?>(null)
+    val counterOfferSheet: StateFlow<CounterOfferSheetArgs?> = _counterOfferSheet.asStateFlow()
+
+    /** Last offline deal created or updated in this screen (parallel to escrow orders). */
+    private val _activeDeal = MutableStateFlow<DealRecord?>(null)
+    val activeDeal: StateFlow<DealRecord?> = _activeDeal.asStateFlow()
+
+    /** After [completeOfflineDeal], prompt for optional star review until submitted or skipped. */
+    private val _pendingDealReviewDealId = MutableStateFlow<String?>(null)
+    val pendingDealReviewDealId: StateFlow<String?> = _pendingDealReviewDealId.asStateFlow()
+
+    private val _isProposingMeeting = MutableStateFlow(false)
+    val isProposingMeeting: StateFlow<Boolean> = _isProposingMeeting.asStateFlow()
+
+    private val _meetingMutationInFlight = MutableStateFlow(false)
+    val meetingMutationInFlight: StateFlow<Boolean> = _meetingMutationInFlight.asStateFlow()
+
+    private val _showMeetingIdentityReverifyDialog = MutableStateFlow(false)
+    val showMeetingIdentityReverifyDialog: StateFlow<Boolean> = _showMeetingIdentityReverifyDialog.asStateFlow()
+
+    private val _ackMeetingReverifyInFlight = MutableStateFlow(false)
+    val ackMeetingReverifyInFlight: StateFlow<Boolean> = _ackMeetingReverifyInFlight.asStateFlow()
+
+    /** After cancel meeting: server may suggest seller reopen listing (never auto-reopen). */
+    private val _suggestReopenListing = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val suggestReopenListing: SharedFlow<Unit> = _suggestReopenListing.asSharedFlow()
+
     /**
      * Non-null when the conversation has an associated order (deal done — seller accepted).
      * Drives the STATE A → STATE B transition.
@@ -92,6 +135,25 @@ class ChatDetailViewModel(
     private val _orderStatus = MutableStateFlow<String?>(null)
     val orderStatus: StateFlow<String?> = _orderStatus.asStateFlow()
 
+    /** ISO `meetup_deadline_at` from order detail when meetup-linked payment window applies. */
+    private val _orderMeetupDeadlineAt = MutableStateFlow<String?>(null)
+    val orderMeetupDeadlineAt: StateFlow<String?> = _orderMeetupDeadlineAt.asStateFlow()
+
+    /** Seller may call [confirmHandoff] (meetup handoff). */
+    private val _orderCanConfirmHandoff = MutableStateFlow(false)
+    val orderCanConfirmHandoff: StateFlow<Boolean> = _orderCanConfirmHandoff.asStateFlow()
+
+    /** From `GET /orders/:id` → `meeting_grace.sos_unlocked` after both parties checked in. */
+    private val _orderMeetingSosUnlocked = MutableStateFlow(false)
+    val orderMeetingSosUnlocked: StateFlow<Boolean> = _orderMeetingSosUnlocked.asStateFlow()
+
+    /**
+     * Lowercase `meeting_appointment.status` from [OrderDetail] when the linked order has a meetup row.
+     * Used to hide the deal-banner "Schedule meeting" CTA while a meetup is pending or confirmed.
+     */
+    private val _orderMeetingAppointmentStatus = MutableStateFlow<String?>(null)
+    val orderMeetingAppointmentStatus: StateFlow<String?> = _orderMeetingAppointmentStatus.asStateFlow()
+
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
 
@@ -100,6 +162,10 @@ class ChatDetailViewModel(
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
+
+    /** One-shot: open order detail after seller accepts offer (escrow flow). */
+    private val _navigateToOrderDetail = MutableSharedFlow<String>(extraBufferCapacity = 2)
+    val navigateToOrderDetail: SharedFlow<String> = _navigateToOrderDetail.asSharedFlow()
 
     // Kept for backward compat with MainActivity callers — never emitted under new offer flow.
     private val _acceptedOfferForCheckout = MutableStateFlow<AcceptedOfferForCheckout?>(null)
@@ -116,12 +182,6 @@ class ChatDetailViewModel(
     private var pollingJob: Job? = null
     private var typingTimeoutJob: Job? = null
     private var silentPollDebounceJob: Job? = null
-
-    /**
-     * Server may still return [ConversationDetail.orderId] briefly after cancel; once we know the order is
-     * `cancelled`, we ignore that id until GET conversation clears it — avoids hiding the offer button.
-     */
-    private val dismissedConversationOrderIds = mutableSetOf<String>()
 
     override fun onCleared() {
         super.onCleared()
@@ -432,41 +492,62 @@ class ChatDetailViewModel(
     fun loadFromItem(item: ConversationItem) {
         pollingJob?.cancel()
         silentPollDebounceJob?.cancel()
-        viewModelScope.launch {
-            _isLoading.value = true
-            _loadError.value = null
-            _messages.value = emptyList()
+
+        val previous = _detail.value
+        val sameConversation = previous?.conversationId == item.conversationId
+        val preservedOrderId = if (sameConversation) {
+            _orderId.value?.trim()?.takeIf { it.isNotEmpty() }
+                ?: previous?.orderId?.trim()?.takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+        val preservedOrderStatus = if (sameConversation) _orderStatus.value else null
+
+        // Apply instantly on the main thread so [ChatDetailScreen] LaunchedEffect sees matching
+        // conversationId before async work — avoids racing [loadConversation] vs this loader and
+        // prevents the deal / view-order row from flashing off (order cleared then restored).
+        _isLoading.value = true
+        _loadError.value = null
+        _messages.value = emptyList()
+        if (!sameConversation) {
             _orderId.value = null
             _orderStatus.value = null
-            dismissedConversationOrderIds.clear()
+            _orderMeetupDeadlineAt.value = null
+            _orderMeetingAppointmentStatus.value = null
+            _orderCanConfirmHandoff.value = false
+            _orderMeetingSosUnlocked.value = false
+        } else {
+            if (preservedOrderId != null) _orderId.value = preservedOrderId
+            if (preservedOrderStatus != null) _orderStatus.value = preservedOrderStatus
+        }
 
-            val myUserId = sessionStore.read()?.userId?.trim().orEmpty()
-            val isBuyer = when {
-                myUserId.isNotBlank() && item.buyerUserId.isNotBlank() -> myUserId == item.buyerUserId
-                else -> true
-            }
+        val myUserId = sessionStore.read()?.userId?.trim().orEmpty()
+        val isBuyer = when {
+            myUserId.isNotBlank() && item.buyerUserId.isNotBlank() -> myUserId == item.buyerUserId
+            else -> true
+        }
 
-            // Instant display from list data
-            _detail.value = ConversationDetail(
-                conversationId = item.conversationId,
-                otherUser = OtherUser(
-                    userId = item.otherUserId,
-                    displayName = item.displayName,
-                    username = item.username,
-                    avatarUrl = item.avatarUrl,
-                ),
-                product = if (item.productId.isNotBlank()) ProductCard(
-                    listingId = item.productId,
-                    title = item.productTitle,
-                    priceVnd = item.productPrice,
-                    imageUrl = item.productThumbnailUrl,
-                ) else null,
-                messages = emptyList(),
-                pendingOffer = null,
-                isBuyer = isBuyer,
-                orderId = null,
-            )
+        _detail.value = ConversationDetail(
+            conversationId = item.conversationId,
+            otherUser = OtherUser(
+                userId = item.otherUserId,
+                displayName = item.displayName,
+                username = item.username,
+                avatarUrl = item.avatarUrl,
+            ),
+            product = if (item.productId.isNotBlank()) ProductCard(
+                listingId = item.productId,
+                title = item.productTitle,
+                priceVnd = item.productPrice,
+                imageUrl = item.productThumbnailUrl,
+            ) else null,
+            messages = emptyList(),
+            pendingOffer = null,
+            isBuyer = isBuyer,
+            orderId = if (sameConversation) preservedOrderId else null,
+        )
 
+        viewModelScope.launch {
             // Parallel: (1) fetch messages, (2) fetch full detail for order_id + listing status
             val msgJob = launch {
                 _isMessagesLoading.value = true
@@ -527,7 +608,13 @@ class ChatDetailViewModel(
             _messages.value = emptyList()
             _orderId.value = null
             _orderStatus.value = null
-            dismissedConversationOrderIds.clear()
+            _orderMeetupDeadlineAt.value = null
+            _orderMeetingAppointmentStatus.value = null
+            _orderCanConfirmHandoff.value = false
+            _orderMeetingSosUnlocked.value = false
+            _activeDeal.value = null
+            _pendingDealReviewDealId.value = null
+            _counterOfferSheet.value = null
 
             val result = withContext(Dispatchers.IO) {
                 chatRepository.getConversationDetail(conversationId)
@@ -626,15 +713,19 @@ class ChatDetailViewModel(
 
     fun createOffer(amountVnd: Long) {
         val d = _detail.value ?: return
+        if (d.pendingOffer != null) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.chat_error_pending_offer))
+            return
+        }
         if (_orderId.value != null) {
             _events.tryEmit(getApplication<Application>().getString(R.string.chat_error_order_exists))
             return
         }
-        if (d.offerCount >= BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION) {
+        if (d.offerCount >= BusinessFlowConfig.maxOffersPerConversation) {
             _events.tryEmit(
                 getApplication<Application>().getString(
                     R.string.chat_error_offer_limit,
-                    BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION,
+                    BusinessFlowConfig.maxOffersPerConversation,
                 ),
             )
             return
@@ -661,25 +752,100 @@ class ChatDetailViewModel(
         }
     }
 
+    fun openCounterOfferSheet(buyerOfferMessageId: String, buyerOfferAmountVnd: Long) {
+        val id = buyerOfferMessageId.trim()
+        if (id.isEmpty()) return
+        _counterOfferSheet.value = CounterOfferSheetArgs(id, buyerOfferAmountVnd)
+    }
+
+    fun dismissCounterOfferSheet() {
+        _counterOfferSheet.value = null
+    }
+
+    fun submitCounterOffer(amountVnd: Long) {
+        val args = _counterOfferSheet.value ?: return
+        val d = _detail.value ?: return
+        val app = getApplication<Application>()
+        if (amountVnd < 1000L) {
+            _events.tryEmit(app.getString(R.string.chat_counter_offer_min))
+            return
+        }
+        if (d.isBuyer) {
+            _events.tryEmit(app.getString(R.string.chat_offer_error))
+            return
+        }
+        if (_orderId.value != null) {
+            _events.tryEmit(app.getString(R.string.chat_error_order_exists))
+            return
+        }
+        if (d.offerCount >= BusinessFlowConfig.maxOffersPerConversation) {
+            _events.tryEmit(
+                app.getString(R.string.chat_error_offer_limit, BusinessFlowConfig.maxOffersPerConversation),
+            )
+            return
+        }
+        viewModelScope.launch {
+            _isCreatingCounterOffer.value = true
+            val result = withContext(Dispatchers.IO) {
+                chatRepository.createCounterOffer(d.conversationId, args.buyerOfferMessageId, amountVnd)
+            }
+            result.fold(
+                onSuccess = { msg ->
+                    _counterOfferSheet.value = null
+                    _detail.value = d.copy(
+                        pendingOffer = PriceOffer(
+                            offerId = msg.messageId,
+                            amountVnd = msg.offerAmountVnd,
+                            proposedByMe = true,
+                            status = "pending",
+                        ),
+                        offerCount = d.offerCount + 1,
+                    )
+                    refreshMessages(d.conversationId)
+                    withContext(Dispatchers.IO) {
+                        chatRepository.getConversationDetail(d.conversationId).getOrNull()
+                    }?.let { fresh ->
+                        _detail.value = _detail.value?.copy(offerCount = fresh.offerCount)
+                    }
+                },
+                onFailure = { e ->
+                    _isCreatingCounterOffer.value = false
+                    _events.tryEmit(mapOfferError(e))
+                },
+            )
+        }
+    }
+
     fun acceptOffer(offer: PriceOffer) {
         val convId = _detail.value?.conversationId ?: return
         viewModelScope.launch {
             _isRespondingToOffer.value = true
-            val result = withContext(Dispatchers.IO) {
-                chatRepository.respondToOffer(convId, offer.offerId, true)
+            val result: Result<String?> = withContext(Dispatchers.IO) {
+                chatRepository.acceptOfferUnified(convId, offer.offerId)
             }
             _isRespondingToOffer.value = false
+            val app = getApplication<Application>()
             result.fold(
-                onSuccess = {
+                onSuccess = { orderIdHint ->
                     _detail.value = _detail.value?.copy(pendingOffer = null)
-                    _events.tryEmit(getApplication<Application>().getString(R.string.chat_offer_accepted))
+                    _events.tryEmit(app.getString(R.string.chat_offer_accepted))
                     refreshMessages(convId)
-                    // Backend auto-creates order on acceptance — fetch to get orderId
-                    checkForOrderId(convId)
+                    var oid = orderIdHint?.trim()?.takeIf { it.isNotEmpty() }
+                    if (oid.isNullOrBlank()) {
+                        checkForOrderId(convId)
+                        oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() }
+                    } else {
+                        _orderId.value = oid
+                        _detail.value = _detail.value?.copy(orderId = oid)
+                        fetchOrderStatus(oid)
+                    }
+                    if (!oid.isNullOrBlank()) {
+                        _navigateToOrderDetail.tryEmit(oid)
+                    }
                 },
                 onFailure = {
                     _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.chat_offer_error),
+                        it.message ?: app.getString(R.string.chat_offer_error),
                     )
                 },
             )
@@ -695,7 +861,7 @@ class ChatDetailViewModel(
             }
             _isRespondingToOffer.value = false
             result.fold(
-                onSuccess = {
+                onSuccess = { _ ->
                     _detail.value = _detail.value?.copy(pendingOffer = null)
                     refreshMessages(convId)
                 },
@@ -706,6 +872,295 @@ class ChatDetailViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * @param conversationId Conversation opened in this screen (required so the request always targets
+     * the correct thread; avoids a silent no-op if [ConversationDetail] is momentarily null).
+     */
+    fun proposeMeeting(
+        conversationId: String,
+        locationUrl: String,
+        scheduledAtIso: String,
+        reminderEnabled: Boolean,
+        reminderOffsetMinutes: Int,
+        onSuccess: () -> Unit = {},
+    ) {
+        val fromParam = conversationId.trim()
+        val fromDetail = _detail.value?.conversationId?.trim().orEmpty()
+        val convId = fromParam.ifBlank { fromDetail }
+        if (convId.isBlank()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.chat_meeting_error))
+            return
+        }
+        val appEarly = getApplication<Application>()
+        if (!ChatMapsUrlRules.isLenientMeetingMapsUrl(locationUrl)) {
+            _events.tryEmit(appEarly.getString(R.string.chat_meeting_maps_url_invalid))
+            return
+        }
+        viewModelScope.launch {
+            _isProposingMeeting.value = true
+            val result = withContext(Dispatchers.IO) {
+                chatRepository.proposeMeeting(
+                    conversationId = convId,
+                    locationUrl = locationUrl,
+                    scheduledAtRfc3339 = scheduledAtIso,
+                    reminderEnabled = reminderEnabled,
+                    reminderOffsetMinutes = reminderOffsetMinutes,
+                )
+            }
+            _isProposingMeeting.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    // Close the bottom sheet immediately; refreshing messages can take ~1s over the network.
+                    onSuccess()
+                    _events.tryEmit(app.getString(R.string.chat_meeting_proposed_ok))
+                    viewModelScope.launch {
+                        refreshMessages(convId)
+                        _orderId.value?.trim()?.takeIf { it.isNotEmpty() }?.let { fetchOrderStatus(it) }
+                    }
+                },
+                onFailure = {
+                    val raw = it.message.orEmpty()
+                    if (MeetingTrustErrorCodes.isIdentityReverifyRequired(raw)) {
+                        _showMeetingIdentityReverifyDialog.value = true
+                    } else {
+                        _events.tryEmit(raw.ifBlank { app.getString(R.string.chat_meeting_error) })
+                    }
+                },
+            )
+        }
+    }
+
+    fun dismissMeetingIdentityReverifyDialog() {
+        _showMeetingIdentityReverifyDialog.value = false
+    }
+
+    fun ackMeetingIdentityReverifyFromChat() {
+        if (_ackMeetingReverifyInFlight.value) return
+        viewModelScope.launch {
+            _ackMeetingReverifyInFlight.value = true
+            val result = withContext(Dispatchers.IO) {
+                userRepository.ackMeetingIdentityReverify()
+            }
+            _ackMeetingReverifyInFlight.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _showMeetingIdentityReverifyDialog.value = false
+                    _events.tryEmit(app.getString(R.string.meeting_identity_reverify_ack_ok))
+                },
+                onFailure = { e ->
+                    _events.tryEmit(
+                        e.message?.takeIf { m -> m.isNotBlank() }
+                            ?: app.getString(R.string.meeting_identity_reverify_ack_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun confirmMeeting(appointmentId: String) {
+        val convId = _detail.value?.conversationId ?: return
+        viewModelScope.launch {
+            _meetingMutationInFlight.value = true
+            val result = withContext(Dispatchers.IO) { chatRepository.confirmMeeting(appointmentId) }
+            _meetingMutationInFlight.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(app.getString(R.string.chat_meeting_confirmed_ok))
+                    refreshMessages(convId)
+                    val oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() }
+                    if (oid != null) {
+                        viewModelScope.launch { fetchOrderStatus(oid) }
+                    }
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_meeting_error))
+                },
+            )
+        }
+    }
+
+    fun cancelMeeting(appointmentId: String) {
+        val convId = _detail.value?.conversationId ?: return
+        viewModelScope.launch {
+            _meetingMutationInFlight.value = true
+            val result = withContext(Dispatchers.IO) { chatRepository.cancelMeeting(appointmentId) }
+            _meetingMutationInFlight.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = { cancelMeta ->
+                    _events.tryEmit(app.getString(R.string.chat_meeting_cancelled_ok))
+                    refreshMessages(convId)
+                    _orderId.value?.trim()?.takeIf { it.isNotEmpty() }?.let { fetchOrderStatus(it) }
+                    val isSeller = _detail.value?.isBuyer == false
+                    if (cancelMeta.suggestSellerReopenListing && isSeller) {
+                        _suggestReopenListing.tryEmit(Unit)
+                    }
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_meeting_error))
+                },
+            )
+        }
+    }
+
+    fun checkInMeeting(appointmentId: String, lat: Double? = null, lng: Double? = null) {
+        val convId = _detail.value?.conversationId ?: return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _meetingMutationInFlight.value = true
+            val result = withContext(Dispatchers.IO) {
+                chatRepository.checkInMeeting(appointmentId, lat, lng)
+            }
+            _meetingMutationInFlight.value = false
+            result.fold(
+                onSuccess = { persisted ->
+                    if (persisted) {
+                        _events.tryEmit(app.getString(R.string.chat_meeting_check_in_ok))
+                    } else {
+                        _events.tryEmit(app.getString(R.string.chat_meeting_check_in_refresh_only))
+                    }
+                    refreshMessages(convId)
+                    _orderId.value?.trim()?.takeIf { it.isNotEmpty() }?.let { fetchOrderStatus(it) }
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_meeting_error))
+                },
+            )
+        }
+    }
+
+    fun createOfflineDeal(
+        meetingAppointmentId: String?,
+        meetingLocationUrl: String,
+        meetingAtRfc3339: String,
+        agreedPriceVnd: Long?,
+    ) {
+        val d = _detail.value ?: return
+        val app = getApplication<Application>()
+        val listingId = d.product?.listingId?.trim().orEmpty()
+        if (listingId.isEmpty()) {
+            _events.tryEmit(app.getString(R.string.chat_offline_deal_error_listing))
+            return
+        }
+        val url = meetingLocationUrl.trim()
+        val at = meetingAtRfc3339.trim()
+        if (!ChatMapsUrlRules.isLenientMeetingMapsUrl(url)) {
+            _events.tryEmit(app.getString(R.string.chat_meeting_maps_url_invalid))
+            return
+        }
+        if (at.isEmpty()) {
+            _events.tryEmit(app.getString(R.string.chat_offline_deal_error_time))
+            return
+        }
+        viewModelScope.launch {
+            _isDealWorking.value = true
+            val result = withContext(Dispatchers.IO) {
+                dealRepository.createDeal(
+                    listingId = listingId,
+                    conversationId = d.conversationId,
+                    meetingLocationUrl = url,
+                    meetingAtRfc3339 = at,
+                    meetingAppointmentId = meetingAppointmentId?.trim()?.takeIf { it.isNotEmpty() },
+                    agreedPriceVnd = agreedPriceVnd?.takeIf { it > 0L },
+                )
+            }
+            _isDealWorking.value = false
+            result.fold(
+                onSuccess = { deal ->
+                    _activeDeal.value = deal
+                    _events.tryEmit(app.getString(R.string.chat_offline_deal_created))
+                    refreshMessages(d.conversationId)
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_offline_deal_error))
+                },
+            )
+        }
+    }
+
+    fun completeOfflineDeal() {
+        val id = _activeDeal.value?.dealId?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _isDealWorking.value = true
+            val result = withContext(Dispatchers.IO) { dealRepository.completeDeal(id) }
+            _isDealWorking.value = false
+            result.fold(
+                onSuccess = { deal ->
+                    _activeDeal.value = deal
+                    if (deal.status == "completed") {
+                        _pendingDealReviewDealId.value = deal.dealId
+                    }
+                    _events.tryEmit(app.getString(R.string.chat_offline_deal_completed_ok))
+                    val conv = _detail.value?.conversationId.orEmpty()
+                    if (conv.isNotEmpty()) refreshMessages(conv)
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_offline_deal_error))
+                },
+            )
+        }
+    }
+
+    fun cancelActiveOfflineDeal() {
+        val id = _activeDeal.value?.dealId?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _isDealWorking.value = true
+            val result = withContext(Dispatchers.IO) { dealRepository.cancelDeal(id) }
+            _isDealWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _activeDeal.value = null
+                    _pendingDealReviewDealId.value = null
+                    _events.tryEmit(app.getString(R.string.chat_offline_deal_cancelled_ok))
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_offline_deal_error))
+                },
+            )
+        }
+    }
+
+    fun submitOfflineDealReview(dealId: String, rating: Int, comment: String?) {
+        val id = dealId.trim().takeIf { it.isNotEmpty() }
+            ?: _pendingDealReviewDealId.value?.trim()?.takeIf { it.isNotEmpty() }
+            ?: _activeDeal.value?.dealId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: run {
+                _events.tryEmit(getApplication<Application>().getString(R.string.chat_offline_deal_error))
+                return
+            }
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _isDealWorking.value = true
+            val result = withContext(Dispatchers.IO) {
+                dealRepository.submitDealReview(id, rating, comment)
+            }
+            _isDealWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _pendingDealReviewDealId.value = null
+                    _events.tryEmit(app.getString(R.string.chat_offline_deal_review_ok))
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_offline_deal_error))
+                },
+            )
+        }
+    }
+
+    fun skipOfflineDealReviewPrompt() {
+        _pendingDealReviewDealId.value = null
+    }
+
+    fun clearActiveOfflineDealState() {
+        _activeDeal.value = null
+        _pendingDealReviewDealId.value = null
     }
 
     fun deleteMessage(message: ChatMessage) {
@@ -763,21 +1218,19 @@ class ChatDetailViewModel(
         syncOrderIdStateFromConversationDetail(d)
     }
 
-    /** When the server clears [ConversationDetail.orderId] (e.g. buyer cancelled unpaid order), drop local order state. */
+    /** When the server clears [ConversationDetail.orderId], drop local order state. */
     private fun syncOrderIdStateFromConversationDetail(d: ConversationDetail) {
         val oid = d.orderId?.trim()?.takeIf { it.isNotEmpty() }
         when {
             oid == null -> {
-                dismissedConversationOrderIds.clear()
                 if (_orderId.value != null) {
                     _orderId.value = null
                     _orderStatus.value = null
+                    _orderMeetupDeadlineAt.value = null
+                    _orderMeetingAppointmentStatus.value = null
+                    _orderCanConfirmHandoff.value = false
+                    _orderMeetingSosUnlocked.value = false
                 }
-            }
-            oid in dismissedConversationOrderIds -> {
-                if (_orderId.value != null) _orderId.value = null
-                _orderStatus.value = "cancelled"
-                _detail.value = _detail.value?.copy(orderId = null)
             }
             _orderId.value != oid -> {
                 _orderId.value = oid
@@ -840,14 +1293,37 @@ class ChatDetailViewModel(
     }
 
     private suspend fun fetchOrderStatus(orderId: String) {
-        val result = withContext(Dispatchers.IO) { orderRepository.getOrder(orderId) }
-        val order = result.getOrNull() ?: return
-        val st = order.status.trim().lowercase()
-        _orderStatus.value = order.status
-        if (st == "cancelled") {
-            dismissedConversationOrderIds.add(orderId)
-            _orderId.value = null
-            _detail.value = _detail.value?.copy(orderId = null)
+        val result = withContext(Dispatchers.IO) { orderRepository.getOrderDetail(orderId) }
+        val detail = result.getOrNull() ?: return
+        _orderStatus.value = detail.status
+        val deadline = detail.meetupDeadlineAt.trim().takeIf { it.isNotEmpty() }
+        _orderMeetupDeadlineAt.value = deadline
+        _orderCanConfirmHandoff.value = detail.canConfirmHandoff
+        _orderMeetingSosUnlocked.value = detail.meetingGrace?.sosUnlocked == true
+        _orderMeetingAppointmentStatus.value =
+            detail.meetingAppointment?.status?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        // Keep [orderId] on detail so the deal row / order overlay stay available for cancelled orders too.
+    }
+
+    /**
+     * Seller: `POST /orders/:id/confirm-handoff` for meetup / in-person delivery path.
+     */
+    fun confirmHandoff() {
+        val oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { orderRepository.confirmHandoff(oid) }
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(app.getString(R.string.order_detail_confirm_handoff_success))
+                    fetchOrderStatus(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: app.getString(R.string.order_detail_confirm_handoff_error),
+                    )
+                },
+            )
         }
     }
 
@@ -864,6 +1340,7 @@ class ChatDetailViewModel(
         }
         // Clear after messages are applied so the offer bubble replaces the sending placeholder without a blank gap.
         _isCreatingOffer.value = false
+        _isCreatingCounterOffer.value = false
     }
 
     /**
@@ -875,8 +1352,11 @@ class ChatDetailViewModel(
      */
     private fun syncPendingOfferFromMessages(messages: List<ChatMessage>, conversationId: String) {
         val detail = _detail.value ?: return
-        val latestOffer = messages
-            .filter { it.messageType == "offer" }
+        val latestNegotiation = messages
+            .filter {
+                it.messageType == "offer" ||
+                    it.messageType.equals("counter_offer", ignoreCase = true)
+            }
             .maxByOrNull { it.timestamp }
             ?: run {
                 if (detail.pendingOffer != null) _detail.value = detail.copy(pendingOffer = null)
@@ -884,22 +1364,21 @@ class ChatDetailViewModel(
             }
 
         val newPendingOffer: PriceOffer? = when {
-            latestOffer.offerStatus == "pending" && !latestOffer.isFromMe ->
+            latestNegotiation.offerStatus == "pending" && !latestNegotiation.isFromMe ->
                 PriceOffer(
-                    offerId = latestOffer.messageId,
-                    amountVnd = latestOffer.offerAmountVnd,
+                    offerId = latestNegotiation.messageId,
+                    amountVnd = latestNegotiation.offerAmountVnd,
                     proposedByMe = false,
                     status = "pending",
                 )
-            latestOffer.offerStatus == "pending" && latestOffer.isFromMe ->
+            latestNegotiation.offerStatus == "pending" && latestNegotiation.isFromMe ->
                 PriceOffer(
-                    offerId = latestOffer.messageId,
-                    amountVnd = latestOffer.offerAmountVnd,
+                    offerId = latestNegotiation.messageId,
+                    amountVnd = latestNegotiation.offerAmountVnd,
                     proposedByMe = true,
                     status = "pending",
                 )
-            latestOffer.offerStatus == "accepted" && _orderId.value == null -> {
-                // Order was auto-created when seller accepted — fetch it
+            latestNegotiation.offerStatus == "accepted" && _orderId.value == null -> {
                 viewModelScope.launch { checkForOrderId(conversationId) }
                 null
             }
@@ -921,7 +1400,7 @@ class ChatDetailViewModel(
             msg.contains("409") && msg.contains("OFFER_LIMIT_REACHED", ignoreCase = true) ->
                 getApplication<Application>().getString(
                     R.string.chat_error_offer_limit,
-                    BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION,
+                    BusinessFlowConfig.maxOffersPerConversation,
                 )
             msg.contains("409") && msg.contains("PENDING_OFFER", ignoreCase = true) ->
                 getApplication<Application>().getString(R.string.chat_error_pending_offer)
@@ -963,4 +1442,9 @@ class ChatDetailViewModel(
 data class AcceptedOfferForCheckout(
     val listingId: String,
     val acceptedAmountVnd: Long,
+)
+
+data class CounterOfferSheetArgs(
+    val buyerOfferMessageId: String,
+    val buyerOfferAmountVnd: Long,
 )

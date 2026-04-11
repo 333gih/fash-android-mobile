@@ -680,6 +680,15 @@ Seller marks order as shipped.
 
 ---
 
+### `POST /orders/{order_id}/confirm-handoff` 🔒
+**Seller only** — confirms in-person / meetup handoff after the scheduled meetup time, when the order is `payment_held` and linked to a confirmed meetup (MEETUP / in-person fulfilment). Transitions toward `in_transit` so the buyer can confirm receipt (`POST /orders/{order_id}/confirm`).
+
+**Response `200`:** `{ "ok": true }` or updated order object (per implementation)
+
+**Errors:** `400` / `403` wrong role or state, `404` unknown order.
+
+---
+
 ### `POST /orders/{order_id}/confirm` 🔒
 Buyer confirms receipt. **Triggers escrow release** to seller.
 

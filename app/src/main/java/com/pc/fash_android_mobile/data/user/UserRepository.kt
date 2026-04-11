@@ -790,6 +790,16 @@ class UserRepository(
             referenceMeasurementShoulders = optDoubleIfPresent("reference_measurement_shoulders"),
             referenceMeasurementSleeveLength = optDoubleIfPresent("reference_measurement_sleeve_length"),
             hasFastDelivery = o.optBoolean("has_fast_delivery", o.optBoolean("hasFastDelivery", false)),
+            reputationPoints = when {
+                o.has("reputation_points") -> o.optInt("reputation_points", 0)
+                o.has("ReputationPoints") -> o.optInt("ReputationPoints", 0)
+                o.has("reputationPoints") -> o.optInt("reputationPoints", 0)
+                else -> null
+            },
+            meetingNoShowWarning = o.optBoolean(
+                "meeting_no_show_warning",
+                o.optBoolean("MeetingNoShowWarning", false),
+            ),
         )
     }
 
@@ -811,6 +821,34 @@ class UserRepository(
      * Secured GET — onboarding/home gate (path from [AppEnvironment.userAccessStatusPath], e.g. `.../setup-status`).
      * Errors: JSON `{ "code": <http>, "error": "<message>" }` (typical core-service shape).
      */
+    /**
+     * `POST /users/me/meeting-trust/ack-identity-reverify` — call after the user completes out-of-band KYC /
+     * identity re-verification; clears `meeting_scheduling_reverify_required` and `meeting_scheduling_suspended_until`
+     * when the server accepts.
+     */
+    fun ackMeetingIdentityReverify(): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/meeting-trust/ack-identity-reverify")
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post("{}".toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
     fun getUserAccessStatus(): Result<UserAccessStatus> = runCatching {
         val path = AppEnvironment.userAccessStatusPath.trim().trimStart('/')
         val url = AppEnvironment.apiPath(path)
@@ -914,6 +952,13 @@ class UserRepository(
             root.has("isChangePassword") -> root.getBoolean("isChangePassword")
             else -> null
         }
+        val reverifyRequired = parseJsonBoolean(root, "meeting_scheduling_reverify_required")
+            ?: parseJsonBoolean(root, "meetingSchedulingReverifyRequired")
+            ?: false
+        val suspendedUntil = root.optString("meeting_scheduling_suspended_until", "")
+            .ifBlank { root.optString("meetingSchedulingSuspendedUntil", "") }
+            .trim()
+            .takeIf { it.isNotEmpty() }
         return UserAccessStatus(
             hasProfile = root.optBoolean("has_profile", root.optBoolean("hasProfile", false)),
             aestheticTagsConfigured = root.optBoolean(
@@ -929,6 +974,8 @@ class UserRepository(
             nextStep = root.optString("next_step", root.optString("nextStep", "")).trim().takeIf { it.isNotEmpty() },
             passwordSet = passwordSet,
             isChangePassword = isChangePassword,
+            meetingSchedulingReverifyRequired = reverifyRequired,
+            meetingSchedulingSuspendedUntil = suspendedUntil,
         )
     }
 
@@ -974,6 +1021,10 @@ data class UserAccessStatus(
     val passwordSet: Boolean? = null,
     /** `true` when first-time password step still needed (same signal as `!password_set` when set). */
     val isChangePassword: Boolean? = null,
+    /** Meetup scheduling blocked until identity is re-verified (e.g. 3rd no-show in 30 days). */
+    val meetingSchedulingReverifyRequired: Boolean = false,
+    /** RFC3339 / server ISO timestamp until meetup scheduling is suspended, if any. */
+    val meetingSchedulingSuspendedUntil: String? = null,
 ) {
     /** First-time password step: after username ([onboardingDone]), before home. */
     fun needsPasswordSetup(): Boolean {
@@ -1102,4 +1153,8 @@ data class ProfileInfo(
     val referenceMeasurementShoulders: Double? = null,
     val referenceMeasurementSleeveLength: Double? = null,
     val hasFastDelivery: Boolean = false,
+    /** Trust / gamification when API sends it. */
+    val reputationPoints: Int? = null,
+    /** Public warning flag from core-service (meetup reliability). */
+    val meetingNoShowWarning: Boolean = false,
 )

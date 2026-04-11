@@ -149,4 +149,8 @@ object AppEnvironment {
         val base = BuildConfig.LISTING_SHARE_BASE_URL.trimEnd('/')
         return "$base/$id"
     }
+
+    /** From env `IDENTITY_REVERIFY_URL` — optional Custom Tabs target for meetup identity re-verification. */
+    val identityReverifyUrl: String
+        get() = BuildConfig.IDENTITY_REVERIFY_URL.trim()
 }

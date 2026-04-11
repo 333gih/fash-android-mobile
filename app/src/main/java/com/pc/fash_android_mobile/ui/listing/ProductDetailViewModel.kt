@@ -189,7 +189,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             orderRepository.getBuyingOrders(50, 0)
         }.getOrNull() ?: return false
         val active = setOf(
-            "payment_pending", "payment_held", "in_transit", "pending",
+            "payment_pending", "payment_held", "in_transit", "pending", "cash_meetup_open",
         )
         return orders.any { o ->
             o.listingId.equals(listingId, ignoreCase = true) &&

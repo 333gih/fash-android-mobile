@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
+import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -37,12 +38,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
@@ -281,6 +285,10 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
+    val meetingReverifyRequired by viewModel.meetingSchedulingReverifyRequired.collectAsState()
+    val meetingSuspendedUntil by viewModel.meetingSchedulingSuspendedUntil.collectAsState()
+    val ackMeetingReverifyInFlight by viewModel.ackMeetingReverifyInFlight.collectAsState()
+    val profileContext = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.ensureProfileLoaded()
@@ -352,6 +360,25 @@ fun ProfileScreen(
                                     onFollowersClick = { onOpenFollowConnections(1) },
                                     onFollowingClick = { onOpenFollowConnections(0) },
                                 )
+                                if (meetingReverifyRequired) {
+                                    ProfileMeetingIdentityReverifyBanner(
+                                        suspendedUntil = meetingSuspendedUntil,
+                                        verifyUrl = AppEnvironment.identityReverifyUrl.takeIf { it.isNotEmpty() },
+                                        isAckInFlight = ackMeetingReverifyInFlight,
+                                        onOpenVerification = {
+                                            val u = AppEnvironment.identityReverifyUrl.trim()
+                                            if (u.isNotEmpty()) {
+                                                runCatching {
+                                                    CustomTabsIntent.Builder()
+                                                        .setShowTitle(true)
+                                                        .build()
+                                                        .launchUrl(profileContext, Uri.parse(u))
+                                                }
+                                            }
+                                        },
+                                        onAckCompleted = { viewModel.ackMeetingIdentityReverify() },
+                                    )
+                                }
                                 ProfileShippingAddressesRow(onClick = onShippingAddressesClick)
                             }
                         },
@@ -375,6 +402,84 @@ fun ProfileScreen(
                         onListingSave = { viewModel.toggleSave(it) },
                         modifier = Modifier.fillMaxSize(),
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileMeetingIdentityReverifyBanner(
+    suspendedUntil: String?,
+    verifyUrl: String?,
+    isAckInFlight: Boolean,
+    onOpenVerification: () -> Unit,
+    onAckCompleted: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp)
+            .clip(RoundedCornerShape(12.dp)),
+        color = scheme.errorContainer,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = scheme.onErrorContainer,
+                    modifier = Modifier.size(22.dp),
+                )
+                Text(
+                    text = stringResource(R.string.profile_meeting_identity_reverify_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onErrorContainer,
+                )
+            }
+            Text(
+                text = stringResource(R.string.profile_meeting_identity_reverify_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onErrorContainer,
+            )
+            suspendedUntil?.takeIf { it.isNotBlank() }?.let { until ->
+                Text(
+                    text = stringResource(R.string.profile_meeting_identity_reverify_suspended_until, until),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onErrorContainer,
+                )
+            }
+            if (!verifyUrl.isNullOrBlank()) {
+                OutlinedButton(
+                    onClick = onOpenVerification,
+                    enabled = !isAckInFlight,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.meeting_identity_reverify_open_link))
+                }
+            }
+            Button(
+                onClick = onAckCompleted,
+                enabled = !isAckInFlight,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isAckInFlight) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = scheme.onPrimary,
+                    )
+                } else {
+                    Text(stringResource(R.string.meeting_identity_reverify_ack_done))
                 }
             }
         }
@@ -550,6 +655,28 @@ internal fun ProfileStats(
                     .clip(RoundedCornerShape(8.dp))
                     .background(FashColors.Success.copy(alpha = 0.15f))
                     .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
+    if (profile?.meetingNoShowWarning == true) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = FashTheme.spacing.editorialStart)
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(R.string.profile_meeting_no_show_warning),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
             )
         }
     }

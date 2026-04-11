@@ -5,8 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderDetail
+import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -17,11 +19,17 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class OrderDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     private val orderRepository: OrderRepository =
         (application as FashApplication).orderRepository
+    private val chatRepository: ChatRepository =
+        (application as FashApplication).chatRepository
     private val orderCancelCoordinator =
         (application as FashApplication).orderCancelCoordinator
     private val listingRepository: ListingRepository =
@@ -50,6 +58,10 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _isWorking = MutableStateFlow(false)
     val isWorking: StateFlow<Boolean> = _isWorking.asStateFlow()
+
+    /** True while meetup check-in (`I've arrived`) is in flight — drives button loading indicator. */
+    private val _checkInInFlight = MutableStateFlow(false)
+    val checkInInFlight: StateFlow<Boolean> = _checkInInFlight.asStateFlow()
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
@@ -85,6 +97,114 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
     /**
      * Marks the order as shipped (seller). Refreshes detail on success.
      */
+    /**
+     * Seller confirms meetup / in-person handoff (see `OrderRepository.confirmHandoff`).
+     */
+    fun checkInAtMeeting(appointmentId: String, lat: Double? = null, lng: Double? = null) {
+        val aid = appointmentId.trim()
+        if (aid.isBlank()) return
+        val oid = _detail.value?.orderId?.trim().orEmpty()
+        if (oid.isBlank()) return
+        viewModelScope.launch {
+            _isWorking.value = true
+            _checkInInFlight.value = true
+            val app = getApplication<Application>()
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    chatRepository.checkInMeeting(aid, lat, lng)
+                }
+                result.fold(
+                    onSuccess = { persisted ->
+                        if (persisted) {
+                            _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_ok))
+                            applyOptimisticMeetupCheckInTimestamp()
+                        } else {
+                            _events.tryEmit(app.getString(R.string.order_detail_meeting_check_in_refresh_only))
+                        }
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: app.getString(R.string.order_detail_load_error),
+                        )
+                    },
+                )
+            } finally {
+                _checkInInFlight.value = false
+                _isWorking.value = false
+            }
+        }
+    }
+
+    fun acknowledgeOfflineCash(orderId: String) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        viewModelScope.launch {
+            _isWorking.value = true
+            val result = withContext(Dispatchers.IO) { orderRepository.acknowledgeOfflineCash(oid) }
+            _isWorking.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(app.getString(R.string.order_detail_ack_cash_ok))
+                    load(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: app.getString(R.string.order_detail_load_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun reportMeetingNoShow(orderId: String, reason: String, note: String? = null) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        val r = reason.trim()
+        if (r.isEmpty()) return
+        viewModelScope.launch {
+            _isWorking.value = true
+            val result = withContext(Dispatchers.IO) {
+                orderRepository.reportMeetingNoShow(oid, r, emptyList(), note?.trim().orEmpty())
+            }
+            _isWorking.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(app.getString(R.string.order_detail_report_no_show_ok))
+                    load(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: app.getString(R.string.order_detail_load_error),
+                    )
+                },
+            )
+        }
+    }
+
+    fun confirmHandoff(orderId: String) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        viewModelScope.launch {
+            _isWorking.value = true
+            val result = withContext(Dispatchers.IO) { orderRepository.confirmHandoff(oid) }
+            _isWorking.value = false
+            result.fold(
+                onSuccess = {
+                    _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_confirm_handoff_success))
+                    load(oid)
+                },
+                onFailure = {
+                    _events.tryEmit(
+                        it.message ?: getApplication<Application>().getString(R.string.order_detail_confirm_handoff_error),
+                    )
+                },
+            )
+        }
+    }
+
     fun shipOrder(orderId: String, trackingNumber: String, carrier: String) {
         val oid = orderId.trim()
         if (oid.isBlank()) return
@@ -147,7 +267,7 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
             result.fold(
                 onSuccess = { order ->
                     if (!_requestedOrderId.value.equals(clean, ignoreCase = true)) return@fold
-                    _detail.value = order
+                    _detail.value = mergeOrderDetailPreservingMeetupGrace(order)
                     _loadError.value = null
                 },
                 onFailure = { e ->
@@ -302,6 +422,53 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                     _events.tryEmit(mapCancelOrderError(e))
                 },
             )
+        }
+    }
+
+    /** RFC3339-ish UTC so [formatOrderDateTime] can show “you checked in” even if GET omits grace briefly. */
+    private fun isoTimestampUtcNow(): String {
+        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        return fmt.format(Date())
+    }
+
+    /**
+     * After successful check-in, show this party’s row immediately (GET may omit `meeting_grace` once).
+     */
+    private fun applyOptimisticMeetupCheckInTimestamp() {
+        val cur = _detail.value ?: return
+        val mg = cur.meetingGrace ?: OrderMeetingGrace()
+        val stamp = isoTimestampUtcNow()
+        val updated = when {
+            isCurrentUserBuyer() && mg.buyerCheckedInAt.isBlank() ->
+                mg.copy(buyerCheckedInAt = stamp)
+            isCurrentUserSeller() && mg.sellerCheckedInAt.isBlank() ->
+                mg.copy(sellerCheckedInAt = stamp)
+            else -> return
+        }
+        _detail.value = cur.copy(meetingGrace = updated)
+    }
+
+    /**
+     * Keeps meetup grace visible when the server returns `null` or partial `meeting_grace` on refresh.
+     */
+    private fun mergeOrderDetailPreservingMeetupGrace(fresh: OrderDetail): OrderDetail {
+        val prev = _detail.value?.takeIf { it.orderId.equals(fresh.orderId, ignoreCase = true) }
+            ?: return fresh
+        val pGrace = prev.meetingGrace
+        val fGrace = fresh.meetingGrace
+        return when {
+            fGrace == null && pGrace != null -> fresh.copy(meetingGrace = pGrace)
+            fGrace != null && pGrace != null -> {
+                val mg = fGrace.copy(
+                    buyerCheckedInAt = fGrace.buyerCheckedInAt.ifBlank { pGrace.buyerCheckedInAt },
+                    sellerCheckedInAt = fGrace.sellerCheckedInAt.ifBlank { pGrace.sellerCheckedInAt },
+                    checkInHint = fGrace.checkInHint.ifBlank { pGrace.checkInHint },
+                    noShowHint = fGrace.noShowHint.ifBlank { pGrace.noShowHint },
+                )
+                fresh.copy(meetingGrace = mg)
+            }
+            else -> fresh
         }
     }
 

@@ -48,6 +48,19 @@ private val NavIconLabelGap = 4.dp
 private val NavSlotMinHeight = 56.dp
 
 /**
+ * Divider + nav row + vertical padding — matches [MainNavBottomBar] layout; excludes system navigation bar.
+ * Use for fullscreen overlays (e.g. global dialogs) so content clears the tab bar.
+ */
+val MainNavBottomBarOverlayInset = 1.dp + 72.dp + 20.dp
+
+/**
+ * Approximate space to reserve above the system nav for [com.pc.fash_android_mobile.ui.chat.ChatDetailScreen]
+ * composer row (divider + optional typing strip + input bar). Excludes system navigation bar insets.
+ * Used so global message dialogs do not cover the typing field when chat is open.
+ */
+val ChatComposerBarOverlayInset = 100.dp
+
+/**
  * Bottom bar with a centered Post action (FAB). Slots share equal width; icons and labels align
  * on one row without a raised FAB that breaks the bar’s top edge.
  */

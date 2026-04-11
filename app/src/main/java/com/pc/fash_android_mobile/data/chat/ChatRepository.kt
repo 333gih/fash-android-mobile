@@ -40,7 +40,8 @@ private fun buildHttpErrorMessage(responseCode: Int, body: String): String {
  *
  * Endpoints match core-service under [com.pc.fash_android_mobile.config.AppEnvironment.apiPath]:
  * `POST api/v1/chat/conversations` (listing_id), `GET api/v1/chat/conversations/{id}`,
- * `POST api/v1/chat/offers`, `POST api/v1/chat/offers/accept|decline`, etc.
+ * `POST api/v1/chat/offers`, `POST api/v1/chat/offers/accept|accept-in-chat|decline`,
+ * `POST api/v1/chat/meetings/propose|.../confirm|.../cancel|.../check-in`, etc.
  * Optional locale segment (`{vi|en}`) is applied when `CORE_API_USE_LANGUAGE_PREFIX` is true in env.
  *
  * Parses PascalCase responses from the backend:
@@ -244,18 +245,176 @@ class ChatRepository(
         parseOffer(postJson(AppEnvironment.apiPath("api/v1/chat/offers"), json))
     }
 
+    /**
+     * API: POST /chat/offers/counter — seller counters a buyer offer.
+     * Body: `conversation_id`, `buyer_offer_message_id`, `amount_vnd` (min 1000 on server).
+     */
+    fun createCounterOffer(
+        conversationId: String,
+        buyerOfferMessageId: String,
+        amountVnd: Long,
+    ): Result<ChatMessage> = runCatching {
+        val json = JSONObject()
+            .put("conversation_id", conversationId.trim())
+            .put("buyer_offer_message_id", buyerOfferMessageId.trim())
+            .put("amount_vnd", amountVnd)
+            .toString()
+        val body = postJson(AppEnvironment.apiPath("api/v1/chat/offers/counter"), json)
+        parseMessage(body)
+    }
+
     /** API: POST /chat/offers/accept or /decline — body: { conversation_id, offer_message_id }. */
+    /**
+     * Decline returns a JSON body without an order. Accept may return a created order id under
+     * `order_id` / `OrderID` or nested `order.id` — used to open order detail immediately.
+     */
     fun respondToOffer(
         conversationId: String,
         offerMessageId: String,
         accept: Boolean,
-    ): Result<Unit> = runCatching {
+    ): Result<String?> = runCatching {
         val path = if (accept) "api/v1/chat/offers/accept" else "api/v1/chat/offers/decline"
         val json = JSONObject()
             .put("conversation_id", conversationId)
             .put("offer_message_id", offerMessageId)
             .toString()
-        postJson(AppEnvironment.apiPath(path), json)
+        val body = postJson(AppEnvironment.apiPath(path), json)
+        if (accept) parseOrderIdFromOfferAcceptResponse(body) else null
+    }
+
+    private fun parseOrderIdFromOfferAcceptResponse(body: String): String? {
+        val raw = body.trim()
+        if (raw.isEmpty()) return null
+        return runCatching {
+            val root = JSONObject(raw)
+            val o: JSONObject = when {
+                root.has("data") && !root.isNull("data") -> {
+                    val d = root.get("data")
+                    if (d is JSONObject) d else root
+                }
+                else -> root
+            }
+            val orderObj = o.optJSONObject("order") ?: o.optJSONObject("Order")
+            val nestedId = orderObj?.let { ord ->
+                ord.optString("id", ord.optString("ID", "")).trim().takeIf { it.isNotEmpty() }
+            }
+            if (nestedId != null) return@runCatching nestedId
+            sequenceOf(
+                o.optString("order_id", ""),
+                o.optString("OrderID", ""),
+                o.optString("orderId", ""),
+            ).map { it.trim() }.firstOrNull { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    /**
+     * `POST /chat/offers/accept-in-chat` — same body as [respondToOffer] accept; creates order
+     * (e.g. cash meetup) per current core-service rules.
+     */
+    fun acceptOfferInChat(conversationId: String, offerMessageId: String): Result<String?> = runCatching {
+        val json = JSONObject()
+            .put("conversation_id", conversationId.trim())
+            .put("offer_message_id", offerMessageId.trim())
+            .toString()
+        val body = postJson(AppEnvironment.apiPath("api/v1/chat/offers/accept-in-chat"), json)
+        parseOrderIdFromOfferAcceptResponse(body)
+    }
+
+    /**
+     * Prefer accept-in-chat; on 404 (older servers) fall back to `POST /chat/offers/accept`.
+     */
+    fun acceptOfferUnified(conversationId: String, offerMessageId: String): Result<String?> {
+        val first = acceptOfferInChat(conversationId, offerMessageId)
+        if (first.isSuccess) return first
+        val err = first.exceptionOrNull()?.message.orEmpty()
+        val notFound = err.contains("HTTP 404") || err.contains(" 404 ") ||
+            err.contains("code=404", ignoreCase = true) ||
+            err.contains("NOT_FOUND", ignoreCase = true)
+        return if (notFound) {
+            respondToOffer(conversationId, offerMessageId, true)
+        } else {
+            first
+        }
+    }
+
+    /** POST /chat/meetings/propose — creates [meeting_proposal] message + appointment. */
+    fun proposeMeeting(
+        conversationId: String,
+        locationUrl: String,
+        scheduledAtRfc3339: String,
+        reminderEnabled: Boolean,
+        reminderOffsetMinutes: Int,
+    ): Result<Unit> = runCatching {
+        val json = JSONObject()
+            .put("conversation_id", conversationId)
+            .put("location_url", locationUrl.trim())
+            .put("scheduled_at", scheduledAtRfc3339.trim())
+            .put("reminder_enabled", reminderEnabled)
+            .put("reminder_offset_minutes", reminderOffsetMinutes)
+            .toString()
+        postJson(AppEnvironment.apiPath("api/v1/chat/meetings/propose"), json)
+    }
+
+    fun confirmMeeting(appointmentId: String): Result<Unit> = runCatching {
+        val id = appointmentId.trim()
+        if (id.isEmpty()) error("appointment id required")
+        postJson(AppEnvironment.apiPath("api/v1/chat/meetings/$id/confirm"), "{}")
+    }
+
+    fun cancelMeeting(appointmentId: String): Result<MeetingCancelResult> = runCatching {
+        val id = appointmentId.trim()
+        if (id.isEmpty()) error("appointment id required")
+        val body = postJson(AppEnvironment.apiPath("api/v1/chat/meetings/$id/cancel"), "{}")
+        val o = JSONObject(body.trim())
+        val root = when {
+            o.has("data") && o.get("data") is JSONObject -> o.getJSONObject("data")
+            else -> o
+        }
+        MeetingCancelResult(
+            suggestSellerReopenListing = root.optBoolean(
+                "suggest_seller_reopen_listing",
+                root.optBoolean("SuggestSellerReopenListing", false),
+            ),
+        )
+    }
+
+    /**
+     * `POST /chat/meetings/:appointment_id/check-in` — optional GPS in ±30m window.
+     *
+     * Many deployments only expose `…/confirm` and `…/cancel`. If check-in is not implemented,
+     * the server returns 404/405/501 — we surface [Result.success] with `false` so the UI can
+     * refresh order/chat without claiming a persisted check-in.
+     *
+     * @return `true` if the HTTP check-in call succeeded; `false` if the route is missing (refresh-only).
+     */
+    fun checkInMeeting(appointmentId: String, lat: Double? = null, lng: Double? = null): Result<Boolean> {
+        val id = appointmentId.trim()
+        if (id.isEmpty()) return Result.failure(IllegalArgumentException("appointment id required"))
+        val json = JSONObject()
+        if (lat != null && lng != null) {
+            json.put("lat", lat)
+            json.put("lng", lng)
+        }
+        val payload = if (json.length() == 0) "{}" else json.toString()
+        return try {
+            postJson(AppEnvironment.apiPath("api/v1/chat/meetings/$id/check-in"), payload)
+            Result.success(true)
+        } catch (e: Exception) {
+            if (isMeetupCheckInEndpointMissing(e)) Result.success(false) else Result.failure(e)
+        }
+    }
+
+    private fun isMeetupCheckInEndpointMissing(e: Exception): Boolean {
+        val msg = e.message.orEmpty()
+        return msg.contains("HTTP 404") ||
+            msg.contains("HTTP 405") ||
+            msg.contains("HTTP 501") ||
+            msg.contains(" 404 ") ||
+            msg.contains(" 405 ") ||
+            msg.contains(" 501 ") ||
+            msg.contains("NOT_FOUND", ignoreCase = true) ||
+            msg.contains("unknown route", ignoreCase = true) ||
+            msg.contains("no such", ignoreCase = true)
     }
 
     // ── Read / unread ─────────────────────────────────────────────────────
@@ -626,6 +785,8 @@ class ChatRepository(
         val systemSubtype = m.optString("system_subtype", m.optString("system_type", m.optString("SystemSubtype", "")))
             .ifBlank { null }
 
+        val meetingAppointment = parseMeetingAppointmentPayload(m)
+
         // Offer data is flat on the message object: OfferAmountVND, OfferStatus (NOT nested)
         val offerAmount = m.optLong("OfferAmountVND", m.optLong("offer_amount_vnd", 0L))
         val offerStatus = m.optString("OfferStatus", m.optString("offer_status", "")).ifBlank { "pending" }
@@ -651,6 +812,27 @@ class ChatRepository(
             offerStatus = offerStatus,
             outboundState = OutboundSendState.NONE,
             systemSubtype = systemSubtype,
+            meetingAppointment = meetingAppointment,
+        )
+    }
+
+    private fun parseMeetingAppointmentPayload(m: JSONObject): MeetingAppointmentPayload? {
+        val o = m.optJSONObject("meeting_appointment")
+            ?: m.optJSONObject("MeetingAppointment")
+            ?: return null
+        val proposerId = o.optString("proposer_id", o.optString("ProposerID", ""))
+        val myId = currentUserId
+        val id = o.optString("id", o.optString("ID", "")).trim()
+        if (id.isEmpty()) return null
+        return MeetingAppointmentPayload(
+            id = id,
+            status = o.optString("status", o.optString("Status", "")).lowercase().ifBlank { "pending" },
+            locationUrl = o.optString("location_url", o.optString("LocationURL", "")),
+            scheduledAt = o.optString("scheduled_at", o.optString("ScheduledAt", "")),
+            reminderOffsetMinutes = o.optInt("reminder_offset_minutes", o.optInt("ReminderOffsetMinutes", 60)),
+            reminderEnabled = o.optBoolean("reminder_enabled", o.optBoolean("ReminderEnabled", true)),
+            proposerId = proposerId,
+            isProposerMe = myId.isNotBlank() && proposerId.isNotBlank() && proposerId == myId,
         )
     }
 
@@ -679,7 +861,12 @@ class ChatRepository(
 
     private fun parseMessage(json: String): ChatMessage {
         val obj = JSONObject(json.trim())
-        val data = if (obj.has("data")) obj.getJSONObject("data") else obj
+        val data: JSONObject = when {
+            obj.has("data") && !obj.isNull("data") -> obj.getJSONObject("data")
+            obj.has("message") && !obj.isNull("message") -> obj.getJSONObject("message")
+            obj.has("Message") && !obj.isNull("Message") -> obj.getJSONObject("Message")
+            else -> obj
+        }
         return parseMessageObj(data)
     }
 
@@ -706,6 +893,23 @@ class ChatRepository(
 }
 
 // ── Data models ───────────────────────────────────────────────────────────────
+
+/** Response hints from `POST /chat/meetings/:id/cancel`. */
+data class MeetingCancelResult(
+    val suggestSellerReopenListing: Boolean = false,
+)
+
+/** Embedded on [ChatMessage] when [ChatMessage.messageType] is `meeting_proposal` and API sends `meeting_appointment`. */
+data class MeetingAppointmentPayload(
+    val id: String,
+    val status: String,
+    val locationUrl: String,
+    val scheduledAt: String,
+    val reminderOffsetMinutes: Int,
+    val reminderEnabled: Boolean,
+    val proposerId: String,
+    val isProposerMe: Boolean,
+)
 
 data class ConversationDetail(
     val conversationId: String,
@@ -767,7 +971,7 @@ data class ChatMessage(
     val timestamp: String,
     val isRead: Boolean = false,
     val senderId: String = "",
-    /** "text" | "offer" | "system" */
+    /** "text" | "offer" | "system" | "meeting_proposal" */
     val messageType: String = "text",
     /** Populated when messageType == "offer" */
     val offerAmountVnd: Long = 0L,
@@ -776,6 +980,8 @@ data class ChatMessage(
     val outboundState: OutboundSendState = OutboundSendState.NONE,
     /** For system rows: e.g. `conversation.closed`, `conversation.reopened`. */
     val systemSubtype: String? = null,
+    /** When [messageType] is `meeting_proposal`, filled from API `meeting_appointment`. */
+    val meetingAppointment: MeetingAppointmentPayload? = null,
 )
 
 data class PriceOffer(

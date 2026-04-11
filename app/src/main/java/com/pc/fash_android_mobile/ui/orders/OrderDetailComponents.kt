@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.ui.orders
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,23 +19,35 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -46,7 +59,8 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.data.order.OrderDetail
-import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
+import com.pc.fash_android_mobile.data.order.OrderMeetingAppointment
+import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -192,6 +206,11 @@ private fun heroContent(
                 primary,
             )
         }
+        "cash_meetup_open" -> Triple(
+            stringResource(R.string.order_status_cash_meetup_open),
+            stringResource(R.string.order_hero_cash_meetup_sub),
+            primary,
+        )
         "payment_held" -> when (role) {
             OrderViewerRole.Seller -> {
                 val shipBy = d.shipByAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty()
@@ -204,9 +223,7 @@ private fun heroContent(
             }
             else -> Triple(
                 stringResource(R.string.order_hero_buyer_payment_held_title),
-                d.escrowReleaseAt.takeIf { it.isNotBlank() }?.let {
-                    stringResource(R.string.order_hero_buyer_escrow_sub, formatDate(it))
-                } ?: stringResource(R.string.order_hero_buyer_payment_held_sub),
+                stringResource(R.string.order_hero_buyer_payment_held_sub),
                 primary,
             )
         }
@@ -247,6 +264,12 @@ private fun heroContent(
         )
     }
 }
+
+/** Meetup / in-person: order has a linked meeting but no ship tracking — hide courier “shipped” steps. */
+private fun isMeetupStyleOrder(d: OrderDetail): Boolean =
+    d.meetingAppointment != null &&
+        d.trackingNumber.isBlank() &&
+        d.carrier.isBlank()
 
 @Composable
 internal fun OrderTimelineSection(
@@ -323,6 +346,24 @@ internal fun OrderTimelineSection(
                         isLast = true,
                     )
                 }
+                "cash_meetup_open" -> {
+                    TimelineRow(
+                        TimelineStepUi(
+                            title = stringResource(R.string.order_timeline_placed),
+                            subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                            state = TimelineStepState.Done,
+                        ),
+                        isLast = false,
+                    )
+                    TimelineRow(
+                        TimelineStepUi(
+                            title = stringResource(R.string.order_timeline_cash_meetup),
+                            subtitle = "",
+                            state = TimelineStepState.Current,
+                        ),
+                        isLast = true,
+                    )
+                }
                 "payment_held" -> {
                     TimelineRow(
                         TimelineStepUi(
@@ -350,76 +391,146 @@ internal fun OrderTimelineSection(
                     )
                 }
                 "in_transit" -> {
-                    val shipSub = d.shippedAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty()
-                    val transitSub = d.trackingStatusSummary.ifBlank {
-                        d.expectedDeliveryAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty()
+                    if (isMeetupStyleOrder(d)) {
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_placed),
+                                subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_paid),
+                                subtitle = d.paidAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_meetup_handoff),
+                                subtitle = "",
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_meetup_awaiting_buyer),
+                                subtitle = stringResource(R.string.order_timeline_meetup_awaiting_buyer_sub),
+                                state = TimelineStepState.Current,
+                            ),
+                            isLast = true,
+                        )
+                    } else {
+                        val shipSub = d.shippedAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty()
+                        val transitSub = d.trackingStatusSummary.ifBlank {
+                            d.expectedDeliveryAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty()
+                        }
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_placed),
+                                subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_paid),
+                                subtitle = d.paidAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_shipped),
+                                subtitle = shipSub,
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_in_transit),
+                                subtitle = transitSub,
+                                state = TimelineStepState.Current,
+                            ),
+                            isLast = true,
+                        )
                     }
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_placed),
-                            subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = false,
-                    )
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_paid),
-                            subtitle = d.paidAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = false,
-                    )
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_shipped),
-                            subtitle = shipSub,
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = false,
-                    )
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_in_transit),
-                            subtitle = transitSub,
-                            state = TimelineStepState.Current,
-                        ),
-                        isLast = true,
-                    )
                 }
                 "delivered_confirmed" -> {
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_placed),
-                            subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = false,
-                    )
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_paid),
-                            subtitle = d.paidAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = false,
-                    )
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_shipped),
-                            subtitle = d.shippedAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = false,
-                    )
-                    TimelineRow(
-                        TimelineStepUi(
-                            title = stringResource(R.string.order_timeline_delivered),
-                            subtitle = d.deliveredAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
-                            state = TimelineStepState.Done,
-                        ),
-                        isLast = true,
-                    )
+                    if (isMeetupStyleOrder(d)) {
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_placed),
+                                subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_paid),
+                                subtitle = d.paidAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_meetup_handoff),
+                                subtitle = "",
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_delivered),
+                                subtitle = d.deliveredAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = true,
+                        )
+                    } else {
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_placed),
+                                subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_paid),
+                                subtitle = d.paidAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_shipped),
+                                subtitle = d.shippedAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = false,
+                        )
+                        TimelineRow(
+                            TimelineStepUi(
+                                title = stringResource(R.string.order_timeline_delivered),
+                                subtitle = d.deliveredAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                                state = TimelineStepState.Done,
+                            ),
+                            isLast = true,
+                        )
+                    }
                 }
                 else -> {
                     TimelineRow(
@@ -444,6 +555,360 @@ internal fun OrderTimelineSection(
     }
 }
 
+/** Meetup-linked payment deadline (`meetup_deadline_at`) while order is still unpaid. */
+@Composable
+internal fun OrderMeetupDeadlineStrip(
+    meetupDeadlineAt: String,
+    formatDate: (String) -> String,
+    modifier: Modifier = Modifier,
+) {
+    val raw = meetupDeadlineAt.trim()
+    if (raw.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = FashColors.Primary.copy(alpha = 0.08f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.Filled.Schedule,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = stringResource(R.string.order_detail_meetup_pay_by, formatDate(raw)),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun OrderMeetingSection(
+    meeting: OrderMeetingAppointment,
+    formatDate: (String) -> String,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val uriHandler = LocalUriHandler.current
+    val stLabel = orderMeetupStatusLabel(meeting.status)
+    val whenStr = meeting.scheduledAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty()
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = scheme.surface,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.order_detail_meetup_section_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            )
+            Text(
+                text = stringResource(R.string.order_detail_meetup_status, stLabel),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (whenStr.isNotBlank()) {
+                Text(
+                    text = stringResource(R.string.order_detail_meetup_when, whenStr),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (meeting.locationUrl.isNotBlank()) {
+                OutlinedButton(
+                    onClick = { runCatching { uriHandler.openUri(meeting.locationUrl) } },
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.5f)),
+                ) {
+                    Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.order_detail_meetup_open_maps))
+                }
+            }
+            Text(
+                text = if (meeting.reminderEnabled) {
+                    stringResource(R.string.order_detail_meetup_reminder_on, meeting.reminderOffsetMinutes)
+                } else {
+                    stringResource(R.string.order_detail_meetup_reminder_off)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+            val activityLines = buildList {
+                meeting.createdAt.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(R.string.order_detail_meetup_created, formatDate(it)))
+                }
+                meeting.reminderSentAt.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(R.string.order_detail_meetup_reminder_sent, formatDate(it)))
+                }
+                meeting.updatedAt.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(R.string.order_detail_meetup_updated, formatDate(it)))
+                }
+            }
+            if (activityLines.isNotEmpty()) {
+                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.45f))
+                Text(
+                    text = stringResource(R.string.order_detail_meetup_activity_title),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+                activityLines.forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun OrderMeetingGraceSection(
+    grace: OrderMeetingGrace,
+    appointmentId: String?,
+    isWorking: Boolean,
+    checkInLoading: Boolean = false,
+    onCheckIn: (String) -> Unit,
+    onReportNoShow: (reason: String, note: String?) -> Unit,
+    showAcknowledgeCash: Boolean,
+    onAcknowledgeCash: () -> Unit,
+    formatDate: (String) -> String,
+) {
+    var showNoShowPicker by remember { mutableStateOf(false) }
+    var noShowNote by remember { mutableStateOf("") }
+    val hasAny =
+        grace.sosUnlocked ||
+            grace.canCheckIn || grace.canReportNoShow || showAcknowledgeCash ||
+            grace.checkInHint.isNotBlank() || grace.noShowHint.isNotBlank() ||
+            grace.buyerCheckedInAt.isNotBlank() || grace.sellerCheckedInAt.isNotBlank() ||
+            grace.phase.isNotBlank() ||
+            !appointmentId.isNullOrBlank()
+    if (!hasAny) return
+
+    val showSyncOnly =
+        !appointmentId.isNullOrBlank() &&
+            !grace.sosUnlocked &&
+            !grace.canCheckIn &&
+            !grace.canReportNoShow &&
+            !showAcknowledgeCash &&
+            grace.checkInHint.isBlank() &&
+            grace.noShowHint.isBlank() &&
+            grace.buyerCheckedInAt.isBlank() &&
+            grace.sellerCheckedInAt.isBlank() &&
+            grace.phase.isBlank()
+
+    val scheme = MaterialTheme.colorScheme
+    LaunchedEffect(showNoShowPicker) {
+        if (showNoShowPicker) noShowNote = ""
+    }
+    if (showNoShowPicker) {
+        AlertDialog(
+            onDismissRequest = { showNoShowPicker = false },
+            title = { Text(stringResource(R.string.order_detail_no_show_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = noShowNote,
+                        onValueChange = { if (it.length <= 500) noShowNote = it },
+                        label = { Text(stringResource(R.string.order_detail_no_show_note_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        enabled = !isWorking,
+                    )
+                    TextButton(
+                        onClick = {
+                            onReportNoShow("other_absent", noShowNote.trim().ifBlank { null })
+                            showNoShowPicker = false
+                        },
+                        enabled = !isWorking,
+                    ) {
+                        Text(stringResource(R.string.order_detail_no_show_other_absent))
+                    }
+                    TextButton(
+                        onClick = {
+                            onReportNoShow("other_late", noShowNote.trim().ifBlank { null })
+                            showNoShowPicker = false
+                        },
+                        enabled = !isWorking,
+                    ) {
+                        Text(stringResource(R.string.order_detail_no_show_other_late))
+                    }
+                    TextButton(
+                        onClick = {
+                            onReportNoShow("mutual_cancel", noShowNote.trim().ifBlank { null })
+                            showNoShowPicker = false
+                        },
+                        enabled = !isWorking,
+                    ) {
+                        Text(stringResource(R.string.order_detail_no_show_mutual_cancel))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showNoShowPicker = false }) {
+                    Text(stringResource(R.string.create_listing_cancel))
+                }
+            },
+        )
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = scheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.order_detail_meeting_grace_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            )
+            if (showSyncOnly) {
+                Text(
+                    text = stringResource(R.string.order_detail_meeting_grace_sync_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (grace.sosUnlocked) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = scheme.errorContainer.copy(alpha = 0.45f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = scheme.onErrorContainer,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.order_detail_grace_sos_unlocked),
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = scheme.onErrorContainer,
+                        )
+                    }
+                }
+            }
+            if (grace.phase.isNotBlank()) {
+                Text(
+                    text = grace.phase,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (grace.checkInHint.isNotBlank()) {
+                Text(
+                    text = grace.checkInHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (grace.noShowHint.isNotBlank()) {
+                Text(
+                    text = grace.noShowHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            grace.buyerCheckedInAt.takeIf { it.isNotBlank() }?.let { raw ->
+                Text(
+                    text = stringResource(R.string.order_detail_grace_buyer_checked, formatDate(raw)),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            grace.sellerCheckedInAt.takeIf { it.isNotBlank() }?.let { raw ->
+                Text(
+                    text = stringResource(R.string.order_detail_grace_seller_checked, formatDate(raw)),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (grace.canCheckIn && !appointmentId.isNullOrBlank()) {
+                Button(
+                    onClick = { onCheckIn(appointmentId) },
+                    enabled = !isWorking,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = FashColors.Primary.fashReadableOn(),
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    if (checkInLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = FashColors.Primary.fashReadableOn(),
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.order_detail_check_in_cta),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+            if (grace.canReportNoShow) {
+                OutlinedButton(
+                    onClick = { showNoShowPicker = true },
+                    enabled = !isWorking,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.45f)),
+                ) {
+                    Text(
+                        stringResource(R.string.order_detail_report_no_show_cta),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            if (showAcknowledgeCash) {
+                OutlinedButton(
+                    onClick = onAcknowledgeCash,
+                    enabled = !isWorking,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.45f)),
+                ) {
+                    Text(
+                        stringResource(R.string.order_detail_ack_offline_cash),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun orderMeetupStatusLabel(status: String): String {
+    return when (status.trim().lowercase()) {
+        "pending" -> stringResource(R.string.chat_meeting_status_pending)
+        "confirmed" -> stringResource(R.string.chat_meeting_status_confirmed)
+        "cancelled" -> stringResource(R.string.chat_meeting_status_cancelled)
+        else -> status.trim().replaceFirstChar { c -> c.uppercaseChar() }
+    }
+}
+
 @Composable
 private fun orderStatusLabelString(status: String): String = when (status.lowercase()) {
     "payment_pending" -> stringResource(R.string.order_status_payment_pending)
@@ -452,6 +917,7 @@ private fun orderStatusLabelString(status: String): String = when (status.lowerc
     "delivered_confirmed" -> stringResource(R.string.order_status_delivered_confirmed)
     "cancelled" -> stringResource(R.string.order_status_cancelled)
     "disputed" -> stringResource(R.string.order_status_disputed)
+    "cash_meetup_open" -> stringResource(R.string.order_status_cash_meetup_open)
     else -> status.ifBlank { stringResource(R.string.order_status_unknown) }
 }
 
@@ -640,11 +1106,23 @@ internal fun BuyerShippingAddressCard(
 }
 
 @Composable
-internal fun OrderProductCard(d: OrderDetail, showSellerHandle: Boolean) {
+internal fun OrderProductCard(
+    d: OrderDetail,
+    showSellerHandle: Boolean,
+    onClick: (() -> Unit)? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     val imageUrl = d.listingImageUrl.takeIf { it.isNotBlank() }?.let { orderDetailResolveImageUrl(it) }.orEmpty()
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null && d.listingId.isNotBlank()) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
         color = scheme.surface,
     ) {
@@ -695,157 +1173,7 @@ internal fun OrderProductCard(d: OrderDetail, showSellerHandle: Boolean) {
                             color = scheme.onSurfaceVariant,
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = formatOrderPrice(d.amountVnd),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = FashColors.Primary,
-                    )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun OrderBuyerPaymentCard(d: OrderDetail) {
-    val scheme = MaterialTheme.colorScheme
-    val total = d.effectiveBuyerTotal()
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        color = scheme.surface,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.order_detail_payment_breakdown_title),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            MoneyLine(stringResource(R.string.order_detail_buyer_product_price), d.amountVnd, emphasis = false)
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.55f),
-            )
-            MoneyLine(stringResource(R.string.order_detail_buyer_shipping_fee), d.shippingFeeVnd, emphasis = false)
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.55f),
-            )
-            MoneyLine(stringResource(R.string.order_detail_buyer_total), total, emphasis = true)
-        }
-    }
-}
-
-@Composable
-internal fun OrderSellerRevenueCard(d: OrderDetail) {
-    val scheme = MaterialTheme.colorScheme
-    val pct = if (d.amountVnd > 0L) {
-        ((d.platformFeeVnd * 100L) / d.amountVnd).toInt().coerceIn(0, 100)
-    } else {
-        null
-    }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-        color = scheme.surface,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.order_detail_seller_revenue_title),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            MoneyLine(stringResource(R.string.order_detail_seller_listing_price), d.amountVnd, emphasis = false)
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.55f),
-            )
-            val feeLabel = if (pct != null) {
-                stringResource(R.string.order_detail_commission_percent, pct)
-            } else {
-                stringResource(R.string.order_detail_platform_fee)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = feeLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "−${formatOrderPrice(d.platformFeeVnd)}",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = scheme.onSurface,
-                )
-            }
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.55f),
-            )
-            MoneyLine(stringResource(R.string.order_detail_seller_net), d.sellerPayoutVnd, emphasis = true)
-        }
-    }
-}
-
-@Composable
-private fun MoneyLine(label: String, vnd: Long, emphasis: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = label,
-            style = if (emphasis) MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.bodyMedium,
-            color = if (emphasis) scheme.onSurface else scheme.onSurfaceVariant,
-        )
-        Text(
-            text = formatOrderPrice(vnd),
-            style = if (emphasis) {
-                MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            } else {
-                MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-            },
-            color = if (emphasis) FashColors.Primary else scheme.onSurface,
-        )
-    }
-}
-
-@Composable
-internal fun BuyerProtectionBanner() {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFFE8F5E9),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                imageVector = Icons.Default.Payments,
-                contentDescription = null,
-                tint = Color(0xFF2E7D32),
-                modifier = Modifier.size(22.dp),
-            )
-            Column {
-                Text(
-                    text = stringResource(R.string.order_detail_buyer_protection_title),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color(0xFF1B5E20),
-                )
-                Text(
-                    text = stringResource(R.string.order_detail_buyer_protection_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF1B5E20).copy(alpha = 0.9f),
-                )
             }
         }
     }
@@ -857,12 +1185,21 @@ internal fun CounterpartyCard(
     displayName: String,
     username: String,
     avatarUrl: String,
+    onClick: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val url = avatarUrl.takeIf { it.isNotBlank() }?.let { orderDetailResolveImageUrl(it) }.orEmpty()
     val avatarForUi = url.takeIf { it.isNotEmpty() }
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null && username.isNotBlank()) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
         color = scheme.surface,
     ) {
@@ -959,6 +1296,8 @@ internal fun OrderStickyBottomBar(
     onConfirmReceipt: () -> Unit,
     onReview: () -> Unit,
     onShip: () -> Unit,
+    /** Seller meetup / in-person handoff — mutually exclusive with [onShip] in normal flows. */
+    onConfirmHandoff: () -> Unit = {},
     onChat: () -> Unit,
     onOpenDispute: () -> Unit = {},
     onSubmitDisputeEvidence: () -> Unit = {},
@@ -967,7 +1306,8 @@ internal fun OrderStickyBottomBar(
     val showPay = role == OrderViewerRole.Buyer && st == "payment_pending"
     val showConfirm = role == OrderViewerRole.Buyer && d.canConfirm
     val showReview = role == OrderViewerRole.Buyer && d.canReview
-    val showShip = role == OrderViewerRole.Seller && st == "payment_held" && d.canShip
+    val showConfirmHandoff = role == OrderViewerRole.Seller && d.canConfirmHandoff
+    val showShip = role == OrderViewerRole.Seller && st == "payment_held" && d.canShip && !showConfirmHandoff
     val showChat =
         d.conversationId.isNotBlank() &&
             (role == OrderViewerRole.Buyer || role == OrderViewerRole.Seller) &&
@@ -978,7 +1318,7 @@ internal fun OrderStickyBottomBar(
     val showDisputeEvidence =
         role != OrderViewerRole.Viewer && st == "disputed"
 
-    if (!showPay && !showConfirm && !showReview && !showShip && !showChat &&
+    if (!showPay && !showConfirm && !showReview && !showShip && !showConfirmHandoff && !showChat &&
         !showOpenDispute && !showDisputeEvidence
     ) {
         return
@@ -993,6 +1333,25 @@ internal fun OrderStickyBottomBar(
             .padding(top = 8.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (showConfirmHandoff) {
+            Button(
+                onClick = onConfirmHandoff,
+                enabled = !isWorking,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FashColors.Primary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Icon(Icons.Filled.Handshake, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.order_detail_confirm_handoff),
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
         if (showShip) {
             Button(
                 onClick = onShip,
@@ -1115,9 +1474,6 @@ internal fun OrderStickyBottomBar(
         }
     }
 }
-
-internal fun formatOrderPrice(vnd: Long): String =
-    "đ ${"%,d".format(vnd).replace(',', '.')}"
 
 internal fun orderDetailResolveImageUrl(path: String): String {
     if (path.startsWith("http")) return path

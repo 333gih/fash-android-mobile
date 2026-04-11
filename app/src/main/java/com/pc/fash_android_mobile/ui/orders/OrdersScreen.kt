@@ -515,12 +515,6 @@ private fun OrderCard(
                     color = scheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = formatPrice(order.priceVnd),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = FashColors.Primary,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
                 if (order.canConfirm) {
                     OutlinedButton(
                         onClick = onConfirmReceipt,
@@ -581,6 +575,7 @@ private fun OrderStatusBadge(status: String) {
         "delivered_confirmed" -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
         "cancelled" -> scheme.errorContainer to scheme.onErrorContainer
         "disputed" -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+        "cash_meetup_open" -> androidx.compose.ui.graphics.Color(0xFFE8EAF6) to androidx.compose.ui.graphics.Color(0xFF3949AB)
         else -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
     }
     Text(
@@ -602,6 +597,3 @@ private fun resolveImageUrl(path: String): String {
     val base = AppEnvironment.apiBaseUrl.trimEnd('/')
     return if (path.startsWith("/")) "$base$path" else "$base/$path"
 }
-
-private fun formatPrice(vnd: Long): String =
-    "đ ${"%,d".format(vnd).replace(',', '.')}"

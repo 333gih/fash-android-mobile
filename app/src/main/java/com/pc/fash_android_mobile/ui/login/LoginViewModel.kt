@@ -360,7 +360,11 @@ class LoginViewModel(
                     (app as FashApplication).onboardingLocalStore.clearAll()
                     _events.tryEmit(app.getString(R.string.logout_success))
                 },
-                onFailure = { _events.tryEmit(app.getString(R.string.logout_failed)) },
+                onFailure = {
+                    (app as FashApplication).onboardingLocalStore.clearAll()
+                    // Local session is already cleared; still show success so the user is not told logout "failed".
+                    _events.tryEmit(app.getString(R.string.logout_success))
+                },
             )
         }
     }
@@ -382,7 +386,10 @@ class LoginViewModel(
                     (app as FashApplication).onboardingLocalStore.clearAll()
                     _events.tryEmit(app.getString(R.string.logout_success))
                 },
-                onFailure = { _events.tryEmit(app.getString(R.string.logout_failed)) },
+                onFailure = {
+                    (app as FashApplication).onboardingLocalStore.clearAll()
+                    _events.tryEmit(app.getString(R.string.logout_success))
+                },
             )
         }
     }

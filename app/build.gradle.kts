@@ -183,6 +183,12 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         "INTERNAL_SERVICE_BEARER_TOKEN",
         buildConfigStringLiteral(envOrEmpty("INTERNAL_SERVICE_BEARER_TOKEN")),
     )
+
+    /**
+     * HTTPS URL for out-of-app identity / KYC re-verification (meetup trust). Empty = no in-app “open” button;
+     * user can still complete verification elsewhere and tap “I've finished” to POST ack.
+     */
+    buildConfigField("String", "IDENTITY_REVERIFY_URL", buildConfigStringLiteral(envOrEmpty("IDENTITY_REVERIFY_URL")))
 }
 
 android {

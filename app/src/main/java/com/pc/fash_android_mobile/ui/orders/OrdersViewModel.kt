@@ -77,12 +77,19 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
             0 -> _buyingStatusFilter.value = filter
             else -> _sellingStatusFilter.value = filter
         }
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            fetchOrdersIntoState()
+            _isRefreshing.value = false
+        }
     }
 
     /** Quietly re-fetches both buying and selling orders without showing a loading indicator. */
     private suspend fun silentRefreshOrders() {
-        val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders() }
-        val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders() }
+        val buyQ = _buyingStatusFilter.value.toApiQuery()
+        val sellQ = _sellingStatusFilter.value.toApiQuery()
+        val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders(status = buyQ) }
+        val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders(status = sellQ) }
         buyingResult.onSuccess { _buyingOrders.value = it }.onFailure { /* keep list */ }
         sellingResult.onSuccess { _sellingOrders.value = it }.onFailure { /* keep list */ }
     }
@@ -107,8 +114,10 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun fetchOrdersIntoState() {
-        val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders() }
-        val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders() }
+        val buyQ = _buyingStatusFilter.value.toApiQuery()
+        val sellQ = _sellingStatusFilter.value.toApiQuery()
+        val buyingResult = withContext(Dispatchers.IO) { orderRepository.getBuyingOrders(status = buyQ) }
+        val sellingResult = withContext(Dispatchers.IO) { orderRepository.getSellingOrders(status = sellQ) }
         buyingResult.onSuccess { _buyingOrders.value = it }
             .onFailure {
                 _loadError.value = it.message

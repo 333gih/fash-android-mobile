@@ -23,7 +23,19 @@ fun normalizeOrderStatus(raw: String): String = when (val s = raw.lowercase().tr
     "delivering", "shipped", "shipping" -> "in_transit"
     "completed" -> "delivered_confirmed"
     "pending" -> "payment_pending"
+    "cash_meetup_open" -> "cash_meetup_open"
     else -> s
+}
+
+/** Server-side status value for GET /orders list filtering. */
+fun OrderStatusFilter.toApiQuery(): String? = when (this) {
+    OrderStatusFilter.ALL -> null
+    OrderStatusFilter.PAYMENT_PENDING -> "payment_pending"
+    OrderStatusFilter.PAYMENT_HELD -> "payment_held"
+    OrderStatusFilter.IN_TRANSIT -> "in_transit"
+    OrderStatusFilter.DELIVERED_CONFIRMED -> "delivered_confirmed"
+    OrderStatusFilter.CANCELLED -> "cancelled"
+    OrderStatusFilter.DISPUTED -> "disputed"
 }
 
 fun OrderStatusFilter.matches(order: OrderItem): Boolean {
@@ -53,6 +65,7 @@ fun orderStatusLabelForList(status: String): String {
         "delivered_confirmed" -> stringResource(R.string.order_status_delivered_confirmed)
         "cancelled" -> stringResource(R.string.order_status_cancelled)
         "disputed" -> stringResource(R.string.order_status_disputed)
+        "cash_meetup_open" -> stringResource(R.string.order_status_cash_meetup_open)
         else -> status.ifBlank { stringResource(R.string.order_status_unknown) }
     }
 }

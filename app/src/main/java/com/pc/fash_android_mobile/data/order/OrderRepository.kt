@@ -5,6 +5,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.URLEncoder
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -21,18 +22,22 @@ class OrderRepository(
      * Fetches orders where current user is the buyer.
      * Tries `GET /orders?role=buyer`, falls back to `/orders/buying`.
      */
-    fun getBuyingOrders(limit: Int = 30, offset: Int = 0): Result<List<OrderItem>> =
-        getOrdersByRole("buyer", limit, offset)
+    fun getBuyingOrders(limit: Int = 30, offset: Int = 0, status: String? = null): Result<List<OrderItem>> =
+        getOrdersByRole("buyer", limit, offset, status)
 
     /**
      * Fetches orders where current user is the seller.
      * Tries `GET /orders?role=seller`, falls back to `/orders/selling`.
      */
-    fun getSellingOrders(limit: Int = 30, offset: Int = 0): Result<List<OrderItem>> =
-        getOrdersByRole("seller", limit, offset)
+    fun getSellingOrders(limit: Int = 30, offset: Int = 0, status: String? = null): Result<List<OrderItem>> =
+        getOrdersByRole("seller", limit, offset, status)
 
-    private fun getOrdersByRole(role: String, limit: Int, offset: Int): Result<List<OrderItem>> = runCatching {
-        val primary = "${AppEnvironment.apiPath("api/v1/orders")}?role=$role&limit=$limit&offset=$offset"
+    private fun getOrdersByRole(role: String, limit: Int, offset: Int, status: String? = null): Result<List<OrderItem>> = runCatching {
+        val q = StringBuilder("role=$role&limit=$limit&offset=$offset")
+        status?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            q.append("&status=").append(URLEncoder.encode(it, Charsets.UTF_8))
+        }
+        val primary = "${AppEnvironment.apiPath("api/v1/orders")}?$q"
         try {
             parseOrders(executeGet(primary))
         } catch (_: Exception) {
@@ -148,6 +153,48 @@ class OrderRepository(
         }
     }
 
+    /**
+     * Seller confirms in-person / meetup handoff (`payment_held` → `in_transit` for MEETUP fulfilment).
+     * `POST /orders/{order_id}/confirm-handoff`
+     */
+    fun confirmHandoff(orderId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/confirm-handoff")
+        executePostEmptyBody(url)
+    }
+
+    /** Seller: optional timestamp for cash received (`POST /orders/:id/acknowledge-offline-cash`). */
+    fun acknowledgeOfflineCash(orderId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/acknowledge-offline-cash")
+        executePostEmptyBody(url)
+    }
+
+    /**
+     * After meet time: report no-show / mutual cancel (`POST /orders/:id/report-meeting-no-show`).
+     * [reason]: `other_absent`, `other_late`, or `mutual_cancel`.
+     */
+    fun reportMeetingNoShow(
+        orderId: String,
+        reason: String,
+        photoUrls: List<String> = emptyList(),
+        note: String = "",
+    ): Result<Unit> = runCatching {
+        val json = JSONObject().put("reason", reason.trim())
+        val n = note.trim()
+        if (n.isNotEmpty()) json.put("note", n)
+        if (photoUrls.isNotEmpty()) {
+            val arr = JSONArray()
+            photoUrls.take(10).forEach { u ->
+                val t = u.trim()
+                if (t.isNotEmpty()) arr.put(t)
+            }
+            if (arr.length() > 0) json.put("photo_urls", arr)
+        }
+        executePostJson(
+            AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/report-meeting-no-show"),
+            json.toString(),
+        )
+    }
+
     /** `POST /orders/ship` */
     fun shipOrder(orderId: String, trackingNumber: String, carrier: String): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/ship")
@@ -212,6 +259,27 @@ class OrderRepository(
         executePostJson(url, json.toString())
     }
 
+    private fun executePostEmptyBody(url: String) {
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post(ByteArray(0).toRequestBody(null))
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val msg = try {
+                    JSONObject(b).optString("error", JSONObject(b).optString("message", b)).ifBlank { b }
+                } catch (_: Exception) {
+                    b
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
     private fun executePostJson(url: String, json: String): String {
         return securedClient.newCall(
             Request.Builder()
@@ -251,15 +319,15 @@ class OrderRepository(
 
     private fun parseOrderDetail(json: String): OrderDetail {
         val raw = json.trim()
-        val o = when {
+        val top = when {
             raw.startsWith("{") -> try {
-                val obj = JSONObject(raw)
-                if (obj.has("data")) obj.getJSONObject("data") else obj
-            } catch (_: Exception) {
                 JSONObject(raw)
+            } catch (_: Exception) {
+                JSONObject("{}")
             }
             else -> JSONObject("{}")
         }
+        val o: JSONObject = unwrapOrderJsonObject(top)
         val listing = o.optJSONObject("Listing") ?: o.optJSONObject("listing") ?: JSONObject()
         val buyer = o.optJSONObject("Buyer") ?: o.optJSONObject("buyer") ?: JSONObject()
         val seller = o.optJSONObject("Seller") ?: o.optJSONObject("seller") ?: JSONObject()
@@ -289,6 +357,14 @@ class OrderRepository(
         val variantLabel = buildListingVariantLabel(listing)
         val convId = o.optString("conversation_id", o.optString("conversationId", o.optString("ConversationID", "")))
         val trackingSummary = o.optString("tracking_status", o.optString("TrackingStatus", o.optString("last_tracking_event", "")))
+        val meetingAppointment = parseOrderMeetingAppointment(o)
+        val meetingGrace = parseOrderMeetingGrace(o)
+        val meetupDeadlineAt = o.optIsoFirst("meetup_deadline_at", "MeetupDeadlineAt")
+        val canConfirmHandoff = o.optBoolean("can_confirm_handoff", o.optBoolean("CanConfirmHandoff", false))
+        val canAcknowledgeOfflineCash = o.optBoolean(
+            "can_acknowledge_offline_cash",
+            o.optBoolean("CanAcknowledgeOfflineCash", false),
+        )
         return OrderDetail(
             orderId = o.optString("id", o.optString("ID", o.optString("order_id", ""))),
             listingId = o.optString("listing_id", o.optString("ListingID", listing.optString("ID", listing.optString("id", "")))),
@@ -335,7 +411,79 @@ class OrderRepository(
             conversationId = convId,
             trackingStatusSummary = trackingSummary,
             canShip = canShip,
+            meetingAppointment = meetingAppointment,
+            meetingGrace = meetingGrace,
+            meetupDeadlineAt = meetupDeadlineAt,
+            canConfirmHandoff = canConfirmHandoff,
+            canAcknowledgeOfflineCash = canAcknowledgeOfflineCash,
         )
+    }
+
+    /** `{ "ok": true, "order": { ... } }`, `{ "data": { "order": ... } }`, or flat order object. */
+    private fun unwrapOrderJsonObject(top: JSONObject): JSONObject {
+        val data = if (top.has("data") && top.get("data") is JSONObject) top.getJSONObject("data") else null
+        fun orderFrom(obj: JSONObject?): JSONObject? {
+            if (obj == null) return null
+            when {
+                obj.has("order") && obj.get("order") is JSONObject -> return obj.getJSONObject("order")
+                obj.has("Order") && obj.get("Order") is JSONObject -> return obj.getJSONObject("Order")
+            }
+            return null
+        }
+        orderFrom(data)?.let { return it }
+        orderFrom(top)?.let { return it }
+        if (data != null) return data
+        return top
+    }
+
+    private fun parseOrderMeetingGrace(order: JSONObject): OrderMeetingGrace? {
+        val g = order.optJSONObject("meeting_grace") ?: order.optJSONObject("MeetingGrace") ?: return null
+        // `{}` is valid — do not drop; otherwise UI removes the whole meetup grace card after check-in refresh.
+        return OrderMeetingGrace(
+            canCheckIn = g.optBoolean("can_check_in", g.optBoolean("CanCheckIn", false)),
+            canReportNoShow = g.optBoolean("can_report_no_show", g.optBoolean("CanReportNoShow", false)),
+            sosUnlocked = g.optBoolean("sos_unlocked", g.optBoolean("SosUnlocked", false)),
+            checkInHint = g.optString("check_in_hint", g.optString("CheckInHint", "")).trim(),
+            noShowHint = g.optString("no_show_hint", g.optString("NoShowHint", "")).trim(),
+            buyerCheckedInAt = g.optIsoGrace("buyer_checked_in_at", "BuyerCheckedInAt"),
+            sellerCheckedInAt = g.optIsoGrace("seller_checked_in_at", "SellerCheckedInAt"),
+            phase = g.optString("phase", g.optString("Phase", "")).trim().lowercase(),
+        )
+    }
+
+    private fun JSONObject.optIsoGrace(vararg keys: String): String {
+        for (k in keys) {
+            val v = optString(k, "").trim()
+            if (v.isNotBlank()) return v
+        }
+        return ""
+    }
+
+    private fun parseOrderMeetingAppointment(order: JSONObject): OrderMeetingAppointment? {
+        val m = order.optJSONObject("meeting_appointment")
+            ?: order.optJSONObject("MeetingAppointment")
+            ?: return null
+        val id = m.optString("id", m.optString("ID", "")).trim()
+        if (id.isEmpty()) return null
+        return OrderMeetingAppointment(
+            id = id,
+            status = m.optString("status", m.optString("Status", "")).trim().lowercase().ifBlank { "pending" },
+            locationUrl = m.optString("location_url", m.optString("LocationURL", "")),
+            scheduledAt = m.optString("scheduled_at", m.optString("ScheduledAt", "")),
+            reminderOffsetMinutes = m.optInt("reminder_offset_minutes", m.optInt("ReminderOffsetMinutes", 60)),
+            reminderEnabled = m.optBoolean("reminder_enabled", m.optBoolean("ReminderEnabled", true)),
+            reminderSentAt = meetingOptIso(m, "reminder_sent_at", "ReminderSentAt"),
+            createdAt = meetingOptIso(m, "created_at", "CreatedAt"),
+            updatedAt = meetingOptIso(m, "updated_at", "UpdatedAt"),
+        )
+    }
+
+    private fun meetingOptIso(m: JSONObject, vararg keys: String): String {
+        for (k in keys) {
+            val v = m.optString(k, "").trim()
+            if (v.isNotBlank()) return v
+        }
+        return ""
     }
 
     private fun JSONObject.optIsoFirst(vararg keys: String): String {

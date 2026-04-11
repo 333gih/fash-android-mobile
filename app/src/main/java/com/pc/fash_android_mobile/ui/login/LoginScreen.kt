@@ -346,8 +346,9 @@ fun LoginScreen(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .navigationBarsPadding(),
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 12.dp),
                 )
             }
         }
@@ -633,10 +634,11 @@ private fun PasswordFieldWithRail(
                 }
             },
             singleLine = true,
+            // Match [ChangePasswordScreen]: default mask (bullet) — custom '.' can render invisible on some fonts.
             visualTransformation = if (passwordVisible) {
                 VisualTransformation.None
             } else {
-                PasswordVisualTransformation(mask = '.')
+                PasswordVisualTransformation()
             },
             shape = RoundedCornerShape(FieldCornerDp),
             keyboardOptions = KeyboardOptions(

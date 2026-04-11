@@ -18,8 +18,8 @@ import java.util.concurrent.TimeUnit
  *   when not logged in (see ANDROID_API_INTEGRATION.md — prefer one auth method server-side).
  * - On 401: refreshes the access token (synchronized — only one refresh at a time)
  *   and retries the original request with the new token
- * - On refresh failure (expired/invalid refresh token): clears session,
- *   calls [onSessionInvalidated] with a reason string, then throws [IOException]
+ * - On refresh failure (expired/invalid refresh token, or [java.net.SocketTimeoutException]):
+ *   clears session, calls [onSessionInvalidated] with a reason string, then throws [IOException]
  *   so callers get a clean error instead of a pointless unauthenticated retry
  */
 class SecuredApiClient(

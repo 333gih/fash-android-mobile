@@ -31,8 +31,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +79,8 @@ import com.pc.fash_android_mobile.ui.profile.EditProfileViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen
 import com.pc.fash_android_mobile.ui.follow.FollowConnectionsViewModel
+import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
+import com.pc.fash_android_mobile.ui.main.MainNavBottomBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavScreen
 import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.login.LoginScreen
@@ -141,7 +145,9 @@ private enum class SellerShopEntrySource {
 private suspend fun refreshNeedsOnboardingFlag(repo: UserRepository): Boolean =
     repo.getUserAccessStatus().fold(
         onSuccess = { !it.canAccessHome },
-        onFailure = { true },
+        // Never treat network/server errors as "needs onboarding" — that incorrectly opened aesthetic tags.
+        // Auth/session expiry clears via [SecuredApiClient] → [AppAuthManager.onSessionCleared] → login.
+        onFailure = { false },
     )
 
 private suspend fun resolveNeedsOnboardingAfterProfileSubmit(repo: UserRepository): Boolean {
@@ -324,6 +330,10 @@ class MainActivity : ComponentActivity() {
                 val realtimeManager = (application as FashApplication).realtimeManager
                 val fashApp = application as FashApplication
                 val dialogMessage by fashApp.uiDialog.current.collectAsState()
+                /** Hoisted so [FashGlobalDialogHost] can reserve bottom inset for chat composer vs main nav. */
+                var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+                /** Hoisted for [FashSnackbarHost] — main bottom nav vs chat composer vs fullscreen overlays. */
+                var snackbarBottomChromeInset by remember { mutableStateOf(0.dp) }
                 val notifPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
                 ) { }
@@ -334,6 +344,8 @@ class MainActivity : ComponentActivity() {
                     } else {
                         realtimeManager.disconnect()
                         needsOnboarding = null
+                        selectedConversationId = null
+                        snackbarBottomChromeInset = 0.dp
                     }
                 }
 
@@ -380,8 +392,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 !status.canAccessHome
                             },
-                            // Do not fall back to username heuristics: that allowed home while server said can_access_home false.
-                            onFailure = { true },
+                            // Do not send users to onboarding on transient errors / 5xx / timeouts.
+                            // Invalid/expired session: refresh path clears session → login screen.
+                            onFailure = { false },
                         )
                     }
                 }
@@ -580,12 +593,13 @@ class MainActivity : ComponentActivity() {
                                     var suppressPdpExploreNav by remember { mutableStateOf(false) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
-                                    var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedConversationItem by remember { mutableStateOf<ConversationItem?>(null) }
                                     var selectedCheckoutListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedCheckoutOfferPrice by rememberSaveable { mutableStateOf(0L) }
                                     var checkoutExistingOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    /** Order detail as a medium-height sheet over chat (keeps conversation open). */
+                                    var chatOrderDetailOverlayId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var addressFlowOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
@@ -667,6 +681,41 @@ class MainActivity : ComponentActivity() {
                                         chatViewModel.unreadCountExcludingConversation(cid)
                                     }
                                     val chatOrderId by chatDetailViewModel.orderId.collectAsState()
+                                    val snackbarChromeInsetForMainApp = remember(
+                                        selectedConversationId,
+                                        selectedListingId,
+                                        selectedOrderId,
+                                        selectedCheckoutListingId,
+                                        sellerShopUsername,
+                                        editListingId,
+                                        showEditProfile,
+                                        showShippingAddressList,
+                                        showAddAddressScreen,
+                                        showOrdersScreen,
+                                        showFollowConnections,
+                                        showFeaturedSellersAll,
+                                    ) {
+                                        val fullscreenOverlay =
+                                            selectedListingId != null ||
+                                                selectedOrderId != null ||
+                                                selectedCheckoutListingId != null ||
+                                                sellerShopUsername != null ||
+                                                editListingId != null ||
+                                                showEditProfile ||
+                                                showShippingAddressList ||
+                                                showAddAddressScreen ||
+                                                showOrdersScreen ||
+                                                showFollowConnections ||
+                                                showFeaturedSellersAll
+                                        when {
+                                            selectedConversationId != null -> ChatComposerBarOverlayInset
+                                            fullscreenOverlay -> 0.dp
+                                            else -> MainNavBottomBarOverlayInset
+                                        }
+                                    }
+                                    SideEffect {
+                                        snackbarBottomChromeInset = snackbarChromeInsetForMainApp
+                                    }
                                     val pendingPaymentBanner by pendingPaymentViewModel.banner.collectAsState()
                                     var pendingCancelPaymentOrder by remember { mutableStateOf<PendingPaymentOrderRow?>(null) }
                                     val pendingPaymentSliderRegistry = remember { PendingPaymentSliderRegistry() }
@@ -674,7 +723,8 @@ class MainActivity : ComponentActivity() {
                                     val pendingPaymentBannerExpanded =
                                         pendingPaymentBanner != null &&
                                             selectedOrderId == null &&
-                                            selectedCheckoutListingId == null
+                                            selectedCheckoutListingId == null &&
+                                            chatOrderDetailOverlayId == null
                                     val anchorTopPx = remember(pendingPaymentSliderRegistry.sliders, rootLayoutCoordinates) {
                                         val coords = rootLayoutCoordinates ?: return@remember null
                                         val h = coords.size.height.toFloat()
@@ -757,6 +807,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             onConversationClick = { item ->
+                                                chatOrderDetailOverlayId = null
                                                 selectedConversationItem = item
                                                 chatDetailViewModel.loadFromItem(item)
                                                 selectedConversationId = item.conversationId
@@ -851,6 +902,7 @@ class MainActivity : ComponentActivity() {
                                                                 selectedListingId = null
                                                                 selectedTab = MainTab.Chat.ordinal
                                                                 selectedConversationItem = null
+                                                                chatOrderDetailOverlayId = null
                                                                 selectedConversationId = convId
                                                                 chatViewModel.loadConversations()
                                                             },
@@ -1018,12 +1070,14 @@ class MainActivity : ComponentActivity() {
                                                 viewModel = chatDetailViewModel,
                                                 otherInboxUnreadCount = otherInboxUnread,
                                                 onBack = {
+                                                    chatOrderDetailOverlayId = null
                                                     selectedConversationId = null
                                                     selectedConversationItem = null
                                                     chatViewModel.loadConversations()
                                                     chatViewModel.refreshUnreadCount()
                                                 },
                                                 onProductClick = {
+                                                    chatOrderDetailOverlayId = null
                                                     selectedConversationId = null
                                                     chatViewModel.loadConversations()
                                                     chatViewModel.refreshUnreadCount()
@@ -1035,22 +1089,19 @@ class MainActivity : ComponentActivity() {
                                                     checkoutExistingOrderId = chatOrderId
                                                 },
                                                 onPayNow = { orderId, _, _ ->
-                                                    selectedConversationId = null
-                                                    selectedConversationItem = null
-                                                    chatViewModel.loadConversations()
-                                                    chatViewModel.refreshUnreadCount()
-                                                    selectedOrderId = orderId
+                                                    chatOrderDetailOverlayId = orderId
                                                 },
                                                 onOrderDetails = { orderId ->
-                                                    selectedConversationId = null
-                                                    selectedConversationItem = null
-                                                    chatViewModel.loadConversations()
-                                                    chatViewModel.refreshUnreadCount()
-                                                    selectedOrderId = orderId
+                                                    val oid = orderId.trim().takeIf { it.isNotEmpty() }
+                                                    if (oid != null) {
+                                                        chatOrderDetailOverlayId = null
+                                                        selectedOrderId = oid
+                                                    }
                                                 },
                                                 onOtherUserProfileClick = { username ->
                                                     val u = username.trim()
                                                     if (u.isNotEmpty()) {
+                                                        chatOrderDetailOverlayId = null
                                                         conversationIdToRestoreAfterSellerShop = selectedConversationId
                                                         selectedConversationId = null
                                                         selectedConversationItem = null
@@ -1061,36 +1112,114 @@ class MainActivity : ComponentActivity() {
                                                         sellerShopUsername = u
                                                     }
                                                 },
-                                            )
-                                        }
-                                        if (selectedOrderId != null) {
-                                            OrderDetailScreen(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(MaterialTheme.colorScheme.surface),
-                                                orderId = selectedOrderId!!,
-                                                viewModel = orderDetailViewModel,
-                                                onBack = { selectedOrderId = null },
-                                                onNavigateToPayment = { listingId, amountVnd, existingOid ->
+                                                onOrdersClick = { showOrdersScreen = true },
+                                                orderDetailOverlayOrderId = chatOrderDetailOverlayId,
+                                                onDismissOrderDetailOverlay = { chatOrderDetailOverlayId = null },
+                                                orderDetailViewModel = orderDetailViewModel,
+                                                addressBookViewModel = addressBookViewModel,
+                                                onOrderOverlayPayment = { listingId, amountVnd, existingOid ->
+                                                    chatOrderDetailOverlayId = null
                                                     selectedCheckoutListingId = listingId
                                                     selectedCheckoutOfferPrice = amountVnd
                                                     checkoutExistingOrderId = existingOid
                                                 },
-                                                onNavigateToChat = { conversationId ->
-                                                    selectedOrderId = null
+                                                onOrderOverlayNavigateToChat = { conversationId ->
+                                                    chatOrderDetailOverlayId = null
                                                     selectedConversationId = conversationId
                                                 },
-                                                addressBookViewModel = addressBookViewModel,
-                                                onOpenShippingAddressList = {
-                                                    addressFlowOrderId = selectedOrderId
+                                                onOrderOverlayOpenShippingList = {
+                                                    addressFlowOrderId = chatOrderDetailOverlayId
                                                     showShippingAddressList = true
                                                 },
-                                                onOpenAddShippingAddress = {
-                                                    addressFlowOrderId = selectedOrderId
+                                                onOrderOverlayOpenAddShipping = {
+                                                    addressFlowOrderId = chatOrderDetailOverlayId
                                                     showAddAddressScreen = true
                                                     addAddressOpenedFromList = false
                                                 },
+                                                onOrderOverlayOpenUserProfile = { username ->
+                                                    val u = username.trim()
+                                                    if (u.isNotEmpty()) {
+                                                        chatOrderDetailOverlayId = null
+                                                        conversationIdToRestoreAfterSellerShop = selectedConversationId
+                                                        selectedConversationId = null
+                                                        selectedConversationItem = null
+                                                        chatViewModel.loadConversations()
+                                                        chatViewModel.refreshUnreadCount()
+                                                        exploreSectionWhenSellerOpened = null
+                                                        sellerShopEntrySource = SellerShopEntrySource.Chat
+                                                        sellerShopUsername = u
+                                                    }
+                                                },
+                                                onOrderOverlayOpenListing = { listingId, sellerUserId ->
+                                                    chatOrderDetailOverlayId = null
+                                                    selectedConversationId = null
+                                                    selectedConversationItem = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
+                                                    val myId =
+                                                        authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                    if (sellerUserId.isNotBlank() &&
+                                                        sellerUserId.equals(myId, ignoreCase = true)
+                                                    ) {
+                                                        selectedListingId = null
+                                                        editListingId = listingId
+                                                    } else {
+                                                        selectedListingId = listingId
+                                                    }
+                                                },
                                             )
+                                        }
+                                        selectedOrderId?.let { orderIdForDetail ->
+                                            key(orderIdForDetail) {
+                                                OrderDetailScreen(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(MaterialTheme.colorScheme.surface),
+                                                    orderId = orderIdForDetail,
+                                                    viewModel = orderDetailViewModel,
+                                                    onBack = { selectedOrderId = null },
+                                                    onNavigateToPayment = { listingId, amountVnd, existingOid ->
+                                                        selectedCheckoutListingId = listingId
+                                                        selectedCheckoutOfferPrice = amountVnd
+                                                        checkoutExistingOrderId = existingOid
+                                                    },
+                                                    onNavigateToChat = { conversationId ->
+                                                        selectedOrderId = null
+                                                        selectedConversationId = conversationId
+                                                    },
+                                                    addressBookViewModel = addressBookViewModel,
+                                                    onOpenShippingAddressList = {
+                                                        addressFlowOrderId = selectedOrderId
+                                                        showShippingAddressList = true
+                                                    },
+                                                    onOpenAddShippingAddress = {
+                                                        addressFlowOrderId = selectedOrderId
+                                                        showAddAddressScreen = true
+                                                        addAddressOpenedFromList = false
+                                                    },
+                                                    onOpenUserProfile = { username ->
+                                                        val u = username.trim()
+                                                        if (u.isNotEmpty()) {
+                                                            selectedOrderId = null
+                                                            sellerShopEntrySource = SellerShopEntrySource.None
+                                                            sellerShopUsername = u
+                                                        }
+                                                    },
+                                                    onOpenListing = { listingId, sellerUserId ->
+                                                        selectedOrderId = null
+                                                        val myId =
+                                                            authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                        if (sellerUserId.isNotBlank() &&
+                                                            sellerUserId.equals(myId, ignoreCase = true)
+                                                        ) {
+                                                            selectedListingId = null
+                                                            editListingId = listingId
+                                                        } else {
+                                                            selectedListingId = listingId
+                                                        }
+                                                    },
+                                                )
+                                            }
                                         }
                                         if (showShippingAddressList && !showAddAddressScreen) {
                                             BackHandler {
@@ -1303,8 +1432,10 @@ class MainActivity : ComponentActivity() {
                                 hostState = snackbarHostState,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                                    .navigationBarsPadding(),
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                                    .padding(bottom = 12.dp),
+                                additionalBottomInset = snackbarBottomChromeInset,
                             )
                         }
                     } else {
@@ -1315,6 +1446,11 @@ class MainActivity : ComponentActivity() {
                 FashGlobalDialogHost(
                     message = dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
+                    bottomOverlayInset = when {
+                        selectedConversationId != null -> ChatComposerBarOverlayInset
+                        isAuthenticated && needsOnboarding == false -> MainNavBottomBarOverlayInset
+                        else -> 0.dp
+                    },
                 )
             }
             }

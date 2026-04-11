@@ -18,21 +18,25 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -50,9 +54,12 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
@@ -83,6 +90,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,6 +100,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
@@ -111,20 +121,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.pc.fash_android_mobile.BuildConfig
+import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
+import com.pc.fash_android_mobile.data.deal.DealRecord
 import com.pc.fash_android_mobile.data.chat.parseOrderCancelledEmbeddedMessage
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAvatar
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
+import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
+import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
+import com.pc.fash_android_mobile.ui.orders.formatOrderDateTime
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.fashShimmer
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,9 +157,8 @@ fun ChatDetailScreen(
     onBack: () -> Unit = {},
     onProductClick: (listingId: String) -> Unit = {},
     /**
-     * Called when the buyer taps "Pay Now" in the deal banner.
-     * Carries the orderId, listingId and the accepted offer amount so the caller can open
-     * CheckoutScreen with the correct price.
+     * Called when the buyer continues in-app checkout from the deal banner (`payment_pending` escrow order).
+     * Carries [orderId], [listingId], and the last accepted offer amount for [CheckoutScreen].
      */
     onPayNow: (orderId: String, listingId: String, acceptedAmountVnd: Long) -> Unit = { _, _, _ -> },
     /** Called when any party taps the banner area (view order details). */
@@ -156,6 +172,24 @@ fun ChatDetailScreen(
     otherInboxUnreadCount: Int = 0,
     /** Open the counterparty’s public seller profile (by username). */
     onOtherUserProfileClick: (username: String) -> Unit = {},
+    /** Opens the orders list (same as main app bar). */
+    onOrdersClick: () -> Unit = {},
+    /**
+     * When non-null, shows [ChatOrderDetailOverlay] as a **child** of this screen so chat stays
+     * composed under the sheet (stable with main nav / bottom bar; avoids overlay–sibling ordering issues).
+     */
+    orderDetailOverlayOrderId: String? = null,
+    onDismissOrderDetailOverlay: () -> Unit = {},
+    orderDetailViewModel: OrderDetailViewModel? = null,
+    addressBookViewModel: AddressBookViewModel? = null,
+    onOrderOverlayPayment: (listingId: String, amountVnd: Long, orderId: String) -> Unit = { _, _, _ -> },
+    onOrderOverlayNavigateToChat: (conversationId: String) -> Unit = {},
+    onOrderOverlayOpenShippingList: () -> Unit = {},
+    onOrderOverlayOpenAddShipping: () -> Unit = {},
+    /** From order sheet: open counterparty profile (dismisses overlay first in caller). */
+    onOrderOverlayOpenUserProfile: (username: String) -> Unit = {},
+    /** From order sheet: open listing PDP or seller edit for own listing. */
+    onOrderOverlayOpenListing: (listingId: String, sellerUserId: String) -> Unit = { _, _ -> },
 ) {
     val detail by viewModel.detail.collectAsState()
     val messages by viewModel.messages.collectAsState()
@@ -168,10 +202,28 @@ fun ChatDetailScreen(
     val showOfferDialog by viewModel.showOfferDialog.collectAsState()
     val orderId by viewModel.orderId.collectAsState()
     val orderStatus by viewModel.orderStatus.collectAsState()
+    val orderMeetupDeadlineAt by viewModel.orderMeetupDeadlineAt.collectAsState()
+    val orderCanConfirmHandoff by viewModel.orderCanConfirmHandoff.collectAsState()
+    val orderMeetingSosUnlocked by viewModel.orderMeetingSosUnlocked.collectAsState()
+    val orderMeetingAppointmentStatus by viewModel.orderMeetingAppointmentStatus.collectAsState()
     val isOtherTyping by viewModel.isOtherTyping.collectAsState()
+    val meetingMutationInFlight by viewModel.meetingMutationInFlight.collectAsState()
+    val isProposingMeeting by viewModel.isProposingMeeting.collectAsState()
+    val showMeetingIdentityReverify by viewModel.showMeetingIdentityReverifyDialog.collectAsState()
+    val ackMeetingReverifyInFlight by viewModel.ackMeetingReverifyInFlight.collectAsState()
+    val isCreatingCounterOffer by viewModel.isCreatingCounterOffer.collectAsState()
+    val counterOfferSheet by viewModel.counterOfferSheet.collectAsState()
+    val activeDeal by viewModel.activeDeal.collectAsState()
+    val isDealWorking by viewModel.isDealWorking.collectAsState()
+    val pendingDealReviewDealId by viewModel.pendingDealReviewDealId.collectAsState()
+
+    /** Escrow order linked to this thread — prefer VM state, fall back to [ConversationDetail.orderId] from API. */
+    val conversationOrderId = orderId?.trim()?.takeIf { it.isNotEmpty() }
+        ?: detail?.orderId?.trim()?.takeIf { it.isNotEmpty() }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { msg ->
@@ -179,14 +231,46 @@ fun ChatDetailScreen(
         }
     }
 
-    // Loads full detail when [conversationId] changes; same id + cached detail is a no-op in the ViewModel.
+    LaunchedEffect(Unit) {
+        viewModel.suggestReopenListing.collect {
+            snackbarHostState.showSnackbar(context.getString(R.string.chat_meeting_cancel_suggest_reopen))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.navigateToOrderDetail.collectLatest { oid ->
+            if (oid.isNotBlank()) onOrderDetails(oid.trim())
+        }
+    }
+
+    // Always invoke [loadConversation]: when [detail] already matches this thread it still runs [silentPoll]
+    // to load messages. Skipping when ids matched left history empty (e.g. open chat from PDP while the VM
+    // still held this conversation from a quick inbox back) until send/offer called [refreshMessages].
     LaunchedEffect(conversationId) {
         viewModel.loadConversation(conversationId)
     }
 
+    MeetingIdentityReverifyDialog(
+        visible = showMeetingIdentityReverify,
+        openVerificationUrl = AppEnvironment.identityReverifyUrl.takeIf { it.isNotEmpty() },
+        isAckInFlight = ackMeetingReverifyInFlight,
+        onDismiss = viewModel::dismissMeetingIdentityReverifyDialog,
+        onAckCompleted = viewModel::ackMeetingIdentityReverifyFromChat,
+    )
+
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier,
-        snackbarHost = { FashSnackbarHost(snackbarHostState) },
+        modifier = Modifier.fillMaxSize(),
+        snackbarHost = {
+            FashSnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp),
+                additionalBottomInset = ChatComposerBarOverlayInset,
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -234,6 +318,15 @@ fun ChatDetailScreen(
                         }
                     }
                 },
+                actions = {
+                    IconButton(onClick = onOrdersClick) {
+                        Icon(
+                            imageVector = Icons.Default.LocalMall,
+                            contentDescription = stringResource(R.string.orders_icon_cd),
+                            tint = FashColors.Primary,
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
@@ -269,16 +362,17 @@ fun ChatDetailScreen(
 
             else -> {
                 val d = detail!!
-                val maxOffers = BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION
-                val hasPendingOfferFromMe = d.pendingOffer?.proposedByMe == true
+                var showMeetingSheet by remember { mutableStateOf(false) }
+                val maxOffers = BusinessFlowConfig.maxOffersPerConversation
                 val orderStatusNorm = orderStatus?.trim()?.lowercase().orEmpty()
                 /**
                  * Aligns with server rules: no new offers while an order is in pipeline (e.g. payment_pending);
                  * after cancel/expiry, [orderId] clears / status cancelled and offers can resume (subject to
                  * is_closed, offer_count, pending offer — see [OfferLimitPolicyBanner] and [offerBlocked]).
                  */
-                val hasOrderBlockingOffer = orderId != null && orderStatusNorm != "cancelled"
-                val hasOrder = orderId != null
+                val hasOrderBlockingOffer =
+                    conversationOrderId != null && orderStatusNorm != "cancelled"
+                val hasLinkedOrder = conversationOrderId != null
                 val composerReadOnly =
                     d.isClosed || d.product?.listingStatus == "sold"
                 val offerBlocked =
@@ -288,10 +382,16 @@ fun ChatDetailScreen(
                 val offerLimitReached = d.offerCount >= maxOffers
                 val sortedMessages = messages.sortedBy { it.timestamp }
 
-                // The amount from the most-recently accepted offer (used for Pay Now)
+                val hasActiveMeetupBlockingSchedule = remember(sortedMessages, orderMeetingAppointmentStatus) {
+                    dealBannerShouldHideScheduleMeetup(orderMeetingAppointmentStatus, sortedMessages)
+                }
+
                 val acceptedOfferAmount = remember(sortedMessages) {
                     sortedMessages
-                        .filter { it.messageType == "offer" && it.offerStatus == "accepted" }
+                        .filter {
+                            isNegotiationMessageType(it.messageType) &&
+                                it.offerStatus.equals("accepted", ignoreCase = true)
+                        }
                         .maxByOrNull { it.timestamp }
                         ?.offerAmountVnd ?: 0L
                 }
@@ -303,22 +403,40 @@ fun ChatDetailScreen(
                 ) {
                     // STATE B: Deal banner (slides in from top when order_id becomes non-null)
                     AnimatedVisibility(
-                        visible = hasOrder,
+                        visible = hasLinkedOrder,
                         enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
                         exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                     ) {
                         DealBanner(
                             isBuyer = d.isBuyer,
                             orderStatus = orderStatus,
-                            onTap = { orderId?.let { onOrderDetails(it) } },
+                            meetupPayByFormatted = orderMeetupDeadlineAt?.takeIf { it.isNotBlank() }?.let { raw ->
+                                formatOrderDateTime(raw)
+                            },
+                            meetingSosUnlocked = orderMeetingSosUnlocked,
+                            onTap = { conversationOrderId?.let { onOrderDetails(it) } },
                             onPayNow = {
-                                orderId?.let { oid ->
+                                conversationOrderId?.let { oid ->
                                     onPayNow(
                                         oid,
                                         d.product?.listingId.orEmpty(),
                                         acceptedOfferAmount,
                                     )
                                 }
+                            },
+                            onConfirmHandoff = if (!d.isBuyer && orderCanConfirmHandoff) {
+                                { viewModel.confirmHandoff() }
+                            } else {
+                                null
+                            },
+                            onScheduleMeetup = if (
+                                hasLinkedOrder &&
+                                orderStatusNorm != "cancelled" &&
+                                !hasActiveMeetupBlockingSchedule
+                            ) {
+                                { showMeetingSheet = true }
+                            } else {
+                                null
                             },
                         )
                     }
@@ -345,14 +463,15 @@ fun ChatDetailScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
                     }
 
-                    // Offer price bottom sheet
-                    if (showOfferDialog) {
-                        OfferPriceBottomSheet(
-                            priceVnd = d.product?.priceVnd ?: 0L,
-                            isLoading = isCreatingOffer,
-                            onDismiss = { viewModel.dismissOfferDialog() },
-                            onSubmit = { amt -> viewModel.createOffer(amt) },
+                    activeDeal?.let { deal ->
+                        OfflineDealRecordBanner(
+                            deal = deal,
+                            isWorking = isDealWorking,
+                            formatPrice = ::formatPrice,
+                            onComplete = { viewModel.completeOfflineDeal() },
+                            onCancel = { viewModel.cancelActiveOfflineDeal() },
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
                     }
 
                     // Messages
@@ -364,8 +483,11 @@ fun ChatDetailScreen(
                         sortedMessages.size,
                         sortedMessages.lastOrNull()?.messageId,
                         isCreatingOffer,
+                        isCreatingCounterOffer,
                     ) {
-                        if (sortedMessages.isEmpty() && !isCreatingOffer) return@LaunchedEffect
+                        if (sortedMessages.isEmpty() && !isCreatingOffer && !isCreatingCounterOffer) {
+                            return@LaunchedEffect
+                        }
                         if (listState.firstVisibleItemIndex == 0) {
                             listState.animateScrollToItem(0)
                         }
@@ -414,7 +536,7 @@ fun ChatDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 when {
-                                    isCreatingOffer -> {
+                                    isCreatingOffer || isCreatingCounterOffer -> {
                                         item(key = "offer_sending_placeholder") {
                                             Box(
                                                 modifier = Modifier
@@ -500,10 +622,27 @@ fun ChatDetailScreen(
                                             ),
                                     ) {
                                         when (msg.messageType) {
-                                            "offer" -> OfferMessageBubble(
+                                            "meeting_proposal" -> {
+                                                msg.meetingAppointment?.let { mtg ->
+                                                    MeetingProposalMessageCard(
+                                                        message = msg,
+                                                        meeting = mtg,
+                                                        formatTime = viewModel::formatTime,
+                                                        mutationInFlight = meetingMutationInFlight,
+                                                        onConfirm = { viewModel.confirmMeeting(mtg.id) },
+                                                        onWithdrawOrReject = { viewModel.cancelMeeting(mtg.id) },
+                                                        onCheckIn = if (mtg.status.equals("confirmed", ignoreCase = true)) {
+                                                            { viewModel.checkInMeeting(mtg.id) }
+                                                        } else {
+                                                            null
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                            "offer", "counter_offer" -> OfferMessageBubble(
                                                 message = msg,
                                                 isBuyer = d.isBuyer,
-                                                hasOrder = hasOrder,
+                                                hasOrder = hasLinkedOrder,
                                                 isResponding = isRespondingToOffer,
                                                 onAccept = {
                                                     viewModel.acceptOffer(
@@ -524,6 +663,20 @@ fun ChatDetailScreen(
                                                             status = msg.offerStatus,
                                                         ),
                                                     )
+                                                },
+                                                onCounter = if (
+                                                    !d.isBuyer && !hasLinkedOrder &&
+                                                    msg.messageType == "offer" &&
+                                                    !msg.isFromMe
+                                                ) {
+                                                    {
+                                                        viewModel.openCounterOfferSheet(
+                                                            msg.messageId,
+                                                            msg.offerAmountVnd,
+                                                        )
+                                                    }
+                                                } else {
+                                                    null
                                                 },
                                                 formatTime = viewModel::formatTime,
                                             )
@@ -580,20 +733,98 @@ fun ChatDetailScreen(
                             onSend = { viewModel.sendMessage() },
                             isSending = isSending,
                             showOfferButton = d.isBuyer && !hasOrderBlockingOffer,
-                            offerButtonEnabled = !hasPendingOfferFromMe && !offerLimitReached && !offerBlocked,
+                            offerButtonEnabled = d.pendingOffer == null && !offerLimitReached && !offerBlocked,
                             offerShowLimitTooltip = d.isBuyer && !hasOrderBlockingOffer && offerLimitReached && !offerBlocked,
                             offerLimitMax = maxOffers,
                             onOfferClick = { viewModel.onSetPriceClick() },
+                        )
+                    }
+
+                    // Modal bottom sheets: must be composed *after* the weighted message [Box] so flex layout
+                    // keeps the list visible; placing sheets above [Modifier.weight(1f)] can collapse the list
+                    // when a sheet opens (e.g. schedule meetup).
+                    if (showOfferDialog) {
+                        OfferPriceBottomSheet(
+                            priceVnd = d.product?.priceVnd ?: 0L,
+                            isLoading = isCreatingOffer,
+                            onDismiss = { viewModel.dismissOfferDialog() },
+                            onSubmit = { amt -> viewModel.createOffer(amt) },
+                        )
+                    }
+
+                    counterOfferSheet?.let { args ->
+                        CounterOfferBottomSheet(
+                            buyerOfferAmountVnd = args.buyerOfferAmountVnd,
+                            isLoading = isCreatingCounterOffer,
+                            onDismiss = { viewModel.dismissCounterOfferSheet() },
+                            onSubmit = { viewModel.submitCounterOffer(it) },
+                        )
+                    }
+
+                    pendingDealReviewDealId?.let { rid ->
+                        DealReviewBottomSheet(
+                            dealId = rid,
+                            isLoading = isDealWorking,
+                            onDismiss = { viewModel.skipOfflineDealReviewPrompt() },
+                            onSubmit = { rating, comment ->
+                                viewModel.submitOfflineDealReview(rid, rating, comment)
+                            },
+                        )
+                    }
+
+                    if (showMeetingSheet) {
+                        val sheetLinkedOrder = conversationOrderId
+                        MeetingProposalBottomSheet(
+                            isLoading = isProposingMeeting,
+                            linkedOrderId = sheetLinkedOrder,
+                            onViewOrder = if (sheetLinkedOrder != null) {
+                                { id: String ->
+                                    showMeetingSheet = false
+                                    onOrderDetails(id)
+                                }
+                            } else {
+                                null
+                            },
+                            onDismiss = { if (!isProposingMeeting) showMeetingSheet = false },
+                            onSubmit = { url, iso, en, off ->
+                                viewModel.proposeMeeting(
+                                    conversationId = conversationId,
+                                    locationUrl = url,
+                                    scheduledAtIso = iso,
+                                    reminderEnabled = en,
+                                    reminderOffsetMinutes = off,
+                                ) {
+                                    showMeetingSheet = false
+                                }
+                            },
                         )
                     }
                 }
             }
         }
     }
+    val overlayOid = orderDetailOverlayOrderId?.trim()?.takeIf { it.isNotEmpty() }
+    val ovm = orderDetailViewModel
+    val avm = addressBookViewModel
+    if (overlayOid != null && ovm != null && avm != null) {
+        ChatOrderDetailOverlay(
+            orderId = overlayOid,
+            onDismiss = onDismissOrderDetailOverlay,
+            viewModel = ovm,
+            addressBookViewModel = avm,
+            onNavigateToPayment = onOrderOverlayPayment,
+            onNavigateToChat = onOrderOverlayNavigateToChat,
+            onOpenShippingAddressList = onOrderOverlayOpenShippingList,
+            onOpenAddShippingAddress = onOrderOverlayOpenAddShipping,
+            onOpenUserProfile = onOrderOverlayOpenUserProfile,
+            onOpenListing = onOrderOverlayOpenListing,
+        )
+    }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Offer limit (buyer — max from CHAT_MAX_OFFERS_PER_CONVERSATION in env / BuildConfig)
+// Offer limit (buyer — max from [BusinessFlowConfig.maxOffersPerConversation])
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -655,21 +886,52 @@ private fun OfferLimitPolicyBanner(
     }
 }
 
+/**
+ * Hide the deal-banner "Schedule meetup" entry while a meetup is **pending** or **confirmed**
+ * (order payload and/or chat `meeting_proposal` rows). After cancel, both should clear so
+ * scheduling can open again.
+ */
+private fun dealBannerShouldHideScheduleMeetup(
+    orderMeetingStatus: String?,
+    sortedMessages: List<ChatMessage>,
+): Boolean {
+    val o = orderMeetingStatus?.trim()?.lowercase().orEmpty()
+    if (o == "pending" || o == "confirmed") return true
+    return sortedMessages.any { msg ->
+        msg.messageType.equals("meeting_proposal", ignoreCase = true) &&
+            msg.meetingAppointment?.let { ap ->
+                val st = ap.status.trim().lowercase()
+                st == "pending" || st == "confirmed"
+            } == true
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Deal banner (STATE B — order exists)
+// Deal banner (STATE B — escrow order exists)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DealBanner(
     isBuyer: Boolean,
     orderStatus: String?,
+    /** When set, shows meetup-linked payment cutoff (server `meetup_deadline_at`). */
+    meetupPayByFormatted: String? = null,
+    /** From `GET /orders/:id` → `meeting_grace.sos_unlocked` (both parties checked in). */
+    meetingSosUnlocked: Boolean = false,
     onTap: () -> Unit,
     onPayNow: () -> Unit = {},
+    /** Seller meetup handoff — `POST .../confirm-handoff`. */
+    onConfirmHandoff: (() -> Unit)? = null,
+    /** When non-null, shows an extra control to open the meetup sheet. */
+    onScheduleMeetup: (() -> Unit)? = null,
 ) {
     val s = orderStatus?.trim()?.lowercase().orEmpty()
     val buyerNeedsToPay = isBuyer && s == "payment_pending"
     val sellerWaitingForPayment = !isBuyer && s == "payment_pending"
     val showPaymentDeadlineWarning = buyerNeedsToPay || sellerWaitingForPayment
+    val showMeetupPayBy =
+        showPaymentDeadlineWarning &&
+            !meetupPayByFormatted.isNullOrBlank()
 
     val appearance = dealBannerAppearance(
         isBuyer = isBuyer,
@@ -709,6 +971,8 @@ private fun DealBanner(
                         stringResource(R.string.chat_deal_banner_disputed)
                     s == "delivered_confirmed" ->
                         stringResource(R.string.chat_deal_banner_delivered)
+                    s == "cash_meetup_open" ->
+                        stringResource(R.string.chat_deal_banner_cash_meetup)
                     s in listOf("payment_held", "in_transit") ->
                         stringResource(R.string.chat_deal_banner_in_progress)
                     s.isBlank() ->
@@ -720,12 +984,74 @@ private fun DealBanner(
                 color = appearance.primaryText,
                 modifier = Modifier.weight(1f),
             )
-            if (!buyerNeedsToPay) {
-                Text(
-                    text = stringResource(R.string.chat_deal_banner_view_order),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = appearance.accent,
-                )
+            Text(
+                text = stringResource(R.string.chat_deal_banner_view_order),
+                style = MaterialTheme.typography.labelSmall,
+                color = appearance.accent,
+            )
+        }
+
+        if (showMeetupPayBy) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 8.dp),
+                color = Color(0xFFE8F5E9),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Schedule,
+                        contentDescription = null,
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_deal_meetup_pay_deadline, meetupPayByFormatted!!),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp,
+                        ),
+                        color = Color(0xFF1B5E20),
+                    )
+                }
+            }
+        }
+
+        if (meetingSosUnlocked && s != "cancelled") {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 8.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_deal_sos_unlocked_hint),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
             }
         }
 
@@ -766,14 +1092,29 @@ private fun DealBanner(
             }
         }
 
-        // Prominent "Pay Now" button — only for buyer awaiting payment
+        // Buyer CTA — view order details + continue checkout when order is payment_pending
         if (buyerNeedsToPay) {
+            OutlinedButton(
+                onClick = onTap,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, appearance.accent.copy(alpha = 0.55f)),
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_deal_banner_view_order),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = appearance.accent,
+                )
+            }
             Button(
                 onClick = onPayNow,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = if (onScheduleMeetup != null) 8.dp else 12.dp)
                     .height(46.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
@@ -786,8 +1127,74 @@ private fun DealBanner(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.chat_deal_pay_now),
+                    text = stringResource(R.string.chat_deal_escrow_continue_cta),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+            if (onScheduleMeetup != null) {
+                OutlinedButton(
+                    onClick = onScheduleMeetup,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, appearance.accent.copy(alpha = 0.55f)),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Event,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = appearance.accent,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.chat_c2c_schedule_meeting),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = appearance.accent,
+                    )
+                }
+            }
+        }
+        if (onScheduleMeetup != null && !buyerNeedsToPay && s != "cancelled") {
+            OutlinedButton(
+                onClick = onScheduleMeetup,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, appearance.accent.copy(alpha = 0.55f)),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Event,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = appearance.accent,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.chat_c2c_schedule_meeting),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = appearance.accent,
+                )
+            }
+        }
+        if (onConfirmHandoff != null && !isBuyer) {
+            Button(
+                onClick = onConfirmHandoff,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp)
+                    .height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+            ) {
+                Text(
+                    text = stringResource(R.string.order_detail_confirm_handoff),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = FashColors.Primary.fashReadableOn(),
                 )
             }
         }
@@ -827,7 +1234,7 @@ private fun dealBannerAppearance(
             accent = Color(0xFFE65100),
             leadingIcon = Icons.Filled.Warning,
         )
-    statusNorm in listOf("payment_held", "in_transit") ->
+    statusNorm in listOf("payment_held", "in_transit", "cash_meetup_open") ->
         DealBannerAppearance(
             background = Color(0xFFE3F2FD),
             primaryText = Color(0xFF0D47A1),
@@ -1045,20 +1452,38 @@ private fun OfferMessageBubble(
     isResponding: Boolean,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
+    /** Seller: counter a pending buyer offer (initial `offer` only). */
+    onCounter: (() -> Unit)? = null,
     formatTime: (String) -> String,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val isCounterOffer = message.messageType.equals("counter_offer", ignoreCase = true)
 
-    // Show Accept/Decline only when: seller + offer pending + offer is from the other person
-    val showSellerActions = !isBuyer &&
+    // Seller responds to buyer's first offer
+    val showSellerActionsOnBuyerOffer = !isBuyer &&
         message.offerStatus == "pending" &&
         !message.isFromMe &&
-        !hasOrder
+        !hasOrder &&
+        !isCounterOffer
 
-    // Buyer sees "Waiting..." subtext when their own pending offer exists
+    // Buyer responds to seller's counter
+    val showBuyerActionsOnSellerCounter = isBuyer &&
+        message.offerStatus == "pending" &&
+        !message.isFromMe &&
+        !hasOrder &&
+        isCounterOffer
+
+    // Buyer waiting on seller (initial offer)
     val showBuyerWaiting = isBuyer &&
         message.offerStatus == "pending" &&
-        message.isFromMe
+        message.isFromMe &&
+        !isCounterOffer
+
+    // Seller waiting on buyer after counter
+    val showSellerWaitingOnBuyer = !isBuyer &&
+        message.offerStatus == "pending" &&
+        message.isFromMe &&
+        isCounterOffer
 
     Column(
         modifier = Modifier
@@ -1092,7 +1517,9 @@ private fun OfferMessageBubble(
                     modifier = Modifier.size(18.dp),
                 )
                 Text(
-                    text = stringResource(R.string.chat_offer_label),
+                    text = stringResource(
+                        if (isCounterOffer) R.string.chat_counter_offer_label else R.string.chat_offer_label,
+                    ),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = FashColors.Primary,
                 )
@@ -1118,7 +1545,15 @@ private fun OfferMessageBubble(
                     )
                 }
 
-                showSellerActions -> {
+                showSellerWaitingOnBuyer -> {
+                    Text(
+                        text = stringResource(R.string.chat_counter_waiting_buyer),
+                        style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                        color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+
+                showBuyerActionsOnSellerCounter || showSellerActionsOnBuyerOffer -> {
                     if (isResponding) {
                         Box(
                             modifier = Modifier.fillMaxWidth(),
@@ -1131,35 +1566,56 @@ private fun OfferMessageBubble(
                             )
                         }
                     } else {
-                        Row(
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            OutlinedButton(
-                                onClick = onDecline,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
-                                ),
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                Text(
-                                    stringResource(R.string.chat_offer_decline),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                                OutlinedButton(
+                                    onClick = onDecline,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error,
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                                    ),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.chat_offer_decline),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                                Button(
+                                    onClick = onAccept,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.chat_offer_accept),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
                             }
-                            Button(
-                                onClick = onAccept,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                            ) {
-                                Text(
-                                    stringResource(R.string.chat_offer_accept),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                            if (showSellerActionsOnBuyerOffer && onCounter != null) {
+                                OutlinedButton(
+                                    onClick = onCounter,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.5f)),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.chat_offer_counter_cta),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = FashColors.Primary,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1754,6 +2210,23 @@ private fun ChatInputBar(
 // Offer price bottom sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Hides the IME and clears focus before sheet content is removed — reduces framework warnings such as
+ * `requestCursorUpdates on inactive InputConnection` when dismissing sheets that contain [OutlinedTextField].
+ */
+@Composable
+private fun rememberSheetDismiss(onDismiss: () -> Unit): () -> Unit {
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    return remember(onDismiss) {
+        {
+            keyboard?.hide()
+            focusManager.clearFocus(force = true)
+            onDismiss()
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OfferPriceBottomSheet(
@@ -1764,9 +2237,10 @@ private fun OfferPriceBottomSheet(
 ) {
     var rawInput by remember { mutableStateOf("") }
     val parsedAmount = rawInput.filter { it.isDigit() }.toLongOrNull() ?: 0L
+    val dismissSheet = rememberSheetDismiss(onDismiss)
 
     androidx.compose.material3.ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismissSheet,
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
         dragHandle = { androidx.compose.material3.BottomSheetDefaults.DragHandle() },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -2049,6 +2523,337 @@ private fun LoadingMessageIndicator() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+private fun isNegotiationMessageType(t: String): Boolean =
+    t == "offer" || t.equals("counter_offer", ignoreCase = true)
+
+@Composable
+private fun OfflineDealRecordBanner(
+    deal: DealRecord,
+    isWorking: Boolean,
+    formatPrice: (Long) -> String,
+    onComplete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val st = deal.status.lowercase()
+    if (st == "cancelled") return
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = scheme.tertiaryContainer.copy(alpha = 0.45f),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_offline_deal_banner_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onTertiaryContainer,
+            )
+            when (st) {
+                "scheduled" -> {
+                    Text(
+                        text = stringResource(R.string.chat_offline_deal_banner_scheduled),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurface,
+                    )
+                    if (deal.agreedPriceVnd > 0L) {
+                        Text(
+                            text = formatPrice(deal.agreedPriceVnd),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = scheme.onSurface,
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedButton(
+                            onClick = onCancel,
+                            enabled = !isWorking,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                        ) {
+                            Text(stringResource(R.string.chat_offline_deal_cancel_record))
+                        }
+                        Button(
+                            onClick = onComplete,
+                            enabled = !isWorking,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                        ) {
+                            if (isWorking) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = FashColors.Primary.fashReadableOn(),
+                                )
+                            } else {
+                                Text(stringResource(R.string.chat_offline_deal_complete))
+                            }
+                        }
+                    }
+                }
+                "completed" -> {
+                    Text(
+                        text = stringResource(R.string.chat_offline_deal_banner_completed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurface,
+                    )
+                }
+                else -> {
+                    Text(
+                        text = deal.status,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CounterOfferBottomSheet(
+    buyerOfferAmountVnd: Long,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (Long) -> Unit,
+) {
+    var rawInput by remember { mutableStateOf("") }
+    val parsedAmount = rawInput.filter { it.isDigit() }.toLongOrNull() ?: 0L
+    val dismissSheet = rememberSheetDismiss(onDismiss)
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = dismissSheet,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+        dragHandle = { androidx.compose.material3.BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_counter_sheet_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (buyerOfferAmountVnd > 0L) {
+                Text(
+                    text = stringResource(
+                        R.string.chat_counter_sheet_buyer_offer,
+                        formatPrice(buyerOfferAmountVnd),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "₫",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = FashColors.Primary,
+                    modifier = Modifier.padding(end = 6.dp),
+                )
+                OutlinedTextField(
+                    value = rawInput,
+                    onValueChange = { rawInput = it.filter { c -> c.isDigit() } },
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            stringResource(R.string.chat_offer_dialog_placeholder),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = FashColors.Primary,
+                    ),
+                )
+            }
+
+            if (parsedAmount > 0L) {
+                Text(
+                    text = formatPrice(parsedAmount),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                )
+            }
+
+            Button(
+                onClick = { if (parsedAmount >= 1000L) onSubmit(parsedAmount) },
+                enabled = parsedAmount >= 1000L && !isLoading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FashColors.Primary,
+                    contentColor = FashColors.Primary.fashReadableOn(),
+                ),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = FashColors.Primary.fashReadableOn(),
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.chat_counter_sheet_submit),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DealReviewBottomSheet(
+    dealId: String,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (Int, String?) -> Unit,
+) {
+    var rating by remember(dealId) { mutableIntStateOf(5) }
+    var comment by remember(dealId) { mutableStateOf("") }
+    val dismissSheet = rememberSheetDismiss(onDismiss)
+    val scheme = MaterialTheme.colorScheme
+
+    Dialog(
+        onDismissRequest = { if (!isLoading) dismissSheet() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+            dismissOnBackPress = !isLoading,
+            dismissOnClickOutside = false,
+        ),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(scheme.scrim.copy(alpha = 0.52f))
+                    .clickable(
+                        enabled = !isLoading,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = dismissSheet,
+                    ),
+            )
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { /* consume — taps stay on the card */ },
+                    ),
+                shape = RoundedCornerShape(20.dp),
+                color = scheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 20.dp, bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_offline_deal_review_title),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        for (star in 1..5) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(
+                                        enabled = !isLoading,
+                                        onClick = { rating = star },
+                                    )
+                                    .background(
+                                        if (rating == star) {
+                                            FashColors.Primary.copy(alpha = 0.16f)
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = star.toString(),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = if (rating == star) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (rating >= star) {
+                                        FashColors.Primary
+                                    } else {
+                                        scheme.outline
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it.take(2000) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.chat_offline_deal_review_hint)) },
+                        maxLines = 4,
+                        enabled = !isLoading,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FashColors.Primary),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = dismissSheet,
+                            enabled = !isLoading,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.chat_offline_deal_review_skip))
+                        }
+                        Button(
+                            onClick = {
+                                onSubmit(
+                                    rating,
+                                    comment.trim().takeIf { it.isNotEmpty() },
+                                )
+                            },
+                            enabled = !isLoading,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = FashColors.Primary.fashReadableOn(),
+                                )
+                            } else {
+                                Text(stringResource(R.string.chat_offline_deal_review_submit))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 /** Formats VND amount as ₫80.000 (spec format with dot separators). */
 private fun formatPrice(vnd: Long): String =

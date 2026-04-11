@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.data.auth
 
+import android.util.Log
 import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
@@ -89,7 +90,13 @@ class AuthRepository(
             .put("refresh_token", refreshToken.trim())
             .put("user_agent", FASH_HTTP_USER_AGENT)
             .toString()
-        val body = postJsonBody(url, json)
+        val body = try {
+            postJsonBody(url, json)
+        } catch (e: Exception) {
+            logRefreshTokenResponseFailure(url, e)
+            throw e
+        }
+        logRefreshTokenResponseSuccess(body)
         parseLoginResponse(body)
     }
 
@@ -162,6 +169,18 @@ class AuthRepository(
         }
     }
 
+    private fun logRefreshTokenResponseSuccess(rawBody: String) {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "refresh token HTTP 200, response: $rawBody")
+        }
+    }
+
+    private fun logRefreshTokenResponseFailure(url: String, e: Exception) {
+        if (BuildConfig.DEBUG) {
+            Log.e(TAG, "refresh token request failed url=$url", e)
+        }
+    }
+
     private fun parseLoginResponse(json: String): AuthSession {
         val o = JSONObject(json)
         return AuthSession(
@@ -176,6 +195,8 @@ class AuthRepository(
     }
 
     companion object {
+        private const val TAG = "AuthRepository"
+
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         private val defaultClient: OkHttpClient = run {

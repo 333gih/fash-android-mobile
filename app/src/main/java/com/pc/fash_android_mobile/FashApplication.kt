@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.chat.ChatRepository
+import com.pc.fash_android_mobile.data.deal.DealRepository
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
@@ -127,6 +128,15 @@ class FashApplication : Application(), ImageLoaderFactory {
 
     val orderRepository: OrderRepository by lazy {
         OrderRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
+
+    /** In-person / offline deals (`POST /deals`, complete, cancel, review). */
+    val dealRepository: DealRepository by lazy {
+        DealRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),

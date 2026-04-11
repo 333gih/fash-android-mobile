@@ -1,8 +1,11 @@
 package com.pc.fash_android_mobile.ui.orders
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -60,6 +63,7 @@ import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -75,6 +79,10 @@ fun OrderDetailScreen(
     onNavigateToPayment: (listingId: String, amountVnd: Long, orderId: String) -> Unit,
     /** Opens chat when [OrderDetail.conversationId] is set. */
     onNavigateToChat: (conversationId: String) -> Unit = {},
+    /** Opens the buyer/seller public profile by @username (from order counterparty card). */
+    onOpenUserProfile: (username: String) -> Unit = {},
+    /** Opens the listing (PDP); [sellerUserId] routes the current user’s own listing to edit when it matches. */
+    onOpenListing: (listingId: String, sellerUserId: String) -> Unit = { _, _ -> },
     addressBookViewModel: AddressBookViewModel? = null,
     onOpenShippingAddressList: () -> Unit = {},
     onOpenAddShippingAddress: () -> Unit = {},
@@ -84,6 +92,7 @@ fun OrderDetailScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val isWorking by viewModel.isWorking.collectAsState()
+    val checkInInFlight by viewModel.checkInInFlight.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -101,6 +110,8 @@ fun OrderDetailScreen(
     val openDisputePhotoUrls = remember { mutableStateListOf<String>() }
     val evidencePhotoUrls = remember { mutableStateListOf<String>() }
     val scrollState = rememberScrollState()
+    var pendingCheckInAppointmentId by remember { mutableStateOf<String?>(null) }
+    var reviewComment by remember { mutableStateOf("") }
     var showEmptyAddressAlert by remember { mutableStateOf(false) }
     val emptyAddrList = remember { emptyList<ShippingAddress>() }
     val addresses by addressBookViewModel?.addresses?.collectAsState(initial = emptyAddrList)
@@ -137,6 +148,17 @@ fun OrderDetailScreen(
                     )
                 }
             }
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val pending = pendingCheckInAppointmentId ?: return@rememberLauncherForActivityResult
+        pendingCheckInAppointmentId = null
+        scope.launch {
+            val loc = if (granted) MeetupCheckInLocation.peekLastKnownLatLng(context) else null
+            viewModel.checkInAtMeeting(pending, loc?.first, loc?.second)
         }
     }
 
@@ -178,6 +200,10 @@ fun OrderDetailScreen(
             evidenceDesc = ""
             evidencePhotoUrls.clear()
         }
+    }
+
+    LaunchedEffect(showReviewDialog) {
+        if (showReviewDialog) reviewComment = ""
     }
 
     LaunchedEffect(orderId) {
@@ -301,6 +327,7 @@ fun OrderDetailScreen(
                             .fillMaxSize()
                             .verticalScroll(scrollState)
                             .padding(horizontal = FashTheme.spacing.editorialStart)
+                            .padding(top = FashTheme.spacing.spacing4)
                             .padding(bottom = 140.dp),
                     ) {
                         AnimatedVisibility(
@@ -312,6 +339,55 @@ fun OrderDetailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         OrderTimelineSection(d = d, formatDate = formatDate)
                         Spacer(modifier = Modifier.height(12.dp))
+                        if (d.meetupDeadlineAt.isNotBlank() && d.status.trim().lowercase() == "payment_pending") {
+                            OrderMeetupDeadlineStrip(
+                                meetupDeadlineAt = d.meetupDeadlineAt,
+                                formatDate = formatDate,
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                        d.meetingAppointment?.let { meet ->
+                            OrderMeetingSection(meeting = meet, formatDate = formatDate)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val grace = d.meetingGrace ?: OrderMeetingGrace()
+                            val apptId = meet.id.trim().takeIf { it.isNotEmpty() }
+                            OrderMeetingGraceSection(
+                                grace = grace,
+                                appointmentId = apptId,
+                                isWorking = isWorking,
+                                checkInLoading = checkInInFlight,
+                                onCheckIn = { appointmentId ->
+                                    when {
+                                        ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                                        ) == PackageManager.PERMISSION_GRANTED -> {
+                                            scope.launch {
+                                                val loc = MeetupCheckInLocation.peekLastKnownLatLng(context)
+                                                viewModel.checkInAtMeeting(
+                                                    appointmentId,
+                                                    loc?.first,
+                                                    loc?.second,
+                                                )
+                                            }
+                                        }
+                                        else -> {
+                                            pendingCheckInAppointmentId = appointmentId
+                                            locationPermissionLauncher.launch(
+                                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            )
+                                        }
+                                    }
+                                },
+                                onReportNoShow = { reason, note ->
+                                    viewModel.reportMeetingNoShow(d.orderId, reason, note)
+                                },
+                                showAcknowledgeCash = d.canAcknowledgeOfflineCash && role == OrderViewerRole.Seller,
+                                onAcknowledgeCash = { viewModel.acknowledgeOfflineCash(d.orderId) },
+                                formatDate = formatDate,
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
                         if (role == OrderViewerRole.Buyer && d.status.trim().lowercase() == "cancelled") {
                             BuyerCancelledNegotiationHint(
                                 listingStatus = d.listingStatus,
@@ -346,35 +422,78 @@ fun OrderDetailScreen(
                                 ) {
                                     Spacer(modifier = Modifier.height(12.dp))
                                 }
+                                val sellerHandle = d.sellerUsername.trim()
                                 CounterpartyCard(
                                     title = stringResource(R.string.order_detail_counterparty_seller),
                                     displayName = d.sellerDisplayName,
                                     username = d.sellerUsername,
                                     avatarUrl = d.sellerAvatarUrl,
+                                    onClick = if (sellerHandle.isNotEmpty()) {
+                                        { onOpenUserProfile(sellerHandle) }
+                                    } else {
+                                        null
+                                    },
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
-                                OrderProductCard(d = d, showSellerHandle = true)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                OrderBuyerPaymentCard(d = d)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                BuyerProtectionBanner()
+                                OrderProductCard(
+                                    d = d,
+                                    showSellerHandle = true,
+                                    onClick = if (d.listingId.isNotBlank()) {
+                                        {
+                                            onOpenListing(
+                                                d.listingId.trim(),
+                                                d.sellerUserId.trim(),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
                             }
                             OrderViewerRole.Seller -> {
+                                val buyerHandle = d.buyerUsername.trim()
                                 CounterpartyCard(
                                     title = stringResource(R.string.order_detail_counterparty_buyer),
                                     displayName = d.buyerDisplayName,
                                     username = d.buyerUsername,
                                     avatarUrl = d.buyerAvatarUrl,
+                                    onClick = if (buyerHandle.isNotEmpty()) {
+                                        { onOpenUserProfile(buyerHandle) }
+                                    } else {
+                                        null
+                                    },
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
-                                OrderProductCard(d = d, showSellerHandle = false)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                OrderSellerRevenueCard(d = d)
+                                OrderProductCard(
+                                    d = d,
+                                    showSellerHandle = false,
+                                    onClick = if (d.listingId.isNotBlank()) {
+                                        {
+                                            onOpenListing(
+                                                d.listingId.trim(),
+                                                d.sellerUserId.trim(),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
                             }
                             OrderViewerRole.Viewer -> {
-                                OrderProductCard(d = d, showSellerHandle = true)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                OrderBuyerPaymentCard(d = d)
+                                OrderProductCard(
+                                    d = d,
+                                    showSellerHandle = true,
+                                    onClick = if (d.listingId.isNotBlank()) {
+                                        {
+                                            onOpenListing(
+                                                d.listingId.trim(),
+                                                d.sellerUserId.trim(),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
                             }
                         }
 
@@ -405,6 +524,7 @@ fun OrderDetailScreen(
                                 carrierInput = d.carrier.ifBlank { "" }
                                 showShipDialog = true
                             },
+                            onConfirmHandoff = { viewModel.confirmHandoff(d.orderId) },
                             onChat = {
                                 val cid = d.conversationId.trim()
                                 if (cid.isNotEmpty()) {
@@ -575,13 +695,23 @@ fun OrderDetailScreen(
                         fontWeight = FontWeight.Bold,
                         color = FashColors.Primary,
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = reviewComment,
+                        onValueChange = { if (it.length <= 500) reviewComment = it },
+                        label = { Text(stringResource(R.string.order_detail_review_comment_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 5,
+                    )
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showReviewDialog = false
-                        viewModel.submitReview(d.orderId, reviewRating.roundToInt(), null)
+                        val c = reviewComment.trim().ifBlank { null }
+                        viewModel.submitReview(d.orderId, reviewRating.roundToInt(), c)
                     },
                 ) {
                     Text(stringResource(R.string.order_detail_review_submit))
