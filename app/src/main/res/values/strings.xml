@@ -1211,15 +1211,28 @@
     <string name="order_detail_shipping_change">Thay đổi</string>
     <string name="order_detail_shipping_choose">Chọn địa chỉ</string>
     <string name="order_detail_shipping_none">Chưa chọn địa chỉ nhận hàng</string>
-    <string name="chat_report_conversation">Báo cáo cuộc hội thoại</string>
-    <string name="chat_report_category_title">Lý do báo cáo</string>
+    <!-- Báo cáo cuộc trò chuyện -->
+    <string name="chat_report_menu_cd">Báo cáo cuộc trò chuyện</string>
+    <string name="chat_report_menu_item">Báo cáo</string>
+    <string name="chat_report_dialog_title">Báo cáo người dùng</string>
+    <string name="chat_report_dialog_subtitle">Tại sao bạn muốn báo cáo người dùng này?</string>
+
     <string name="chat_report_category_spam">Spam</string>
     <string name="chat_report_category_harassment">Quấy rối</string>
     <string name="chat_report_category_scam">Lừa đảo</string>
-    <string name="chat_report_category_inappropriate">Không phù hợp</string>
+    <string name="chat_report_category_inappropriate">Nội dung không phù hợp</string>
     <string name="chat_report_category_other">Khác</string>
-    <string name="chat_report_description_hint">Mô tả chi tiết (tối đa 2000 ký tự)</string>
+
+    <string name="chat_report_description_label">Mô tả (không bắt buộc)</string>
+    <string name="chat_report_description_hint">Cung cấp thêm chi tiết (tối đa 2000 ký tự)</string>
+
     <string name="chat_report_submit">Gửi báo cáo</string>
-    <string name="chat_report_success">Đã gửi báo cáo thành công</string>
-    <string name="chat_report_error_duplicate">Bạn đã báo cáo cuộc hội thoại này rồi</string>
+
+    <string name="chat_report_success">Báo cáo đã được gửi. Cảm ơn bạn đã giúp giữ an toàn cho cộng đồng.</string>
+
+    <string name="chat_report_error_duplicate">Bạn đã báo cáo người dùng này trong cuộc trò chuyện này rồi.</string>
+    <string name="chat_report_error_forbidden">Bạn không được phép báo cáo người dùng này.</string>
+    <string name="chat_report_error_not_found">Không tìm thấy cuộc trò chuyện.</string>
+    <string name="chat_report_error_general">Gửi báo cáo thất bại. Vui lòng thử lại.</string>
+    <string name="chat_report_error_missing_user">Không thể xác định người dùng còn lại.</string>
 </resources>

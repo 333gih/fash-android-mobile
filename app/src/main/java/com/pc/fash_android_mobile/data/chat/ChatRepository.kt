@@ -421,6 +421,39 @@ class ChatRepository(
         }
     }
 
+    // Add this inside class ChatRepository
+
+    /**
+     * POST /v1/chat/conversations/:conversation_id/report
+     * Body: reported_user_id, category, description (max 2000)
+     * Only buyer/seller in the thread can call; reported_user_id must be the other party.
+     * Duplicate pending report returns 409 CONVERSATION_REPORT_DUPLICATE.
+     */
+    fun reportConversation(
+        conversationId: String,
+        reportedUserId: String,
+        category: String,
+        description: String?,
+    ): Result<Unit> = runCatching {
+        if (conversationId.isBlank()) error("conversationId required")
+        if (reportedUserId.isBlank()) error("reportedUserId required")
+        val allowedCategories = setOf("spam", "harassment", "scam", "inappropriate", "other")
+        if (category !in allowedCategories) error("Invalid category: $category")
+        val desc = description?.trim()?.takeIf { it.isNotEmpty() }
+        if (desc != null && desc.length > 2000) error("Description exceeds 2000 characters")
+
+        val json = JSONObject().apply {
+            put("reported_user_id", reportedUserId)
+            put("category", category)
+            desc?.let { put("description", it) }
+        }.toString()
+
+        postJson(
+            AppEnvironment.apiPath("api/v1/chat/conversations/$conversationId/report"),
+            json,
+        )
+    }
+
     private fun parseMeetingCheckInResponse(body: String): MeetingCheckInResult {
         val o = JSONObject(body.trim())
         val root: JSONObject = when {

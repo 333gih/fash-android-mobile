@@ -56,14 +56,17 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -78,6 +81,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -220,6 +224,8 @@ fun ChatDetailScreen(
     val showMeetingIdentityReverify by viewModel.showMeetingIdentityReverifyDialog.collectAsState()
     val ackMeetingReverifyInFlight by viewModel.ackMeetingReverifyInFlight.collectAsState()
     val isCreatingCounterOffer by viewModel.isCreatingCounterOffer.collectAsState()
+    val showReportDialog by viewModel.showReportDialog.collectAsState()
+    val isReporting by viewModel.isReporting.collectAsState()
     val counterOfferSheet by viewModel.counterOfferSheet.collectAsState()
     val activeDeal by viewModel.activeDeal.collectAsState()
     val isDealWorking by viewModel.isDealWorking.collectAsState()
@@ -333,6 +339,29 @@ fun ChatDetailScreen(
                             contentDescription = stringResource(R.string.orders_icon_cd),
                             tint = FashColors.Primary,
                         )
+                    }
+                    // Report menu
+                    var expanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { expanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = stringResource(R.string.chat_report_menu_cd),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                        ) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_report_menu_item)) },
+                                onClick = {
+                                    expanded = false
+                                    viewModel.openReportDialog()
+                                },
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -883,6 +912,16 @@ fun ChatDetailScreen(
                                 ) {
                                     showMeetingSheet = false
                                 }
+                            },
+                        )
+                    }
+                    // Report dialog
+                    if (showReportDialog) {
+                        ReportConversationDialog(
+                            isLoading = isReporting,
+                            onDismiss = { viewModel.dismissReportDialog() },
+                            onSubmit = { category, description ->
+                                viewModel.submitReport(category, description)
                             },
                         )
                     }
@@ -2395,6 +2434,7 @@ private fun rememberSheetDismiss(onDismiss: () -> Unit): () -> Unit {
     }
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OfferPriceBottomSheet(
@@ -3027,3 +3067,100 @@ private fun DealReviewBottomSheet(
 private fun formatPrice(vnd: Long): String =
     "₫${"%,d".format(vnd).replace(',', '.')}"
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReportConversationDialog(
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (category: String, description: String?) -> Unit,
+) {
+    var selectedCategory by remember { mutableStateOf("spam") }
+    var description by remember { mutableStateOf("") }
+    val categories = listOf(
+        "spam" to R.string.chat_report_category_spam,
+        "harassment" to R.string.chat_report_category_harassment,
+        "scam" to R.string.chat_report_category_scam,
+        "inappropriate" to R.string.chat_report_category_inappropriate,
+        "other" to R.string.chat_report_category_other,
+    )
+    val isFormValid = selectedCategory.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() }, // ✅ fixed lambda
+        title = { Text(stringResource(R.string.chat_report_dialog_title)) },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_report_dialog_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                categories.forEach { (cat, labelRes) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isLoading) { selectedCategory = cat }
+                            .padding(vertical = 4.dp),
+                    ) {
+                        RadioButton(
+                            selected = selectedCategory == cat,
+                            onClick = null,
+                            enabled = !isLoading,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(labelRes),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { if (it.length <= 2000) description = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.chat_report_description_label)) },
+                    placeholder = { Text(stringResource(R.string.chat_report_description_hint)) },
+                    supportingText = {
+                        Text(
+                            text = "${description.length}/2000",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    },
+                    enabled = !isLoading,
+                    maxLines = 4,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = FashColors.Primary,
+                    ),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(selectedCategory, description.trim().takeIf { it.isNotEmpty() }) },
+                enabled = isFormValid && !isLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = FashColors.Primary.fashReadableOn(),
+                    )
+                } else {
+                    Text(stringResource(R.string.chat_report_submit))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isLoading,
+            ) {
+                Text(stringResource(R.string.create_listing_cancel))
+            }
+        },
+    )
+}

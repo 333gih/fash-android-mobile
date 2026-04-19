@@ -1164,4 +1164,24 @@
     <string name="order_detail_shipping_change">Change</string>
     <string name="order_detail_shipping_choose">Choose address</string>
     <string name="order_detail_shipping_none">No shipping address selected</string>
+
+    <!-- Report conversation -->
+    <string name="chat_report_menu_cd">Report conversation</string>
+    <string name="chat_report_menu_item">Report</string>
+    <string name="chat_report_dialog_title">Report user</string>
+    <string name="chat_report_dialog_subtitle">Why are you reporting this user?</string>
+    <string name="chat_report_category_spam">Spam</string>
+    <string name="chat_report_category_harassment">Harassment</string>
+    <string name="chat_report_category_scam">Scam</string>
+    <string name="chat_report_category_inappropriate">Inappropriate content</string>
+    <string name="chat_report_category_other">Other</string>
+    <string name="chat_report_description_label">Description (optional)</string>
+    <string name="chat_report_description_hint">Provide additional details (max 2000 characters)</string>
+    <string name="chat_report_submit">Submit report</string>
+    <string name="chat_report_success">Report submitted. Thank you for helping keep the community safe.</string>
+    <string name="chat_report_error_duplicate">You have already reported this user for this conversation.</string>
+    <string name="chat_report_error_forbidden">You are not allowed to report this user.</string>
+    <string name="chat_report_error_not_found">Conversation not found.</string>
+    <string name="chat_report_error_general">Failed to submit report. Please try again.</string>
+    <string name="chat_report_error_missing_user">Cannot identify the other user.</string>
 </resources>

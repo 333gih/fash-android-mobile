@@ -75,6 +75,12 @@ class ChatDetailViewModel(
     private val _inputText = MutableStateFlow("")
     val inputText: StateFlow<String> = _inputText.asStateFlow()
 
+    private val _isReporting = MutableStateFlow(false)
+    val isReporting: StateFlow<Boolean> = _isReporting.asStateFlow()
+
+    private val _showReportDialog = MutableStateFlow(false)
+    val showReportDialog: StateFlow<Boolean> = _showReportDialog.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -1249,6 +1255,48 @@ class ChatDetailViewModel(
                     _events.tryEmit(
                         it.message ?: getApplication<Application>().getString(R.string.chat_load_error),
                     )
+                },
+            )
+        }
+    }
+
+    fun openReportDialog() {
+        _showReportDialog.value = true
+    }
+
+    fun dismissReportDialog() {
+        _showReportDialog.value = false
+    }
+
+    fun submitReport(category: String, description: String?) {
+        val convId = _detail.value?.conversationId ?: return
+        val reportedUserId = _detail.value?.otherUser?.userId?.trim() ?: return
+        if (reportedUserId.isBlank()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.chat_report_error_missing_user))
+            return
+        }
+        viewModelScope.launch {
+            _isReporting.value = true
+            val result = withContext(Dispatchers.IO) {
+                chatRepository.reportConversation(convId, reportedUserId, category, description)
+            }
+            _isReporting.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = {
+                    _showReportDialog.value = false
+                    _events.tryEmit(app.getString(R.string.chat_report_success))
+                },
+                onFailure = { e ->
+                    val msg = e.message.orEmpty()
+                    val errorRes = when {
+                        msg.contains("409") && msg.contains("CONVERSATION_REPORT_DUPLICATE", ignoreCase = true) ->
+                            R.string.chat_report_error_duplicate
+                        msg.contains("403") -> R.string.chat_report_error_forbidden
+                        msg.contains("404") -> R.string.chat_report_error_not_found
+                        else -> R.string.chat_report_error_general
+                    }
+                    _events.tryEmit(app.getString(errorRes))
                 },
             )
         }
