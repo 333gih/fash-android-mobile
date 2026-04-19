@@ -1211,4 +1211,15 @@
     <string name="order_detail_shipping_change">Thay đổi</string>
     <string name="order_detail_shipping_choose">Chọn địa chỉ</string>
     <string name="order_detail_shipping_none">Chưa chọn địa chỉ nhận hàng</string>
+    <string name="chat_report_conversation">Báo cáo cuộc hội thoại</string>
+    <string name="chat_report_category_title">Lý do báo cáo</string>
+    <string name="chat_report_category_spam">Spam</string>
+    <string name="chat_report_category_harassment">Quấy rối</string>
+    <string name="chat_report_category_scam">Lừa đảo</string>
+    <string name="chat_report_category_inappropriate">Không phù hợp</string>
+    <string name="chat_report_category_other">Khác</string>
+    <string name="chat_report_description_hint">Mô tả chi tiết (tối đa 2000 ký tự)</string>
+    <string name="chat_report_submit">Gửi báo cáo</string>
+    <string name="chat_report_success">Đã gửi báo cáo thành công</string>
+    <string name="chat_report_error_duplicate">Bạn đã báo cáo cuộc hội thoại này rồi</string>
 </resources>
