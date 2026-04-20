@@ -11,6 +11,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -43,6 +44,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.pc.fash_android_mobile.data.chat.MyConversationReport
 import com.pc.fash_android_mobile.data.order.sellerConfirmHandoffCtaVisible
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import androidx.compose.foundation.shape.CircleShape
@@ -54,6 +56,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Flag
@@ -226,6 +229,7 @@ fun ChatDetailScreen(
     val isCreatingCounterOffer by viewModel.isCreatingCounterOffer.collectAsState()
     val showReportDialog by viewModel.showReportDialog.collectAsState()
     val isReporting by viewModel.isReporting.collectAsState()
+    val reportBannerPulseAt by viewModel.reportBannerPulseAt.collectAsState()
     val counterOfferSheet by viewModel.counterOfferSheet.collectAsState()
     val activeDeal by viewModel.activeDeal.collectAsState()
     val isDealWorking by viewModel.isDealWorking.collectAsState()
@@ -340,27 +344,51 @@ fun ChatDetailScreen(
                             tint = FashColors.Primary,
                         )
                     }
-                    // Report menu
-                    var expanded by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { expanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Flag,
-                                contentDescription = stringResource(R.string.chat_report_menu_cd),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
+                    // Report: hide flow when this thread already has the viewer's report (server `my_report`).
+                    if (detail?.myReport == null) {
+                        var expanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Flag,
+                                    contentDescription = stringResource(R.string.chat_report_menu_cd),
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            androidx.compose.material3.DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false },
+                            ) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_report_menu_item)) },
+                                    onClick = {
+                                        expanded = false
+                                        viewModel.openReportDialog()
+                                    },
+                                )
+                            }
                         }
-                        androidx.compose.material3.DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
+                    } else {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = {
+                                PlainTooltip {
+                                    Text(stringResource(R.string.chat_report_already_submitted_cd))
+                                }
+                            },
+                            state = rememberTooltipState(),
                         ) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_report_menu_item)) },
-                                onClick = {
-                                    expanded = false
-                                    viewModel.openReportDialog()
-                                },
-                            )
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircle,
+                                    contentDescription = stringResource(R.string.chat_report_already_submitted_cd),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
                         }
                     }
                 },
@@ -538,6 +566,28 @@ fun ChatDetailScreen(
                             onClick = { onProductClick(product.listingId) },
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
+                    }
+
+                    val myReport = d.myReport
+                    AnimatedVisibility(
+                        visible = myReport != null,
+                        enter = fadeIn(tween(240, easing = FastOutSlowInEasing)) +
+                            expandVertically(
+                                expandFrom = Alignment.Top,
+                                animationSpec = tween(260, easing = FastOutSlowInEasing),
+                            ),
+                        exit = fadeOut(tween(160)) + shrinkVertically(shrinkTowards = Alignment.Top),
+                    ) {
+                        if (myReport != null) {
+                            ConversationReportStatusBanner(
+                                report = myReport,
+                                pulseAt = reportBannerPulseAt,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
+                        }
                     }
 
                     if (d.isBuyer && !hasOrderBlockingOffer && !offerBlocked) {
@@ -946,6 +996,129 @@ fun ChatDetailScreen(
             onOpenListing = onOrderOverlayOpenListing,
         )
     }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conversation report (GET `my_report` + POST success feedback)
+// ─────────────────────────────────────────────────────────────────────────────
+
+private fun formatChatReportSubmittedAt(iso: String): String {
+    if (iso.isBlank()) return ""
+    return try {
+        val toParse = when {
+            iso.contains("T") -> iso
+            iso.contains(" ") -> iso.replace(" ", "T")
+            else -> iso
+        }
+        val instant = java.time.Instant.parse(toParse)
+        java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+            .format(instant.atZone(java.time.ZoneId.systemDefault()))
+    } catch (_: Exception) {
+        iso
+    }
+}
+
+@Composable
+private fun reportCategoryLabel(category: String): String {
+    val c = category.trim().lowercase()
+    return when (c) {
+        "spam" -> stringResource(R.string.chat_report_category_spam)
+        "harassment" -> stringResource(R.string.chat_report_category_harassment)
+        "scam" -> stringResource(R.string.chat_report_category_scam)
+        "inappropriate" -> stringResource(R.string.chat_report_category_inappropriate)
+        "other" -> stringResource(R.string.chat_report_category_other)
+        "" -> ""
+        else -> c.replaceFirstChar { ch ->
+            if (ch.isLowerCase()) ch.titlecase(java.util.Locale.getDefault()) else ch.toString()
+        }
+    }
+}
+
+@Composable
+private fun ConversationReportStatusBanner(
+    report: MyConversationReport,
+    pulseAt: Long,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val norm = report.status.trim().lowercase()
+    val (container, onContainer, icon) = when (norm) {
+        "pending" -> Triple(scheme.secondaryContainer, scheme.onSecondaryContainer, Icons.Outlined.Info)
+        "dismissed" -> Triple(scheme.surfaceContainerHighest, scheme.onSurfaceVariant, Icons.Outlined.CheckCircle)
+        "warned" -> Triple(scheme.tertiaryContainer, scheme.onTertiaryContainer, Icons.Filled.Warning)
+        "suspended" -> Triple(scheme.errorContainer, scheme.onErrorContainer, Icons.Filled.ErrorOutline)
+        else -> Triple(scheme.surfaceContainerHighest, scheme.onSurfaceVariant, Icons.Outlined.Info)
+    }
+    val statusLine = when (norm) {
+        "pending" -> stringResource(R.string.chat_report_status_pending)
+        "dismissed" -> stringResource(R.string.chat_report_status_dismissed)
+        "warned" -> stringResource(R.string.chat_report_status_warned)
+        "suspended" -> stringResource(R.string.chat_report_status_suspended)
+        else -> stringResource(R.string.chat_report_status_unknown, report.status)
+    }
+    val scale = remember { Animatable(1f) }
+    LaunchedEffect(pulseAt) {
+        if (pulseAt == 0L) return@LaunchedEffect
+        scale.snapTo(1f)
+        scale.animateTo(1.04f, tween(140, easing = FastOutSlowInEasing))
+        scale.animateTo(
+            1f,
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        )
+    }
+    Surface(
+        modifier = modifier.graphicsLayer {
+            scaleX = scale.value
+            scaleY = scale.value
+            transformOrigin = TransformOrigin.Center
+        },
+        color = container,
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_report_banner_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = onContainer,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = onContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = statusLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = onContainer,
+                )
+            }
+            val submitted = formatChatReportSubmittedAt(report.createdAt)
+            if (submitted.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.chat_report_banner_submitted_at, submitted),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onContainer.copy(alpha = 0.92f),
+                )
+            }
+            val catLabel = reportCategoryLabel(report.category)
+            if (catLabel.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.chat_report_banner_category, catLabel),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onContainer.copy(alpha = 0.92f),
+                )
+            }
+        }
     }
 }
 

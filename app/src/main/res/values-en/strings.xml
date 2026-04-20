@@ -1184,4 +1184,13 @@
     <string name="chat_report_error_not_found">Conversation not found.</string>
     <string name="chat_report_error_general">Failed to submit report. Please try again.</string>
     <string name="chat_report_error_missing_user">Cannot identify the other user.</string>
+    <string name="chat_report_already_submitted_cd">You already reported this conversation</string>
+    <string name="chat_report_banner_title">You reported this conversation</string>
+    <string name="chat_report_banner_submitted_at">Submitted: %1$s</string>
+    <string name="chat_report_banner_category">Reason: %1$s</string>
+    <string name="chat_report_status_pending">Under review</string>
+    <string name="chat_report_status_dismissed">Closed — no violation found</string>
+    <string name="chat_report_status_warned">Action taken — user warned</string>
+    <string name="chat_report_status_suspended">Action taken — user suspended</string>
+    <string name="chat_report_status_unknown">Status: %1$s</string>
 </resources>

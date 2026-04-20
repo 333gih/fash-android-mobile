@@ -11,6 +11,7 @@ import com.pc.fash_android_mobile.data.chat.ChatMapsUrlRules
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ConversationDetail
+import com.pc.fash_android_mobile.data.chat.MyConversationReport
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.data.chat.OtherUser
 import com.pc.fash_android_mobile.data.chat.ProductCard
@@ -80,6 +81,10 @@ class ChatDetailViewModel(
 
     private val _showReportDialog = MutableStateFlow(false)
     val showReportDialog: StateFlow<Boolean> = _showReportDialog.asStateFlow()
+
+    /** Monotonic-ish token so the report banner can play a short success pulse after submit. */
+    private val _reportBannerPulseAt = MutableStateFlow(0L)
+    val reportBannerPulseAt: StateFlow<Long> = _reportBannerPulseAt.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -1261,6 +1266,7 @@ class ChatDetailViewModel(
     }
 
     fun openReportDialog() {
+        if (_detail.value?.myReport != null) return
         _showReportDialog.value = true
     }
 
@@ -1285,13 +1291,33 @@ class ChatDetailViewModel(
             result.fold(
                 onSuccess = {
                     _showReportDialog.value = false
+                    val refreshed = withContext(Dispatchers.IO) {
+                        chatRepository.getConversationDetail(convId).getOrNull()
+                    }
+                    if (refreshed != null) {
+                        applyConversationDetail(refreshed)
+                    } else {
+                        applyLocalPendingMyReport(
+                            convId = convId,
+                            reportedUserId = reportedUserId,
+                            category = category,
+                        )
+                    }
+                    _reportBannerPulseAt.value = System.currentTimeMillis()
                     _events.tryEmit(app.getString(R.string.chat_report_success))
                 },
                 onFailure = { e ->
                     val msg = e.message.orEmpty()
+                    val duplicate = msg.contains("409") &&
+                        msg.contains("CONVERSATION_REPORT_DUPLICATE", ignoreCase = true)
+                    if (duplicate) {
+                        val refreshed = withContext(Dispatchers.IO) {
+                            chatRepository.getConversationDetail(convId).getOrNull()
+                        }
+                        refreshed?.let { applyConversationDetail(it) }
+                    }
                     val errorRes = when {
-                        msg.contains("409") && msg.contains("CONVERSATION_REPORT_DUPLICATE", ignoreCase = true) ->
-                            R.string.chat_report_error_duplicate
+                        duplicate -> R.string.chat_report_error_duplicate
                         msg.contains("403") -> R.string.chat_report_error_forbidden
                         msg.contains("404") -> R.string.chat_report_error_not_found
                         else -> R.string.chat_report_error_general
@@ -1311,6 +1337,21 @@ class ChatDetailViewModel(
      * Presigned avatar/product URLs often get new query params on every GET; we keep the
      * previous URL when the path matches so [StateFlow] does not emit and Coil does not reload.
      */
+    /** If GET detail fails right after POST /report, still show a pending row until the next refresh. */
+    private fun applyLocalPendingMyReport(convId: String, reportedUserId: String, category: String) {
+        val cur = _detail.value?.takeIf { it.conversationId == convId } ?: return
+        if (cur.myReport != null) return
+        _detail.value = cur.copy(
+            myReport = MyConversationReport(
+                reportId = "local-" + UUID.randomUUID().toString(),
+                reportedUserId = reportedUserId,
+                category = category.lowercase(),
+                createdAt = java.time.Instant.now().toString(),
+                status = "pending",
+            ),
+        )
+    }
+
     private fun applyConversationDetail(d: ConversationDetail) {
         val current = _detail.value
         val merged: ConversationDetail = if (current != null) {
@@ -1324,6 +1365,7 @@ class ChatDetailViewModel(
                 offerCount = d.offerCount,
                 isClosed = d.isClosed,
                 pendingOffer = d.pendingOffer,
+                myReport = d.myReport,
             )
         } else {
             d

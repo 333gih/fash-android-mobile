@@ -1235,4 +1235,13 @@
     <string name="chat_report_error_not_found">Không tìm thấy cuộc trò chuyện.</string>
     <string name="chat_report_error_general">Gửi báo cáo thất bại. Vui lòng thử lại.</string>
     <string name="chat_report_error_missing_user">Không thể xác định người dùng còn lại.</string>
+    <string name="chat_report_already_submitted_cd">Đã gửi báo cáo cho cuộc trò chuyện này</string>
+    <string name="chat_report_banner_title">Bạn đã báo cáo cuộc trò chuyện này</string>
+    <string name="chat_report_banner_submitted_at">Gửi lúc: %1$s</string>
+    <string name="chat_report_banner_category">Lý do: %1$s</string>
+    <string name="chat_report_status_pending">Đang xem xét</string>
+    <string name="chat_report_status_dismissed">Đã xử lý — không có hành động</string>
+    <string name="chat_report_status_warned">Đã xử lý — người dùng được cảnh báo</string>
+    <string name="chat_report_status_suspended">Đã xử lý — tài khoản bị tạm khóa</string>
+    <string name="chat_report_status_unknown">Trạng thái: %1$s</string>
 </resources>

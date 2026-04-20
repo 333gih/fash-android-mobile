@@ -791,6 +791,7 @@ class ChatRepository(
 
         val offerCount = root.optInt("offer_count", root.optInt("OfferCount", 0))
         val isClosed = root.optBoolean("is_closed", root.optBoolean("IsClosed", false))
+        val myReport = parseMyConversationReport(root)
 
         return ConversationDetail(
             conversationId = convId,
@@ -802,6 +803,31 @@ class ChatRepository(
             orderId = orderId,
             offerCount = offerCount,
             isClosed = isClosed,
+            myReport = myReport,
+        )
+    }
+
+    /** Latest report by the current user on this conversation, if present (`my_report` on GET detail). */
+    private fun parseMyConversationReport(root: JSONObject): MyConversationReport? {
+        val o = root.optJSONObject("my_report")
+            ?: root.optJSONObject("MyReport")
+            ?: return null
+        if (o.length() == 0) return null
+        val reportId = o.optString("report_id", o.optString("ReportID", o.optString("id", ""))).trim()
+        if (reportId.isEmpty()) return null
+        val status = o.optString("status", o.optString("Status", ""))
+            .trim()
+            .lowercase()
+            .ifBlank { "pending" }
+        val reportedUserId = o.optString("reported_user_id", o.optString("ReportedUserID", "")).trim()
+        val category = o.optString("category", o.optString("Category", "")).trim().lowercase()
+        val createdAt = o.optString("created_at", o.optString("CreatedAt", "")).trim()
+        return MyConversationReport(
+            reportId = reportId,
+            reportedUserId = reportedUserId,
+            category = category,
+            createdAt = createdAt,
+            status = status,
         )
     }
 
@@ -1030,6 +1056,18 @@ data class ConversationDetail(
     val offerCount: Int = 0,
     /** Listing reserved / chat read-only. */
     val isClosed: Boolean = false,
+    /** Present when the current user has a report on this thread (GET conversation detail). */
+    val myReport: MyConversationReport? = null,
+)
+
+/** Subset of the server `my_report` object on conversation detail. */
+data class MyConversationReport(
+    val reportId: String,
+    val reportedUserId: String,
+    val category: String,
+    val createdAt: String,
+    /** `pending` | `dismissed` | `warned` | `suspended` — moderation progress. */
+    val status: String,
 )
 
 /** Seller inbox: conversations grouped under one listing. */
