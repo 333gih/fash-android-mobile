@@ -59,6 +59,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingShippingAddress
+import com.pc.fash_android_mobile.data.listing.isListingStatusSellerPutAllowed
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.post.ListingConditionOptions
 import com.pc.fash_android_mobile.ui.post.MaxListingDescriptionLength
@@ -72,6 +73,7 @@ import com.pc.fash_android_mobile.ui.feed.formatListingPriceVnd
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -128,7 +130,7 @@ fun EditListingScreen(
         },
         bottomBar = {
             val d = detail
-            if (d != null && d.status.equals("active", ignoreCase = true)) {
+            if (d != null && isListingStatusSellerPutAllowed(d.status)) {
                 Surface(
                     tonalElevation = 1.dp,
                     shadowElevation = 0.dp,
@@ -210,7 +212,7 @@ fun EditListingScreen(
             }
             detail != null -> {
                 val d = detail!!
-                val editable = d.status.equals("active", ignoreCase = true)
+                val editable = isListingStatusSellerPutAllowed(d.status)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -229,7 +231,7 @@ fun EditListingScreen(
                         ) {
                             if (!editable) {
                                 Text(
-                                    text = stringResource(R.string.edit_listing_readonly_hint),
+                                    text = editListingReadOnlyBannerMessage(d.status),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier
@@ -695,6 +697,14 @@ fun EditListingScreen(
         )
     }
 }
+
+@Composable
+private fun editListingReadOnlyBannerMessage(status: String): String =
+    if (status.trim().lowercase(Locale.ROOT) == "inactive") {
+        stringResource(R.string.edit_listing_readonly_inactive)
+    } else {
+        stringResource(R.string.edit_listing_readonly_locked)
+    }
 
 @Composable
 private fun EditListingSectionCard(content: @Composable ColumnScope.() -> Unit) {

@@ -534,7 +534,8 @@
     <string name="edit_listing_not_editable">You can only edit active listings.</string>
     <string name="edit_listing_title_invalid">Title must be 3–60 characters.</string>
     <string name="edit_listing_price_invalid">Price must be between 1,000 and 100,000,000 VND.</string>
-    <string name="edit_listing_readonly_hint">This listing is no longer active — view only. You can still try to delete if allowed.</string>
+    <string name="edit_listing_readonly_inactive">This listing is hidden or moderated — it can’t be edited in the app.</string>
+    <string name="edit_listing_readonly_locked">This listing can’t be edited in its current state (sold, reserved, deleted, …) — view only.</string>
     <string name="edit_listing_category_locked">Category (cannot change after posting)</string>
     <string name="edit_listing_style_tags">Style tags (max 5)</string>
     <string name="edit_listing_tags_hint">Unselect all and save to clear style tags.</string>

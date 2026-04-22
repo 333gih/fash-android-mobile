@@ -119,6 +119,6 @@ data class ListingDetail(
     val isSaved: Boolean = false,
     /** From nested `seller` on listing response — same meaning as profile `is_following`. */
     val sellerIsFollowing: Boolean? = null,
-    /** `active` | `reserved` | `sold` — from listing API / realtime. */
+    /** Marketplace status wire (`active`, `in_review`, `rejected`, `inactive`, `sold`, `reserved`, `deleted`, …). */
     val status: String = "active",
 )

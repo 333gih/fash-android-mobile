@@ -49,6 +49,10 @@ import androidx.compose.material.icons.outlined.Storefront
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -375,6 +379,7 @@ private fun ProfileSizingReferenceStrip(profile: ProfileInfo?) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
@@ -402,6 +407,7 @@ fun ProfileScreen(
     val soldListings by viewModel.soldListings.collectAsState()
     val wishlistListings by viewModel.wishlistListings.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
     val meetingReverifyRequired by viewModel.meetingSchedulingReverifyRequired.collectAsState()
@@ -452,16 +458,29 @@ fun ProfileScreen(
             else -> {
                 val listState = remember(selectedTab) { LazyListState(0, 0) }
                 val scrollScope = rememberCoroutineScope()
+                val pullState = rememberPullToRefreshState()
                 val items = when (selectedTab) {
                     0 -> sellingListings
                     1 -> soldListings
                     else -> wishlistListings
                 }
-                Box(
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    state = pullState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                         .fillMaxHeight(),
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullState,
+                            isRefreshing = isRefreshing,
+                            color = FashColors.Primary,
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
+                    },
                 ) {
                     ProfileCollapsingScrollLayout(
                         listState = listState,

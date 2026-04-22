@@ -554,7 +554,8 @@
     <string name="edit_listing_not_editable">Chỉ có thể sửa tin đang hiển thị (đang bán).</string>
     <string name="edit_listing_title_invalid">Tiêu đề cần 3–60 ký tự.</string>
     <string name="edit_listing_price_invalid">Giá từ 1.000 đến 100.000.000 đ.</string>
-    <string name="edit_listing_readonly_hint">Tin không còn ở trạng thái đang bán — chỉ xem thông tin. Bạn vẫn có thể thử xóa nếu hệ thống cho phép.</string>
+    <string name="edit_listing_readonly_inactive">Tin đã ẩn / kiểm duyệt — bạn không thể chỉnh sửa qua ứng dụng.</string>
+    <string name="edit_listing_readonly_locked">Tin ở trạng thái này (đã bán, giữ chỗ, đã xóa, …) — chỉ xem thông tin, không thể cập nhật.</string>
     <string name="edit_listing_category_locked">Danh mục (không đổi sau khi đăng)</string>
     <string name="edit_listing_style_tags">Phong cách (tối đa 5)</string>
     <string name="edit_listing_tags_hint">Bỏ chọn hết và lưu để xóa thẻ phong cách.</string>

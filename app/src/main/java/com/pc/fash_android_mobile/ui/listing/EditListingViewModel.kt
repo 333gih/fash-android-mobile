@@ -12,6 +12,7 @@ import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.listing.UpdateListingRequest
+import com.pc.fash_android_mobile.data.listing.isListingStatusSellerPutAllowed
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.post.ListingConditionOptions
 import kotlinx.coroutines.Dispatchers
@@ -434,7 +435,7 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
 
     fun save() {
         val d = _detail.value ?: return
-        if (!d.status.equals("active", ignoreCase = true)) {
+        if (!isListingStatusSellerPutAllowed(d.status)) {
             viewModelScope.launch {
                 _events.emit(getApplication<Application>().getString(R.string.edit_listing_not_editable))
             }
@@ -544,7 +545,7 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
 
     fun canSave(): Boolean {
         val d = _detail.value ?: return false
-        if (!d.status.equals("active", ignoreCase = true)) return false
+        if (!isListingStatusSellerPutAllowed(d.status)) return false
         val f = _form.value
         val title = f.title.trim()
         val price = f.priceText.trim().toLongOrNull()

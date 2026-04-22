@@ -49,6 +49,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _loadError = MutableStateFlow(false)
     val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
 
@@ -80,36 +83,55 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             if (showBlockingUi) _isLoading.value = true
             try {
                 _loadError.value = false
-                withContext(Dispatchers.IO) {
-                    userRepository.getMeProfile().fold(
-                        onSuccess = { _profile.value = it },
-                        onFailure = { _loadError.value = true },
-                    )
-                    userRepository.getUserAccessStatus().getOrNull()?.let { applyMeetingTrustFromStatus(it) }
-                }
-                _profile.value?.userId?.let {
-                    withContext(Dispatchers.IO) {
-                        coroutineScope {
-                            val mine = async {
-                                listingRepository.getMyListings(limit = 50, offset = 0).getOrElse { emptyList() }
-                            }
-                            val wish = async {
-                                listingRepository.getWishlistListings(limit = 50, offset = 0).getOrElse { emptyList() }
-                            }
-                            val allMine = mine.await()
-                            _sellingListings.value = allMine.filter { !it.isSoldListingStatus() }
-                            _soldListings.value = allMine.filter { it.isSoldListingStatus() }
-                            _wishlistListings.value = wish.await()
-                        }
-                    }
-                } ?: run {
-                    _sellingListings.value = emptyList()
-                    _soldListings.value = emptyList()
-                    _wishlistListings.value = emptyList()
-                }
+                fetchProfileAndListings()
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+
+    /** Pull-to-refresh — same payload as [loadProfile], with Material indicator (no full-screen blocking). */
+    fun refresh() {
+        loadProfileJob?.cancel()
+        loadProfileJob = viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                _loadError.value = false
+                fetchProfileAndListings()
+            } finally {
+                _isRefreshing.value = false
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun fetchProfileAndListings() {
+        withContext(Dispatchers.IO) {
+            userRepository.getMeProfile().fold(
+                onSuccess = { _profile.value = it },
+                onFailure = { _loadError.value = true },
+            )
+            userRepository.getUserAccessStatus().getOrNull()?.let { applyMeetingTrustFromStatus(it) }
+        }
+        _profile.value?.userId?.let {
+            withContext(Dispatchers.IO) {
+                coroutineScope {
+                    val mine = async {
+                        listingRepository.getMyListings(limit = 50, offset = 0).getOrElse { emptyList() }
+                    }
+                    val wish = async {
+                        listingRepository.getWishlistListings(limit = 50, offset = 0).getOrElse { emptyList() }
+                    }
+                    val allMine = mine.await()
+                    _sellingListings.value = allMine.filter { !it.isSoldListingStatus() }
+                    _soldListings.value = allMine.filter { it.isSoldListingStatus() }
+                    _wishlistListings.value = wish.await()
+                }
+            }
+        } ?: run {
+            _sellingListings.value = emptyList()
+            _soldListings.value = emptyList()
+            _wishlistListings.value = emptyList()
         }
     }
 
