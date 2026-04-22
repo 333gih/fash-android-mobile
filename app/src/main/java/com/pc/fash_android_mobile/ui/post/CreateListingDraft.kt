@@ -6,11 +6,30 @@ import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.common.CategoryTreeNode
+import com.pc.fash_android_mobile.data.common.ListingImageStepCatalog
 import com.pc.fash_android_mobile.data.listing.CreateListingRequest
+import com.pc.fash_android_mobile.data.listing.ListingImageStepPayload
+
+/**
+ * One photo slot in the create-listing wizard (definition from common-service + local/uploaded image).
+ */
+data class ListingPhotoSlotDraft(
+    val stepKey: String,
+    val label: String,
+    val labelVi: String,
+    val sortOrder: Int,
+    val required: Boolean,
+    /** Picked gallery/camera `Uri` string — cleared after successful upload when only server URL is kept. */
+    val localImageUri: String? = null,
+    val uploadedImageUrl: String? = null,
+)
+
+fun ListingPhotoSlotDraft.hasImageSelected(): Boolean =
+    !localImageUri.isNullOrBlank() || !uploadedImageUrl.isNullOrBlank()
 
 /**
  * In-memory draft for the multi-step create listing flow.
- * [imageUris] are content `Uri` strings; [imageUrls] are server URLs after upload.
+ * [listingPhotoSlots] are filled from common-service `listing-image-setup` for the chosen leaf category.
  */
 data class CreateListingDraft(
     val categoryId: String = "",
@@ -33,8 +52,9 @@ data class CreateListingDraft(
     val measurementLength: String = "",
     val measurementShoulders: String = "",
     val measurementSleeveLength: String = "",
-    val imageUris: List<String> = emptyList(),
-    val imageUrls: List<String> = emptyList(),
+    val listingPhotoSlots: List<ListingPhotoSlotDraft> = emptyList(),
+    /** Leaf category id used to build [listingPhotoSlots] — cleared when category changes. */
+    val listingPhotoSlotsCategoryId: String? = null,
     val priceVnd: String = "",
     val acceptOffers: Boolean = true,
     val autoPriceDropEnabled: Boolean = false,
@@ -45,17 +65,29 @@ data class CreateListingDraft(
     val shippingAddressLabel: String = "",
 )
 
-fun CreateListingDraft.withImageUris(uris: List<String>): CreateListingDraft =
-    copy(imageUris = uris, imageUrls = emptyList())
-
-fun CreateListingDraft.removeImageAtIndex(index: Int): CreateListingDraft {
-    if (index !in imageUris.indices) return copy(imageUrls = emptyList())
-    val next = imageUris.toMutableList().also { it.removeAt(index) }
-    return copy(imageUris = next, imageUrls = emptyList())
+fun CreateListingDraft.withListingPhotoSlotsFromCatalog(
+    categoryId: String,
+    catalog: List<ListingImageStepCatalog>,
+): CreateListingDraft {
+    val old = listingPhotoSlots.associateBy { it.stepKey }
+    val capped = catalog.sortedBy { it.sortOrder }.take(20)
+    val slots = capped.map { c ->
+        val o = old[c.stepKey]
+        ListingPhotoSlotDraft(
+            stepKey = c.stepKey,
+            label = c.label,
+            labelVi = c.labelVi,
+            sortOrder = c.sortOrder,
+            required = c.required,
+            localImageUri = o?.localImageUri,
+            uploadedImageUrl = o?.uploadedImageUrl,
+        )
+    }
+    return copy(
+        listingPhotoSlots = slots,
+        listingPhotoSlotsCategoryId = categoryId,
+    )
 }
-
-fun CreateListingDraft.withImageUrls(urls: List<String>): CreateListingDraft =
-    copy(imageUrls = urls)
 
 private fun parsePositiveLong(s: String): Long? =
     s.trim().replace(".", "").replace(",", "").toLongOrNull()?.takeIf { it > 0 }
@@ -72,7 +104,7 @@ fun CreateListingDraft.parsedPriceDropPercent(): Int? {
 }
 
 fun CreateListingDraft.toCreateListingRequest(
-    imageUrls: List<String>,
+    imageUrlSteps: List<ListingImageStepPayload>,
     aestheticTagsById: Map<String, CommonAestheticTagDto>,
 ): CreateListingRequest {
     val tagIds = selectedAestheticTagIds.toList()
@@ -83,7 +115,7 @@ fun CreateListingDraft.toCreateListingRequest(
     val floor = floorPriceVnd.trim().let { if (it.isEmpty()) null else parsePositiveLong(it) }
     return CreateListingRequest(
         title = title.trim(),
-        imageUrls = imageUrls,
+        imageUrlSteps = imageUrlSteps,
         priceVnd = price,
         condition = condition.trim(),
         categoryId = categoryId.trim(),
@@ -134,7 +166,11 @@ fun CreateListingDraft.validationErrorKeyForSubmit(): String? {
     if (title.trim().length > MaxListingTitleLength) return "post_validation_title_long"
     if (description.length > MaxListingDescriptionLength) return "post_validation_description_long"
     if (condition.isBlank()) return "post_validation_condition"
-    if (postRequireListingImages() && imageUris.isEmpty()) return "post_validation_photos"
+    if (postRequireListingImages()) {
+        val missing = listingPhotoSlots.isEmpty() ||
+            listingPhotoSlots.any { it.required && !it.hasImageSelected() }
+        if (missing) return "post_validation_photos"
+    }
     val p = parsePositiveLong(priceVnd) ?: return "post_validation_price"
     if (p < MinPriceVnd || p > MaxPriceVnd) return "post_validation_price_range"
     if (selectedAestheticTagIds.size > MaxAestheticTags) return "post_validation_tags_max"
@@ -194,6 +230,8 @@ fun CreateListingDraft.withLeafCategory(
         categoryName = leaf.name,
         parentCategoryId = parent?.id,
         parentCategoryName = parent?.name,
+        listingPhotoSlots = emptyList(),
+        listingPhotoSlotsCategoryId = null,
     )
 }
 
@@ -215,7 +253,10 @@ fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
         title.trim().length in MinListingTitleLength..MaxListingTitleLength &&
         description.length <= MaxListingDescriptionLength
     6 -> true
-    7 -> !postRequireListingImages() || imageUris.isNotEmpty()
+    7 -> !postRequireListingImages() || (
+        listingPhotoSlots.isNotEmpty() &&
+            listingPhotoSlots.all { !it.required || it.hasImageSelected() }
+        )
     8 -> {
         val p = parsePositiveLong(priceVnd)
         p != null && p in MinPriceVnd..MaxPriceVnd &&
@@ -289,3 +330,16 @@ fun CommonAestheticTagDto.matchesTagQuery(q: String): Boolean {
     val n = q.trim().lowercase()
     return name.lowercase().contains(n) || displayName.lowercase().contains(n)
 }
+
+/** Builds core-service `image_urls` JSON array after uploads filled [ListingPhotoSlotDraft.uploadedImageUrl]. */
+fun CreateListingDraft.buildListingImageStepPayloads(): List<ListingImageStepPayload> =
+    listingPhotoSlots.sortedBy { it.sortOrder }.map { s ->
+        ListingImageStepPayload(
+            stepKey = s.stepKey.trim(),
+            label = s.label.trim().ifBlank { s.stepKey },
+            labelVi = s.labelVi.trim().takeIf { it.isNotEmpty() },
+            sortOrder = s.sortOrder,
+            required = s.required,
+            imageUrl = s.uploadedImageUrl?.trim().orEmpty(),
+        )
+    }

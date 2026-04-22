@@ -455,6 +455,7 @@
     <string name="post_step_country">Country of origin</string>
     <string name="post_step_measure">Measurements</string>
     <string name="post_step_photos">Photos</string>
+    <string name="post_listing_photo_slots_unavailable">No photo steps loaded for this category. Pick a leaf category in the previous step or try again.</string>
     <string name="post_step_price">Price &amp; offers</string>
     <string name="post_step_shipping">Ship-from address</string>
     <string name="post_step_review">Review &amp; post</string>

@@ -14,6 +14,7 @@ import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.common.CategoryTreeNode
+import com.pc.fash_android_mobile.data.common.defaultListingImageCatalogSteps
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -73,6 +74,9 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
+
+    private val _listingPhotoSetupLoading = MutableStateFlow(false)
+    val listingPhotoSetupLoading: StateFlow<Boolean> = _listingPhotoSetupLoading.asStateFlow()
 
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
@@ -168,12 +172,43 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun formatAddressLabel(a: ShippingAddress): String = a.labelForDraft()
 
-    fun setImageUris(uris: List<Uri>) {
-        _draft.value = _draft.value.withImageUris(uris.take(6).map { it.toString() })
+    /**
+     * Loads common-service listing image steps for the draft leaf [CreateListingDraft.categoryId]
+     * and merges any existing picks by [ListingPhotoSlotDraft.stepKey].
+     */
+    suspend fun ensureListingPhotoSlotsLoaded() {
+        val cat = _draft.value.categoryId.trim()
+        if (cat.isEmpty()) return
+        if (_draft.value.listingPhotoSlotsCategoryId == cat && _draft.value.listingPhotoSlots.isNotEmpty()) return
+        _listingPhotoSetupLoading.value = true
+        try {
+            val catalog = withContext(Dispatchers.IO) {
+                commonServiceRepository.getListingImageSetup(cat).getOrNull()?.steps
+                    ?: defaultListingImageCatalogSteps()
+            }
+            _draft.value = _draft.value.withListingPhotoSlotsFromCatalog(cat, catalog)
+        } finally {
+            _listingPhotoSetupLoading.value = false
+        }
     }
 
-    fun removeImage(index: Int) {
-        _draft.value = _draft.value.removeImageAtIndex(index)
+    fun setListingPhotoForStep(stepKey: String, uriString: String?) {
+        _draft.value = _draft.value.copy(
+            listingPhotoSlots = _draft.value.listingPhotoSlots.map { s ->
+                if (s.stepKey != stepKey) {
+                    s
+                } else {
+                    s.copy(
+                        localImageUri = uriString?.takeIf { it.isNotBlank() },
+                        uploadedImageUrl = null,
+                    )
+                }
+            },
+        )
+    }
+
+    fun clearListingPhotoForStep(stepKey: String) {
+        setListingPhotoForStep(stepKey, null)
     }
 
     fun nextStep() {
@@ -208,44 +243,61 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Uploads images from draft and stores URLs in [CreateListingDraft.imageUrls].
+     * Uploads each slot that has a new local [ListingPhotoSlotDraft.localImageUri] via `POST /listings/images`.
      */
     suspend fun uploadImages(uriResolver: (Uri) -> Pair<ByteArray, String>?): Boolean {
-        val uris = _draft.value.imageUris
-        if (uris.isEmpty()) return true
-        _isUploading.value = true
-        val urls = mutableListOf<String>()
-        for ((i, uriStr) in uris.withIndex()) {
-            val uri = Uri.parse(uriStr)
-            val data = withContext(Dispatchers.IO) { uriResolver(uri) }
-            if (data == null || data.first.isEmpty()) {
-                publishUi(getApplication<Application>().getString(R.string.create_listing_image_error))
-                _isUploading.value = false
-                return false
-            }
-            val (bytes, mimeType) = data
-            val ext = mimeTypeToExt(mimeType)
-            val result = withContext(Dispatchers.IO) {
-                listingRepository.uploadListingImage(bytes, "image_$i.$ext", mimeType)
-            }
-            result.fold(
-                onSuccess = { urls.add(it) },
-                onFailure = {
-                    publishUi(it.message ?: getApplication<Application>().getString(R.string.create_listing_upload_error))
-                    _isUploading.value = false
-                    return false
-                },
-            )
+        val slots = _draft.value.listingPhotoSlots
+        if (slots.isEmpty()) return true
+        val toUpload = slots.filter {
+            it.localImageUri?.isNotBlank() == true && it.uploadedImageUrl.isNullOrBlank()
         }
-        _draft.value = _draft.value.withImageUrls(urls)
-        _isUploading.value = false
-        return true
+        if (toUpload.isEmpty()) return true
+        _isUploading.value = true
+        try {
+            var fileIndex = 0
+            for (slot in toUpload.sortedBy { it.sortOrder }) {
+                val local = slot.localImageUri ?: continue
+                val uri = Uri.parse(local)
+                val data = withContext(Dispatchers.IO) { uriResolver(uri) }
+                if (data == null || data.first.isEmpty()) {
+                    publishUi(getApplication<Application>().getString(R.string.create_listing_image_error))
+                    return false
+                }
+                val (bytes, mimeType) = data
+                val ext = mimeTypeToExt(mimeType)
+                val slug = slot.stepKey.replace(Regex("[^a-zA-Z0-9_-]"), "_").take(32).ifBlank { "img" }
+                val result = withContext(Dispatchers.IO) {
+                    listingRepository.uploadListingImage(bytes, "${slug}_$fileIndex.$ext", mimeType)
+                }
+                fileIndex++
+                val uploaded = result.fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        publishUi(it.message ?: getApplication<Application>().getString(R.string.create_listing_upload_error))
+                        return false
+                    },
+                )
+                _draft.value = _draft.value.copy(
+                    listingPhotoSlots = _draft.value.listingPhotoSlots.map { s ->
+                        if (s.stepKey != slot.stepKey) {
+                            s
+                        } else {
+                            s.copy(uploadedImageUrl = uploaded, localImageUri = null)
+                        }
+                    },
+                )
+            }
+            return true
+        } finally {
+            _isUploading.value = false
+        }
     }
 
     fun submitListing(uriResolver: (Uri) -> Pair<ByteArray, String>?, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
+                ensureListingPhotoSlotsLoaded()
                 val d = _draft.value
                 val tagsMap = _aestheticTagsById.value
                 val errKey = d.validationErrorKeyForSubmit()
@@ -253,19 +305,25 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     publishUi(resolveValidationString(errKey))
                     return@launch
                 }
-                val finalUrls = when {
-                    !BuildConfig.POST_REQUIRE_LISTING_IMAGES && d.imageUris.isEmpty() -> emptyList()
-                    d.imageUrls.size == d.imageUris.size && d.imageUrls.isNotEmpty() -> d.imageUrls
+                val anyPhoto = d.listingPhotoSlots.any { it.hasImageSelected() }
+                val skipImagesEntirely = !BuildConfig.POST_REQUIRE_LISTING_IMAGES && !anyPhoto
+                val stepsPayload = when {
+                    skipImagesEntirely -> emptyList()
                     else -> {
-                        if (!uploadImages(uriResolver ?: { null })) return@launch
-                        _draft.value.imageUrls
+                        val needsUpload = d.listingPhotoSlots.any {
+                            it.localImageUri?.isNotBlank() == true && it.uploadedImageUrl.isNullOrBlank()
+                        }
+                        if (needsUpload) {
+                            if (!uploadImages(uriResolver ?: { null })) return@launch
+                        }
+                        _draft.value.buildListingImageStepPayloads()
                     }
                 }
-                if (finalUrls.isEmpty() && BuildConfig.POST_REQUIRE_LISTING_IMAGES) {
+                if (stepsPayload.isEmpty() && BuildConfig.POST_REQUIRE_LISTING_IMAGES) {
                     publishUi(getApplication<Application>().getString(R.string.create_listing_no_images))
                     return@launch
                 }
-                val req = _draft.value.toCreateListingRequest(finalUrls, tagsMap)
+                val req = _draft.value.toCreateListingRequest(stepsPayload, tagsMap)
                 val createResult = withContext(Dispatchers.IO) {
                     listingRepository.createListing(req)
                 }

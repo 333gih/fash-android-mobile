@@ -246,7 +246,7 @@ class ListingRepository(
         val url = AppEnvironment.apiPath("api/v1/listings")
         val json = JSONObject()
         json.put("title", request.title)
-        json.put("image_urls", JSONArray(request.imageUrls))
+        json.put("image_urls", listingImageStepsToJsonArray(request.imageUrlSteps))
         json.put("price", request.priceVnd)
         json.put("condition", request.condition)
         json.put("category_id", request.categoryId)
@@ -389,11 +389,6 @@ class ListingRepository(
     private fun parseFeedResponse(json: String): List<ListingFeedItem> =
         ListingFeedJsonParser.parseFeedArray(json)
 
-    private fun parseStringArray(arr: JSONArray?): List<String> {
-        if (arr == null) return emptyList()
-        return (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
-    }
-
     /**
      * Listing tags / aesthetic_tags may be plain strings or `{ "id", "name" }` objects.
      * Using [JSONArray.optString] on object elements stringifies the whole JSON (bad for UI).
@@ -491,12 +486,13 @@ class ListingRepository(
         val brandObj = o.optJSONObject("brand") ?: o.optJSONObject("Brand")
         val countryObj = o.optJSONObject("country") ?: o.optJSONObject("Country")
         val shipObj = o.optJSONObject("shipping_address") ?: o.optJSONObject("ShippingAddress")
-        val imageUrls = parseStringArray(
-            o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs"),
+        val imageUrlsArr = o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs")
+        val imageUrls = ListingImageUrlsWire.parseUrlStrings(imageUrlsArr)
+        val coverUrl = ListingImageUrlsWire.resolveCoverUrl(
+            o.optString("cover_image_url", "")
+                .ifBlank { o.optString("CoverImageURL", "") },
+            imageUrlsArr,
         )
-        val coverUrl = o.optString("cover_image_url", "")
-            .ifBlank { o.optString("CoverImageURL", "") }
-            .ifBlank { imageUrls.firstOrNull() ?: "" }
         val tagsArr = o.optJSONArray("tags") ?: o.optJSONArray("Tags")
         val aestheticArr = o.optJSONArray("aesthetic_tags") ?: o.optJSONArray("AestheticTags")
         val brandIdWire = brandObj?.optString("id", "")?.ifBlank { null }
@@ -682,10 +678,35 @@ class ListingRepository(
     }
 }
 
+/** One step in `POST /listings` body `image_urls` (core-service JSONB array). */
+data class ListingImageStepPayload(
+    val stepKey: String,
+    val label: String,
+    val labelVi: String?,
+    val sortOrder: Int,
+    val required: Boolean,
+    val imageUrl: String,
+)
+
+private fun listingImageStepsToJsonArray(steps: List<ListingImageStepPayload>): JSONArray {
+    val arr = JSONArray()
+    for (s in steps) {
+        val o = JSONObject()
+        o.put("step_key", s.stepKey.trim())
+        o.put("label", s.label.trim())
+        s.labelVi?.trim()?.takeIf { it.isNotEmpty() }?.let { o.put("label_vi", it) }
+        o.put("sort_order", s.sortOrder)
+        o.put("required", s.required)
+        o.put("image_url", s.imageUrl.trim())
+        arr.put(o)
+    }
+    return arr
+}
+
 /** `POST /api/v1/listings` body — align with listings API doc (`snake_case` on wire). */
 data class CreateListingRequest(
     val title: String,
-    val imageUrls: List<String>,
+    val imageUrlSteps: List<ListingImageStepPayload>,
     val priceVnd: Long,
     val condition: String,
     val categoryId: String,

@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.data.order
 
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.listing.ListingImageUrlsWire
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -332,9 +333,11 @@ class OrderRepository(
         val buyer = o.optJSONObject("Buyer") ?: o.optJSONObject("buyer") ?: JSONObject()
         val seller = o.optJSONObject("Seller") ?: o.optJSONObject("seller") ?: JSONObject()
         val imageUrlsArr = listing.optJSONArray("ImageURLs") ?: listing.optJSONArray("image_urls")
-        val coverUrl = listing.optString("CoverImageURL", "")
-            .ifBlank { listing.optString("cover_image_url", "") }
-            .ifBlank { imageUrlsArr?.optString(0) ?: "" }
+        val coverUrl = ListingImageUrlsWire.resolveCoverUrl(
+            listing.optString("CoverImageURL", "")
+                .ifBlank { listing.optString("cover_image_url", "") },
+            imageUrlsArr,
+        )
         val rawStatus = o.optString("status", o.optString("Status", "payment_pending")).lowercase()
         val canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit")
         val buyerReview = parseBuyerReview(o)
@@ -634,9 +637,11 @@ class OrderRepository(
             ?: o.optJSONObject("buyer") ?: o.optJSONObject("Buyer") ?: o
         val rawStatus = o.optString("status", o.optString("Status", "payment_pending")).lowercase()
         val imageUrlsArr = listing.optJSONArray("image_urls") ?: listing.optJSONArray("ImageURLs")
-        val coverUrl = listing.optString("cover_image_url", "")
-            .ifBlank { listing.optString("CoverImageURL", "") }
-            .ifBlank { imageUrlsArr?.optString(0) ?: "" }
+        val coverUrl = ListingImageUrlsWire.resolveCoverUrl(
+            listing.optString("cover_image_url", "")
+                .ifBlank { listing.optString("CoverImageURL", "") },
+            imageUrlsArr,
+        )
         return OrderItem(
             orderId = o.optString("id", o.optString("ID", o.optString("order_id", ""))),
             listingId = o.optString("listing_id", o.optString("ListingID", listing.optString("id", listing.optString("ID", "")))),

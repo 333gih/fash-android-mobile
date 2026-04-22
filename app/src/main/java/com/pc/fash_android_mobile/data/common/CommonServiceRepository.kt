@@ -163,6 +163,15 @@ class CommonServiceRepository(
         parseCategoryDto(c)
     }
 
+    /**
+     * Photo wizard steps for a leaf category (`GET .../categories/{id}/listing-image-setup`).
+     * Uses the first template with non-empty [steps]; otherwise [defaultListingImageCatalogSteps].
+     */
+    fun getListingImageSetup(categoryId: String): Result<ListingImageSetupDto> = runCatching {
+        val body = executeGet(apiV1("categories/${categoryId.trim()}/listing-image-setup"))
+        parseListingImageSetup(JSONObject(body.trim()))
+    }
+
     // --- Aesthetic tags ---
 
     /** Full catalog when [all] is true (ignores pagination). */
@@ -381,6 +390,61 @@ class CommonServiceRepository(
             offset = obj.optInt("offset", 0),
             limit = obj.optInt("limit", 20),
             hasMore = obj.optBoolean("has_more", false),
+        )
+    }
+
+    private fun parseListingImageSetup(root: JSONObject): ListingImageSetupDto {
+        val wrapped = root.optJSONObject("listing_image_setup") ?: root
+        val categoryId = wrapped.optString("category_id", "")
+            .ifBlank { wrapped.optString("categoryId", "") }
+        val setups = wrapped.optJSONArray("listing_image_setups") ?: JSONArray()
+        val merged = mutableListOf<ListingImageStepCatalog>()
+        for (i in 0 until setups.length()) {
+            val template = setups.optJSONObject(i) ?: continue
+            val stepsArr = template.optJSONArray("steps") ?: JSONArray()
+            if (stepsArr.length() == 0) continue
+            for (j in 0 until stepsArr.length()) {
+                val s = stepsArr.optJSONObject(j) ?: continue
+                merged.add(parseListingImageCatalogStep(s))
+            }
+            break
+        }
+        val normalized = when {
+            merged.isNotEmpty() ->
+                merged
+                    .filter { it.stepKey.isNotBlank() }
+                    .distinctBy { it.stepKey }
+                    .sortedBy { it.sortOrder }
+                    .take(20)
+            else -> defaultListingImageCatalogSteps()
+        }
+        return ListingImageSetupDto(categoryId = categoryId, steps = normalized)
+    }
+
+    private fun parseListingImageCatalogStep(s: JSONObject): ListingImageStepCatalog {
+        val stepKey = s.optString("step_key", "")
+            .ifBlank { s.optString("stepKey", "") }
+            .trim()
+        val label = s.optString("label", "").trim()
+        val labelVi = s.optString("label_vi", "")
+            .ifBlank { s.optString("labelVi", "") }
+            .trim()
+        val sortOrder = when {
+            s.has("sort_order") && !s.isNull("sort_order") -> s.optInt("sort_order", 0)
+            s.has("SortOrder") && !s.isNull("SortOrder") -> s.optInt("SortOrder", 0)
+            else -> 0
+        }
+        val required = when {
+            s.has("required") && !s.isNull("required") -> s.optBoolean("required", true)
+            s.has("Required") && !s.isNull("Required") -> s.optBoolean("Required", true)
+            else -> true
+        }
+        return ListingImageStepCatalog(
+            stepKey = stepKey,
+            label = label.ifBlank { stepKey },
+            labelVi = labelVi,
+            sortOrder = sortOrder,
+            required = required,
         )
     }
 

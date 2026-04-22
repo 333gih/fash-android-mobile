@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.ui.post
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +42,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,7 +57,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.address.ShippingAddressSelectableCard
+import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -231,14 +238,39 @@ fun CreateListingPostStep7(
     onCloseRequest: () -> Unit,
 ) {
     val draft by viewModel.draft.collectAsState()
+    val setupLoading by viewModel.listingPhotoSetupLoading.collectAsState()
     val canNext = draft.canProceedFromStep(7)
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents(),
-    ) { uris: List<Uri> ->
-        viewModel.setImageUris(uris)
+    val scrollState = rememberScrollState()
+    val context = LocalContext.current
+
+    LaunchedEffect(draft.categoryId) {
+        viewModel.ensureListingPhotoSlotsLoaded()
     }
 
-    val scrollState = rememberScrollState()
+    var pickStepKey by remember { mutableStateOf<String?>(null) }
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        val key = pickStepKey
+        pickStepKey = null
+        if (uri != null && key != null) {
+            viewModel.setListingPhotoForStep(key, uri.toString())
+        }
+    }
+
+    fun stepLabel(slot: ListingPhotoSlotDraft): String =
+        if (AppLocale.currentTag(context) == AppLocale.TAG_EN) {
+            slot.label.ifBlank { slot.stepKey }
+        } else {
+            slot.labelVi.ifBlank { slot.label }.ifBlank { slot.stepKey }
+        }
+
+    val coverStepKey = remember(draft.listingPhotoSlots) {
+        draft.listingPhotoSlots
+            .filter { it.hasImageSelected() }
+            .minByOrNull { it.sortOrder }
+            ?.stepKey
+    }
 
     Column(
         modifier = Modifier
@@ -267,14 +299,51 @@ fun CreateListingPostStep7(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             )
             Spacer(modifier = Modifier.height(16.dp))
-            PostAddPhotoBox(onClick = { imagePicker.launch("image/*") })
-            if (draft.imageUris.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                PostImagePreviewRow(
-                    imageUriStrings = draft.imageUris,
-                    onRemove = { viewModel.removeImage(it) },
-                    onAddMore = { imagePicker.launch("image/*") },
-                )
+            when {
+                setupLoading && draft.listingPhotoSlots.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = FashColors.Primary)
+                    }
+                }
+                draft.listingPhotoSlots.isEmpty() -> {
+                    Text(
+                        text = stringResource(R.string.post_listing_photo_slots_unavailable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        draft.listingPhotoSlots
+                            .sortedBy { it.sortOrder }
+                            .forEach { slot ->
+                                PostListingPhotoSlotCard(
+                                    label = stepLabel(slot),
+                                    required = slot.required,
+                                    isCover = coverStepKey == slot.stepKey && slot.hasImageSelected(),
+                                    imageModel = when {
+                                        slot.uploadedImageUrl?.isNotBlank() == true ->
+                                            resolveListingImageUrl(slot.uploadedImageUrl!!)
+                                        slot.localImageUri?.isNotBlank() == true ->
+                                            Uri.parse(slot.localImageUri!!)
+                                        else -> null
+                                    },
+                                    onPick = {
+                                        pickStepKey = slot.stepKey
+                                        photoPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        )
+                                    },
+                                    onClear = { viewModel.clearListingPhotoForStep(slot.stepKey) },
+                                )
+                            }
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -282,116 +351,105 @@ fun CreateListingPostStep7(
 }
 
 @Composable
-private fun PostAddPhotoBox(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1.5f)
-            .clip(RoundedCornerShape(16.dp))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(16.dp),
-            )
-            .background(PostListingColors.fieldSurface())
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.CameraAlt,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.create_listing_add_photo),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = stringResource(R.string.create_listing_photo_tip),
-                style = MaterialTheme.typography.bodySmall,
-                color = FashColors.Primary,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-@Composable
-private fun PostImagePreviewRow(
-    imageUriStrings: List<String>,
-    onRemove: (Int) -> Unit,
-    onAddMore: () -> Unit,
+private fun PostListingPhotoSlotCard(
+    label: String,
+    required: Boolean,
+    isCover: Boolean,
+    imageModel: Any?,
+    onPick: () -> Unit,
+    onClear: () -> Unit,
 ) {
-    Row(
+    val scheme = MaterialTheme.colorScheme
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        imageUriStrings.forEachIndexed { index, uriStr ->
-            val uri = Uri.parse(uriStr)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(FashTheme.spacing.spacing4),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(
                 modifier = Modifier
-                    .width(80.dp)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(PostListingColors.fieldSurface()),
-            ) {
-                FashAsyncImage(
-                    model = uri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-                if (index == 0) {
-                    Text(
-                        text = stringResource(R.string.create_listing_cover_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .background(FashColors.Primary)
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                    )
-                }
-                IconButton(
-                    onClick = { onRemove(index) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(28.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-        }
-        if (imageUriStrings.size < 6) {
-            Box(
-                modifier = Modifier
-                    .width(80.dp)
-                    .aspectRatio(1f)
+                    .size(88.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(PostListingColors.fieldSurface())
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    .clickable(onClick = onAddMore),
+                    .then(
+                        if (imageModel == null) {
+                            Modifier
+                                .border(
+                                    width = 1.dp,
+                                    color = scheme.outlineVariant.copy(alpha = 0.45f),
+                                    shape = RoundedCornerShape(12.dp),
+                                )
+                                .clickable(onClick = onPick)
+                        } else {
+                            Modifier
+                        },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                when (imageModel) {
+                    null -> {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp),
+                            tint = scheme.onSurfaceVariant,
+                        )
+                    }
+                    else -> {
+                        FashAsyncImage(
+                            model = imageModel,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                        if (isCover) {
+                            Text(
+                                text = stringResource(R.string.create_listing_cover_label),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onPrimary,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .background(FashColors.Primary)
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(28.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = scheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = label + if (required) " *" else "",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.create_listing_add_photo),
+                    style = MaterialTheme.typography.labelLarge.copy(color = FashColors.Primary),
+                    modifier = Modifier.clickable(onClick = onPick),
                 )
             }
         }

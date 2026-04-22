@@ -48,8 +48,11 @@ fun CreateListingReviewCard(
     aestheticTagsById: Map<String, CommonAestheticTagDto>,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val coverImageUrl = draft.imageUrls.firstOrNull()
-    val coverImageUri = draft.imageUris.firstOrNull()
+    val coverSlot = draft.listingPhotoSlots
+        .sortedBy { it.sortOrder }
+        .firstOrNull { it.hasImageSelected() }
+    val coverImageUrl = coverSlot?.uploadedImageUrl?.takeIf { it.isNotBlank() }
+    val coverImageUri = coverSlot?.localImageUri?.takeIf { it.isNotBlank() && coverImageUrl == null }
     val firstTagDisplay = draft.selectedAestheticTagIds.firstOrNull()?.let { id ->
         aestheticTagsById[id]?.let { t ->
             t.displayName.ifBlank { t.name }

@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.data.chat
 
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
+import com.pc.fash_android_mobile.data.listing.ListingImageUrlsWire
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -699,12 +700,13 @@ class ChatRepository(
         val lastMsgAt = o.optString("LastMessageAt", "").takeIf { it.isNotBlank() && it != "null" }
         val timestamp = lastMsgAt ?: o.optString("UpdatedAt", o.optString("updated_at", o.optString("CreatedAt", "")))
         val productThumb: String = listingObj?.let { listing ->
-            listing.optString("CoverImageURL", listing.optString("cover_image_url", ""))
-                .takeIf { it.isNotBlank() }
-                ?: listing.optJSONArray("ImageURLs")?.optString(0, "")?.takeIf { it.isNotBlank() }
-                ?: listing.optJSONArray("image_urls")?.optString(0, "")?.takeIf { it.isNotBlank() }
-                ?: ""
-        } ?: ""
+            val arr = listing.optJSONArray("ImageURLs") ?: listing.optJSONArray("image_urls")
+            ListingImageUrlsWire.resolveCoverUrl(
+                listing.optString("CoverImageURL", "")
+                    .ifBlank { listing.optString("cover_image_url", "") },
+                arr,
+            )
+        }.orEmpty()
         val productId: String = listingObj?.optString("ID", listingObj.optString("id", ""))
             ?.takeIf { it.isNotBlank() }
             ?: o.optString("ListingID", o.optString("listing_id", ""))
@@ -848,15 +850,14 @@ class ChatRepository(
      * Handles PascalCase: ID, Title, CoverImageURL, Price.
      */
     private fun parseProductCard(p: JSONObject): ProductCard {
-        val imageUrl = p.optString("CoverImageURL", "").takeIf { it.isNotBlank() }
-            ?: p.optString("cover_image_url", "").takeIf { it.isNotBlank() }
-            ?: p.optString("image_url", "").takeIf { it.isNotBlank() }
-            ?: p.optString("thumbnail_url", "").takeIf { it.isNotBlank() }
-            ?: run {
-                // Try first element of ImageURLs array
-                val urlsArr = p.optJSONArray("ImageURLs") ?: p.optJSONArray("image_urls")
-                urlsArr?.optString(0, "") ?: ""
-            }
+        val urlsArr = p.optJSONArray("ImageURLs") ?: p.optJSONArray("image_urls")
+        val imageUrl = ListingImageUrlsWire.resolveCoverUrl(
+            p.optString("CoverImageURL", "")
+                .ifBlank { p.optString("cover_image_url", "") }
+                .ifBlank { p.optString("image_url", "") }
+                .ifBlank { p.optString("thumbnail_url", "") },
+            urlsArr,
+        )
         return ProductCard(
             listingId = p.optString("ID", p.optString("id", p.optString("listing_id", ""))),
             title = p.optString("Title", p.optString("title", "")),

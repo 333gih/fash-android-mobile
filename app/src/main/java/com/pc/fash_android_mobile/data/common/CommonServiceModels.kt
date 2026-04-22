@@ -123,3 +123,36 @@ data class CountriesPage(
     val limit: Int,
     val hasMore: Boolean,
 )
+
+/** One catalog step from `GET .../categories/{id}/listing-image-setup` (no [image_url] until upload). */
+data class ListingImageStepCatalog(
+    val stepKey: String,
+    val label: String,
+    val labelVi: String,
+    val sortOrder: Int,
+    val required: Boolean,
+)
+
+/** Normalized listing-image-setup for the create-listing photo wizard. */
+data class ListingImageSetupDto(
+    val categoryId: String,
+    val steps: List<ListingImageStepCatalog>,
+)
+
+/** Default steps when common-service has no template (aligned with core DB backfill). */
+fun defaultListingImageCatalogSteps(): List<ListingImageStepCatalog> = listOf(
+    ListingImageStepCatalog(
+        stepKey = "front",
+        label = "Front view",
+        labelVi = "Mặt trước",
+        sortOrder = 0,
+        required = true,
+    ),
+    ListingImageStepCatalog(
+        stepKey = "step_2",
+        label = "Back side",
+        labelVi = "Mặt sau",
+        sortOrder = 1,
+        required = true,
+    ),
+)

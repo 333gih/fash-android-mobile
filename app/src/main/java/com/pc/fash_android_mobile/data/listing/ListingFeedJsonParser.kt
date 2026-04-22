@@ -57,10 +57,12 @@ internal object ListingFeedJsonParser {
                 ListingFeedItem(
                     id = o.optString("id", o.optString("ID", "")),
                     title = o.optString("title", o.optString("Title", "")),
-                    coverImageUrl = o.optString("cover_image_url", "")
-                        .ifBlank { o.optString("CoverImageURL", "") }
-                        .ifBlank { imageUrlsArr?.optString(0) ?: "" },
-                    imageUrls = parseStringArray(imageUrlsArr),
+                    coverImageUrl = ListingImageUrlsWire.resolveCoverUrl(
+                        o.optString("cover_image_url", "")
+                            .ifBlank { o.optString("CoverImageURL", "") },
+                        imageUrlsArr,
+                    ),
+                    imageUrls = ListingImageUrlsWire.parseUrlStrings(imageUrlsArr),
                     priceVnd = o.optLong("price", o.optLong("Price", 0L)),
                     brand = o.optString("brand", "")
                         .ifBlank { o.optString("Brand", "") }
@@ -131,10 +133,5 @@ internal object ListingFeedJsonParser {
             }
         }
         return JSONArray("[]")
-    }
-
-    private fun parseStringArray(arr: JSONArray?): List<String> {
-        if (arr == null) return emptyList()
-        return (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
     }
 }

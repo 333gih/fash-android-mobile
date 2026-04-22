@@ -474,6 +474,7 @@
     <string name="post_step_country">Xuất xứ</string>
     <string name="post_step_measure">Số đo</string>
     <string name="post_step_photos">Ảnh sản phẩm</string>
+    <string name="post_listing_photo_slots_unavailable">Chưa có bước chụp ảnh cho danh mục này. Hãy chọn danh mục lá ở bước trước hoặc thử lại.</string>
     <string name="post_step_price">Giá &amp; ưu đãi</string>
     <string name="post_step_shipping">Địa chỉ gửi hàng</string>
     <string name="post_step_review">Xem lại &amp; đăng</string>
