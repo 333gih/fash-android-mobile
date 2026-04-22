@@ -67,12 +67,14 @@ fun ListingGridCard(
     onSave: () -> Unit = {},
     /** Fewer text lines for thin columns. */
     compactFooter: Boolean = false,
+    /** Short marketplace status (e.g. own profile); drawn top-start with the photo-stack badge. */
+    statusOverlayLabel: String? = null,
 ) {
     val imageUrl = resolveListingImageUrl(item.coverImageUrl)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     val metaUi = listingCardMetaUi(item, compactFooter)
     val sellerLine = listingCardSellerLine(item)
-    val cardA11y = listingCardContentDescription(item, metaUi.combinedA11y)
+    val cardA11y = listingCardContentDescription(item, metaUi.combinedA11y, statusOverlayLabel)
 
     Box(
         modifier = modifier
@@ -110,37 +112,62 @@ fun ListingGridCard(
                 }
             }
 
-            if (item.imageUrls.size > 1) {
-                val photoStackA11y = stringResource(
-                    R.string.listing_card_photo_stack_a11y,
-                    item.imageUrls.size,
-                )
-                Surface(
+            val statusTrimmed = statusOverlayLabel?.trim()?.takeIf { it.isNotEmpty() }
+            if (item.imageUrls.size > 1 || statusTrimmed != null) {
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .semantics(mergeDescendants = true) {
-                            contentDescription = photoStackA11y
-                        },
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.45f),
+                        .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Collections,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp),
+                    if (item.imageUrls.size > 1) {
+                        val photoStackA11y = stringResource(
+                            R.string.listing_card_photo_stack_a11y,
+                            item.imageUrls.size,
                         )
-                        Text(
-                            text = item.imageUrls.size.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                        )
+                        Surface(
+                            modifier = Modifier.semantics(mergeDescendants = true) {
+                                contentDescription = photoStackA11y
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.Black.copy(alpha = 0.45f),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Collections,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Text(
+                                    text = item.imageUrls.size.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                )
+                            }
+                        }
+                    }
+                    if (statusTrimmed != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.Black.copy(alpha = 0.45f),
+                        ) {
+                            Text(
+                                text = statusTrimmed,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.2.sp,
+                                ),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
@@ -399,10 +426,15 @@ private fun listingCardSellerLine(item: ListingFeedItem): String {
 }
 
 @Composable
-private fun listingCardContentDescription(item: ListingFeedItem, metaLine: String): String {
+private fun listingCardContentDescription(
+    item: ListingFeedItem,
+    metaLine: String,
+    statusOverlay: String? = null,
+): String {
     val title = sanitizeListingUiText(item.title).trim()
     val price = formatListingPriceVnd(item.priceVnd)
     val user = sanitizeListingUiText(item.sellerUsername ?: "").ifBlank { "user" }
+    val status = statusOverlay?.trim()?.takeIf { it.isNotEmpty() }
     return buildString {
         if (title.isNotEmpty()) {
             append(title)
@@ -412,6 +444,10 @@ private fun listingCardContentDescription(item: ListingFeedItem, metaLine: Strin
         if (metaLine.isNotEmpty()) {
             append(". ")
             append(metaLine)
+        }
+        if (status != null) {
+            append(". ")
+            append(status)
         }
         append(". ")
         append(stringResource(R.string.listing_card_a11y_seller_role))

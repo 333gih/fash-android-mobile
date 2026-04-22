@@ -53,6 +53,9 @@ internal object ListingFeedJsonParser {
                 ?: o.optString("category_name", "").ifBlank { null }
                 ?: o.optString("CategoryName", "").ifBlank { null }
             val imageUrlsArr = o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs")
+            val listingStatusWire = o.optString("status", "")
+                .ifBlank { o.optString("Status", "") }
+                .ifBlank { null }
             list.add(
                 ListingFeedItem(
                     id = o.optString("id", o.optString("ID", "")),
@@ -98,6 +101,7 @@ internal object ListingFeedJsonParser {
                     isLiked = listingWireBool(o, "is_liked", "IsLiked"),
                     isSaved = listingWireBool(o, "is_saved", "IsSaved"),
                     sellerIsFollowing = sellerFollowingWireBool(seller),
+                    listingStatus = listingStatusWire,
                 ),
             )
         }

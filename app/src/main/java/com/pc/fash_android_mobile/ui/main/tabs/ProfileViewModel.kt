@@ -24,6 +24,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private fun ListingFeedItem.isSoldListingStatus(): Boolean =
+    listingStatus?.equals("sold", ignoreCase = true) == true
+
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val userRepository: UserRepository =
@@ -84,28 +87,18 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     )
                     userRepository.getUserAccessStatus().getOrNull()?.let { applyMeetingTrustFromStatus(it) }
                 }
-                _profile.value?.userId?.let { sellerId ->
+                _profile.value?.userId?.let {
                     withContext(Dispatchers.IO) {
                         coroutineScope {
-                            val selling = async {
-                                listingRepository.getListingsBySeller(
-                                    sellerId = sellerId,
-                                    status = null,
-                                    limit = 50,
-                                ).getOrElse { emptyList() }
-                            }
-                            val sold = async {
-                                listingRepository.getListingsBySeller(
-                                    sellerId = sellerId,
-                                    status = "sold",
-                                    limit = 50,
-                                ).getOrElse { emptyList() }
+                            val mine = async {
+                                listingRepository.getMyListings(limit = 50, offset = 0).getOrElse { emptyList() }
                             }
                             val wish = async {
                                 listingRepository.getWishlistListings(limit = 50, offset = 0).getOrElse { emptyList() }
                             }
-                            _sellingListings.value = selling.await()
-                            _soldListings.value = sold.await()
+                            val allMine = mine.await()
+                            _sellingListings.value = allMine.filter { !it.isSoldListingStatus() }
+                            _soldListings.value = allMine.filter { it.isSoldListingStatus() }
                             _wishlistListings.value = wish.await()
                         }
                     }

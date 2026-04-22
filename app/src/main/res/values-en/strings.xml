@@ -598,6 +598,13 @@
     <string name="profile_tab_selling">Selling</string>
     <string name="profile_tab_sold">Sold</string>
     <string name="profile_tab_wishlist">Saved</string>
+    <string name="listing_status_in_review">Pending review</string>
+    <string name="listing_status_rejected">Rejected</string>
+    <string name="listing_status_active">Active</string>
+    <string name="listing_status_inactive">Hidden</string>
+    <string name="listing_status_sold">Sold</string>
+    <string name="listing_status_reserved">Reserved</string>
+    <string name="listing_status_deleted">Deleted</string>
     <string name="profile_empty_selling_title">No items for sale</string>
     <string name="profile_empty_selling_subtitle">Tap Post in the bottom bar to list your first item.</string>
     <string name="profile_empty_sold_title">No sold items yet</string>

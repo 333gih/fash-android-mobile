@@ -182,19 +182,15 @@ Use returned URL(s) in `image_urls` when creating a listing.
 | Field | Type | Required | Validation / notes |
 |-------|------|----------|---------------------|
 | `title` | string | Yes | 3–60 chars |
-| `image_urls` | string[] | Yes | 1–6 URLs, each 1–512 chars |
+| `image_urls` | object[] | Yes | 1–20 **listing image steps** (`step_key`, `label`, optional `label_vi`, `sort_order`, `required`, `image_url`) — upload images first via `POST /listings/images` |
 | `price` | number | Yes | 1000–100000000 (VND) |
 | `condition` | string | Yes | max 30 |
-| `category_id` | string | Yes | UUID — **leaf** category |
-| `category_name` | string | No | max 100 — snapshot |
-| `parent_category_name` | string | No | max 100 |
-| `parent_category_id` | string \| null | No | UUID — must match parent of `category_id` when set |
+| `category` | object | Yes | **`NamedRef`:** `{ "id": "<leaf UUID>", "name": "<max 100>" }` — leaf category (not top-level `category_id`) |
+| `parent_category` | object | No | **`NamedRef`:** `{ "id", "name" }` when the leaf has a parent in the tree |
 | `description` | string | No | max 500 |
 | `size` | string | No | max 20 |
-| `brand_id` | string | No | UUID |
-| `brand_name` | string | No | max 255 — snapshot |
-| `aesthetic_tags` | string[] | No | max 5 items, each 1–50 chars (names) |
-| `aesthetic_tag_ids` | string[] | No | max 5 UUIDs — **preferred** over names when both used |
+| `brand` | object | No | **`BrandRef`:** `{ "id": "<UUID>", "name": "<max 255>" }` (not `brand_id` / `brand_name`) |
+| `aesthetic_tags` | object[] | No | **`NamedRef[]`:** each `{ "id", "name" }` from common-service catalog (max items per policy); not `aesthetic_tag_ids` alone |
 | `country_of_origin` | string | No | ISO2 length 2 if set |
 | `country_id` | string | No | UUID |
 | `country_name` | string | No | max 128 |
@@ -466,8 +462,8 @@ These are **not** for normal Android builds unless you explicitly enable them in
 
 1. **Use `snake_case`** in JSON for all request and response mapping (e.g. Kotlin with `@SerializedName` or Moshi/ kotlinx.serialization names).
 2. **Locale:** Prefer `/{en|vi}/api/v1` for correct translations on error messages where the server uses i18n.
-3. **Images:** Upload first via `POST /listings/images`, then pass returned URLs in `image_urls` on create.
-4. **Catalog:** Resolve category/brand/tag/country/address choices using **common-service** (or cached data); send IDs and optional display snapshots on create/update as required by your product.
+3. **Images:** Upload first via `POST /listings/images`, then pass returned URLs inside each `image_urls[]` step object on create (see `image_urls` row above).
+4. **Catalog:** Resolve category/brand/tag/country/address choices using **common-service** (or cached data). On **create**, send nested `category`, optional `parent_category` and `brand`, and `aesthetic_tags` as `{ "id", "name" }` objects matching core `listing_request.CreateListingRequest` — flat `category_id` / `aesthetic_tag_ids` keys are not bound by the server.
 5. **Wishlist:** `GET /listings/wishlist` returns IDs only — hydrate with `GET /listings/{id}` (consider caching and batching on the client).
 6. **Pagination:** Use `limit`/`offset` consistently; enforce max 50 where documented to match server caps.
 

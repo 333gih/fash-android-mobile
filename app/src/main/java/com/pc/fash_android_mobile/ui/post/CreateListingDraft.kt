@@ -9,6 +9,7 @@ import com.pc.fash_android_mobile.data.common.CategoryTreeNode
 import com.pc.fash_android_mobile.data.common.ListingImageStepCatalog
 import com.pc.fash_android_mobile.data.listing.CreateListingRequest
 import com.pc.fash_android_mobile.data.listing.ListingImageStepPayload
+import com.pc.fash_android_mobile.data.listing.NamedRefPayload
 
 /**
  * One photo slot in the create-listing wizard (definition from common-service + local/uploaded image).
@@ -107,9 +108,20 @@ fun CreateListingDraft.toCreateListingRequest(
     imageUrlSteps: List<ListingImageStepPayload>,
     aestheticTagsById: Map<String, CommonAestheticTagDto>,
 ): CreateListingRequest {
-    val tagIds = selectedAestheticTagIds.toList()
-    val tagNamesFromIds = tagIds.mapNotNull { id ->
-        aestheticTagsById[id]?.name?.trim()?.takeIf { it.isNotEmpty() }
+    val leafId = categoryId.trim()
+    val leafName = categoryName.trim()
+    val aestheticTagRefs = selectedAestheticTagIds.mapNotNull { tid ->
+        val dto = aestheticTagsById[tid] ?: return@mapNotNull null
+        val n = dto.displayName.trim().ifBlank { dto.name.trim() }.ifBlank { return@mapNotNull null }
+        NamedRefPayload(id = tid.trim(), name = n)
+    }
+    val parentRef = parentCategoryId?.trim()?.takeIf { it.isNotEmpty() }?.let { pid ->
+        val pn = parentCategoryName?.trim().orEmpty().ifBlank { return@let null }
+        NamedRefPayload(id = pid, name = pn)
+    }
+    val brandRef = brandId?.trim()?.takeIf { it.isNotEmpty() }?.let { bid ->
+        val bn = brandName.trim().ifBlank { return@let null }
+        NamedRefPayload(id = bid, name = bn)
     }
     val price = parsePositiveLong(priceVnd) ?: 1_000L
     val floor = floorPriceVnd.trim().let { if (it.isEmpty()) null else parsePositiveLong(it) }
@@ -118,16 +130,12 @@ fun CreateListingDraft.toCreateListingRequest(
         imageUrlSteps = imageUrlSteps,
         priceVnd = price,
         condition = condition.trim(),
-        categoryId = categoryId.trim(),
+        category = NamedRefPayload(id = leafId, name = leafName),
         description = description.trim(),
         size = size.trim(),
-        parentCategoryId = parentCategoryId?.takeIf { !it.isNullOrBlank() },
-        parentCategoryName = parentCategoryName?.takeIf { !it.isNullOrBlank() },
-        categoryName = categoryName.takeIf { it.isNotBlank() },
-        brandId = brandId?.takeIf { !it.isNullOrBlank() },
-        brandName = brandName.takeIf { it.isNotBlank() },
-        aestheticTagIds = tagIds,
-        aestheticTagNames = if (tagIds.isEmpty()) tagNamesFromIds else emptyList(),
+        parentCategory = parentRef,
+        brand = brandRef,
+        aestheticTags = aestheticTagRefs,
         countryOfOrigin = countryIso2.takeIf { it.length == 2 },
         countryId = countryId?.takeIf { !it.isNullOrBlank() },
         countryName = countryName.takeIf { it.isNotBlank() },
@@ -161,7 +169,7 @@ fun postRequireListingImages(): Boolean = BuildConfig.POST_REQUIRE_LISTING_IMAGE
 
 /** @return string resource name for [com.pc.fash_android_mobile.R.string], or null if valid. */
 fun CreateListingDraft.validationErrorKeyForSubmit(): String? {
-    if (categoryId.isBlank()) return "post_validation_category"
+    if (categoryId.isBlank() || categoryName.isBlank()) return "post_validation_category"
     if (title.trim().length < MinListingTitleLength) return "post_validation_title_short"
     if (title.trim().length > MaxListingTitleLength) return "post_validation_title_long"
     if (description.length > MaxListingDescriptionLength) return "post_validation_description_long"

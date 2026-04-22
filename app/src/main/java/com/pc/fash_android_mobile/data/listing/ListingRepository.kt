@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.data.listing
 
 import android.net.Uri
+import android.util.Log
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
@@ -40,6 +41,15 @@ class ListingRepository(
     fun getListingDetail(listingId: String): Result<ListingDetail> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/listings/$listingId")
         parseListingDetail(executeGet(url))
+    }
+
+    /**
+     * Authenticated: `GET /api/v1/users/me/listings` — all statuses for the signed-in user (paginated).
+     */
+    fun getMyListings(limit: Int = 50, offset: Int = 0): Result<List<ListingFeedItem>> = runCatching {
+        val url =
+            "${AppEnvironment.apiPath("api/v1/users/me/listings")}?limit=$limit&offset=$offset"
+        parseFeedResponse(executeGet(url))
     }
 
     /**
@@ -249,19 +259,17 @@ class ListingRepository(
         json.put("image_urls", listingImageStepsToJsonArray(request.imageUrlSteps))
         json.put("price", request.priceVnd)
         json.put("condition", request.condition)
-        json.put("category_id", request.categoryId)
+        json.put("category", namedRefToJson(request.category, maxNameLen = 100))
+        request.parentCategory?.let { json.put("parent_category", namedRefToJson(it, maxNameLen = 100)) }
         if (request.description.isNotBlank()) json.put("description", request.description)
         if (request.size.isNotBlank()) json.put("size", request.size)
-        request.parentCategoryId?.takeIf { it.isNotBlank() }?.let { json.put("parent_category_id", it) }
-        request.parentCategoryName?.takeIf { it.isNotBlank() }?.let { json.put("parent_category_name", it) }
-        request.categoryName?.takeIf { it.isNotBlank() }?.let { json.put("category_name", it) }
-        request.brandId?.takeIf { it.isNotBlank() }?.let { json.put("brand_id", it) }
-        request.brandName?.takeIf { it.isNotBlank() }?.let { json.put("brand_name", it) }
-        when {
-            request.aestheticTagIds.isNotEmpty() ->
-                json.put("aesthetic_tag_ids", JSONArray(request.aestheticTagIds))
-            request.aestheticTagNames.isNotEmpty() ->
-                json.put("aesthetic_tags", JSONArray(request.aestheticTagNames))
+        request.brand?.let { json.put("brand", namedRefToJson(it, maxNameLen = 255)) }
+        if (request.aestheticTags.isNotEmpty()) {
+            val tagsArr = JSONArray()
+            for (t in request.aestheticTags) {
+                tagsArr.put(namedRefToJson(t, maxNameLen = 100))
+            }
+            json.put("aesthetic_tags", tagsArr)
         }
         request.countryOfOrigin?.takeIf { it.isNotBlank() }?.let { json.put("country_of_origin", it) }
         request.countryId?.takeIf { it.isNotBlank() }?.let { json.put("country_id", it) }
@@ -277,13 +285,20 @@ class ListingRepository(
         request.floorPriceVnd?.let { json.put("floor_price", it) }
         request.priceDropPercent?.let { json.put("price_drop_percent", it) }
         request.shippingAddressId?.takeIf { it.isNotBlank() }?.let { json.put("shipping_address_id", it) }
-        val body = executePostJson(url, json.toString())
+        val payload = json.toString()
+        logCreateListingChunked(Log.DEBUG, "createListing request url=$url payload=", payload)
+        val body = executePostJsonWithLoggedResponse(url, payload)
+        logCreateListingChunked(Log.DEBUG, "createListing success url=$url http=200 responseBody=", body)
         val o = JSONObject(body)
         val dataObj = if (o.has("data")) o.optJSONObject("data") else null
         val id = (dataObj ?: o).let { obj ->
             obj.optString("ID", "").ifBlank { obj.optString("id", "") }
         }
-        CreateListingResponse(id = id.ifBlank { error("No id in response") })
+        if (id.isBlank()) {
+            Log.e(TAG_CREATE_LISTING, "createListing HTTP 200 but no listing id in JSON (full body was logged above as success responseBody)")
+            error("No id in response")
+        }
+        CreateListingResponse(id = id)
     }
 
     private fun executePostJson(url: String, json: String): String {
@@ -300,6 +315,55 @@ class ListingRepository(
                 throwHttpError(response.code, body)
             }
             body.ifBlank { "{}" }
+        }
+    }
+
+    /**
+     * Same as [executePostJson] but logs the raw response body for create-listing debugging
+     * (success and failure include full body; long bodies are split across log lines).
+     */
+    private fun executePostJsonWithLoggedResponse(url: String, json: String): String {
+        val request = Request.Builder()
+            .url(url)
+            .post(json.toRequestBody(JSON_MEDIA))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        return securedClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                logCreateListingChunked(
+                    Log.ERROR,
+                    "createListing failure url=$url http=${response.code} responseBody=",
+                    body.ifBlank { "<empty>" },
+                )
+                throwHttpError(response.code, body)
+            }
+            body.ifBlank { "{}" }
+        }
+    }
+
+    private fun logCreateListingChunked(level: Int, prefix: String, text: String) {
+        val chunkSize = 3500
+        if (text.length <= chunkSize) {
+            when (level) {
+                Log.ERROR -> Log.e(TAG_CREATE_LISTING, prefix + text)
+                else -> Log.d(TAG_CREATE_LISTING, prefix + text)
+            }
+            return
+        }
+        var i = 0
+        var part = 0
+        while (i < text.length) {
+            val end = minOf(i + chunkSize, text.length)
+            val line = "$prefix[part $part] ${text.substring(i, end)}"
+            when (level) {
+                Log.ERROR -> Log.e(TAG_CREATE_LISTING, line)
+                else -> Log.d(TAG_CREATE_LISTING, line)
+            }
+            i = end
+            part++
         }
     }
 
@@ -675,6 +739,7 @@ class ListingRepository(
 
     companion object {
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+        private const val TAG_CREATE_LISTING = "FashCreateListingApi"
     }
 }
 
@@ -687,6 +752,13 @@ data class ListingImageStepPayload(
     val required: Boolean,
     val imageUrl: String,
 )
+
+/** Core `NamedRef` / `BrandRef` JSON: `{ "id", "name" }` (see listing_request.CreateListingRequest). */
+private fun namedRefToJson(ref: NamedRefPayload, maxNameLen: Int): JSONObject =
+    JSONObject().apply {
+        put("id", ref.id.trim())
+        put("name", ref.name.trim().take(maxNameLen))
+    }
 
 private fun listingImageStepsToJsonArray(steps: List<ListingImageStepPayload>): JSONArray {
     val arr = JSONArray()
@@ -703,23 +775,28 @@ private fun listingImageStepsToJsonArray(steps: List<ListingImageStepPayload>): 
     return arr
 }
 
-/** `POST /api/v1/listings` body — align with listings API doc (`snake_case` on wire). */
+/** Core-service `NamedRef`: required `id` (UUID) + `name` (max length enforced when encoding). */
+data class NamedRefPayload(
+    val id: String,
+    val name: String,
+)
+
+/** `POST /api/v1/listings` body — matches core `listing_request.CreateListingRequest` (`snake_case` on wire). */
 data class CreateListingRequest(
     val title: String,
     val imageUrlSteps: List<ListingImageStepPayload>,
     val priceVnd: Long,
     val condition: String,
-    val categoryId: String,
+    /** Leaf category — required; JSON key `category`, not `category_id`. */
+    val category: NamedRefPayload,
     val description: String = "",
     val size: String = "",
-    val parentCategoryId: String? = null,
-    val parentCategoryName: String? = null,
-    val categoryName: String? = null,
-    val brandId: String? = null,
-    val brandName: String? = null,
-    /** Preferred when non-empty; else [aestheticTagNames]. */
-    val aestheticTagIds: List<String> = emptyList(),
-    val aestheticTagNames: List<String> = emptyList(),
+    /** Optional parent category in hierarchy. */
+    val parentCategory: NamedRefPayload? = null,
+    /** Optional; same `{id,name}` shape as category (brand `name` max 255 on wire). */
+    val brand: NamedRefPayload? = null,
+    /** Optional; each `{ "id", "name" }` from catalog (not `aesthetic_tag_ids`). */
+    val aestheticTags: List<NamedRefPayload> = emptyList(),
     val countryOfOrigin: String? = null,
     val countryId: String? = null,
     val countryName: String? = null,

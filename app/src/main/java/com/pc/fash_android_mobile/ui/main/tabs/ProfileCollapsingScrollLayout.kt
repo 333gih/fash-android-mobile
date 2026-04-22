@@ -70,9 +70,25 @@ import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import java.util.Locale
 
 /** Scroll distance (first list item) used to derive collapse progress for the hero item only. */
 private val ProfileHeaderCollapseScrollDp: Dp = 280.dp
+
+@Composable
+private fun listingStatusOverlayLabel(wire: String?): String? {
+    if (wire.isNullOrBlank()) return null
+    return when (wire.lowercase(Locale.ROOT)) {
+        "in_review" -> stringResource(R.string.listing_status_in_review)
+        "rejected" -> stringResource(R.string.listing_status_rejected)
+        "active" -> stringResource(R.string.listing_status_active)
+        "inactive" -> stringResource(R.string.listing_status_inactive)
+        "sold" -> stringResource(R.string.listing_status_sold)
+        "reserved" -> stringResource(R.string.listing_status_reserved)
+        "deleted" -> stringResource(R.string.listing_status_deleted)
+        else -> wire
+    }
+}
 
 @Composable
 fun rememberProfileHeaderCollapseProgress(listState: LazyListState): androidx.compose.runtime.State<Float> {
@@ -110,6 +126,8 @@ fun ProfileCollapsingScrollLayout(
     showListingQuickActions: Boolean = false,
     onListingLike: (ListingFeedItem) -> Unit = {},
     onListingSave: (ListingFeedItem) -> Unit = {},
+    /** Own profile: show marketplace status chip on listing cards (Selling / Sold tabs). */
+    showListingStatusOverlay: Boolean = false,
     /** Extra space at list end (e.g. seller profile bottom promo overlay). */
     additionalBottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
@@ -245,12 +263,15 @@ fun ProfileCollapsingScrollLayout(
                 ) {
                     pair.forEach { item ->
                         Box(modifier = Modifier.weight(1f)) {
+                            val statusLabel =
+                                if (showListingStatusOverlay) listingStatusOverlayLabel(item.listingStatus) else null
                             ListingGridCard(
                                 item = item,
                                 onClick = { onListingClick(item) },
                                 showQuickActions = showListingQuickActions,
                                 onLike = { onListingLike(item) },
                                 onSave = { onListingSave(item) },
+                                statusOverlayLabel = statusLabel,
                             )
                         }
                     }

@@ -619,6 +619,13 @@
     <string name="profile_tab_selling">Đang bán</string>
     <string name="profile_tab_sold">Đã bán</string>
     <string name="profile_tab_wishlist">Đã lưu</string>
+    <string name="listing_status_in_review">Chờ duyệt</string>
+    <string name="listing_status_rejected">Từ chối</string>
+    <string name="listing_status_active">Đang bán</string>
+    <string name="listing_status_inactive">Đã ẩn</string>
+    <string name="listing_status_sold">Đã bán</string>
+    <string name="listing_status_reserved">Giữ chỗ</string>
+    <string name="listing_status_deleted">Đã xóa</string>
     <string name="profile_empty_selling_title">Chưa có sản phẩm đang bán</string>
     <string name="profile_empty_selling_subtitle">Nhấn Đăng bài ở thanh dưới để đăng tin đầu tiên.</string>
     <string name="profile_empty_sold_title">Chưa có sản phẩm đã bán</string>

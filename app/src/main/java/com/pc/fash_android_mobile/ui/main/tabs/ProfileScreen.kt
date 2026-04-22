@@ -519,6 +519,7 @@ fun ProfileScreen(
                         showListingQuickActions = true,
                         onListingLike = { viewModel.toggleLike(it) },
                         onListingSave = { viewModel.toggleSave(it) },
+                        showListingStatusOverlay = selectedTab == 0 || selectedTab == 1,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
