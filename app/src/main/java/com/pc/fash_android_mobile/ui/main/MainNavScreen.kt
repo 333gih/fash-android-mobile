@@ -20,10 +20,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +68,7 @@ import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.components.FashInboxNotificationIconButton
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -159,6 +158,8 @@ fun MainNavScreen(
     onTabChange: (Int) -> Unit,
 ) {
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
+    /** Tracks overlay visibility to refresh server unread count when user leaves the inbox. */
+    var wasNotificationOverlayVisible by remember { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
     var showChangePasswordScreen by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
@@ -186,6 +187,14 @@ fun MainNavScreen(
             chatViewModel.refreshUnreadCount()
         }
     }
+    LaunchedEffect(showNotificationScreen) {
+        when {
+            showNotificationScreen -> notificationsViewModel.refreshUnreadSummary()
+            wasNotificationOverlayVisible -> notificationsViewModel.refreshUnreadSummary()
+        }
+        wasNotificationOverlayVisible = showNotificationScreen
+    }
+    val inboxUnreadTotal by notificationsViewModel.unreadCount.collectAsState()
     val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val openExploreSearch: () -> Unit = {
         exploreViewModel.requestSearchBarExpanded()
@@ -201,10 +210,12 @@ fun MainNavScreen(
                 when (val tab = tabs.getOrNull(selectedTab)) {
                 MainTab.Explore -> ExploreTopBar(
                     viewModel = exploreViewModel,
+                    inboxUnreadCount = inboxUnreadTotal,
                     onOrdersClick = onOrdersClick,
                     onNotificationsClick = { showNotificationScreen = true },
                 )
                 MainTab.Profile -> ProfileTopBar(
+                    inboxUnreadCount = inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
@@ -217,23 +228,27 @@ fun MainNavScreen(
                 )
                 MainTab.Home -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
+                    inboxUnreadCount = inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
                 )
                 MainTab.Post -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
+                    inboxUnreadCount = inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                 )
                 MainTab.Chat -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
+                    inboxUnreadCount = inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
                 )
                 else -> MainTopBar(
                     suffixRes = MainTab.Home.headerSuffixRes,
+                    inboxUnreadCount = inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
@@ -429,6 +444,7 @@ fun MainNavScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileTopBar(
+    inboxUnreadCount: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOrdersClick: () -> Unit,
@@ -447,21 +463,10 @@ private fun ProfileTopBar(
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            BadgedBox(
-                badge = {
-                    if (true) {
-                        androidx.compose.material3.Badge(containerColor = FashColors.Primary)
-                    }
-                },
-            ) {
-                IconButton(onClick = onNotificationsClick) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = stringResource(R.string.notifications),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
+            FashInboxNotificationIconButton(
+                unreadCount = inboxUnreadCount,
+                onClick = onNotificationsClick,
+            )
             IconButton(onClick = onOrdersClick) {
                 Icon(
                     imageVector = Icons.Default.LocalMall,
@@ -507,6 +512,7 @@ private fun ProfileTopBar(
 @Composable
 private fun MainTopBar(
     @StringRes suffixRes: Int,
+    inboxUnreadCount: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOrdersClick: (() -> Unit)? = null,
@@ -521,21 +527,10 @@ private fun MainTopBar(
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            BadgedBox(
-                badge = {
-                    if (true) {
-                        androidx.compose.material3.Badge(containerColor = FashColors.Primary)
-                    }
-                },
-            ) {
-                IconButton(onClick = onNotificationsClick) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = stringResource(R.string.notifications),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
+            FashInboxNotificationIconButton(
+                unreadCount = inboxUnreadCount,
+                onClick = onNotificationsClick,
+            )
             onOrdersClick?.let { openOrders ->
                 IconButton(onClick = openOrders) {
                     Icon(

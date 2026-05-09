@@ -66,7 +66,8 @@ fun FashInboxNotificationIconButton(
             Icon(
                 imageVector = Icons.Default.Notifications,
                 contentDescription = null,
-                tint = scheme.onSurface,
+                // Slight primary tint when there is unread mail so the state is visible without relying only on the badge.
+                tint = if (unreadCount > 0) FashColors.Primary else scheme.onSurface,
                 modifier = Modifier.size(24.dp),
             )
         }

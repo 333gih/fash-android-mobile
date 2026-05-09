@@ -16,9 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocalMall
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.components.FashInboxNotificationIconButton
 import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -52,6 +51,8 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 @Composable
 fun ExploreTopBar(
     viewModel: ExploreViewModel,
+    /** Server total unread inbox rows ([NotificationsViewModel.unreadCount]). */
+    inboxUnreadCount: Int,
     onOrdersClick: () -> Unit,
     onNotificationsClick: () -> Unit,
 ) {
@@ -178,19 +179,10 @@ fun ExploreTopBar(
             }
         },
         actions = {
-            BadgedBox(
-                badge = {
-                    androidx.compose.material3.Badge(containerColor = FashColors.Primary)
-                },
-            ) {
-                IconButton(onClick = onNotificationsClick) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = stringResource(R.string.notifications),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
+            FashInboxNotificationIconButton(
+                unreadCount = inboxUnreadCount,
+                onClick = onNotificationsClick,
+            )
             IconButton(onClick = onOrdersClick) {
                 Icon(
                     imageVector = Icons.Default.LocalMall,
