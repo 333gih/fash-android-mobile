@@ -243,6 +243,8 @@
     <string name="explore_empty_clear_all">Clear search &amp; filters</string>
     <string name="follow_success">Following.</string>
     <string name="notifications">Notifications</string>
+    <string name="notifications_cd_none">Open notifications. No unread.</string>
+    <string name="notifications_cd_with_unread">Open notifications. %1$d unread.</string>
     <string name="notification_empty_title">No notifications yet</string>
     <string name="notification_empty_subtitle">When something needs your attention — orders, messages, or shop activity — it will show up here.</string>
     <string name="notification_empty_hints_title">What you may see here</string>

@@ -258,6 +258,8 @@
     <string name="explore_empty_clear_all">Xóa tìm kiếm &amp; bộ lọc</string>
     <string name="follow_success">Đã theo dõi.</string>
     <string name="notifications">Thông báo</string>
+    <string name="notifications_cd_none">Mở hộp thông báo. Không có thông báo chưa đọc.</string>
+    <string name="notifications_cd_with_unread">Mở hộp thông báo. %1$d thông báo chưa đọc.</string>
     <string name="notification_empty_title">Chưa có thông báo</string>
     <string name="notification_empty_subtitle">Khi có việc cần bạn xem — đơn hàng, tin nhắn hoặc hoạt động shop — sẽ hiển thị ở đây.</string>
     <string name="notification_empty_hints_title">Bạn có thể thấy gì ở đây</string>

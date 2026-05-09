@@ -70,6 +70,7 @@ import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -151,6 +152,9 @@ fun MainNavScreen(
         countryId: String?,
         countryIso2: String?,
     ) -> Unit = { _, _, _, _, _, _ -> },
+    /** When null, screens use built-in promo copy; otherwise from core-service CMS. */
+    promoSlides: List<FashPromoSlideDef>? = null,
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
 ) {
@@ -315,16 +319,16 @@ fun MainNavScreen(
                         onNavigateToChat = { onTabChange(MainTab.Chat.ordinal) },
                         onNavigateToSaved = { onTabChange(MainTab.Profile.ordinal) },
                         onNavigateToPost = { onTabChange(MainTab.Post.ordinal) },
-                        onPromoSlideClick = { _, _ -> onTabChange(MainTab.Explore.ordinal) },
-                        promoSlides = null,
+                        onPromoSlideClick = onPromoSlideClick,
+                        promoSlides = promoSlides,
                     )
                     MainTab.Explore -> ExploreScreen(
                         viewModel = exploreViewModel,
                         onListingClick = onListingClick,
                         onFeaturedSellerClick = onFeaturedSellerClick,
                         onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
-                        onPromoSlideClick = { _, _ -> },
-                        promoSlides = null,
+                        onPromoSlideClick = onPromoSlideClick,
+                        promoSlides = promoSlides,
                     )
                     MainTab.Post -> CreateListingFlowScreen(
                         viewModel = postViewModel,
@@ -337,8 +341,8 @@ fun MainNavScreen(
                     MainTab.Chat -> ChatScreen(
                         viewModel = chatViewModel,
                         onConversationClick = onConversationClick,
-                        onPromoSlideClick = { _, _ -> onTabChange(MainTab.Explore.ordinal) },
-                        promoSlides = null,
+                        onPromoSlideClick = onPromoSlideClick,
+                        promoSlides = promoSlides,
                     )
                     MainTab.Profile -> ProfileScreen(
                         viewModel = profileViewModel,
@@ -365,6 +369,8 @@ fun MainNavScreen(
                 showNotificationScreen = false
                 onTabChange(MainTab.Explore.ordinal)
             },
+            onPromoSlideClick = onPromoSlideClick,
+            promoSlides = promoSlides,
             onOpenOrder = { orderId ->
                 showNotificationScreen = false
                 onOpenOrderFromNotification(orderId)

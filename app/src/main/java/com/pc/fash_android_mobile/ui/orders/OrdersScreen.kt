@@ -109,7 +109,7 @@ fun OrdersScreen(
     /** Bottom promo strip — same role as chat inbox (e.g. open Explore). */
     onExploreClick: () -> Unit = {},
     /** Slider above ad: [slideId] from [FashPromoSlideDef], page index for analytics / deep links. */
-    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     /** When non-null, replaces default promo slides (e.g. remote config / admin CMS). */
     promoSlides: List<FashPromoSlideDef>? = null,
     onOrderClick: (OrderItem) -> Unit = {},

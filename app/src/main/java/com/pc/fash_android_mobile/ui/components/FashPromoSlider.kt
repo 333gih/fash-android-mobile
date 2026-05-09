@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,9 +29,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,23 +41,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.orders.pendingPaymentSliderAnchor
+import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.theme.fashReadableOnGradient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+/** Deep link / in-app target for a promo slide (from core-service CMS). */
+data class FashPromoNav(
+    val type: String,
+    val payload: String = "",
+)
+
 /**
  * Admin-ready promo slide (orders, notifications, home, etc.).
- * [id] is stable for analytics and deep links when wired from CMS / remote config.
+ * [id] is stable for analytics. Use [titleRes]/[subtitleRes] for built-in copy or
+ * [titleText]/[subtitleText] when loaded from [com.pc.fash_android_mobile.data.advertising.AdvertisingRepository].
  */
 data class FashPromoSlideDef(
     val id: String,
-    val titleRes: Int,
-    val subtitleRes: Int,
+    val titleRes: Int? = null,
+    val subtitleRes: Int? = null,
+    val titleText: String? = null,
+    val subtitleText: String? = null,
     val gradient: List<Color>,
     val border: Color? = null,
+    /** When null, UI uses [R.string.orders_promo_badge]. */
+    val badgeText: String? = null,
+    val bannerImageUrl: String? = null,
+    val navigation: FashPromoNav? = null,
 )
 
 private val FashPromoCardHeight = 112.dp
@@ -88,7 +104,7 @@ fun defaultFashPromoSlides(scheme: ColorScheme): List<FashPromoSlideDef> = listO
  * **Default slides** ([defaultFashPromoSlides], `orders_promo_*` strings) are shared with
  * Orders, Notifications, Home, Explore, and Chat — pass [slides] only when overriding (e.g. CMS).
  *
- * @param slides When null, uses [defaultFashPromoSlides]. Pass a non-null list from ViewModel when admin API is ready.
+ * @param slides When null, uses [defaultFashPromoSlides]. Pass empty list to hide the block.
  * @param reportPendingPaymentAnchor When true, registers bounds for global pending-payment banner placement (above slider).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -100,7 +116,7 @@ fun FashPromoSlider(
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,
     ),
-    onSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    onSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
     val resolved = slides ?: remember(scheme) { defaultFashPromoSlides(scheme) }
@@ -138,9 +154,10 @@ fun FashPromoSlider(
             )
             FashPromoCard(
                 slide = slide,
-                badge = stringResource(R.string.orders_promo_badge),
+                badge = slide.badgeText?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.orders_promo_badge),
                 contentDescription = cd,
-                onClick = { onSlideClick(slide.id, page) },
+                onClick = { onSlideClick(slide, page) },
             )
         }
 
@@ -168,7 +185,7 @@ fun FashPromoSliderBlock(
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,
     ),
-    onSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    onSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
     Surface(
         modifier = modifier,
@@ -195,6 +212,11 @@ private fun FashPromoCard(
     val titleColor = slide.gradient.fashReadableOnGradient()
     val subtitleColor = titleColor.copy(alpha = 0.92f)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
+    val titleStr = slide.titleText?.takeIf { it.isNotBlank() }
+        ?: slide.titleRes?.let { stringResource(it) }.orEmpty()
+    val subtitleStr = slide.subtitleText?.takeIf { it.isNotBlank() }
+        ?: slide.subtitleRes?.let { stringResource(it) }.orEmpty()
+    val banner = slide.bannerImageUrl?.takeIf { it.isNotBlank() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,35 +225,60 @@ private fun FashPromoCard(
                 this.contentDescription = contentDescription
             }
             .clip(shape)
-            .background(Brush.horizontalGradient(slide.gradient))
             .then(
                 slide.border?.let { b -> Modifier.border(1.dp, b, shape) } ?: Modifier,
             )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .clickable(onClick = onClick),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.horizontalGradient(slide.gradient)),
+        )
+        if (banner != null) {
+            FashAsyncImage(
+                model = banner,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(0.42f),
+                contentScale = ContentScale.Crop,
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            slide.gradient.map { it.copy(alpha = 0.72f) },
+                        ),
+                    ),
+            )
+        }
         Text(
             text = badge,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = titleColor.copy(alpha = 0.85f),
-            modifier = Modifier.align(Alignment.TopEnd),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.CenterStart)
-                .padding(end = 48.dp, bottom = 22.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(end = 48.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = stringResource(slide.titleRes),
+                text = titleStr,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = titleColor,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = stringResource(slide.subtitleRes),
+                text = subtitleStr,
                 style = MaterialTheme.typography.bodySmall,
                 color = subtitleColor,
                 maxLines = 2,

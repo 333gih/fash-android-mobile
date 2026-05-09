@@ -68,7 +68,7 @@ fun HomeFeedContent(
     /** e.g. open Profile for saved items / account context. */
     onNavigateToSaved: () -> Unit = {},
     onNavigateToPost: () -> Unit = {},
-    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> onNavigateToExplore() },
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> onNavigateToExplore() },
     promoSlides: List<FashPromoSlideDef>? = null,
 ) {
     val items by viewModel.items.collectAsState()
@@ -234,9 +234,7 @@ fun HomeFeedContent(
                     FashPromoSlider(
                         modifier = Modifier.fillMaxWidth(),
                         slides = promoSlides,
-                        onSlideClick = { slideId, index ->
-                            onPromoSlideClick(slideId, index)
-                        },
+                        onSlideClick = onPromoSlideClick,
                     )
                 }
             }

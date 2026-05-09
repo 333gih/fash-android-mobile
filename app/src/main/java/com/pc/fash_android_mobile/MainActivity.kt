@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -83,6 +84,7 @@ import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavBottomBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavScreen
 import com.pc.fash_android_mobile.ui.main.MainTab
+import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel
@@ -99,6 +101,8 @@ import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
 import com.pc.fash_android_mobile.ui.theme.FashLightAppearance
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.toFashPromoSlideDef
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.ui.address.AddEditAddressScreen
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
@@ -187,6 +191,7 @@ class MainActivity : ComponentActivity() {
     private val featuredSellersViewModel: FeaturedSellersViewModel by viewModels()
     private val changePasswordViewModel: ChangePasswordViewModel by viewModels()
     private val notificationsViewModel: com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel by viewModels()
+    private val promoSlidesViewModel: PromoSlidesViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
 
     private val fashApp get() = application as FashApplication
@@ -669,6 +674,41 @@ class MainActivity : ComponentActivity() {
                                         (context.applicationContext as FashApplication).orderRepository
                                     }
                                     val chatUnreadCount by chatViewModel.unreadBadgeCount.collectAsState()
+                                    val remotePromo by promoSlidesViewModel.remoteSlides.collectAsState()
+                                    val scheme = MaterialTheme.colorScheme
+                                    val mappedPromoSlides = remember(remotePromo, scheme) {
+                                        val rp = remotePromo
+                                        when {
+                                            rp == null -> null
+                                            rp.isEmpty() -> null
+                                            else -> rp.map { it.toFashPromoSlideDef(scheme) }
+                                        }
+                                    }
+                                    val handlePromoClick: (FashPromoSlideDef, Int) -> Unit = { slide, _ ->
+                                        val nav = slide.navigation
+                                        val t = nav?.type?.trim()?.lowercase().orEmpty()
+                                        when (t) {
+                                            "in_app_orders" -> showOrdersScreen = true
+                                            "in_app_chat" -> selectedTab = MainTab.Chat.ordinal
+                                            "external_url" -> {
+                                                val url = nav?.payload?.trim().orEmpty()
+                                                if (url.isNotEmpty()) {
+                                                    runCatching {
+                                                        CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+                                                    }
+                                                }
+                                            }
+                                            "deeplink" -> {
+                                                val u = nav?.payload?.trim().orEmpty()
+                                                if (u.isNotEmpty()) {
+                                                    runCatching {
+                                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                                                    }
+                                                }
+                                            }
+                                            else -> selectedTab = MainTab.Explore.ordinal
+                                        }
+                                    }
                                     val chatConversations by chatViewModel.conversations.collectAsState()
                                     val chatDisplayGroups by chatViewModel.displayGroups.collectAsState()
                                     val otherInboxUnread = remember(
@@ -843,6 +883,8 @@ class MainActivity : ComponentActivity() {
                                                 exploreSectionWhenSellerOpened = null
                                                 conversationIdToRestoreAfterSellerShop = null
                                             },
+                                            promoSlides = mappedPromoSlides,
+                                            onPromoSlideClick = handlePromoClick,
                                             selectedTab = selectedTab,
                                             onTabChange = { selectedTab = it },
                                             )
@@ -1042,9 +1084,8 @@ class MainActivity : ComponentActivity() {
                                                     exploreSectionWhenSellerOpened = null
                                                     conversationIdToRestoreAfterSellerShop = null
                                                 },
-                                                onPromoSlideClick = { _, _ ->
-                                                    navigateToExploreFromSellerShop()
-                                                },
+                                                onPromoSlideClick = handlePromoClick,
+                                                promoSlides = mappedPromoSlides,
                                                 onExploreClick = {
                                                     navigateToExploreFromSellerShop()
                                                 },
@@ -1336,6 +1377,8 @@ class MainActivity : ComponentActivity() {
                                                     showOrdersScreen = false
                                                     selectedTab = MainTab.Explore.ordinal
                                                 },
+                                                promoSlides = mappedPromoSlides,
+                                                onPromoSlideClick = handlePromoClick,
                                                 onOrderClick = { order ->
                                                     showOrdersScreen = false
                                                     selectedOrderId = order.orderId

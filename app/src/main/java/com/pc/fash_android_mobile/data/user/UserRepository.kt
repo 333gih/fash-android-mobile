@@ -709,6 +709,34 @@ class UserRepository(
     }
 
     /**
+     * `GET /users/me/notifications/unread-count` — total unread inbox rows (all pages).
+     */
+    fun getMyNotificationsUnreadCount(): Result<Int> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/notifications/unread-count")
+        val body = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            resBody
+        }
+        val root = JSONObject(body.trim())
+        root.optLong("unread_count", 0L).toInt().coerceAtLeast(0)
+    }
+
+    /**
      * `PATCH /users/me/notifications/{id}/read` — marks read for current user.
      * 404 when not found or already read.
      */

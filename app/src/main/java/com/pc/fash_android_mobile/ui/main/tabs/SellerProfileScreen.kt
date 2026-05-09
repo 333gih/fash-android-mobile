@@ -103,7 +103,7 @@ fun SellerProfileScreen(
         countryIso2: String?,
     ) -> Unit = { _, _, _, _, _, _ -> },
     /** Same default promo deck as Orders / Explore; tap usually opens Explore. */
-    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     promoSlides: List<FashPromoSlideDef>? = null,
     /** Bottom strip below the promo slider — same as Orders / Notifications. */
     onExploreClick: () -> Unit = {},

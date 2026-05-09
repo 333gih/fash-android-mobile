@@ -82,7 +82,7 @@ fun NotificationScreen(
     viewModel: NotificationsViewModel,
     onBack: () -> Unit,
     onExploreClick: () -> Unit = {},
-    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     promoSlides: List<FashPromoSlideDef>? = null,
     onOpenOrder: (String) -> Unit = {},
     onOpenListing: (String, String?) -> Unit = { _, _ -> },

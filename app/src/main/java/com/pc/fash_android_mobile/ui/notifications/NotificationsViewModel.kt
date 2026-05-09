@@ -44,6 +44,23 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     private val _selectedDetailId = MutableStateFlow<String?>(null)
     val selectedDetailId: StateFlow<String?> = _selectedDetailId.asStateFlow()
 
+    private val _unreadCount = MutableStateFlow(0)
+    /** Total unread from server ([UserRepository.getMyNotificationsUnreadCount]); not limited to the first inbox page. */
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    init {
+        refreshUnreadSummary()
+    }
+
+    fun refreshUnreadSummary() {
+        viewModelScope.launch {
+            val n = withContext(Dispatchers.IO) {
+                userRepository.getMyNotificationsUnreadCount().getOrElse { 0 }
+            }
+            _unreadCount.value = n
+        }
+    }
+
     fun refresh() {
         viewModelScope.launch {
             if (_items.value.isEmpty()) {
@@ -59,6 +76,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
             result.onSuccess { page ->
                 _items.value = page.items
                 _hasMore.value = page.items.size >= PAGE_LIMIT
+                refreshUnreadSummary()
             }.onFailure { e ->
                 val msg = e.message.orEmpty()
                 _loadError.value = msg
@@ -114,6 +132,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                         if (row.id == item.id) row.copy(readAtIso = stamp) else row
                     }
                 }
+                refreshUnreadSummary()
             }
         }
     }

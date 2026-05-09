@@ -87,7 +87,7 @@ fun ChatScreen(
     modifier: Modifier = Modifier,
     viewModel: ChatViewModel,
     onConversationClick: (ConversationItem) -> Unit = {},
-    onPromoSlideClick: (slideId: String, pageIndex: Int) -> Unit = { _, _ -> },
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     promoSlides: List<FashPromoSlideDef>? = null,
 ) {
     val conversations by viewModel.conversations.collectAsState()
