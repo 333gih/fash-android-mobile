@@ -132,12 +132,14 @@ class UserRepository(
     }
 
     /**
-     * `PUT /api/v1/users/me/password` — set first password (omit [currentPassword]) or change password.
+     * Auth-service `POST .../auth/change-password` (via [AppEnvironment.authServicePath]) — set first password
+     * (omit [currentPassword]) or change password. Secured client sends Bearer (JWT from auth-service) + headers per app policy.
      * [newPassword] length 8–72 per API. Errors: `INVALID_CURRENT_PASSWORD`, `CURRENT_PASSWORD_REQUIRED`.
      */
     fun putUserPassword(newPassword: String, currentPassword: String?): Result<Unit> = runCatching {
         require(newPassword.length in 8..72) { "PASSWORD_LENGTH" }
-        val url = AppEnvironment.apiPath("api/v1/users/me/password")
+        val path = AppEnvironment.authChangePasswordPath.trim().trimStart('/')
+        val url = AppEnvironment.authServicePath(path)
         val json = JSONObject().put("new_password", newPassword)
         val cur = currentPassword?.trim().orEmpty()
         if (cur.isNotEmpty()) {
@@ -146,7 +148,7 @@ class UserRepository(
         securedClient.newCall(
             Request.Builder()
                 .url(url)
-                .put(json.toString().toRequestBody(JSON_MEDIA))
+                .post(json.toString().toRequestBody(JSON_MEDIA))
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "FashAndroid/1.0")
@@ -659,6 +661,129 @@ class UserRepository(
                 error("HTTP ${response.code}: $msg")
             }
         }
+    }
+
+    /**
+     * `GET /users/me/notifications` — inbox list (core proxies notification-service).
+     * @param beforeId Keyset cursor: next page = rows older than this id; omit for first page.
+     */
+    fun listMyNotifications(
+        limit: Int = 30,
+        beforeId: String? = null,
+    ): Result<InboxNotificationsPage> = runCatching {
+        val lim = when {
+            limit < 1 || limit > 100 -> 30
+            else -> limit
+        }
+        val base = AppEnvironment.apiPath("api/v1/users/me/notifications")
+        val delimiter = if ('?' in base) '&' else '?'
+        val url = buildString {
+            append(base)
+            append(delimiter)
+            append("limit=").append(lim)
+            val b = beforeId?.trim()?.takeIf { it.isNotEmpty() }
+            if (b != null) {
+                append("&before_id=").append(Uri.encode(b, null))
+            }
+        }
+        val body = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            resBody
+        }
+        parseInboxNotificationsPage(body)
+    }
+
+    /**
+     * `PATCH /users/me/notifications/{id}/read` — marks read for current user.
+     * 404 when not found or already read.
+     */
+    fun markNotificationRead(notificationId: String): Result<Unit> = runCatching {
+        val id = notificationId.trim()
+        if (id.isEmpty() || !USER_ID_UUID_REGEX.matches(id)) {
+            error("HTTP 400: invalid id")
+        }
+        val url = AppEnvironment.apiPath("api/v1/users/me/notifications/${Uri.encode(id, null)}/read")
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .patch("{}".toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
+    private fun parseInboxNotificationsPage(json: String): InboxNotificationsPage {
+        val root = JSONObject(json.trim())
+        val arr = root.optJSONArray("data") ?: JSONArray()
+        val items = buildList {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val item = parseInboxNotificationItem(o) ?: continue
+                add(item)
+            }
+        }
+        val serviceRef = root.optString("service_ref", "").takeIf { it.isNotBlank() }
+        return InboxNotificationsPage(items = items, serviceRef = serviceRef)
+    }
+
+    private fun parseInboxNotificationItem(o: JSONObject): InboxNotificationItem? {
+        val id = o.optString("id", "").trim()
+        if (id.isEmpty() || !USER_ID_UUID_REGEX.matches(id)) return null
+        return InboxNotificationItem(
+            id = id,
+            title = o.optString("title", ""),
+            body = o.optString("body", ""),
+            dataMap = parseNotificationDataObject(o.opt("data")),
+            payloadType = o.optString("payload_type", "").takeIf { it.isNotBlank() },
+            source = o.optString("source", "").takeIf { it.isNotBlank() },
+            sourceEventId = o.optString("source_event_id", "").takeIf { it.isNotBlank() },
+            readAtIso = o.optString("read_at", "").takeIf { it.isNotBlank() },
+            createdAtIso = o.optString("created_at", ""),
+        )
+    }
+
+    private fun parseNotificationDataObject(raw: Any?): Map<String, Any?>? {
+        if (raw == null || raw === JSONObject.NULL) return null
+        if (raw !is JSONObject) return null
+        val out = mutableMapOf<String, Any?>()
+        val keys = raw.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            when (val v = raw.opt(k)) {
+                JSONObject.NULL -> out[k] = null
+                is JSONObject -> out[k] = v.toString()
+                is JSONArray -> out[k] = v.toString()
+                else -> out[k] = v
+            }
+        }
+        return out.takeIf { it.isNotEmpty() }
     }
 
     /** Uploads profile avatar or cover image. Returns the image URL. */

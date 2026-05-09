@@ -264,6 +264,22 @@
     <string name="notification_empty_tip_1">Cập nhật đơn hàng và giao hàng</string>
     <string name="notification_empty_tip_2">Tin nhắn chat giữa người mua và người bán</string>
     <string name="notification_empty_tip_3">Theo dõi và hoạt động khác trên shop</string>
+    <string name="notification_load_error_title">Không tải được thông báo</string>
+    <string name="notification_load_error_subtitle">Hãy thử lại sau. Nếu lỗi vẫn còn, có thể dịch vụ đang bảo trì.</string>
+    <string name="notification_inbox_unavailable_title">Hộp thông báo chưa bật</string>
+    <string name="notification_inbox_unavailable_subtitle">Máy chủ chưa cấu hình inbox hoặc bạn không có quyền truy cập. Thử lại sau.</string>
+    <string name="notification_detail_title">Chi tiết thông báo</string>
+    <string name="notification_detail_no_title">(Không tiêu đề)</string>
+    <string name="notification_detail_time">%1$s</string>
+    <string name="notification_detail_read_at">Đã đọc: %1$s</string>
+    <string name="notification_detail_payload_type">Loại</string>
+    <string name="notification_detail_source">Nguồn</string>
+    <string name="notification_detail_source_event">ID sự kiện</string>
+    <string name="notification_detail_payload_title">Dữ liệu kèm</string>
+    <string name="notification_action_open_order">Xem đơn hàng</string>
+    <string name="notification_action_open_listing">Xem tin đăng</string>
+    <string name="notification_row_no_title">Thông báo</string>
+    <string name="notification_unread_badge">Chưa đọc</string>
 
     <string name="explore_title">Khám phá</string>
     <string name="explore_featured_sellers">Người bán nổi bật</string>

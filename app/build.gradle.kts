@@ -84,6 +84,21 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("String", "AUTH_LOGIN_PATH", buildConfigStringLiteral(loginPath))
     val fcmRegisterPath = envVal("AUTH_FCM_REGISTER_PATH") ?: "api/v1/auth/fcm/register"
     buildConfigField("String", "AUTH_FCM_REGISTER_PATH", buildConfigStringLiteral(fcmRegisterPath))
+    val changePasswordPath = envVal("AUTH_CHANGE_PASSWORD_PATH") ?: "api/v1/auth/change-password"
+    buildConfigField("String", "AUTH_CHANGE_PASSWORD_PATH", buildConfigStringLiteral(changePasswordPath))
+
+    /**
+     * When true, [com.pc.fash_android_mobile.config.AppEnvironment.authServicePath] becomes
+     * `{AUTH_SERVICE_BASE_URL}/{vi|en}/api/v1/auth/...` (same locale segment as core).
+     * When unset, falls back to `CORE_API_USE_LANGUAGE_PREFIX` so auth tracks core unless overridden.
+     */
+    val authApiUseLanguagePrefix = when {
+        envVal("AUTH_API_USE_LANGUAGE_PREFIX") != null ->
+            envVal("AUTH_API_USE_LANGUAGE_PREFIX")!!.equals("true", ignoreCase = true)
+        else ->
+            envVal("CORE_API_USE_LANGUAGE_PREFIX")?.equals("true", ignoreCase = true) == true
+    }
+    buildConfigField("boolean", "AUTH_API_USE_LANGUAGE_PREFIX", authApiUseLanguagePrefix.toString())
     val fbAppId = envOrEmpty("FACEBOOK_APP_ID")
     val fbClientToken = envOrEmpty("FACEBOOK_CLIENT_TOKEN")
     buildConfigField("String", "FACEBOOK_APP_ID", buildConfigStringLiteral(fbAppId))
@@ -142,7 +157,9 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
 
     /**
      * When true, [com.pc.fash_android_mobile.config.AppEnvironment.apiPath] becomes
-     * `{API_BASE_URL}/{vi|en}/api/...` (current app language). Auth URLs use [authServicePath] and are unchanged.
+     * `{API_BASE_URL}/{vi|en}/api/...` (current app language).
+     * Auth URLs under [AUTH_SERVICE_BASE_URL] use [com.pc.fash_android_mobile.config.AppEnvironment.authServicePath]
+     * (`AUTH_API_USE_LANGUAGE_PREFIX`, defaults to matching this flag).
      */
     val coreApiUseLanguagePrefix =
         envVal("CORE_API_USE_LANGUAGE_PREFIX")?.equals("true", ignoreCase = true) == true

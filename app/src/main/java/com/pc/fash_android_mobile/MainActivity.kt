@@ -186,6 +186,7 @@ class MainActivity : ComponentActivity() {
     private val followConnectionsViewModel: FollowConnectionsViewModel by viewModels()
     private val featuredSellersViewModel: FeaturedSellersViewModel by viewModels()
     private val changePasswordViewModel: ChangePasswordViewModel by viewModels()
+    private val notificationsViewModel: com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
 
     private val fashApp get() = application as FashApplication
@@ -776,6 +777,20 @@ class MainActivity : ComponentActivity() {
                                             profileViewModel = profileViewModel,
                                             chatViewModel = chatViewModel,
                                             changePasswordViewModel = changePasswordViewModel,
+                                            notificationsViewModel = notificationsViewModel,
+                                            onOpenOrderFromNotification = { oid ->
+                                                selectedOrderId = oid
+                                            },
+                                            onOpenListingFromNotification = { lid, sellerId ->
+                                                val myId =
+                                                    authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                                if (!sellerId.isNullOrBlank() && sellerId == myId) {
+                                                    selectedListingId = null
+                                                    editListingId = lid
+                                                } else {
+                                                    selectedListingId = lid
+                                                }
+                                            },
                                             snackbarHostState = snackbarHostState,
                                             chatUnreadCount = chatUnreadCount,
                                             onListingClick = { lid, sellerId ->

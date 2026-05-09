@@ -15,7 +15,8 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Auth-service HTTP client (paths align with core-service/auth-service).
+ * Auth-service HTTP client — URLs built with [AppEnvironment.authServicePath] (base `AUTH_SERVICE_BASE_URL`
+ * + optional `{vi|en}/` when `AUTH_API_USE_LANGUAGE_PREFIX` + paths from env).
  * Unauthenticated: OTP, social, login, refresh. Authenticated: logout, logoutAll, FCM.
  */
 class AuthRepository(
@@ -87,8 +88,7 @@ class AuthRepository(
      */
     fun refresh(refreshToken: String): Result<AuthSession> = runCatching {
         val rel = AppEnvironment.authRefreshPath.trim().trimStart('/')
-        // Same language segment as core API (`.../en/api/v1/...`) when CORE_API_USE_LANGUAGE_PREFIX is true.
-        val url = AppEnvironment.apiPath(rel)
+        val url = AppEnvironment.authServicePath(rel)
         val json = JSONObject()
             .put("application_id", AppEnvironment.authApplicationId.trim())
             .put("ip_address", ClientIpAddress.localIpv4OrEmpty())

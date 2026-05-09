@@ -15,8 +15,8 @@ private const val COMMON_SERVICE_USER_AGENT = "FashAndroid/1.0"
 /**
  * Common-service GET catalog (see project ANDROID_API_INTEGRATION.md).
  *
- * Authenticated catalog calls use the secured OkHttpClient: interceptors add
- * Accept, User-Agent, and Authorization Bearer when a session exists (no internal secret).
+ * Authenticated catalog calls use [securedClient]: same as core — `Accept`, `User-Agent`,
+ * optional `X-Internal-Secret`, and `Authorization` Bearer (user JWT from auth-service, or internal service token when logged out).
  *
  * [getHealth] uses a separate client so the health check sends only Accept and User-Agent.
  *

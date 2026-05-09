@@ -72,6 +72,10 @@ object AppEnvironment {
     val authFcmRegisterPath: String
             get() = BuildConfig.AUTH_FCM_REGISTER_PATH
 
+    /** `POST` — relative to [authServicePath], e.g. `api/v1/auth/change-password`. */
+    val authChangePasswordPath: String
+        get() = BuildConfig.AUTH_CHANGE_PASSWORD_PATH
+
     /**
      * OAuth **Web client** id (ends with `.apps.googleusercontent.com`) for [requestIdToken][com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder.requestIdToken].
      */
@@ -118,16 +122,27 @@ object AppEnvironment {
     /** `GET /health` — unauthenticated; path is service root, not under `/api/v1`. */
     fun commonServiceHealthUrl(): String = "$commonServiceBaseUrl/health"
 
+    /**
+     * Full URL under **auth-service** only (login, OTP, refresh, logout, FCM, change-password, …).
+     *
+     * Pattern when `AUTH_API_USE_LANGUAGE_PREFIX` is true (default follows `CORE_API_USE_LANGUAGE_PREFIX`):
+     * `{AUTH_SERVICE_BASE_URL}/{vi|en}/api/v1/auth/...` — e.g. `http://host/auth-service/en/api/v1/auth/login`.
+     *
+     * [relativePath] is typically from env (`AUTH_LOGIN_PATH`, …) and starts with `api/v1/auth/`.
+     */
     fun authServicePath(relativePath: String): String {
         val base = authServiceBaseUrl.trimEnd('/')
         val rel = relativePath.trimStart('/')
-        return "$base/$rel"
+        if (!BuildConfig.AUTH_API_USE_LANGUAGE_PREFIX) {
+            return "$base/$rel"
+        }
+        val lang = AppLocale.coreApiPathSegment()
+        return "$base/$lang/$rel"
     }
 
     /**
      * Core-service API (same host as [apiBaseUrl]). When [BuildConfig.CORE_API_USE_LANGUAGE_PREFIX] is true
      * (from `CORE_API_USE_LANGUAGE_PREFIX=true` in env), paths are `{base}/{vi|en}/{relativePath}` e.g. `.../vi/api/v1/...`.
-     * Auth endpoints use [authServicePath] and are not prefixed.
      */
     fun apiPath(relativePath: String): String {
         val base = apiBaseUrl.trimEnd('/')

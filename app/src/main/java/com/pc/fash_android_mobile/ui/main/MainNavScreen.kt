@@ -65,6 +65,7 @@ import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
+import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
@@ -138,6 +139,9 @@ fun MainNavScreen(
     /** Featured seller chip on Explore — opens seller shop (`GET …/users/{username}`). */
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
+    notificationsViewModel: NotificationsViewModel,
+    onOpenOrderFromNotification: (String) -> Unit = {},
+    onOpenListingFromNotification: (String, String?) -> Unit = { _, _ -> },
     /** Profile / seller shop: open Explore → Posts with filters + search + optional country. */
     onNavigateToExploreFromProfile: (
         categoryId: String?,
@@ -355,10 +359,19 @@ fun MainNavScreen(
         BackHandler { showNotificationScreen = false }
         NotificationScreen(
             modifier = Modifier.fillMaxSize(),
+            viewModel = notificationsViewModel,
             onBack = { showNotificationScreen = false },
             onExploreClick = {
                 showNotificationScreen = false
                 onTabChange(MainTab.Explore.ordinal)
+            },
+            onOpenOrder = { orderId ->
+                showNotificationScreen = false
+                onOpenOrderFromNotification(orderId)
+            },
+            onOpenListing = { listingId, sellerId ->
+                showNotificationScreen = false
+                onOpenListingFromNotification(listingId, sellerId)
             },
         )
     }
