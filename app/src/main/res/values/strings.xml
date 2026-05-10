@@ -280,8 +280,16 @@
     <string name="notification_detail_payload_title">Dữ liệu kèm</string>
     <string name="notification_action_open_order">Xem đơn hàng</string>
     <string name="notification_action_open_listing">Xem tin đăng</string>
+    <string name="notification_action_open_chat">Mở chat</string>
+    <string name="notification_action_open_followers">Mở người theo dõi bạn</string>
+    <string name="notification_action_open_following">Mở đang theo dõi</string>
+    <string name="notification_action_open_explore">Mở Khám phá</string>
+    <string name="notification_detail_more_label">Thêm chi tiết</string>
+    <string name="notification_detail_actions_heading">Điều hướng</string>
     <string name="notification_row_no_title">Thông báo</string>
     <string name="notification_unread_badge">Chưa đọc</string>
+    <string name="notification_new_arrival_snackbar">Bạn có thông báo mới trong hộp thư.</string>
+    <string name="notification_new_arrival_snackbar_action">Mở</string>
 
     <string name="explore_title">Khám phá</string>
     <string name="explore_featured_sellers">Người bán nổi bật</string>

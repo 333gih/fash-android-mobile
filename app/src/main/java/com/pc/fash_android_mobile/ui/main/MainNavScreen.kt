@@ -140,8 +140,15 @@ fun MainNavScreen(
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
     notificationsViewModel: NotificationsViewModel,
+    /** Ledger id from FCM tray / `fash://inbox/{id}` — opens inbox overlay and detail when non-null. */
+    pendingInboxNotificationIdToOpen: String? = null,
+    onConsumePendingInboxNotificationId: () -> Unit = {},
+    /** Incremented (e.g. snackbar action) to open the inbox list without a specific row. */
+    inboxOpenRequestGeneration: Long = 0L,
     onOpenOrderFromNotification: (String) -> Unit = {},
     onOpenListingFromNotification: (String, String?) -> Unit = { _, _ -> },
+    /** Opens Chat tab with a conversation selected (FCM / inbox `conversation_id`). */
+    onNavigateToChatConversation: (String) -> Unit = {},
     /** Profile / seller shop: open Explore → Posts with filters + search + optional country. */
     onNavigateToExploreFromProfile: (
         categoryId: String?,
@@ -179,6 +186,18 @@ fun MainNavScreen(
         }
     }
     val tabs = MainTab.entries
+    LaunchedEffect(inboxOpenRequestGeneration) {
+        if (inboxOpenRequestGeneration <= 0L) return@LaunchedEffect
+        showNotificationScreen = true
+    }
+
+    LaunchedEffect(pendingInboxNotificationIdToOpen) {
+        val id = pendingInboxNotificationIdToOpen?.trim()?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+        showNotificationScreen = true
+        notificationsViewModel.openInboxDetailFromPush(id)
+        onConsumePendingInboxNotificationId()
+    }
+
     LaunchedEffect(Unit) {
         chatViewModel.refreshUnreadCount()
     }
@@ -393,6 +412,18 @@ fun MainNavScreen(
             onOpenListing = { listingId, sellerId ->
                 showNotificationScreen = false
                 onOpenListingFromNotification(listingId, sellerId)
+            },
+            onOpenChat = { conversationId ->
+                showNotificationScreen = false
+                onNavigateToChatConversation(conversationId)
+            },
+            onOpenFollowConnections = { tab ->
+                showNotificationScreen = false
+                onOpenFollowConnections(tab)
+            },
+            onOpenExplore = {
+                showNotificationScreen = false
+                onTabChange(MainTab.Explore.ordinal)
             },
         )
     }

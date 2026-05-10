@@ -265,8 +265,16 @@
     <string name="notification_detail_payload_title">Payload</string>
     <string name="notification_action_open_order">View order</string>
     <string name="notification_action_open_listing">View listing</string>
+    <string name="notification_action_open_chat">Open chat</string>
+    <string name="notification_action_open_followers">Open followers</string>
+    <string name="notification_action_open_following">Open following</string>
+    <string name="notification_action_open_explore">Open Explore</string>
+    <string name="notification_detail_more_label">More detail</string>
+    <string name="notification_detail_actions_heading">Go to</string>
     <string name="notification_row_no_title">Notification</string>
     <string name="notification_unread_badge">Unread</string>
+    <string name="notification_new_arrival_snackbar">You have a new notification in your inbox.</string>
+    <string name="notification_new_arrival_snackbar_action">Open</string>
     <string name="explore_title">Explore</string>
     <string name="explore_featured_sellers">Featured sellers</string>
     <string name="explore_see_all">See all</string>

@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -24,9 +27,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -44,10 +50,12 @@ fun NotificationDetailScreen(
     onBack: () -> Unit,
     onOpenOrder: (String) -> Unit = {},
     onOpenListing: (String, String?) -> Unit = { _, _ -> },
+    onOpenChat: (String) -> Unit = {},
+    onOpenFollowConnections: (Int) -> Unit = {},
+    onOpenExplore: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
-    val orderId = firstStringFromDataCi(item.dataMap, "order_id", "marketplace_order_id", "orderId")
-    val listingId = firstStringFromDataCi(item.dataMap, "listing_id", "listingId")
+    val actions = parseNotificationDetailActions(item)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -84,6 +92,18 @@ fun NotificationDetailScreen(
                 .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            actions.imageUrl?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(FashTheme.spacing.radiusCard)),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
             Text(
                 text = item.title.ifBlank { stringResource(R.string.notification_detail_no_title) },
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -94,6 +114,28 @@ fun NotificationDetailScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = scheme.onSurface,
             )
+
+            actions.richDetailBody?.takeIf { it.isNotBlank() && it != item.body }?.let { extra ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = stringResource(R.string.notification_detail_more_label),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = extra,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurface,
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(
@@ -143,20 +185,60 @@ fun NotificationDetailScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            if (!orderId.isNullOrBlank()) {
-                OutlinedButton(
-                    onClick = { onOpenOrder(orderId) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.notification_action_open_order))
+
+            Text(
+                text = stringResource(R.string.notification_detail_actions_heading),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                if (!actions.orderId.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = { onOpenOrder(actions.orderId!!) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_order))
+                    }
                 }
-            }
-            if (!listingId.isNullOrBlank()) {
-                OutlinedButton(
-                    onClick = { onOpenListing(listingId, sellerUserIdFromData(data)) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.notification_action_open_listing))
+                if (!actions.listingId.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = { onOpenListing(actions.listingId!!, actions.sellerUserId) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_listing))
+                    }
+                }
+                if (!actions.conversationId.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = { onOpenChat(actions.conversationId!!) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_chat))
+                    }
+                }
+                if (actions.openFollowersTab) {
+                    OutlinedButton(
+                        onClick = { onOpenFollowConnections(1) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_followers))
+                    }
+                }
+                if (actions.openFollowingTab) {
+                    OutlinedButton(
+                        onClick = { onOpenFollowConnections(0) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_following))
+                    }
+                }
+                if (actions.openExploreTab) {
+                    OutlinedButton(
+                        onClick = onOpenExplore,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_explore))
+                    }
                 }
             }
         }
@@ -178,24 +260,6 @@ private fun MetaRow(label: String, value: String) {
         )
     }
 }
-
-private fun firstStringFromDataCi(data: Map<String, Any?>?, vararg keys: String): String? {
-    if (data == null) return null
-    val byLower = data.entries.associate { it.key.lowercase(Locale.ROOT) to it.value }
-    for (k in keys) {
-        val v = byLower[k.lowercase(Locale.ROOT)] ?: continue
-        val s = when (v) {
-            is String -> v.trim()
-            is Number -> v.toString()
-            else -> v?.toString()?.trim().orEmpty()
-        }
-        if (s.isNotEmpty()) return s
-    }
-    return null
-}
-
-private fun sellerUserIdFromData(data: Map<String, Any?>?): String? =
-    firstStringFromDataCi(data, "seller_user_id", "sellerUserId", "seller_id", "sellerId")
 
 private fun formatNotificationInstant(iso: String): String =
     runCatching {

@@ -86,6 +86,9 @@ fun NotificationScreen(
     promoSlides: List<FashPromoSlideDef>? = null,
     onOpenOrder: (String) -> Unit = {},
     onOpenListing: (String, String?) -> Unit = { _, _ -> },
+    onOpenChat: (String) -> Unit = {},
+    onOpenFollowConnections: (Int) -> Unit = {},
+    onOpenExplore: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val items by viewModel.items.collectAsState()
@@ -323,6 +326,9 @@ fun NotificationScreen(
                     onBack = { viewModel.closeDetail() },
                     onOpenOrder = onOpenOrder,
                     onOpenListing = onOpenListing,
+                    onOpenChat = onOpenChat,
+                    onOpenFollowConnections = onOpenFollowConnections,
+                    onOpenExplore = onOpenExplore,
                 )
             }
         }

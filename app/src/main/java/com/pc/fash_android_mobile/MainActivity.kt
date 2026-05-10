@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -119,6 +120,7 @@ import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -200,7 +202,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        applyLaunchNavigationIntents(intent)
+    }
+
+    private fun applyLaunchNavigationIntents(intent: Intent?) {
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
+        InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
     }
 
     private val googleSignInLauncher = registerForActivityResult(
@@ -217,7 +224,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
+        applyLaunchNavigationIntents(intent)
 
         LoginManager.getInstance().registerCallback(
             callbackManager,
@@ -336,6 +343,7 @@ class MainActivity : ComponentActivity() {
                 // Connect / disconnect the realtime WebSocket on auth state changes
                 val realtimeManager = (application as FashApplication).realtimeManager
                 val fashApp = application as FashApplication
+                val notificationSnackbarContext = LocalContext.current
                 val dialogMessage by fashApp.uiDialog.current.collectAsState()
                 /** Hoisted so [FashGlobalDialogHost] can reserve bottom inset for chat composer vs main nav. */
                 var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -390,8 +398,23 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    var prevUnread = notificationsViewModel.unreadCount.value
                     fashApp.inboxUnreadRefreshSignals.collect {
+                        val before = prevUnread
                         notificationsViewModel.refreshUnreadSummary()
+                        delay(120)
+                        val after = notificationsViewModel.unreadCount.value
+                        prevUnread = after
+                        if (after > before) {
+                            val result = snackbarHostState.showSnackbar(
+                                message = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar),
+                                actionLabel = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar_action),
+                                duration = SnackbarDuration.Short,
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                fashApp.requestOpenNotificationInbox()
+                            }
+                        }
                     }
                 }
 
@@ -632,6 +655,8 @@ class MainActivity : ComponentActivity() {
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
+                                    val pendingInboxOpenId by fashApp.pendingInboxNotificationId.collectAsState()
+                                    val inboxOpenGen by fashApp.inboxOpenRequestGeneration.collectAsState()
                                     val scope = rememberCoroutineScope()
                                     /**
                                      * Closes the seller storefront overlay. Does **not** clear [selectedListingId];
@@ -835,6 +860,11 @@ class MainActivity : ComponentActivity() {
                                             chatViewModel = chatViewModel,
                                             changePasswordViewModel = changePasswordViewModel,
                                             notificationsViewModel = notificationsViewModel,
+                                            pendingInboxNotificationIdToOpen = pendingInboxOpenId,
+                                            onConsumePendingInboxNotificationId = {
+                                                fashApp.pendingInboxNotificationId.value = null
+                                            },
+                                            inboxOpenRequestGeneration = inboxOpenGen,
                                             onOpenOrderFromNotification = { oid ->
                                                 selectedOrderId = oid
                                             },
@@ -847,6 +877,10 @@ class MainActivity : ComponentActivity() {
                                                 } else {
                                                     selectedListingId = lid
                                                 }
+                                            },
+                                            onNavigateToChatConversation = { conversationId ->
+                                                selectedConversationId = conversationId.trim()
+                                                selectedTab = MainTab.Chat.ordinal
                                             },
                                             snackbarHostState = snackbarHostState,
                                             chatUnreadCount = chatUnreadCount,
