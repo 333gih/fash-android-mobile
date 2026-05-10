@@ -116,6 +116,7 @@ import com.pc.fash_android_mobile.ui.orders.PendingPaymentOrderRow
 import com.pc.fash_android_mobile.ui.orders.PendingPaymentSliderRegistry
 import com.pc.fash_android_mobile.ui.orders.PendingPaymentViewModel
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
+import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
@@ -383,6 +384,22 @@ class MainActivity : ComponentActivity() {
                         delay(30_000L)
                         if (realtimeManager.state.value == RealtimeManager.State.CONNECTED) {
                             realtimeManager.sendPing()
+                        }
+                    }
+                }
+
+                LaunchedEffect(splashFinished, isAuthenticated) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    fashApp.inboxUnreadRefreshSignals.collect {
+                        notificationsViewModel.refreshUnreadSummary()
+                    }
+                }
+
+                LaunchedEffect(splashFinished, isAuthenticated) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    realtimeManager.events.collect { event ->
+                        if (event is RealtimeEvent.InboxRefresh) {
+                            fashApp.requestInboxUnreadRefreshDebounced()
                         }
                     }
                 }

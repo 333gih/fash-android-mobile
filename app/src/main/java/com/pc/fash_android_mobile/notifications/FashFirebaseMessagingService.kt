@@ -29,6 +29,9 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
+        if (message.data["inbox_refresh"] == "1") {
+            (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
+        }
         if (shouldSuppressTrayForPresence()) return
 
         val title = message.notification?.title

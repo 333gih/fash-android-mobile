@@ -455,6 +455,7 @@ class RealtimeManager(
                     firstNonBlankPayload(payload, json, "conversation_id", "ConversationID", "conversationId"),
                 )
                 "feed.refresh" -> RealtimeEvent.FeedRefresh
+                "inbox.refresh" -> RealtimeEvent.InboxRefresh
                 "pong" -> RealtimeEvent.Pong
                 else -> RealtimeEvent.Unknown(type)
             }

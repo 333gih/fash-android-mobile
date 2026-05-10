@@ -29,8 +29,14 @@ import com.pc.fash_android_mobile.notifications.FashNotificationChannels
 import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -66,6 +72,28 @@ class FashApplication : Application(), ImageLoaderFactory {
      * ANRs when EncryptedSharedPreferences / keystore is slow under memory pressure.
      */
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * FCM or realtime signaled that inbox unread count may have changed.
+     * [com.pc.fash_android_mobile.MainActivity] collects this and calls [com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel.refreshUnreadSummary].
+     */
+    private val _inboxUnreadRefreshSignals = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val inboxUnreadRefreshSignals: SharedFlow<Unit> = _inboxUnreadRefreshSignals.asSharedFlow()
+
+    @Volatile
+    private var inboxUnreadRefreshJob: Job? = null
+
+    /** Debounced so burst FCM / WS frames do not hammer the API. */
+    fun requestInboxUnreadRefreshDebounced() {
+        inboxUnreadRefreshJob?.cancel()
+        inboxUnreadRefreshJob = applicationScope.launch {
+            delay(400)
+            _inboxUnreadRefreshSignals.emit(Unit)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()

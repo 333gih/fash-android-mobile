@@ -72,6 +72,9 @@ sealed class RealtimeEvent {
     /** Feed/listing refresh hint (`type: feed.refresh`). */
     object FeedRefresh : RealtimeEvent()
 
+    /** In-app notification inbox / unread badge should refresh from core (`type: inbox.refresh`). */
+    object InboxRefresh : RealtimeEvent()
+
     /** Server pong response (`type: pong`). */
     object Pong : RealtimeEvent()
 
