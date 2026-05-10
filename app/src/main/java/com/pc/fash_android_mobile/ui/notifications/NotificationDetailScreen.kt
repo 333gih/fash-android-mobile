@@ -228,10 +228,18 @@ fun NotificationDetailScreen(
             )
 
             item.payloadType?.let { pt ->
-                MetaRow(label = stringResource(R.string.notification_detail_payload_type), value = pt)
+                val res = inboxPayloadTypeStringRes(pt)
+                MetaRow(
+                    label = stringResource(R.string.notification_detail_payload_type),
+                    value = if (res != null) stringResource(res) else pt,
+                )
             }
             item.source?.let { s ->
-                MetaRow(label = stringResource(R.string.notification_detail_source), value = s)
+                val res = inboxSourceStringRes(s)
+                MetaRow(
+                    label = stringResource(R.string.notification_detail_source),
+                    value = if (res != null) stringResource(res) else s,
+                )
             }
             item.sourceEventId?.let { sid ->
                 MetaRow(label = stringResource(R.string.notification_detail_source_event), value = sid)
