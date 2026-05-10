@@ -866,9 +866,24 @@ class MainActivity : ComponentActivity() {
                                             },
                                             inboxOpenRequestGeneration = inboxOpenGen,
                                             onOpenOrderFromNotification = { oid ->
+                                                // Close chat / overlays so order detail is not covered by ChatDetailScreen.
+                                                chatOrderDetailOverlayId = null
+                                                selectedConversationId = null
+                                                selectedConversationItem = null
+                                                chatViewModel.loadConversations()
+                                                chatViewModel.refreshUnreadCount()
+                                                selectedListingId = null
                                                 selectedOrderId = oid
                                             },
                                             onOpenListingFromNotification = { lid, sellerId ->
+                                                // Chat (and other overlays) are composed after PDP in this Box — clear
+                                                // them or "View listing" appears to do nothing / wrong screen.
+                                                chatOrderDetailOverlayId = null
+                                                selectedConversationId = null
+                                                selectedConversationItem = null
+                                                chatViewModel.loadConversations()
+                                                chatViewModel.refreshUnreadCount()
+                                                selectedOrderId = null
                                                 val myId =
                                                     authManager.sessionStore.read()?.userId?.trim().orEmpty()
                                                 if (!sellerId.isNullOrBlank() && sellerId == myId) {
@@ -879,6 +894,10 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             onNavigateToChatConversation = { conversationId ->
+                                                selectedListingId = null
+                                                selectedOrderId = null
+                                                editListingId = null
+                                                chatOrderDetailOverlayId = null
                                                 selectedConversationId = conversationId.trim()
                                                 selectedTab = MainTab.Chat.ordinal
                                             },
