@@ -300,8 +300,14 @@
     <string name="notification_pt_admin_mobile_push_transactional">Giao dịch / vận hành (cổng quản trị)</string>
     <string name="notification_pt_admin_mobile_push_ops">Vận hành / bảo trì (cổng quản trị)</string>
     <string name="notification_data_label_listing">Tin đăng</string>
+    <string name="notification_data_title_with_id">%1$s\nMã: %2$s</string>
     <string name="notification_data_label_seller">Người bán</string>
+    <string name="notification_data_label_buyer">Người mua</string>
+    <string name="notification_data_label_reviewer">Người đánh giá</string>
+    <string name="notification_data_label_follower_batch_names">Người theo dõi mới</string>
+    <string name="notification_data_label_rating_stars">Số sao</string>
     <string name="notification_data_label_order">Đơn hàng</string>
+    <string name="notification_data_label_chat_message">Tin nhắn</string>
     <string name="notification_data_label_conversation">Cuộc trò chuyện</string>
     <string name="notification_data_label_tracking">Mã vận chuyển</string>
     <string name="notification_data_label_nav">Hành động gợi ý</string>

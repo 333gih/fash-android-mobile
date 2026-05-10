@@ -285,8 +285,14 @@
     <string name="notification_pt_admin_mobile_push_transactional">Transactional / ops (admin)</string>
     <string name="notification_pt_admin_mobile_push_ops">Maintenance / ops (admin)</string>
     <string name="notification_data_label_listing">Listing</string>
+    <string name="notification_data_title_with_id">%1$s\nID: %2$s</string>
     <string name="notification_data_label_seller">Seller</string>
+    <string name="notification_data_label_buyer">Buyer</string>
+    <string name="notification_data_label_reviewer">Reviewer</string>
+    <string name="notification_data_label_follower_batch_names">New followers</string>
+    <string name="notification_data_label_rating_stars">Star rating</string>
     <string name="notification_data_label_order">Order</string>
+    <string name="notification_data_label_chat_message">Message</string>
     <string name="notification_data_label_conversation">Conversation</string>
     <string name="notification_data_label_tracking">Tracking number</string>
     <string name="notification_data_label_nav">Suggested action</string>

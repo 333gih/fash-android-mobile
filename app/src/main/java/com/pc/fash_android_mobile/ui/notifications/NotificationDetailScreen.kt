@@ -255,8 +255,13 @@ fun NotificationDetailScreen(
     }
 }
 
+private sealed interface LineValue {
+    data class Plain(val text: String) : LineValue
+    data class TitleWithId(val title: String, val id: String) : LineValue
+}
+
 private sealed interface FriendlyPayloadLine {
-    data class TextLine(val labelRes: Int, val value: String) : FriendlyPayloadLine
+    data class TextLine(val labelRes: Int, val value: LineValue) : FriendlyPayloadLine
     data class NavLine(val labelRes: Int, val rawNav: String) : FriendlyPayloadLine
 }
 
@@ -300,11 +305,11 @@ private fun FriendlyPayloadCard(
                         )
                     }
                     when (line) {
-                        is FriendlyPayloadLine.TextLine -> PayloadLabeledValue(
+                        is FriendlyPayloadLine.TextLine -> PayloadLabeledLine(
                             label = stringResource(line.labelRes),
                             value = line.value,
                         )
-                        is FriendlyPayloadLine.NavLine -> PayloadLabeledValue(
+                        is FriendlyPayloadLine.NavLine -> PayloadLabeledPlain(
                             label = stringResource(line.labelRes),
                             value = navTargetDisplay(line.rawNav),
                         )
@@ -343,7 +348,7 @@ private fun FriendlyPayloadCard(
 }
 
 @Composable
-private fun PayloadLabeledValue(label: String, value: String) {
+private fun PayloadLabeledPlain(label: String, value: String) {
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -353,12 +358,33 @@ private fun PayloadLabeledValue(label: String, value: String) {
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
-            ),
+            style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun PayloadLabeledLine(label: String, value: LineValue) {
+    val scheme = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        when (value) {
+            is LineValue.Plain -> Text(
+                text = value.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurface,
+            )
+            is LineValue.TitleWithId -> Text(
+                text = stringResource(R.string.notification_data_title_with_id, value.title, value.id),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurface,
+            )
+        }
     }
 }
 
@@ -376,47 +402,97 @@ private fun navTargetDisplay(raw: String): String {
     }
 }
 
+private fun lineValueTitleOrPlain(title: String?, id: String?): LineValue {
+    val t = title?.trim().orEmpty()
+    val i = id?.trim().orEmpty()
+    return when {
+        t.isNotEmpty() && i.isNotEmpty() && t.equals(i, ignoreCase = true) -> LineValue.Plain(t)
+        t.isNotEmpty() && i.isNotEmpty() -> LineValue.TitleWithId(t, i)
+        t.isNotEmpty() -> LineValue.Plain(t)
+        i.isNotEmpty() -> LineValue.Plain(i)
+        else -> LineValue.Plain("—")
+    }
+}
+
 private fun buildFriendlyPayloadLines(item: InboxNotificationItem): List<FriendlyPayloadLine> {
     val data = item.dataMap ?: return emptyList()
     val pt = item.payloadType?.trim().orEmpty()
     val lines = mutableListOf<FriendlyPayloadLine>()
 
     fun str(vararg keys: String): String? = firstStringFromDataCi(data, *keys)
+    fun addText(labelRes: Int, value: LineValue) {
+        lines.add(FriendlyPayloadLine.TextLine(labelRes, value))
+    }
 
-    str("listing_id", "listingId")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_listing, it))
+    val listingTitle = str("listing_title", "listingTitle")
+    val listingId = str("listing_id", "listingId")
+    if (!listingTitle.isNullOrBlank() || !listingId.isNullOrBlank()) {
+        addText(R.string.notification_data_label_listing, lineValueTitleOrPlain(listingTitle, listingId))
     }
-    str("seller_user_id", "sellerUserId", "seller_id", "sellerId")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_seller, it))
+
+    val sellerName = str("seller_display_name", "sellerDisplayName")
+    val sellerId = str("seller_user_id", "sellerUserId", "seller_id", "sellerId")
+    if (!sellerName.isNullOrBlank() || !sellerId.isNullOrBlank()) {
+        addText(R.string.notification_data_label_seller, lineValueTitleOrPlain(sellerName, sellerId))
     }
-    val orderVal = str("marketplace_order_id", "order_id", "orderId")
-    if (!orderVal.isNullOrBlank()) {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_order, orderVal))
+
+    str("buyer_display_name", "buyerDisplayName")?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        addText(R.string.notification_data_label_buyer, LineValue.Plain(it))
     }
-    str("conversation_id", "conversationId")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_conversation, it))
+
+    str("marketplace_order_id", "order_id", "orderId")?.takeIf { it.isNotBlank() }?.let {
+        addText(R.string.notification_data_label_order, LineValue.Plain(it))
     }
-    str("tracking_number", "trackingNumber")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_tracking, it))
+
+    val preview = str("message_preview", "messagePreview")
+    val conv = str("conversation_id", "conversationId")
+    when {
+        !preview.isNullOrBlank() && !conv.isNullOrBlank() ->
+            addText(R.string.notification_data_label_chat_message, LineValue.TitleWithId(preview, conv))
+        !preview.isNullOrBlank() ->
+            addText(R.string.notification_data_label_chat_message, LineValue.Plain(preview))
+        !conv.isNullOrBlank() ->
+            addText(R.string.notification_data_label_conversation, LineValue.Plain(conv))
     }
-    str("nav_target", "navTarget")?.let {
+
+    str("tracking_number", "trackingNumber")?.takeIf { it.isNotBlank() }?.let {
+        addText(R.string.notification_data_label_tracking, LineValue.Plain(it))
+    }
+
+    str("nav_target", "navTarget")?.takeIf { it.isNotBlank() }?.let {
         lines.add(FriendlyPayloadLine.NavLine(R.string.notification_data_label_nav, it))
     }
-    str("follower_user_id", "followerUserId")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_follower, it))
+
+    str("follower_names_summary", "followerNamesSummary")?.takeIf { it.isNotBlank() }?.let {
+        addText(R.string.notification_data_label_follower_batch_names, LineValue.Plain(it))
     }
-    str("followee_id", "followeeId")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_followee, it))
+
+    val followerName = str("follower_display_name", "followerDisplayName")?.takeIf { it.isNotBlank() }
+        ?: if (pt.equals("marketplace.follower.new", ignoreCase = true) && item.title.isNotBlank()) {
+            item.title.trim()
+        } else {
+            null
+        }
+    val followerId = str("follower_user_id", "followerUserId")
+    if (!followerName.isNullOrBlank() || !followerId.isNullOrBlank()) {
+        addText(R.string.notification_data_label_follower, lineValueTitleOrPlain(followerName, followerId))
     }
-    str("screen")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_screen, it))
+
+    str("reviewer_display_name", "reviewerDisplayName")?.takeIf { it.isNotBlank() }?.let {
+        addText(R.string.notification_data_label_reviewer, LineValue.Plain(it))
     }
-    str("event")?.let {
-        lines.add(FriendlyPayloadLine.TextLine(R.string.notification_data_label_event, it))
+
+    str("star_count", "starCount")?.trim()?.toIntOrNull()?.let { n ->
+        addText(R.string.notification_data_label_rating_stars, LineValue.Plain("$n/5 ★"))
     }
+
+    str("event")?.takeIf { it.isNotBlank() }?.let {
+        addText(R.string.notification_data_label_event, LineValue.Plain(it))
+    }
+
     str("type")?.let { t ->
         if (pt.isEmpty() || !t.equals(pt, ignoreCase = true)) {
-            lines.add(FriendlyPayloadLine.TextLine(R.string.notification_detail_payload_type, t))
+            addText(R.string.notification_detail_payload_type, LineValue.Plain(t))
         }
     }
     return lines
@@ -436,6 +512,24 @@ private val internalPayloadKeysLowercase: Set<String> = setOf(
     "detailbody",
     "rich_body",
     "richbody",
+    "listing_title",
+    "listingtitle",
+    "seller_display_name",
+    "sellerdisplayname",
+    "buyer_display_name",
+    "buyerdisplayname",
+    "follower_display_name",
+    "followerdisplayname",
+    "follower_names_summary",
+    "followernamessummary",
+    "message_preview",
+    "messagepreview",
+    "reviewer_display_name",
+    "reviewerdisplayname",
+    "star_count",
+    "starcount",
+    "screen",
+    "event",
 )
 
 private fun buildRawPayloadDump(data: Map<String, Any?>?): String {
