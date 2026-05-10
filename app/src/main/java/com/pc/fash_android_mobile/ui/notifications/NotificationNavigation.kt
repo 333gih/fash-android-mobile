@@ -27,9 +27,8 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
     val ptype = item.payloadType?.lowercase(Locale.ROOT).orEmpty()
 
     val openFollowersTab = nav == "followers_tab" ||
-        ptype.contains("follower") ||
-        ptype == "marketplace.follower.new".lowercase(Locale.ROOT) ||
-        ptype == "marketplace.follower.batch".lowercase(Locale.ROOT)
+        ptype.equals("marketplace.follower.new", ignoreCase = true) ||
+        ptype.equals("marketplace.follower.batch", ignoreCase = true)
 
     val openFollowingTab = nav == "following_tab"
 
