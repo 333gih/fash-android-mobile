@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.notifications
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
@@ -40,9 +41,16 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         val body = message.notification?.body ?: message.data["body"].orEmpty()
         val channelId = resolveChannelId(message)
 
+        val deepLink = message.data["deep_link"]?.takeIf { it.isNotBlank() }
+            ?: message.data["user_notification_id"]?.takeIf { it.isNotBlank() }?.let { id ->
+                "fash://inbox/${id.trim()}"
+            }
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            message.data["deep_link"]?.let { putExtra("deep_link", it) }
+            deepLink?.let { putExtra("deep_link", it) }
+            message.data["user_notification_id"]?.takeIf { it.isNotBlank() }?.let {
+                putExtra("notification_id", it.trim())
+            }
         }
         val pending = PendingIntent.getActivity(
             this,
@@ -59,6 +67,12 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pending)
             .setAutoCancel(true)
+            // Pre-Oreo: channel sound does not apply; use system default tone + short vibration.
+            .apply {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                    setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+                }
+            }
             .build()
 
         val notifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()

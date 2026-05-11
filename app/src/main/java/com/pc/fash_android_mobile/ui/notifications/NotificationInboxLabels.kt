@@ -12,6 +12,7 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "marketplace.listing.liked" -> R.string.notification_pt_marketplace_listing_liked
         "marketplace.listing.liked.batch" -> R.string.notification_pt_marketplace_listing_liked_batch
         "marketplace.listing.approved_for_followers" -> R.string.notification_pt_marketplace_listing_approved_for_followers
+        "marketplace.listing.approved" -> R.string.notification_pt_marketplace_listing_approved
         "marketplace.chat.message" -> R.string.notification_pt_marketplace_chat_message
         "marketplace.chat.offer_received" -> R.string.notification_pt_marketplace_chat_offer_received
         "marketplace.chat.offer_accepted" -> R.string.notification_pt_marketplace_chat_offer_accepted

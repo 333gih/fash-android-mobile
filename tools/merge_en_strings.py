@@ -33,6 +33,14 @@ TRANSLATIONS: dict[str, str] = {
     "chat_set_price": "Make offer",
     "chat_input_hint": "Type a message…",
     "chat_send": "Send",
+    "chat_send_error_gateway": (
+        "The gateway temporarily returned an error (code %1$d). Try again. "
+        "Text that looks like shell or SQL commands is sometimes blocked by edge security — rephrase or contact support."
+    ),
+    "address_catalog_load_failed": (
+        "Could not load the administrative catalog (province / district / ward). "
+        "Check your connection and common-service auth (JWT or INTERNAL_SECRET must match the server), then try again."
+    ),
     "chat_offer_label": "Price offer",
     "chat_offer_accept": "Accept",
     "chat_offer_decline": "Decline",

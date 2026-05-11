@@ -90,7 +90,12 @@ class AddressBookViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             _provincesLoading.value = true
             try {
-                commonRepo.getAddresses(level = 1).onSuccess { _provinces.value = it }
+                commonRepo.getProvincesCatalog().fold(
+                    onSuccess = { _provinces.value = it },
+                    onFailure = {
+                        _events.tryEmit(app.getString(R.string.address_catalog_load_failed))
+                    },
+                )
             } finally {
                 _provincesLoading.value = false
             }
@@ -104,7 +109,13 @@ class AddressBookViewModel(
                 _wards.value = emptyList()
                 return@launch
             }
-            commonRepo.getAddresses(level = 2, parentId = provinceId).onSuccess { _districts.value = it }
+            commonRepo.getAdministrativeChildren(parentId = provinceId, childLevel = 2).fold(
+                onSuccess = { _districts.value = it },
+                onFailure = {
+                    _districts.value = emptyList()
+                    _events.tryEmit(app.getString(R.string.address_catalog_load_failed))
+                },
+            )
             _wards.value = emptyList()
         }
     }
@@ -115,7 +126,13 @@ class AddressBookViewModel(
                 _wards.value = emptyList()
                 return@launch
             }
-            commonRepo.getAddresses(level = 3, parentId = districtId).onSuccess { _wards.value = it }
+            commonRepo.getAdministrativeChildren(parentId = districtId, childLevel = 3).fold(
+                onSuccess = { _wards.value = it },
+                onFailure = {
+                    _wards.value = emptyList()
+                    _events.tryEmit(app.getString(R.string.address_catalog_load_failed))
+                },
+            )
         }
     }
 

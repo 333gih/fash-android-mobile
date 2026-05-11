@@ -117,6 +117,61 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         _selectedDetailId.value = id.trim().takeIf { it.isNotEmpty() }
     }
 
+    /**
+     * Tray / deep-link open: reload inbox (and paginate) until [notificationId] is found, then show detail and mark read.
+     */
+    fun openInboxDetailFromPush(notificationId: String) {
+        val id = notificationId.trim()
+        if (id.isEmpty()) return
+        viewModelScope.launch {
+            if (_items.value.isEmpty()) {
+                _isLoading.value = true
+            }
+            _loadError.value = null
+            val first = withContext(Dispatchers.IO) {
+                userRepository.listMyNotifications(PAGE_LIMIT, beforeId = null)
+            }
+            first.fold(
+                onSuccess = { page ->
+                    _items.value = page.items
+                    _hasMore.value = page.items.size >= PAGE_LIMIT
+                },
+                onFailure = { e ->
+                    _loadError.value = e.message
+                    _items.value = emptyList()
+                    _hasMore.value = false
+                    _isLoading.value = false
+                    return@launch
+                },
+            )
+            refreshUnreadSummary()
+            var found = _items.value.any { it.id == id }
+            var guard = 0
+            while (!found && _hasMore.value && guard++ < 12) {
+                val last = _items.value.lastOrNull() ?: break
+                _loadMoreBusy.value = true
+                val more = withContext(Dispatchers.IO) {
+                    userRepository.listMyNotifications(PAGE_LIMIT, beforeId = last.id)
+                }
+                more.onSuccess { page ->
+                    val have = _items.value.map { it.id }.toSet()
+                    val appended = page.items.filter { it.id !in have }
+                    _items.update { it + appended }
+                    _hasMore.value = page.items.size >= PAGE_LIMIT
+                }
+                _loadMoreBusy.value = false
+                found = _items.value.any { it.id == id }
+            }
+            _isLoading.value = false
+            if (found) {
+                _selectedDetailId.value = id
+                _items.value.find { it.id == id }?.let { markReadIfNeeded(it) }
+            } else {
+                openDetail(id)
+            }
+        }
+    }
+
     fun closeDetail() {
         _selectedDetailId.value = null
     }

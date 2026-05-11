@@ -18,6 +18,7 @@ import com.pc.fash_android_mobile.data.common.defaultListingImageCatalogSteps
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.common.showUiDialogSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -329,7 +330,11 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 createResult.fold(
                     onSuccess = {
-                        publishUi(getApplication<Application>().getString(R.string.create_listing_success))
+                        val appCtx = getApplication<Application>()
+                        showUiDialogSuccess(
+                            message = appCtx.getString(R.string.create_listing_success_dialog_message),
+                            title = appCtx.getString(R.string.create_listing_success_dialog_title),
+                        )
                         resetDraft()
                         onSuccess()
                     },

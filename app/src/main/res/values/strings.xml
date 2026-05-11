@@ -285,6 +285,7 @@
     <string name="notification_pt_marketplace_listing_liked">Tin đăng được thích</string>
     <string name="notification_pt_marketplace_listing_liked_batch">Tin được nhiều người thích</string>
     <string name="notification_pt_marketplace_listing_approved_for_followers">Tin mới dành cho người theo dõi</string>
+    <string name="notification_pt_marketplace_listing_approved">Tin đăng đã được duyệt</string>
     <string name="notification_pt_marketplace_chat_message">Tin nhắn mới</string>
     <string name="notification_pt_marketplace_chat_offer_received">Lời đề nghị giá</string>
     <string name="notification_pt_marketplace_chat_offer_accepted">Chấp nhận giá</string>
@@ -492,6 +493,8 @@
     <string name="create_listing_upload_error">Tải ảnh lên thất bại.</string>
     <string name="create_listing_no_images">Vui lòng thêm ít nhất 1 ảnh.</string>
     <string name="create_listing_success">Đăng tin thành công.</string>
+    <string name="create_listing_success_dialog_title">Đã tạo tin thành công</string>
+    <string name="create_listing_success_dialog_message">Tin của bạn đã được gửi. Trạng thái hiện tại: đang chờ duyệt. Bạn sẽ nhận thông báo khi tin được duyệt và hiển thị trên chợ.</string>
     <string name="create_listing_error">Đăng tin thất bại. Thử lại.</string>
 
     <string name="create_listing_title_dang_tin">Đăng tin (%1$d/%2$d)</string>
@@ -790,6 +793,7 @@
     <string name="chat_detail_decline">Từ chối</string>
     <string name="chat_detail_accept">Chấp nhận</string>
     <string name="chat_send_error">Gửi tin nhắn thất bại.</string>
+    <string name="chat_send_error_gateway">Máy chủ cổng tạm thời không phản hồi (mã %1$d). Hãy thử lại sau. Nếu nội dung giống lệnh máy tính hoặc SQL, bộ lọc bảo mật phía hạ tầng đôi khi chặn nhầm — thử diễn đạt khác hoặc liên hệ hỗ trợ.</string>
     <string name="chat_offer_error">Thao tác thất bại. Thử lại.</string>
     <string name="chat_offer_accepted">Đã chấp nhận đề xuất giá — đơn hàng đã được tạo trên ứng dụng.</string>
     <string name="chat_offer_accepted_in_chat">Đã đồng ý giá trong chat. Hãy hẹn gặp hoặc ghi nhận giao dịch — không tạo đơn ký quỹ từ bước này.</string>
@@ -1272,6 +1276,7 @@
     <string name="address_empty_alert_body">Bạn cần tạo ít nhất một địa chỉ nhận hàng và có thể đặt một địa chỉ làm mặc định để thanh toán nhanh hơn.</string>
     <string name="address_empty_alert_create">Tạo địa chỉ</string>
     <string name="address_sync_failed">Không tải được danh sách địa chỉ từ máy chủ. Đang dùng dữ liệu trên máy.</string>
+    <string name="address_catalog_load_failed">Không tải được danh mục tỉnh/thành, quận/huyện hoặc phường/xã. Kiểm tra kết nối và cấu hình common-service (JWT/INTERNAL_SECRET giống máy chủ), rồi thử lại.</string>
     <string name="address_default_failed">Không đặt mặc định được. Thử lại.</string>
     <string name="address_vn_catalog_hint">Chọn Tỉnh/TP → Quận/Huyện → Phường/Xã theo dữ liệu Vietnam (common-service).</string>
     <string name="address_field_label_optional">Nhãn (tuỳ chọn)</string>

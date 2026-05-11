@@ -270,6 +270,7 @@
     <string name="notification_pt_marketplace_listing_liked">Someone liked your listing</string>
     <string name="notification_pt_marketplace_listing_liked_batch">Your listing received several likes</string>
     <string name="notification_pt_marketplace_listing_approved_for_followers">New listing for people you follow</string>
+    <string name="notification_pt_marketplace_listing_approved">Your listing was approved</string>
     <string name="notification_pt_marketplace_chat_message">New chat message</string>
     <string name="notification_pt_marketplace_chat_offer_received">Price offer received</string>
     <string name="notification_pt_marketplace_chat_offer_accepted">Offer accepted</string>
@@ -474,6 +475,8 @@
     <string name="create_listing_upload_error">Upload failed. Try again.</string>
     <string name="create_listing_no_images">Please add at least 1 photo.</string>
     <string name="create_listing_success">Listing posted successfully.</string>
+    <string name="create_listing_success_dialog_title">Listing created</string>
+    <string name="create_listing_success_dialog_message">Your listing was submitted successfully. It is now pending review. You will be notified when it is approved and visible on the marketplace.</string>
     <string name="create_listing_error">Failed to post. Try again.</string>
     <string name="create_listing_title_dang_tin">Post listing (%1$d/%2$d)</string>
     <string name="create_listing_title_label">Title</string>
@@ -762,6 +765,7 @@
     <string name="chat_detail_decline">Decline</string>
     <string name="chat_detail_accept">Accept</string>
     <string name="chat_send_error">Failed to send message.</string>
+    <string name="chat_send_error_gateway">The gateway temporarily returned an error (code %1$d). Try again. Text that looks like shell or SQL commands is sometimes blocked by edge security — rephrase or contact support.</string>
     <string name="chat_offer_error">Action failed. Try again.</string>
     <string name="chat_offer_accepted">Price proposal accepted — an escrow order was created in the app.</string>
     <string name="chat_offer_accepted_in_chat">Price agreed in chat. Schedule a meetup or record the deal — no escrow order is created from this step.</string>
@@ -1225,6 +1229,7 @@
     <string name="address_empty_alert_body">Add at least one shipping address. You can set one as default for faster checkout.</string>
     <string name="address_empty_alert_create">Add address</string>
     <string name="address_sync_failed">Could not load addresses from server. Showing saved addresses on device.</string>
+    <string name="address_catalog_load_failed">Could not load the administrative catalog (province / district / ward). Check your connection and common-service auth (JWT or INTERNAL_SECRET must match the server), then try again.</string>
     <string name="address_default_failed">Could not set default. Try again.</string>
     <string name="address_vn_catalog_hint">Pick Province/City → District → Ward from the Vietnam catalog (common-service).</string>
     <string name="address_field_label_optional">Label (optional)</string>

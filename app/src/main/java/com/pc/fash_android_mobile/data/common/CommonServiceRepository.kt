@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.data.common
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -17,6 +18,9 @@ private const val COMMON_SERVICE_USER_AGENT = "FashAndroid/1.0"
  *
  * Authenticated catalog calls use [securedClient]: same as core — `Accept`, `User-Agent`,
  * optional `X-Internal-Secret`, and `Authorization` Bearer (user JWT from auth-service, or internal service token when logged out).
+ *
+ * Query strings for `addresses` / `countries` mirror **fash-admin-portal-fe** → common-service
+ * (`URLSearchParams` / [okhttp3.HttpUrl.addQueryParameter]): `level`, `parent_id`, `current`, `all`, etc.
  *
  * [getHealth] uses a separate client so the health check sends only Accept and User-Agent.
  *
@@ -67,6 +71,15 @@ class CommonServiceRepository(
     private fun apiV1(path: String): String =
         AppEnvironment.commonServicePath("api/v1/${path.trimStart('/')}")
 
+    /** Encodes query the same way as the admin portal BFF / browser (RFC 3986 via OkHttp). */
+    private fun apiV1UrlWithQuery(pathAfterApiV1: String, queryParams: List<Pair<String, String>>): String {
+        val base = apiV1(pathAfterApiV1)
+        val resolved = base.toHttpUrlOrNull() ?: error("Invalid common-service catalog URL: $base")
+        val b = resolved.newBuilder()
+        queryParams.forEach { (k, v) -> b.addQueryParameter(k, v) }
+        return b.build().toString()
+    }
+
     private fun enc(s: String): String = URLEncoder.encode(s, Charsets.UTF_8.name())
 
     // --- Health (no /api/v1) ---
@@ -97,12 +110,110 @@ class CommonServiceRepository(
         parentId: String? = null,
         current: Boolean = true,
     ): Result<List<CommonAddressDto>> = runCatching {
-        val q = mutableListOf<String>()
-        q.add("current=$current")
-        level?.let { q.add("level=$it") }
-        parentId?.takeIf { it.isNotBlank() }?.let { q.add("parent_id=${enc(it)}") }
-        val url = "${apiV1("addresses")}?${q.joinToString("&")}"
+        val params = buildList {
+            add("current" to if (current) "true" else "false")
+            level?.let { add("level" to it.toString()) }
+            parentId?.trim()?.takeIf { it.isNotEmpty() }?.let { add("parent_id" to it) }
+        }
+        val url = apiV1UrlWithQuery("addresses", params)
         parseAddressList(JSONObject(executeGet(url).trim()))
+    }
+
+    /**
+     * Level-1 provinces: `GET .../addresses?level=1&current=true` (same as admin portal list tab);
+     * if empty or HTTP error, falls back to `GET .../addresses/tree` and collects `level == 1` nodes
+     * (portal tree tab).
+     */
+    fun getProvincesCatalog(): Result<List<CommonAddressDto>> = runCatching {
+        val listAttempt = kotlin.runCatching { getAddresses(level = 1, current = true).getOrThrow() }
+        if (listAttempt.isSuccess && listAttempt.getOrThrow().isNotEmpty()) {
+            return@runCatching listAttempt.getOrThrow()
+        }
+        flattenAddressesAtLevel(getAddressTree().getOrThrow(), 1)
+    }
+
+    private fun flattenAddressesAtLevel(nodes: List<AddressTreeNode>, targetLevel: Int): List<CommonAddressDto> {
+        val out = mutableListOf<CommonAddressDto>()
+        fun walk(list: List<AddressTreeNode>) {
+            for (n in list) {
+                if (n.level == targetLevel) {
+                    out.add(
+                        CommonAddressDto(
+                            id = n.id,
+                            name = n.name,
+                            code = n.code,
+                            parentId = n.parentId,
+                            level = n.level,
+                            status = n.status,
+                            effectiveFrom = n.effectiveFrom,
+                            effectiveTo = n.effectiveTo,
+                        ),
+                    )
+                }
+                if (n.children.isNotEmpty()) walk(n.children)
+            }
+        }
+        walk(nodes)
+        return out.sortedBy { it.name }
+    }
+
+    private fun findTreeNodeById(nodes: List<AddressTreeNode>, id: String): AddressTreeNode? {
+        val target = id.trim()
+        if (target.isEmpty()) return null
+        for (n in nodes) {
+            if (n.id.equals(target, ignoreCase = true)) return n
+            findTreeNodeById(n.children, target)?.let { return it }
+        }
+        return null
+    }
+
+    private fun addressTreeNodeToDto(n: AddressTreeNode): CommonAddressDto =
+        CommonAddressDto(
+            id = n.id,
+            name = n.name,
+            code = n.code,
+            parentId = n.parentId,
+            level = n.level,
+            status = n.status,
+            effectiveFrom = n.effectiveFrom,
+            effectiveTo = n.effectiveTo,
+        )
+
+    /**
+     * Direct children of [parentId] at [childLevel] (2 = district, 3 = ward).
+     * Matches admin portal `GET .../addresses?level=&parent_id=&current=true`; if that returns empty
+     * or throws, uses the same parent's **children** from `GET .../addresses/tree` (portal tree tab).
+     */
+    fun getAdministrativeChildren(parentId: String, childLevel: Int): Result<List<CommonAddressDto>> = runCatching {
+        val pid = parentId.trim().ifEmpty { return@runCatching emptyList() }
+        require(childLevel in 2..3) { "childLevel must be 2 or 3" }
+
+        val listTry = kotlin.runCatching {
+            getAddresses(level = childLevel, parentId = pid, current = true).getOrThrow()
+        }
+        listTry.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@runCatching it }
+
+        val tree = kotlin.runCatching { getAddressTree().getOrThrow() }.getOrElse { ex ->
+            throw listTry.exceptionOrNull() ?: ex
+        }
+        val node = findTreeNodeById(tree, pid)
+        val fromTree = node?.children.orEmpty()
+            .filter { it.level == childLevel }
+            .map { addressTreeNodeToDto(it) }
+            .sortedBy { it.name }
+
+        val looseList = kotlin.runCatching {
+            getAddresses(level = null, parentId = pid, current = true).getOrThrow()
+                .filter { it.level == childLevel }
+                .sortedBy { it.name }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
+
+        when {
+            fromTree.isNotEmpty() -> fromTree
+            looseList != null -> looseList
+            listTry.isSuccess -> listTry.getOrThrow()
+            else -> throw listTry.exceptionOrNull()!!
+        }
     }
 
     fun getAddressHistory(
@@ -233,16 +344,17 @@ class CommonServiceRepository(
         offset: Int = 0,
         limit: Int = 20,
     ): Result<List<CommonCountryDto>> = runCatching {
-        val params = mutableListOf<String>()
-        if (all) {
-            params.add("all=true")
-        } else {
-            params.add("offset=$offset")
-            params.add("limit=$limit")
-            q?.takeIf { it.isNotBlank() }?.let { params.add("q=${enc(it)}") }
-            status?.takeIf { it.isNotBlank() }?.let { params.add("status=${enc(it)}") }
+        val params = buildList<Pair<String, String>> {
+            if (all) {
+                add("all" to "true")
+            } else {
+                add("offset" to offset.toString())
+                add("limit" to limit.toString())
+                q?.trim()?.takeIf { it.isNotEmpty() }?.let { add("q" to it) }
+                status?.trim()?.takeIf { it.isNotEmpty() }?.let { add("status" to it) }
+            }
         }
-        val url = "${apiV1("countries")}?${params.joinToString("&")}"
+        val url = apiV1UrlWithQuery("countries", params)
         val body = executeGet(url).trim()
         val obj = JSONObject(body)
         if (all) {
@@ -259,10 +371,13 @@ class CommonServiceRepository(
         offset: Int = 0,
         limit: Int = 20,
     ): Result<CountriesPage> = runCatching {
-        val params = mutableListOf("offset=$offset", "limit=$limit")
-        q?.takeIf { it.isNotBlank() }?.let { params.add("q=${enc(it)}") }
-        status?.takeIf { it.isNotBlank() }?.let { params.add("status=${enc(it)}") }
-        val url = "${apiV1("countries")}?${params.joinToString("&")}"
+        val params = buildList<Pair<String, String>> {
+            add("offset" to offset.toString())
+            add("limit" to limit.toString())
+            q?.trim()?.takeIf { it.isNotEmpty() }?.let { add("q" to it) }
+            status?.trim()?.takeIf { it.isNotEmpty() }?.let { add("status" to it) }
+        }
+        val url = apiV1UrlWithQuery("countries", params)
         parseCountriesPage(JSONObject(executeGet(url).trim()))
     }
 
@@ -291,28 +406,36 @@ class CommonServiceRepository(
             arr.optJSONObject(i)?.let { children.add(parseAddressTreeNode(it)) }
         }
         return AddressTreeNode(
-            id = o.optString("id"),
-            name = o.optString("name"),
-            code = o.optString("code"),
-            parentId = o.optString("parent_id").takeIf { it.isNotBlank() },
-            level = o.optInt("level", 1),
-            status = o.optString("status"),
-            effectiveFrom = o.optString("effective_from").takeIf { it.isNotBlank() },
-            effectiveTo = o.optString("effective_to").takeIf { it.isNotBlank() },
+            id = o.optString("id").ifBlank { o.optString("ID") },
+            name = o.optString("name").ifBlank { o.optString("Name") },
+            code = o.optString("code").ifBlank { o.optString("Code") },
+            parentId = o.optString("parent_id").ifBlank { o.optString("ParentID") }.takeIf { it.isNotBlank() },
+            level = when {
+                o.has("level") && !o.isNull("level") -> o.optInt("level", 1)
+                o.has("Level") && !o.isNull("Level") -> o.optInt("Level", 1)
+                else -> 1
+            },
+            status = o.optString("status").ifBlank { o.optString("Status") },
+            effectiveFrom = o.optString("effective_from").ifBlank { o.optString("EffectiveFrom") }.takeIf { it.isNotBlank() },
+            effectiveTo = o.optString("effective_to").ifBlank { o.optString("EffectiveTo") }.takeIf { it.isNotBlank() },
             children = children,
         )
     }
 
     private fun parseAddressDto(o: JSONObject): CommonAddressDto =
         CommonAddressDto(
-            id = o.optString("id"),
-            name = o.optString("name"),
-            code = o.optString("code"),
-            parentId = o.optString("parent_id").takeIf { it.isNotBlank() },
-            level = o.optInt("level", 1),
-            status = o.optString("status"),
-            effectiveFrom = o.optString("effective_from").takeIf { it.isNotBlank() },
-            effectiveTo = o.optString("effective_to").takeIf { it.isNotBlank() },
+            id = o.optString("id").ifBlank { o.optString("ID") },
+            name = o.optString("name").ifBlank { o.optString("Name") },
+            code = o.optString("code").ifBlank { o.optString("Code") },
+            parentId = o.optString("parent_id").ifBlank { o.optString("ParentID") }.takeIf { it.isNotBlank() },
+            level = when {
+                o.has("level") && !o.isNull("level") -> o.optInt("level", 1)
+                o.has("Level") && !o.isNull("Level") -> o.optInt("Level", 1)
+                else -> 1
+            },
+            status = o.optString("status").ifBlank { o.optString("Status") },
+            effectiveFrom = o.optString("effective_from").ifBlank { o.optString("EffectiveFrom") }.takeIf { it.isNotBlank() },
+            effectiveTo = o.optString("effective_to").ifBlank { o.optString("EffectiveTo") }.takeIf { it.isNotBlank() },
         )
 
     private fun parseAddressList(obj: JSONObject): List<CommonAddressDto> {

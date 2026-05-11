@@ -191,6 +191,12 @@ class ChatRepository(
         parseMessagesArray(body)
     }
 
+    /**
+     * POST [apiPath]/chat/messages — JSON `conversation_id`, `content`.
+     * If the UI shows HTTP 502 with Kong’s message *“An invalid response was received from the upstream server”*,
+     * the failure is usually at the **API gateway / edge** (upstream reset, timeout, or a WAF blocking the body),
+     * not malformed JSON from the client. Normal chat text should reach core-service unchanged.
+     */
     fun sendMessage(conversationId: String, text: String): Result<ChatMessage> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/chat/messages")
         val json = JSONObject()

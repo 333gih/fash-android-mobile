@@ -48,6 +48,8 @@ private const val POLL_INTERVAL_FALLBACK_MS = 5_000L
 /** Coalesce rapid `message.new` / read-receipt bursts into one GET /messages (reduces load). */
 private const val SILENT_POLL_DEBOUNCE_MS = 400L
 
+private val httpStatusPrefix = Regex("^HTTP (\\d+):")
+
 class ChatDetailViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
@@ -681,6 +683,17 @@ class ChatDetailViewModel(
 
     // ── Messaging ─────────────────────────────────────────────────────────
 
+    /** Maps raw [ChatRepository] / OkHttp errors to readable copy (e.g. Kong 502 gateway text). */
+    private fun userMessageForChatSendFailure(t: Throwable): String {
+        val app = getApplication<Application>()
+        val raw = t.message.orEmpty().trim()
+        val code = httpStatusPrefix.find(raw)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        return when (code) {
+            502, 503, 504 -> app.getString(R.string.chat_send_error_gateway, code)
+            else -> raw.ifBlank { app.getString(R.string.chat_send_error) }
+        }
+    }
+
     fun onInputChange(text: String) {
         if (isComposerReadOnly()) return
         _inputText.value = text
@@ -731,9 +744,7 @@ class ChatDetailViewModel(
                         if (row.messageId == tempId) row.copy(outboundState = OutboundSendState.FAILED) else row
                     }
                     _inputText.value = text
-                    _events.tryEmit(
-                        it.message ?: getApplication<Application>().getString(R.string.chat_send_error),
-                    )
+                    _events.tryEmit(userMessageForChatSendFailure(it))
                 },
             )
         }

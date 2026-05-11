@@ -36,7 +36,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -65,6 +68,22 @@ class FashApplication : Application(), ImageLoaderFactory {
      * read it via [applicationContext] without [androidx.activity.compose.LocalActivity] (null in that subtree).
      */
     val pendingDeepLinkListingId = MutableStateFlow<String?>(null)
+
+    /**
+     * Ledger row id from FCM / `fash://inbox/{id}`. Consumed when main shell opens the inbox detail sheet.
+     */
+    val pendingInboxNotificationId = MutableStateFlow<String?>(null)
+
+    /**
+     * Incremented when the user should land on the inbox list (e.g. snackbar “Open” after unread increased).
+     * [com.pc.fash_android_mobile.ui.main.MainNavScreen] opens the notification overlay when this changes past 0.
+     */
+    private val _inboxOpenRequestGeneration = MutableStateFlow(0L)
+    val inboxOpenRequestGeneration = _inboxOpenRequestGeneration.asStateFlow()
+
+    fun requestOpenNotificationInbox() {
+        _inboxOpenRequestGeneration.update { it + 1L }
+    }
 
     /**
      * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until
