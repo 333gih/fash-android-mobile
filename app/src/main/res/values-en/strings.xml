@@ -17,6 +17,9 @@
     <string name="language_vietnamese">Tiếng Việt</string>
     <string name="language_english">English</string>
     <string name="dialog_ok">OK</string>
+    <string name="welcome_banner_dialog_title">Welcome to Fash</string>
+    <string name="welcome_banner_dialog_message">Browse listings, save favorites, chat with sellers, and open Notifications so you never miss an update. You can close this anytime — it will not show again after you tap Get started.</string>
+    <string name="welcome_banner_dialog_action">Get started</string>
     <string name="dialog_title_success">Success</string>
     <string name="dialog_title_error">Error</string>
     <string name="dialog_title_info">Information</string>

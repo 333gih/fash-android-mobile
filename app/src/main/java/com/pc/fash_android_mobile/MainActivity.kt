@@ -99,6 +99,7 @@ import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
+import com.pc.fash_android_mobile.ui.components.FashWelcomeBannerDialog
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
 import com.pc.fash_android_mobile.ui.theme.FashLightAppearance
@@ -123,6 +124,7 @@ import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
+import com.pc.fash_android_mobile.data.welcome.WelcomeDialogStore
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -349,6 +351,8 @@ class MainActivity : ComponentActivity() {
                 var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
                 /** Hoisted for [FashSnackbarHost] — main bottom nav vs chat composer vs fullscreen overlays. */
                 var snackbarBottomChromeInset by remember { mutableStateOf(0.dp) }
+                /** One-time welcome dialog after home is available; persisted in [WelcomeDialogStore]. */
+                var showWelcomeBanner by remember { mutableStateOf(false) }
                 val notifPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
                 ) { }
@@ -361,7 +365,29 @@ class MainActivity : ComponentActivity() {
                         needsOnboarding = null
                         selectedConversationId = null
                         snackbarBottomChromeInset = 0.dp
+                        showWelcomeBanner = false
                     }
+                }
+
+                LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
+                    if (!splashFinished || !isAuthenticated) {
+                        showWelcomeBanner = false
+                        return@LaunchedEffect
+                    }
+                    if (needsOnboarding == null) {
+                        showWelcomeBanner = false
+                        return@LaunchedEffect
+                    }
+                    if (needsOnboarding == true) {
+                        showWelcomeBanner = false
+                        return@LaunchedEffect
+                    }
+                    delay(550)
+                    val appCtx = notificationSnackbarContext.applicationContext
+                    val already = withContext(Dispatchers.IO) {
+                        WelcomeDialogStore.isDismissedForCurrentVersion(appCtx)
+                    }
+                    showWelcomeBanner = !already
                 }
 
                 LaunchedEffect(isAuthenticated) {
@@ -1574,14 +1600,23 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val welcomeBottomInset = when {
+                    selectedConversationId != null -> ChatComposerBarOverlayInset
+                    isAuthenticated && needsOnboarding == false -> MainNavBottomBarOverlayInset
+                    else -> 0.dp
+                }
+                FashWelcomeBannerDialog(
+                    visible = showWelcomeBanner,
+                    onDismiss = {
+                        WelcomeDialogStore.markDismissedForCurrentVersion(notificationSnackbarContext.applicationContext)
+                        showWelcomeBanner = false
+                    },
+                    bottomOverlayInset = welcomeBottomInset,
+                )
                 FashGlobalDialogHost(
                     message = dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
-                    bottomOverlayInset = when {
-                        selectedConversationId != null -> ChatComposerBarOverlayInset
-                        isAuthenticated && needsOnboarding == false -> MainNavBottomBarOverlayInset
-                        else -> 0.dp
-                    },
+                    bottomOverlayInset = welcomeBottomInset,
                 )
             }
             }

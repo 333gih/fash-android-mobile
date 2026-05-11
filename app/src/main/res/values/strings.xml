@@ -18,6 +18,9 @@
     <string name="language_english">English</string>
 
     <string name="dialog_ok">Đồng ý</string>
+    <string name="welcome_banner_dialog_title">Chào mừng đến với Fash</string>
+    <string name="welcome_banner_dialog_message">Khám phá tin đăng, lưu yêu thích, chat với người bán và mở mục thông báo để không bỏ lỡ cập nhật. Bạn có thể đóng hộp thoại này bất cứ lúc nào — chúng sẽ không hiện lại sau khi bạn bấm Bắt đầu.</string>
+    <string name="welcome_banner_dialog_action">Bắt đầu</string>
     <string name="dialog_title_success">Thành công</string>
     <string name="dialog_title_error">Lỗi</string>
     <string name="dialog_title_info">Thông tin</string>
