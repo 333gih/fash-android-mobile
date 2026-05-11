@@ -12,6 +12,7 @@ import com.pc.fash_android_mobile.data.user.UserAccessStatus
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -22,7 +23,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private fun ListingFeedItem.isSoldListingStatus(): Boolean =
     listingStatus?.equals("sold", ignoreCase = true) == true
@@ -69,10 +69,79 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     private var loadProfileJob: Job? = null
 
-    /** First load when profile is missing. Skips refetch when the Profile tab recomposes but data is already in memory. */
+    /** Session user id we last reconciled [profile] against; used to detect account switch without a full process restart. */
+    private var lastLoadedProfileForUserId: String? = null
+
+    private fun clearProfileCachesOnly() {
+        loadProfileJob?.cancel()
+        _profile.value = null
+        _sellingListings.value = emptyList()
+        _soldListings.value = emptyList()
+        _wishlistListings.value = emptyList()
+        _loadError.value = false
+        _meetingSchedulingReverifyRequired.value = false
+        _meetingSchedulingSuspendedUntil.value = null
+    }
+
+    /**
+     * Clears cached profile and listings when the session ends.
+     * Call from the same [LaunchedEffect] that observes [AppAuthManager.isAuthenticated] going false.
+     */
+    fun clearCachedProfile() {
+        lastLoadedProfileForUserId = null
+        clearProfileCachesOnly()
+    }
+
+    /**
+     * After cold-start validation or a fresh login: if the in-memory profile belongs to another user,
+     * clear it and refetch. Avoids showing the previous account on the Profile tab when [ProfileViewModel]
+     * is scoped to [MainActivity] and survives logout/login.
+     */
+    fun onAuthenticatedSessionReady() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val sid = (getApplication<FashApplication>().authManager.sessionStore.read()?.userId ?: "")
+                .trim()
+                .lowercase()
+            if (sid.isEmpty()) return@launch
+            withContext(Dispatchers.Main.immediate) {
+                val pid = _profile.value?.userId?.trim()?.lowercase()
+                val staleProfile = !pid.isNullOrBlank() && pid != sid
+                val switchedAccount = lastLoadedProfileForUserId != null && lastLoadedProfileForUserId != sid
+                if (staleProfile || switchedAccount) {
+                    lastLoadedProfileForUserId = null
+                    clearProfileCachesOnly()
+                }
+                lastLoadedProfileForUserId = sid
+                if (_profile.value == null) {
+                    loadProfile()
+                }
+            }
+        }
+    }
+
+    /**
+     * First load when profile is missing; also refetches if cached profile user id does not match the session
+     * (e.g. account switch edge cases).
+     */
     fun ensureProfileLoaded() {
-        if (_profile.value != null) return
-        loadProfile()
+        viewModelScope.launch(Dispatchers.IO) {
+            val sid = (getApplication<FashApplication>().authManager.sessionStore.read()?.userId ?: "")
+                .trim()
+                .lowercase()
+            withContext(Dispatchers.Main.immediate) {
+                val pid = _profile.value?.userId?.trim()?.lowercase()
+                if (sid.isNotEmpty() && !pid.isNullOrBlank() && sid != pid) {
+                    lastLoadedProfileForUserId = null
+                    clearProfileCachesOnly()
+                    lastLoadedProfileForUserId = sid
+                    loadProfile()
+                    return@withContext
+                }
+                if (_profile.value == null && sid.isNotEmpty()) {
+                    loadProfile()
+                }
+            }
+        }
     }
 
     fun loadProfile() {

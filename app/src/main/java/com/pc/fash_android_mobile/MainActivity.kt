@@ -362,11 +362,19 @@ class MainActivity : ComponentActivity() {
                         realtimeManager.connect()
                     } else {
                         realtimeManager.disconnect()
+                        profileViewModel.clearCachedProfile()
                         needsOnboarding = null
                         selectedConversationId = null
                         snackbarBottomChromeInset = 0.dp
                         showWelcomeBanner = false
                     }
+                }
+
+                // Profile VM is activity-scoped: reconcile or reload after splash validation / login so the tab
+                // never shows the previous user's profile or listings.
+                LaunchedEffect(splashFinished, isAuthenticated) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    profileViewModel.onAuthenticatedSessionReady()
                 }
 
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
