@@ -25,6 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -33,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
@@ -275,10 +278,17 @@ fun CreateListingReviewCard(
 
 @Composable
 fun CreateListingReviewFooter() {
-    PostFlowNoticeCard(
-        text = stringResource(R.string.create_listing_legal_disclaimer),
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    PostFlowLegalNoticeCard(
         horizontalPadding = FashTheme.spacing.editorialStart,
         title = stringResource(R.string.post_review_notice_title),
+        onTermsClick = {
+            uriHandler.openUri(AppEnvironment.legalTermsUrl(AppLocale.currentTag(context)))
+        },
+        onPrivacyClick = {
+            uriHandler.openUri(AppEnvironment.legalPrivacyUrl(AppLocale.currentTag(context)))
+        },
     )
 }
 

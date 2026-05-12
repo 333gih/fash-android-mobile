@@ -204,6 +204,13 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     )
 
     /**
+     * Public marketing / legal site root (no trailing slash). App opens `{base}/{vi|en}/terms` and `.../privacy`.
+     * Production: `https://fashandcurious.com/portal` (see traefik PathPrefix `/portal`).
+     */
+    val legalPortalBaseUrl = envVal("LEGAL_PORTAL_BASE_URL") ?: "https://fashandcurious.com/portal"
+    buildConfigField("String", "LEGAL_PORTAL_BASE_URL", buildConfigStringLiteral(legalPortalBaseUrl))
+
+    /**
      * HTTPS URL for out-of-app identity / KYC re-verification (meetup trust). Empty = no in-app “open” button;
      * user can still complete verification elsewhere and tap “I've finished” to POST ack.
      */

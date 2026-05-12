@@ -508,7 +508,11 @@
     <string name="create_listing_step3_subtitle">Review your listing</string>
     <string name="create_listing_seller_just_active">Just active</string>
     <string name="create_listing_post_for_sale">POST FOR SALE</string>
-    <string name="create_listing_legal_disclaimer">By tapping Post for sale, you agree to our Terms of use and Community guidelines.</string>
+    <string name="create_listing_legal_prefix">By tapping Post for sale, you agree to our\u00A0</string>
+    <string name="create_listing_legal_terms_link">Terms of use</string>
+    <string name="create_listing_legal_mid">\u00A0and\u00A0</string>
+    <string name="create_listing_legal_privacy_link">Privacy policy</string>
+    <string name="create_listing_legal_suffix">.</string>
     <string name="create_listing_location_default">Hanoi</string>
     <string name="create_listing_just_now">Just now</string>
 

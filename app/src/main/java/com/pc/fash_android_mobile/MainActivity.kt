@@ -122,6 +122,7 @@ import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
@@ -1624,8 +1625,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     isGoogleConfigured = googleOk,
                                     isFacebookConfigured = facebookOk,
-                                    onTermsClick = { openUrl("https://example.com/terms") },
-                                    onPrivacyClick = { openUrl("https://example.com/privacy") },
+                                    onTermsClick = {
+                                        openUrl(AppEnvironment.legalTermsUrl(AppLocale.currentTag(this@MainActivity)))
+                                    },
+                                    onPrivacyClick = {
+                                        openUrl(AppEnvironment.legalPrivacyUrl(AppLocale.currentTag(this@MainActivity)))
+                                    },
                                     usePasswordLogin = usePasswordLogin,
                                     onTogglePasswordLogin = loginViewModel::togglePasswordLogin,
                                     password = password,

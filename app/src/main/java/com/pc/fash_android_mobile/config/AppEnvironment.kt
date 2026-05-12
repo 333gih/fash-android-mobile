@@ -190,6 +190,23 @@ object AppEnvironment {
         return "$base/$id"
     }
 
+    /**
+     * Marketing / legal pages on the admin portal (see `fash-admin-portal-fe` publish routes).
+     * [languageTag] should be [AppLocale.TAG_VI] or [AppLocale.TAG_EN] (e.g. from [AppLocale.currentTag]).
+     */
+    val legalPortalBaseUrl: String
+        get() = BuildConfig.LEGAL_PORTAL_BASE_URL.trimEnd('/')
+
+    fun legalTermsUrl(languageTag: String): String {
+        val lang = if (languageTag.equals(AppLocale.TAG_EN, ignoreCase = true)) AppLocale.TAG_EN else AppLocale.TAG_VI
+        return "${legalPortalBaseUrl}/$lang/terms"
+    }
+
+    fun legalPrivacyUrl(languageTag: String): String {
+        val lang = if (languageTag.equals(AppLocale.TAG_EN, ignoreCase = true)) AppLocale.TAG_EN else AppLocale.TAG_VI
+        return "${legalPortalBaseUrl}/$lang/privacy"
+    }
+
     /** From env `IDENTITY_REVERIFY_URL` — optional Custom Tabs target for meetup identity re-verification. */
     val identityReverifyUrl: String
         get() = BuildConfig.IDENTITY_REVERIFY_URL.trim()

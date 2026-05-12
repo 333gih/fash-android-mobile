@@ -527,7 +527,11 @@
     <string name="create_listing_step3_subtitle">Xem lại tin đăng của bạn</string>
     <string name="create_listing_seller_just_active">Vừa hoạt động</string>
     <string name="create_listing_post_for_sale">ĐĂNG BÁN</string>
-    <string name="create_listing_legal_disclaimer">Bằng cách nhấn Đăng bán, bạn đồng ý với Điều khoản sử dụng và Chính sách cộng đồng của chúng tôi.</string>
+    <string name="create_listing_legal_prefix">Bằng cách nhấn Đăng bán, bạn đồng ý với\u00A0</string>
+    <string name="create_listing_legal_terms_link">Điều khoản sử dụng</string>
+    <string name="create_listing_legal_mid">\u00A0và\u00A0</string>
+    <string name="create_listing_legal_privacy_link">Chính sách bảo mật</string>
+    <string name="create_listing_legal_suffix">\u00A0của chúng tôi.</string>
     <string name="create_listing_location_default">Hà Nội</string>
     <string name="create_listing_just_now">Vừa xong</string>
 
