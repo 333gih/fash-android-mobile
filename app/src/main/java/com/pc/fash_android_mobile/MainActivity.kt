@@ -98,6 +98,7 @@ import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
+import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
 import com.pc.fash_android_mobile.ui.components.FashWelcomeBannerDialog
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
@@ -137,6 +138,10 @@ private const val SPLASH_DISPLAY_MS = 2_500L
 private const val ACCESS_STATUS_POLL_MS = 350L
 private const val ACCESS_STATUS_POLL_ATTEMPTS = 5
 
+/** Initial GET setup-status retries after login / cold start (transient network / cold LB). */
+private const val SETUP_STATUS_INITIAL_RETRY_MS = 450L
+private const val SETUP_STATUS_INITIAL_ATTEMPTS = 4
+
 /** How the seller shop overlay was opened — restores the correct screen when closing (e.g. tag taps). */
 private enum class SellerShopEntrySource {
     None,
@@ -154,9 +159,8 @@ private enum class SellerShopEntrySource {
 private suspend fun refreshNeedsOnboardingFlag(repo: UserRepository): Boolean =
     repo.getUserAccessStatus().fold(
         onSuccess = { !it.canAccessHome },
-        // Never treat network/server errors as "needs onboarding" — that incorrectly opened aesthetic tags.
-        // Auth/session expiry clears via [SecuredApiClient] → [AppAuthManager.onSessionCleared] → login.
-        onFailure = { false },
+        // If we cannot confirm setup-status, stay in onboarding rather than opening main with a broken profile.
+        onFailure = { true },
     )
 
 private suspend fun resolveNeedsOnboardingAfterProfileSubmit(repo: UserRepository): Boolean {
@@ -287,6 +291,9 @@ class MainActivity : ComponentActivity() {
             }
             // Not saveable: a persisted false would skip re-fetching access-status after process restore (wrong home).
             var needsOnboarding by remember { mutableStateOf<Boolean?>(null) }
+            var setupGateFetchFailed by remember { mutableStateOf(false) }
+            var setupGateAttempt by remember { mutableIntStateOf(0) }
+            val setupGateRecheckGen by fashApp.setupGateRecheckGeneration.collectAsState()
             val mainScope = rememberCoroutineScope()
             val isLoggingOut by loginViewModel.isLoggingOut.collectAsState()
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
@@ -364,6 +371,9 @@ class MainActivity : ComponentActivity() {
                         realtimeManager.disconnect()
                         profileViewModel.clearCachedProfile()
                         needsOnboarding = null
+                        fashApp.resetSetupGateRecheckGeneration()
+                        setupGateAttempt = 0
+                        setupGateFetchFailed = false
                         selectedConversationId = null
                         snackbarBottomChromeInset = 0.dp
                         showWelcomeBanner = false
@@ -461,22 +471,55 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(splashFinished, isAuthenticated) {
+                LaunchedEffect(splashFinished, isAuthenticated, setupGateAttempt) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    setupGateFetchFailed = false
+                    needsOnboarding = null
                     val userRepo = (this@MainActivity.application as FashApplication).userRepository
-                    needsOnboarding = withContext(Dispatchers.IO) {
-                        userRepo.getUserAccessStatus().fold(
-                            onSuccess = { status ->
-                                if (!status.canAccessHome) {
-                                    onboardingViewModel.applyInitialStepFromAccessStatus(status)
-                                }
-                                !status.canAccessHome
-                            },
-                            // Do not send users to onboarding on transient errors / 5xx / timeouts.
-                            // Invalid/expired session: refresh path clears session → login screen.
-                            onFailure = { false },
-                        )
+                    val gate = withContext(Dispatchers.IO) {
+                        repeat(SETUP_STATUS_INITIAL_ATTEMPTS) { attempt ->
+                            userRepo.getUserAccessStatus().fold(
+                                onSuccess = { status ->
+                                    return@withContext status to !status.canAccessHome
+                                },
+                                onFailure = { },
+                            )
+                            if (attempt < SETUP_STATUS_INITIAL_ATTEMPTS - 1) {
+                                delay(SETUP_STATUS_INITIAL_RETRY_MS)
+                            }
+                        }
+                        null
                     }
+                    if (gate == null) {
+                        setupGateFetchFailed = true
+                        needsOnboarding = null
+                    } else {
+                        val (status, needOnboarding) = gate
+                        if (needOnboarding) {
+                            onboardingViewModel.applyInitialStepFromAccessStatus(status)
+                        }
+                        needsOnboarding = needOnboarding
+                    }
+                }
+
+                LaunchedEffect(splashFinished, isAuthenticated, setupGateRecheckGen) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    if (setupGateRecheckGen == 0L) return@LaunchedEffect
+                    val userRepo = (this@MainActivity.application as FashApplication).userRepository
+                    withContext(Dispatchers.IO) {
+                        userRepo.getUserAccessStatus()
+                    }.fold(
+                        onSuccess = { status ->
+                            if (!status.canAccessHome) {
+                                setupGateFetchFailed = false
+                                onboardingViewModel.applyInitialStepFromAccessStatus(status)
+                                needsOnboarding = true
+                                profileViewModel.clearCachedProfile()
+                                profileViewModel.onAuthenticatedSessionReady()
+                            }
+                        },
+                        onFailure = { },
+                    )
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -484,6 +527,18 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize()) {
                             when {
                                 isLoggingOut -> FashWaitingScreen()
+                                isAuthenticated && setupGateFetchFailed -> {
+                                    SetupGateRetryScreen(
+                                        onRetry = {
+                                            setupGateFetchFailed = false
+                                            setupGateAttempt++
+                                        },
+                                        onSignOut = {
+                                            authManager.sessionStore.clear()
+                                            authManager.onSessionCleared()
+                                        },
+                                    )
+                                }
                                 isAuthenticated && needsOnboarding == null -> FashWaitingScreen()
                                 isAuthenticated && needsOnboarding == true -> {
                                     LaunchedEffect(onboardingStep) {

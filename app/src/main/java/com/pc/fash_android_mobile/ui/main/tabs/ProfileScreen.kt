@@ -254,6 +254,22 @@ private fun ProfileIdentityBlock(
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
         )
+        profile?.accountEmail?.takeIf { it.isNotBlank() }?.let { em ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.profile_account_email, em),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        profile?.accountPhone?.takeIf { it.isNotBlank() }?.let { ph ->
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.profile_account_phone, ph),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
         if (onEditClick != null) {
             TextButton(
                 onClick = onEditClick,

@@ -34,10 +34,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -519,6 +521,49 @@ fun FashWaitingOverlay(
         exit = fadeOut(),
     ) {
         FashWaitingScreen()
+    }
+}
+
+/**
+ * Shown when `GET …/setup-status` (or legacy access-status) fails after retries so we never open the main shell
+ * without knowing whether onboarding is required.
+ */
+@Composable
+fun SetupGateRetryScreen(
+    onRetry: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(scheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 32.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.setup_gate_error_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = scheme.onBackground,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.setup_gate_error_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(28.dp))
+        Button(onClick = onRetry) {
+            Text(stringResource(R.string.setup_gate_retry))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        TextButton(onClick = onSignOut) {
+            Text(stringResource(R.string.setup_gate_sign_out))
+        }
     }
 }
 

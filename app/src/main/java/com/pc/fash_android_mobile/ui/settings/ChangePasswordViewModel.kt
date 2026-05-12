@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pc.fash_android_mobile.data.auth.AuthTokenRefreshCoordinator
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -22,6 +23,8 @@ class ChangePasswordViewModel(
 
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val authManager =
+        (application as FashApplication).authManager
 
     private val _currentPassword = MutableStateFlow("")
     val currentPassword: StateFlow<String> = _currentPassword.asStateFlow()
@@ -67,6 +70,13 @@ class ChangePasswordViewModel(
                 }
                 result.fold(
                     onSuccess = {
+                        withContext(Dispatchers.IO) {
+                            AuthTokenRefreshCoordinator.refreshIfStillCurrent(
+                                authManager.sessionStore,
+                                authManager.authRepository,
+                                "",
+                            )
+                        }
                         _currentPassword.value = ""
                         _newPassword.value = ""
                         _confirmPassword.value = ""

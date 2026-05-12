@@ -178,7 +178,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         withContext(Dispatchers.IO) {
             userRepository.getMeProfile().fold(
                 onSuccess = { _profile.value = it },
-                onFailure = { _loadError.value = true },
+                onFailure = {
+                    _loadError.value = true
+                    val gate = userRepository.getUserAccessStatus().getOrNull()
+                    if (gate == null || !gate.canAccessHome) {
+                        (getApplication<FashApplication>()).requestSetupGateRecheckFromIncompleteProfile()
+                    }
+                },
             )
             userRepository.getUserAccessStatus().getOrNull()?.let { applyMeetingTrustFromStatus(it) }
         }

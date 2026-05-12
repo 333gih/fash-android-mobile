@@ -958,6 +958,8 @@ class UserRepository(
                 "sizing_reference_completed",
                 o.optBoolean("SizingReferenceCompleted", false),
             ),
+            accountEmail = "",
+            accountPhone = "",
         )
     }
 
@@ -1009,27 +1011,35 @@ class UserRepository(
 
     fun getUserAccessStatus(): Result<UserAccessStatus> = runCatching {
         val path = AppEnvironment.userAccessStatusPath.trim().trimStart('/')
-        val url = AppEnvironment.apiPath(path)
-        val body = securedClient.newCall(
-            Request.Builder()
-                .url(url)
-                .get()
-                .header("Accept", "application/json")
-                .header("User-Agent", "FashAndroid/1.0")
-                .build(),
-        ).execute().use { response ->
-            val b = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val msg = try {
-                    JSONObject(b).optString("error", b).ifBlank { b }
-                } catch (_: Exception) {
+        val urls = AppEnvironment.coreApiCandidateUrls(path)
+        var last: Exception? = null
+        for (url in urls) {
+            try {
+                val body = securedClient.newCall(
+                    Request.Builder()
+                        .url(url)
+                        .get()
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "FashAndroid/1.0")
+                        .build(),
+                ).execute().use { response ->
+                    val b = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        val msg = try {
+                            JSONObject(b).optString("error", b).ifBlank { b }
+                        } catch (_: Exception) {
+                            b
+                        }
+                        error("HTTP ${response.code}: $msg")
+                    }
                     b
                 }
-                error("HTTP ${response.code}: $msg")
+                return@runCatching parseUserAccessStatus(body)
+            } catch (e: Exception) {
+                last = e
             }
-            b
         }
-        parseUserAccessStatus(body)
+        throw last ?: IllegalStateException("getUserAccessStatus: no candidate URL")
     }
 
     /**
@@ -1065,7 +1075,89 @@ class UserRepository(
         }
         val obj = JSONObject(body.trim())
         val profileJson = if (obj.has("data")) obj.getJSONObject("data").toString() else body
-        parseProfileInfo(profileJson)
+        val profile = parseProfileInfo(profileJson)
+        mergeAuthMeIntoProfile(profile, fetchAuthMeJsonOrNull())
+    }
+
+    /**
+     * Updates auth-service identity fields (`PATCH …/auth/me`); same JWT as core.
+     * After success, callers typically call [getMeProfile] again to refresh merged state.
+     */
+    fun patchAuthMe(
+        fullName: String? = null,
+        phoneNumber: String? = null,
+        avatarUrl: String? = null,
+    ): Result<Unit> = runCatching {
+        if (fullName == null && phoneNumber == null && avatarUrl == null) {
+            error("patchAuthMe: at least one field required")
+        }
+        val path = AppEnvironment.authMePath.trim().trimStart('/')
+        val url = AppEnvironment.authServicePath(path)
+        val json = JSONObject().apply {
+            fullName?.let { put("full_name", it) }
+            phoneNumber?.let { put("phone_number", it) }
+            avatarUrl?.let { put("avatar_url", it) }
+        }.toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .patch(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val b = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try { JSONObject(b).optString("message", JSONObject(b).optString("error", b)).ifBlank { b } } catch (_: Exception) { b }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
+    private fun fetchAuthMeJsonOrNull(): String? = try {
+        val path = AppEnvironment.authMePath.trim().trimStart('/')
+        val url = AppEnvironment.authServicePath(path)
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            response.body?.string()?.takeIf { it.isNotBlank() }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun mergeAuthMeIntoProfile(profile: ProfileInfo, authBody: String?): ProfileInfo {
+        if (authBody.isNullOrBlank()) return profile
+        val o = JSONObject(authBody.trim())
+        val root = when {
+            o.has("data") && o.get("data") is JSONObject -> o.getJSONObject("data")
+            else -> o
+        }
+        val email = root.optString("email", "").trim()
+        val phone = root.optString("phone_number", "").trim()
+        val fullName = root.optString("full_name", "").trim()
+        val avatar = root.optString("avatar_url", "").trim()
+        val authId = root.optString("id", "").trim()
+        var display = profile.displayName
+        if (display.isBlank() && fullName.isNotEmpty()) display = fullName
+        var avatarUrl = profile.avatarUrl
+        if (avatarUrl.isBlank() && avatar.isNotEmpty()) avatarUrl = avatar
+        var uid = profile.userId
+        if (uid.isBlank() && authId.isNotEmpty()) uid = authId
+        return profile.copy(
+            userId = uid,
+            displayName = display,
+            avatarUrl = avatarUrl,
+            accountEmail = email,
+            accountPhone = phone,
+        )
     }
 
     private fun parseAestheticTags(json: String): List<AestheticTag> {
@@ -1076,7 +1168,9 @@ class UserRepository(
             else -> try {
                 val obj = JSONObject(raw)
                 if (obj.has("data")) obj.getJSONArray("data") else JSONArray("[]")
-            } catch (_: Exception) { JSONArray("[]") }
+            } catch (_: Exception) {
+                JSONArray("[]")
+            }
         }
         val list = mutableListOf<AestheticTag>()
         for (i in 0 until arr.length()) {
@@ -1085,7 +1179,10 @@ class UserRepository(
                 AestheticTag(
                     id = o.optString("id", o.optString("ID", "")),
                     name = o.optString("name", o.optString("Name", "")),
-                    displayName = o.optString("display_name", o.optString("DisplayName", o.optString("name", o.optString("Name", "")))),
+                    displayName = o.optString(
+                        "display_name",
+                        o.optString("DisplayName", o.optString("name", o.optString("Name", ""))),
+                    ),
                     sortOrder = o.optInt("sort_order", o.optInt("SortOrder", 0)),
                 ),
             )
@@ -1319,4 +1416,8 @@ data class ProfileInfo(
     val verified: Boolean = false,
     /** Onboarding / profile sizing step completed (`sizing_reference_completed`). */
     val sizingReferenceCompleted: Boolean = false,
+    /** From auth-service `GET /auth/me` — account email (core profile may omit). */
+    val accountEmail: String = "",
+    /** From auth-service `GET /auth/me` — account phone. */
+    val accountPhone: String = "",
 )

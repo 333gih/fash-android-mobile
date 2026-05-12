@@ -86,6 +86,8 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("String", "AUTH_FCM_REGISTER_PATH", buildConfigStringLiteral(fcmRegisterPath))
     val changePasswordPath = envVal("AUTH_CHANGE_PASSWORD_PATH") ?: "api/v1/auth/change-password"
     buildConfigField("String", "AUTH_CHANGE_PASSWORD_PATH", buildConfigStringLiteral(changePasswordPath))
+    val authMePath = envVal("AUTH_ME_PATH") ?: "api/v1/auth/me"
+    buildConfigField("String", "AUTH_ME_PATH", buildConfigStringLiteral(authMePath))
 
     /**
      * When true, [com.pc.fash_android_mobile.config.AppEnvironment.authServicePath] becomes

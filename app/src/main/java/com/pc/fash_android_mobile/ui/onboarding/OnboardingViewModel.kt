@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.ui.onboarding
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pc.fash_android_mobile.data.auth.AuthTokenRefreshCoordinator
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
@@ -42,6 +43,8 @@ class OnboardingViewModel(
         (application as FashApplication).onboardingLocalStore
     private val sessionStore =
         (application as FashApplication).authManager.sessionStore
+    private val authManager =
+        (application as FashApplication).authManager
 
     private val _onboardingStep = MutableStateFlow(OnboardingStep.AestheticTags)
     val onboardingStep: StateFlow<OnboardingStep> = _onboardingStep.asStateFlow()
@@ -109,15 +112,16 @@ class OnboardingViewModel(
     private fun resolveNextStep(status: UserAccessStatus): OnboardingStep {
         val uid = currentUserId()
         val skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted
+        val ns = status.nextStep?.trim()?.lowercase()
         return when {
+            status.needsPasswordSetup() || ns == "password" ->
+                OnboardingStep.SetupPassword
             !status.aestheticTagsConfigured && !onboardingLocalStore.skippedAestheticTags(uid) ->
                 OnboardingStep.AestheticTags
             !status.sizingReferenceCompleted && !skipSizingEnv && !onboardingLocalStore.skippedSizing(uid) ->
                 OnboardingStep.SizingReference
             !status.onboardingDone ->
                 OnboardingStep.UsernameOnboard
-            status.needsPasswordSetup() ->
-                OnboardingStep.SetupPassword
             status.canAccessHome ->
                 OnboardingStep.Completed
             else ->
@@ -473,6 +477,11 @@ class OnboardingViewModel(
                         _setupPassword.value = ""
                         _setupPasswordConfirm.value = ""
                         val status = withContext(Dispatchers.IO) {
+                            AuthTokenRefreshCoordinator.refreshIfStillCurrent(
+                                authManager.sessionStore,
+                                authManager.authRepository,
+                                "",
+                            )
                             userRepository.getUserAccessStatus().getOrNull()
                         }
                         val base = status ?: lastAccessStatus?.copy(passwordSet = true, isChangePassword = false)

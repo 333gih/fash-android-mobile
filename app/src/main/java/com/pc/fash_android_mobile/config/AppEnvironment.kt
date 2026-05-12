@@ -76,6 +76,10 @@ object AppEnvironment {
     val authChangePasswordPath: String
         get() = BuildConfig.AUTH_CHANGE_PASSWORD_PATH
 
+    /** `GET` / `PATCH` — relative to [authServicePath], e.g. `api/v1/auth/me` (fash-auth-service identity). */
+    val authMePath: String
+        get() = BuildConfig.AUTH_ME_PATH
+
     /**
      * OAuth **Web client** id (ends with `.apps.googleusercontent.com`) for [requestIdToken][com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder.requestIdToken].
      */
@@ -152,6 +156,27 @@ object AppEnvironment {
         }
         val lang = AppLocale.coreApiPathSegment()
         return "$base/$lang/$rel"
+    }
+
+    /**
+     * Core API without `{vi|en}/` — for stacks that only expose `/api/v1/...` directly under [apiBaseUrl].
+     */
+    fun apiPathWithoutLocale(relativePath: String): String {
+        val base = apiBaseUrl.trimEnd('/')
+        val rel = relativePath.trimStart('/')
+        return "$base/$rel"
+    }
+
+    /**
+     * Ordered URLs for a core relative path when the locale segment may be absent on the server (Traefik / routing mismatch).
+     * Always tries [apiPath] first; when [BuildConfig.CORE_API_USE_LANGUAGE_PREFIX] is true, also tries [apiPathWithoutLocale] if different.
+     */
+    fun coreApiCandidateUrls(relativePath: String): List<String> {
+        val path = relativePath.trim().trimStart('/')
+        val withLocale = apiPath(path)
+        if (!BuildConfig.CORE_API_USE_LANGUAGE_PREFIX) return listOf(withLocale)
+        val withoutLocale = apiPathWithoutLocale(path)
+        return if (withoutLocale == withLocale) listOf(withLocale) else listOf(withLocale, withoutLocale)
     }
 
     /**

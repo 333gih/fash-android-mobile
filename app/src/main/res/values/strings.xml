@@ -717,6 +717,12 @@
     <string name="profile_empty_pinned_footer_sold">Đơn đã bán sẽ hiển thị khi giao dịch hoàn tất.</string>
     <string name="profile_empty_pinned_footer_wishlist">Khám phá thêm—lưu tin yêu thích ở mục Khám phá.</string>
     <string name="profile_load_error">Không tải được hồ sơ.</string>
+    <string name="profile_account_email">Email: %1$s</string>
+    <string name="profile_account_phone">Điện thoại: %1$s</string>
+    <string name="setup_gate_error_title">Không kiểm tra được bước thiết lập tài khoản</string>
+    <string name="setup_gate_error_body">Vui lòng kiểm tra kết nối mạng rồi thử lại. Ứng dụng cần tải trạng thái thiết lập trước khi vào trang chủ.</string>
+    <string name="setup_gate_retry">Thử lại</string>
+    <string name="setup_gate_sign_out">Đăng xuất</string>
 
     <string name="edit_profile_title">Chỉnh sửa hồ sơ</string>
     <string name="edit_profile_close_cd">Đóng</string>

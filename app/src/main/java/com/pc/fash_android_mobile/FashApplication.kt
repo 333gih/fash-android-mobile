@@ -86,6 +86,21 @@ class FashApplication : Application(), ImageLoaderFactory {
     }
 
     /**
+     * Incremented when profile load fails but the account is (likely) not fully set up — [MainActivity] should
+     * re-fetch setup-status and return the user to onboarding instead of leaving them on a broken home shell.
+     */
+    private val _setupGateRecheckGeneration = MutableStateFlow(0L)
+    val setupGateRecheckGeneration = _setupGateRecheckGeneration.asStateFlow()
+
+    fun requestSetupGateRecheckFromIncompleteProfile() {
+        _setupGateRecheckGeneration.update { it + 1L }
+    }
+
+    fun resetSetupGateRecheckGeneration() {
+        _setupGateRecheckGeneration.value = 0L
+    }
+
+    /**
      * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until
      * the coroutine finishes, which defeats IO dispatchers and causes "failed to complete startup"
      * ANRs when EncryptedSharedPreferences / keystore is slow under memory pressure.
