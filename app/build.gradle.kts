@@ -1,5 +1,6 @@
 import com.android.build.api.dsl.ApplicationProductFlavor
 import java.io.File
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -136,8 +137,10 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("String", "PAYMENT_REDIRECT_URL", buildConfigStringLiteral(paymentRedirectUrl))
 
     /**
-     * Public HTTPS base for listing share links (no trailing slash); listing id is appended: `{base}/{listingId}`.
-     * Must match [AndroidManifest.xml] VIEW intent-filter host/pathPrefix for app links.
+     * Public HTTPS base for listing share links (no trailing slash); final URL is `{base}/{listingId}`.
+     * Use your **marketing / website host** (same host users see in a browser), not `api-*` subdomains:
+     * those URLs must serve an HTML bridge page (e.g. `fash-admin-portal-fe` `/p/l/[id]`) + Android App Links.
+     * Host here must match [AndroidManifest.xml] `android:host`; path prefix must stay `/p/l` unless you change the manifest.
      */
     val listingShareBaseUrl = envVal("LISTING_SHARE_BASE_URL") ?: "https://fash.app/p/l"
     buildConfigField("String", "LISTING_SHARE_BASE_URL", buildConfigStringLiteral(listingShareBaseUrl))
@@ -147,6 +150,27 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         .substringBefore('/')
         .trim()
         .ifBlank { "fash.app" }
+    if (listingShareHost.startsWith("api-", ignoreCase = true)) {
+        logger.lifecycle(
+            "[$flavorName] LISTING_SHARE_BASE_URL uses host '$listingShareHost'. Prefer your public site " +
+                "(e.g. https://fashandcurious.com/p/l) so shared links open in a browser and App Links stay on-brand.",
+        )
+    }
+    val listingSharePath =
+        try {
+            val uriString =
+                if (listingShareBaseUrl.contains("://")) listingShareBaseUrl else "https://$listingShareBaseUrl"
+            val uri = URI(uriString)
+            (uri.path ?: "").trimEnd('/').ifBlank { "" }
+        } catch (_: Exception) {
+            ""
+        }
+    if (listingSharePath != "/p/l") {
+        logger.lifecycle(
+            "[$flavorName] LISTING_SHARE_BASE_URL path is '${listingSharePath.ifBlank { "/" }}' — " +
+                "AndroidManifest intent-filters use pathPrefix /p/l/ only; mismatch breaks HTTPS deep links.",
+        )
+    }
     manifestPlaceholders["listingShareHost"] = listingShareHost
     /**
      * Core API path template for initiating gateway payment (single %s = order_id).

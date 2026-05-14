@@ -181,6 +181,8 @@ object AppEnvironment {
 
     /**
      * Share / universal link for a listing ([BuildConfig.LISTING_SHARE_BASE_URL] + `/` + id).
+     * This must be a **browser-resolvable** HTTPS URL on your marketing domain (not an API-only host), so chat apps
+     * can show a preview page; the site should offer “Open in app” (see portal `app/p/l/[listingId]`).
      * Also use [com.pc.fash_android_mobile.deeplink.ListingDeepLinks.fashListingUri] for the `fash://` fallback.
      */
     fun listingShareUrl(listingId: String): String {
