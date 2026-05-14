@@ -101,6 +101,17 @@ class FashApplication : Application(), ImageLoaderFactory {
     }
 
     /**
+     * Incremented after OTP / password / social login succeeds so [MainActivity] can refresh
+     * Home, Explore, and notification counts while the user token is now valid (feeds may differ for authed users).
+     */
+    private val _postLoginDataRefreshGeneration = MutableStateFlow(0L)
+    val postLoginDataRefreshGeneration = _postLoginDataRefreshGeneration.asStateFlow()
+
+    fun requestPostLoginDataRefresh() {
+        _postLoginDataRefreshGeneration.update { it + 1L }
+    }
+
+    /**
      * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until
      * the coroutine finishes, which defeats IO dispatchers and causes "failed to complete startup"
      * ANRs when EncryptedSharedPreferences / keystore is slow under memory pressure.

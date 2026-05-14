@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -128,6 +129,8 @@ fun LoginScreen(
     isPasswordLoading: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val formLockedForSocial = isSocialLoading
+    val signingInLabel = stringResource(R.string.login_social_signing_in)
     val emailValid = isValidEmail(email)
     val passwordValid = password.isNotBlank()
 
@@ -219,11 +222,14 @@ fun LoginScreen(
                 EmailFieldWithRail(
                     email = email,
                     onEmailChange = onEmailChange,
+                    enabled = !formLockedForSocial,
                     onDone = {
                         if (usePasswordLogin) {
-                            if (emailValid && passwordValid && !isPasswordLoading) onLoginWithPassword?.invoke()
+                            if (emailValid && passwordValid && !isPasswordLoading && !formLockedForSocial) {
+                                onLoginWithPassword?.invoke()
+                            }
                         } else {
-                            if (emailValid && !isOtpLoading) onSendOtp()
+                            if (emailValid && !isOtpLoading && !formLockedForSocial) onSendOtp()
                         }
                     },
                 )
@@ -233,7 +239,12 @@ fun LoginScreen(
                     PasswordFieldWithRail(
                         password = password,
                         onPasswordChange = onPasswordChange,
-                        onDone = { if (emailValid && passwordValid && !isPasswordLoading) onLoginWithPassword?.invoke() },
+                        enabled = !formLockedForSocial,
+                        onDone = {
+                            if (emailValid && passwordValid && !isPasswordLoading && !formLockedForSocial) {
+                                onLoginWithPassword?.invoke()
+                            }
+                        },
                     )
                 }
 
@@ -252,7 +263,11 @@ fun LoginScreen(
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
                             .padding(4.dp)
-                            .clickable(onClick = onTogglePasswordLogin),
+                            .clickable(
+                                enabled = !formLockedForSocial,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { onTogglePasswordLogin!!() },
                     )
                 }
 
@@ -264,8 +279,8 @@ fun LoginScreen(
                         else -> onSendOtp
                     },
                     enabled = when {
-                        usePasswordLogin -> emailValid && passwordValid && !isPasswordLoading
-                        else -> emailValid && !isOtpLoading
+                        usePasswordLogin -> emailValid && passwordValid && !isPasswordLoading && !formLockedForSocial
+                        else -> emailValid && !isOtpLoading && !formLockedForSocial
                     },
                     horizontalArrangement = Arrangement.Center,
                     cornerRadius = PillCornerDp,
@@ -350,6 +365,39 @@ fun LoginScreen(
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 12.dp),
                 )
+            }
+            if (isSocialLoading) {
+                val soakClicks = remember { MutableInteractionSource() }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.38f))
+                        .clickable(
+                            interactionSource = soakClicks,
+                            indication = null,
+                        ) { },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 28.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .semantics { contentDescription = signingInLabel },
+                            strokeWidth = 3.dp,
+                            color = scheme.primary,
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = signingInLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.92f),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
             }
         }
     }
@@ -512,6 +560,7 @@ private fun LoginHeroPageIndicator(
 private fun EmailFieldWithRail(
     email: String,
     onEmailChange: (String) -> Unit,
+    enabled: Boolean = true,
     onDone: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -527,6 +576,7 @@ private fun EmailFieldWithRail(
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
+            enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
                 Text(
@@ -577,6 +627,7 @@ private fun EmailFieldWithRail(
 private fun PasswordFieldWithRail(
     password: String,
     onPasswordChange: (String) -> Unit,
+    enabled: Boolean = true,
     onDone: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -593,6 +644,7 @@ private fun PasswordFieldWithRail(
         OutlinedTextField(
             value = password,
             onValueChange = onPasswordChange,
+            enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
                 Text(
@@ -619,7 +671,10 @@ private fun PasswordFieldWithRail(
                 }
             },
             trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    enabled = enabled,
+                ) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = stringResource(

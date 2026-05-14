@@ -295,6 +295,7 @@ class MainActivity : ComponentActivity() {
             var setupGateFetchFailed by remember { mutableStateOf(false) }
             var setupGateAttempt by remember { mutableIntStateOf(0) }
             val setupGateRecheckGen by fashApp.setupGateRecheckGeneration.collectAsState()
+            val postLoginDataRefreshGen by fashApp.postLoginDataRefreshGeneration.collectAsState()
             val mainScope = rememberCoroutineScope()
             val isLoggingOut by loginViewModel.isLoggingOut.collectAsState()
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
@@ -386,6 +387,15 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     profileViewModel.onAuthenticatedSessionReady()
+                }
+
+                /** After any successful login path, refetch feeds and inbox counts now that JWT-backed APIs apply. */
+                LaunchedEffect(splashFinished, isAuthenticated, postLoginDataRefreshGen) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    if (postLoginDataRefreshGen == 0L) return@LaunchedEffect
+                    homeViewModel.refresh()
+                    exploreViewModel.refresh()
+                    notificationsViewModel.refreshUnreadSummary()
                 }
 
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {

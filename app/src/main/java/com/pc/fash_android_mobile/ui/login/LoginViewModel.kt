@@ -36,8 +36,8 @@ class LoginViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
 
-    private val authManager: AppAuthManager =
-        (application as FashApplication).authManager
+    private val fashApp: FashApplication = application as FashApplication
+    private val authManager: AppAuthManager = fashApp.authManager
     private val authRepository = authManager.authRepository
     private val sessionStore = authManager.sessionStore
 
@@ -143,6 +143,7 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
+                    fashApp.requestPostLoginDataRefresh()
                     _events.tryEmit(app.getString(R.string.otp_verify_success))
                     resetAfterVerified()
                 },
@@ -211,6 +212,7 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
+                    fashApp.requestPostLoginDataRefresh()
                     _events.tryEmit(app.getString(R.string.otp_verify_success))
                     resetAfterVerified()
                 },
@@ -259,7 +261,9 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
-                    _events.tryEmit(app.getString(R.string.login_facebook_success))
+                    fashApp.requestPostLoginDataRefresh()
+                    _events.tryEmit(app.getString(R.string.otp_verify_success))
+                    resetAfterVerified()
                 },
                 onFailure = { e ->
                     _events.tryEmit(
@@ -306,7 +310,9 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
-                    _events.tryEmit(app.getString(R.string.login_google_success))
+                    fashApp.requestPostLoginDataRefresh()
+                    _events.tryEmit(app.getString(R.string.otp_verify_success))
+                    resetAfterVerified()
                 },
                 onFailure = { e ->
                     _events.tryEmit(
@@ -319,21 +325,33 @@ class LoginViewModel(
     }
 
     fun onGoogleSignInFailure(exception: Exception) {
+        val app = getApplication<Application>()
         if (exception is ApiException) {
-            if (exception.statusCode == GoogleSignInStatusCodes.SIGN_IN_CANCELLED) return
-            val detail = exception.message?.takeIf { it.isNotBlank() }
-            _events.tryEmit(
-                detail ?: getApplication<Application>().getString(
-                    R.string.login_google_error_code,
-                    exception.statusCode,
-                ),
-            )
+            val status = exception.statusCode
+            if (status == GoogleSignInStatusCodes.SIGN_IN_CANCELLED) return
+            // Do not use exception.message — Play services often returns useless fragments (e.g. "7:").
+            _events.tryEmit(googleSignInFailureUserMessage(app, status))
             return
         }
         _events.tryEmit(
             exception.message?.takeIf { it.isNotBlank() }
-                ?: getApplication<Application>().getString(R.string.login_google_error),
+                ?: app.getString(R.string.login_google_error),
         )
+    }
+
+    /**
+     * Maps [com.google.android.gms.common.api.CommonStatusCodes] / Sign-In status codes to localized copy.
+     * [GoogleSignInStatusCodes.NETWORK_ERROR] (7) often accompanies Cronet `ERR_NAME_NOT_RESOLVED` when DNS is broken.
+     */
+    private fun googleSignInFailureUserMessage(app: Application, status: Int): String {
+        val tech = runCatching { GoogleSignInStatusCodes.getStatusCodeString(status) }.getOrElse { "?" }
+        return when (status) {
+            GoogleSignInStatusCodes.NETWORK_ERROR ->
+                app.getString(R.string.login_google_network_error)
+            GoogleSignInStatusCodes.DEVELOPER_ERROR ->
+                app.getString(R.string.login_google_developer_error)
+            else -> app.getString(R.string.login_google_error_code, status, tech)
+        }
     }
 
     fun warnGoogleNotConfigured() {

@@ -29,6 +29,9 @@ object CoreServiceErrors {
                 val o = JSONObject(raw)
                 val err = o.optString("error", "").trim()
                 if (err.isNotBlank()) return err
+                // fash-auth-service (and other services) use { "code", "message" }
+                val msg = o.optString("message", "").trim()
+                if (msg.isNotBlank()) return msg
             } catch (_: Exception) {
                 // fall through
             }

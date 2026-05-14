@@ -8,7 +8,16 @@ import com.pc.fash_android_mobile.BuildConfig
 
 /**
  * Builds [GoogleSignInClient] using the **Web application** OAuth client id in [BuildConfig.GOOGLE_WEB_CLIENT_ID].
- * You must also register an **Android** OAuth client (package + SHA-1) in Google Cloud Console.
+ *
+ * Important: [BuildConfig.GOOGLE_WEB_CLIENT_ID] must be the **Web application** client ID from Google Cloud
+ * Console (Credentials → OAuth 2.0 Client IDs → type *Web application*). A downloaded JSON whose root key is
+ * `"installed"` is a *Desktop/other* client — that id is the wrong credential type for [requestIdToken] and
+ * often causes [com.google.android.gms.common.api.ApiException] `DEVELOPER_ERROR` or invalid ID tokens.
+ * Create a separate **Web application** client in the *same* GCP project, put its client id in env, and add
+ * that same id to auth-service `GOOGLE_OAUTH_CLIENT_IDS` for server verification.
+ *
+ * You must also create **Android** OAuth clients (package + SHA-1) for `com.pc.fash_android_mobile` and, for
+ * the `dev` flavor, `com.pc.fash_android_mobile.dev` (debug keystore SHA-1 + release/upload SHA-1 as needed).
  */
 fun buildGoogleSignInClient(context: Context): GoogleSignInClient {
     val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
