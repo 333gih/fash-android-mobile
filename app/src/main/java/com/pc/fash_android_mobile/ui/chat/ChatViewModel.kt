@@ -65,6 +65,7 @@ class ChatViewModel(
         viewModelScope.launch {
             realtimeManager.events.collect { event ->
                 when (event) {
+                    is RealtimeEvent.Connected -> resyncConversationRoomSubscriptions()
                     is RealtimeEvent.MessageNew,
                     is RealtimeEvent.ReadReceipts,
                     -> {
@@ -72,6 +73,13 @@ class ChatViewModel(
                         refreshUnreadCount()
                     }
                     else -> Unit
+                }
+            }
+        }
+        viewModelScope.launch {
+            realtimeManager.state.collect { state ->
+                if (state == RealtimeManager.State.CONNECTED) {
+                    resyncConversationRoomSubscriptions()
                 }
             }
         }
@@ -147,6 +155,7 @@ class ChatViewModel(
                         _conversationGroups.value = groups
                         _expandedGroupListingIds.setAll(groups.map { it.listingId })
                         applyCurrentViewFilter()
+                        syncConversationRoomSubscriptionsFromGroups(groups)
                     },
                     onFailure = {
                         _loadError.value = it.message
@@ -162,6 +171,7 @@ class ChatViewModel(
                         fetchSucceeded = true
                         _allConversations.value = all
                         applyCurrentViewFilter()
+                        syncConversationRoomSubscriptions(all)
                     },
                     onFailure = {
                         _loadError.value = it.message
@@ -219,6 +229,7 @@ class ChatViewModel(
                 if (_expandedGroupListingIds.value.isEmpty()) {
                     _expandedGroupListingIds.setAll(groups.map { it.listingId })
                 }
+                syncConversationRoomSubscriptionsFromGroups(groups)
             }
             applyCurrentViewFilter()
         } else {
@@ -228,7 +239,32 @@ class ChatViewModel(
             result.getOrNull()?.let { all ->
                 _allConversations.value = all
                 applyCurrentViewFilter()
+                syncConversationRoomSubscriptions(all)
             }
+        }
+    }
+
+    /**
+     * Join conversation rooms for inbox threads so [typing.start]/[typing.stop] reach this device
+     * while the user is on the chat tab (INTEGRATION.md — typing is room-scoped, unlike message.new).
+     */
+    private fun syncConversationRoomSubscriptions(conversations: List<ConversationItem>) {
+        conversations
+            .map { it.conversationId.trim() }
+            .filter { it.isNotEmpty() }
+            .take(50)
+            .forEach { realtimeManager.subscribeToConversation(it) }
+    }
+
+    private fun syncConversationRoomSubscriptionsFromGroups(groups: List<ConversationListingGroup>) {
+        syncConversationRoomSubscriptions(groups.flatMap { it.conversations })
+    }
+
+    private fun resyncConversationRoomSubscriptions() {
+        if (isGroupedInbox()) {
+            syncConversationRoomSubscriptionsFromGroups(_conversationGroups.value)
+        } else {
+            syncConversationRoomSubscriptions(_allConversations.value)
         }
     }
 

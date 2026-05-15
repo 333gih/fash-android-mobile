@@ -67,11 +67,6 @@ fun FeaturedSellersScreen(
     onSellerClick: (FeaturedSellerItem) -> Unit,
     onListingClick: (listingId: String, sellerId: String?) -> Unit,
 ) {
-    LaunchedEffect(Unit) {
-        if (viewModel.items.value.isEmpty() && !viewModel.isLoading.value) {
-            viewModel.load()
-        }
-    }
     val items by viewModel.items.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()

@@ -91,6 +91,7 @@ import com.pc.fash_android_mobile.ui.main.MainNavScreen
 import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.navigation.SellerShopEntrySource
 import com.pc.fash_android_mobile.ui.navigation.SellerShopRestoreContext
+import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
 import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
@@ -956,6 +957,38 @@ class MainActivity : ComponentActivity() {
                                     LaunchedEffect(showFollowConnections, followConnectionsInitialTab) {
                                         if (showFollowConnections) {
                                             followConnectionsViewModel.show(followConnectionsInitialTab)
+                                        }
+                                    }
+                                    ReloadWhenVisible(showOrdersScreen, selectedOrderId) {
+                                        if (showOrdersScreen && selectedOrderId == null) {
+                                            ordersViewModel.refreshOrders()
+                                        }
+                                    }
+                                    ReloadWhenVisible(showHomeDeliveringScreen, selectedOrderId) {
+                                        if (showHomeDeliveringScreen && selectedOrderId == null) {
+                                            homeDeliveringViewModel.refresh(AppEnvironment.shippingEnabled)
+                                        }
+                                    }
+                                    ReloadWhenVisible(showFeaturedSellersAll, sellerShopUsername, selectedListingId) {
+                                        if (showFeaturedSellersAll && sellerShopUsername == null && selectedListingId == null) {
+                                            featuredSellersViewModel.refresh()
+                                        }
+                                    }
+                                    ReloadWhenVisible(showEditProfile) {
+                                        if (showEditProfile) {
+                                            editProfileViewModel.loadProfile()
+                                        }
+                                    }
+                                    ReloadWhenVisible(sellerShopUsername != null, sellerShopUsername) {
+                                        sellerShopUsername?.let { sellerProfileViewModel.loadForSeller(it) }
+                                    }
+                                    ReloadWhenVisible(
+                                        showShippingAddressList && !showAddAddressScreen,
+                                        showShippingAddressList,
+                                        showAddAddressScreen,
+                                    ) {
+                                        if (showShippingAddressList && !showAddAddressScreen) {
+                                            addressBookViewModel.refresh()
                                         }
                                     }
                                     val orderRepository = remember {

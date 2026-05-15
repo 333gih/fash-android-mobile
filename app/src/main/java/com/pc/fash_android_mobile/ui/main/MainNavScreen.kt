@@ -262,7 +262,10 @@ fun MainNavScreen(
     }
     LaunchedEffect(showNotificationScreen) {
         when {
-            showNotificationScreen -> notificationsViewModel.refreshUnreadSummary()
+            showNotificationScreen -> {
+                notificationsViewModel.refresh()
+                notificationsViewModel.refreshUnreadSummary()
+            }
             wasNotificationOverlayVisible -> notificationsViewModel.refreshUnreadSummary()
         }
         wasNotificationOverlayVisible = showNotificationScreen
@@ -407,14 +410,22 @@ fun MainNavScreen(
                 .padding(paddingValues),
         ) {
             LaunchedEffect(selectedTab) {
-                if (selectedTab in tabs.indices && tabs[selectedTab] == MainTab.Explore) {
+                val tab = tabs.getOrNull(selectedTab)
+                if (tab == MainTab.Explore) {
                     exploreViewModel.onExploreTabSelected()
                 } else {
                     exploreViewModel.setSearchBarExpanded(false)
                 }
-                if (selectedTab in tabs.indices && tabs[selectedTab] == MainTab.Chat) {
-                    chatViewModel.loadConversations()
-                    chatViewModel.refreshUnreadCount()
+                when (tab) {
+                    MainTab.Home -> homeViewModel.refresh()
+                    MainTab.Explore -> Unit
+                    MainTab.Post -> postViewModel.reloadOnNavReselect()
+                    MainTab.Chat -> {
+                        chatViewModel.loadConversations()
+                        chatViewModel.refreshUnreadCount()
+                    }
+                    MainTab.Profile -> profileViewModel.refresh()
+                    null -> Unit
                 }
             }
             AnimatedContent(

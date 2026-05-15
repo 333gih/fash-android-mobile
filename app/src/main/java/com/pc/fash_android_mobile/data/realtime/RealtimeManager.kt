@@ -108,6 +108,9 @@ class RealtimeManager(
     private val subscribedListings: MutableSet<String> =
         Collections.synchronizedSet(mutableSetOf())
 
+    /** Outbound frames queued while the socket is still connecting (typing/subscribe). */
+    private val pendingOutbound = Collections.synchronizedList(mutableListOf<JSONObject>())
+
     private val client: OkHttpClient = OkHttpClient.Builder()
         // Transport-level keep-alive (OkHttp answers server ping frames automatically)
         .pingInterval(25, TimeUnit.SECONDS)
@@ -137,6 +140,7 @@ class RealtimeManager(
         _state.value = State.DISCONNECTED
         subscribedConversations.clear()
         subscribedListings.clear()
+        synchronized(pendingOutbound) { pendingOutbound.clear() }
     }
 
     /**
@@ -147,23 +151,28 @@ class RealtimeManager(
      * in CONNECTING state and was never re-sent after a reconnect.
      */
     fun subscribeToConversation(conversationId: String) {
-        subscribedConversations.add(conversationId)
-        if (_state.value == State.CONNECTED) {
-            send(JSONObject().apply {
+        val cid = normalizeConversationId(conversationId)
+        if (cid.isEmpty()) return
+        subscribedConversations.add(cid)
+        send(
+            JSONObject().apply {
                 put("type", "subscribe.conversation")
-                put("conversation_id", conversationId)
-            })
-        }
-        // Not connected yet → will be sent inside resubscribeAll() when Connected fires
+                put("conversation_id", cid)
+            },
+        )
     }
 
     /** Sends `unsubscribe.conversation` and stops tracking the room. */
     fun unsubscribeFromConversation(conversationId: String) {
-        subscribedConversations.remove(conversationId)
-        send(JSONObject().apply {
-            put("type", "unsubscribe.conversation")
-            put("conversation_id", conversationId)
-        })
+        val cid = normalizeConversationId(conversationId)
+        if (cid.isEmpty()) return
+        subscribedConversations.remove(cid)
+        send(
+            JSONObject().apply {
+                put("type", "unsubscribe.conversation")
+                put("conversation_id", cid)
+            },
+        )
     }
 
     /** Sends `subscribe.listing` and tracks the room for reconnect (INTEGRATION.md §2.5). */
@@ -194,19 +203,27 @@ class RealtimeManager(
 
     /** Sends `typing.start` for the given conversation. */
     fun sendTypingStart(conversationId: String) {
-        send(JSONObject().apply {
-            put("type", "typing.start")
-            put("conversation_id", conversationId)
-        })
+        val cid = normalizeConversationId(conversationId)
+        if (cid.isEmpty()) return
+        send(
+            JSONObject().apply {
+                put("type", "typing.start")
+                put("conversation_id", cid)
+            },
+        )
         _isTyping.value = true
     }
 
     /** Sends `typing.stop` for the given conversation. */
     fun sendTypingStop(conversationId: String) {
-        send(JSONObject().apply {
-            put("type", "typing.stop")
-            put("conversation_id", conversationId)
-        })
+        val cid = normalizeConversationId(conversationId)
+        if (cid.isEmpty()) return
+        send(
+            JSONObject().apply {
+                put("type", "typing.stop")
+                put("conversation_id", cid)
+            },
+        )
         _isTyping.value = false
     }
 
@@ -225,6 +242,8 @@ class RealtimeManager(
                 webSocket = ws
                 _state.value = State.CONNECTED
                 reconnectJob?.cancel()
+                flushPendingOutbound()
+                resubscribeAll()
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -306,8 +325,32 @@ class RealtimeManager(
         }
     }
 
-    private fun send(json: JSONObject) {
+    private fun normalizeConversationId(conversationId: String): String =
+        conversationId.trim().lowercase()
+
+    private fun sendNow(json: JSONObject) {
         webSocket?.send(json.toString())
+    }
+
+    private fun send(json: JSONObject) {
+        if (_state.value == State.CONNECTED && webSocket != null) {
+            sendNow(json)
+            return
+        }
+        if (intentionalDisconnect.get()) return
+        synchronized(pendingOutbound) {
+            pendingOutbound.add(json)
+            while (pendingOutbound.size > 64) {
+                pendingOutbound.removeAt(0)
+            }
+        }
+    }
+
+    private fun flushPendingOutbound() {
+        val batch = synchronized(pendingOutbound) {
+            pendingOutbound.toList().also { pendingOutbound.clear() }
+        }
+        batch.forEach { sendNow(it) }
     }
 
     /**

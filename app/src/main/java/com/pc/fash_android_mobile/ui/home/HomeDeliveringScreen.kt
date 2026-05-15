@@ -41,7 +41,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -87,12 +86,6 @@ fun HomeDeliveringScreen(
     val loadError by viewModel.loadError.collectAsState()
     val confirmingOrderId by viewModel.confirmingOrderId.collectAsState()
     val pullState = rememberPullToRefreshState()
-
-    LaunchedEffect(shippingEnabled) {
-        if (shippingEnabled) {
-            viewModel.loadIfShippingEnabled(shippingEnabled)
-        }
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),

@@ -29,7 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.ShoppingBag
@@ -54,7 +53,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -100,7 +98,6 @@ fun OrdersScreen(
     modifier: Modifier = Modifier,
     viewModel: OrdersViewModel,
     onBack: () -> Unit,
-    onSearchClick: () -> Unit = {},
     /** Bottom promo strip — same role as chat inbox (e.g. open Explore). */
     onExploreClick: () -> Unit = {},
     /** Slider above ad: [slideId] from [FashPromoSlideDef], page index for analytics / deep links. */
@@ -126,10 +123,6 @@ fun OrdersScreen(
         sourceOrders.filter { currentFilter.matches(it) }
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadOrders()
-    }
-
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
         TopAppBar(
             title = {
@@ -144,15 +137,6 @@ fun OrdersScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.orders_back),
-                        tint = FashColors.Primary,
-                    )
-                }
-            },
-            actions = {
-                IconButton(onClick = onSearchClick) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = stringResource(R.string.search_label),
                         tint = FashColors.Primary,
                     )
                 }

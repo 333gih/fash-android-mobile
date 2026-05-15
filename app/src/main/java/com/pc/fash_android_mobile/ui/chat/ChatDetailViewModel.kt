@@ -232,6 +232,9 @@ class ChatDetailViewModel(
         wsJob = viewModelScope.launch {
             realtimeManager.events.collect { event ->
                 when (event) {
+                    is RealtimeEvent.Connected -> {
+                        realtimeManager.subscribeToConversation(conversationId)
+                    }
                     is RealtimeEvent.MessageNew -> {
                         if (sameConversation(event.conversationId, conversationId)) {
                             when {

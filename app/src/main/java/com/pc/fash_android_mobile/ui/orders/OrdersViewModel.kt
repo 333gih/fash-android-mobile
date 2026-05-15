@@ -115,9 +115,15 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
     /** Pull-to-refresh: reload without full-screen blocking spinner when lists already have data. */
     fun refreshOrders() {
         viewModelScope.launch {
-            _isRefreshing.value = true
+            val empty = _buyingOrders.value.isEmpty() && _sellingOrders.value.isEmpty()
+            if (empty) {
+                _isLoading.value = true
+            } else {
+                _isRefreshing.value = true
+            }
             _loadError.value = null
             fetchOrdersIntoState()
+            _isLoading.value = false
             _isRefreshing.value = false
         }
     }
