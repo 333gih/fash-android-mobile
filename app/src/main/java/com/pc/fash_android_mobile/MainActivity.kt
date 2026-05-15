@@ -433,13 +433,16 @@ class MainActivity : ComponentActivity() {
 
                 // Resolve app-open promo only once the setup gate has settled on main shell.
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
-                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) {
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    if (needsOnboarding == true) {
                         activePromoCampaign = null
-                        if (needsOnboarding != false) {
-                            showFeatureTour = false
-                        }
+                        showFeatureTour = false
                         return@LaunchedEffect
                     }
+                    // Gate still loading — do not clear promos; WS may enqueue into PendingQueue meanwhile.
+                    if (needsOnboarding == null) return@LaunchedEffect
+                    if (selectedConversationId != null) return@LaunchedEffect
+
                     delay(550)
                     val appCtx = notificationSnackbarContext.applicationContext
                     val openCount = withContext(Dispatchers.IO) {
@@ -462,13 +465,24 @@ class MainActivity : ComponentActivity() {
                         appOpenCount = openCount,
                     )
                     activePromoCampaign = withContext(Dispatchers.IO) {
+                        AppPromoPendingQueue.pollHighest()?.let { remote ->
+                            if (!AppPromoCampaignStore.isDismissed(appCtx, remote)) return@withContext remote
+                        }
                         AppPromoCampaignResolver.resolve(gate, appCtx)
                     }
                 }
 
-                LaunchedEffect(selectedConversationId) {
+                LaunchedEffect(selectedConversationId, needsOnboarding, splashFinished, isAuthenticated) {
                     if (selectedConversationId != null) {
                         activePromoCampaign = null
+                        return@LaunchedEffect
+                    }
+                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) return@LaunchedEffect
+                    val appCtx = notificationSnackbarContext.applicationContext
+                    AppPromoPendingQueue.peekHighest()?.let { remote ->
+                        if (!AppPromoCampaignStore.isDismissed(appCtx, remote)) {
+                            activePromoCampaign = remote
+                        }
                     }
                 }
 
@@ -551,9 +565,15 @@ class MainActivity : ComponentActivity() {
                             is RealtimeEvent.InboxRefresh ->
                                 fashApp.requestInboxUnreadRefreshDebounced()
                             is RealtimeEvent.AppPromoShow -> {
-                                if (needsOnboarding != false || selectedConversationId != null) return@collect
-                                parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()?.let { promo ->
-                                    AppPromoPendingQueue.enqueue(promo)
+                                val promo = parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()
+                                    ?: return@collect
+                                AppPromoPendingQueue.enqueue(promo)
+                                if (
+                                    splashFinished &&
+                                    isAuthenticated &&
+                                    needsOnboarding == false &&
+                                    selectedConversationId == null
+                                ) {
                                     activePromoCampaign = promo
                                 }
                             }
@@ -563,11 +583,12 @@ class MainActivity : ComponentActivity() {
                 }
 
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
-                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) return@LaunchedEffect
+                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     fashApp.appPromoShowSignals.collect { promo ->
-                        if (selectedConversationId != null) return@collect
                         AppPromoPendingQueue.enqueue(promo)
-                        activePromoCampaign = promo
+                        if (needsOnboarding == false && selectedConversationId == null) {
+                            activePromoCampaign = promo
+                        }
                     }
                 }
 

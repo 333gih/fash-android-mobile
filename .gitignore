@@ -16,3 +16,4 @@ local.properties
 
 # Google OAuth JSON from Cloud Console (may contain secrets; app uses GOOGLE_WEB_CLIENT_ID from env only).
 client_secret*.json
+*.env
