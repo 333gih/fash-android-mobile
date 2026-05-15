@@ -143,7 +143,6 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
-                    fashApp.requestPostLoginDataRefresh()
                     _events.tryEmit(app.getString(R.string.otp_verify_success))
                     resetAfterVerified()
                 },
@@ -212,7 +211,6 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
-                    fashApp.requestPostLoginDataRefresh()
                     _events.tryEmit(app.getString(R.string.otp_verify_success))
                     resetAfterVerified()
                 },
@@ -261,7 +259,6 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
-                    fashApp.requestPostLoginDataRefresh()
                     _events.tryEmit(app.getString(R.string.otp_verify_success))
                     resetAfterVerified()
                 },
@@ -310,7 +307,6 @@ class LoginViewModel(
                 onSuccess = { session ->
                     sessionStore.save(session)
                     authManager.onSessionSaved()
-                    fashApp.requestPostLoginDataRefresh()
                     _events.tryEmit(app.getString(R.string.otp_verify_success))
                     resetAfterVerified()
                 },

@@ -87,6 +87,24 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** Clears PDP + listing realtime subscription after logout so the next user never sees stale CTAs. */
+    fun clearCachesForSignedOutUser() {
+        listingEventsJob?.cancel()
+        listingEventsJob = null
+        if (activeListingId.isNotBlank()) {
+            runCatching { realtimeManager.unsubscribeFromListing(activeListingId) }
+        }
+        activeListingId = ""
+        _detail.value = null
+        _sellerProfile.value = null
+        _moreFromSeller.value = emptyList()
+        _isLoading.value = false
+        _loadError.value = null
+        _isFollowing.value = false
+        _bottomBarMode.value = ProductBottomBarMode.Normal
+        _isOpeningChat.value = false
+    }
+
     fun loadDetail(listingId: String) {
         if (listingId.isBlank()) {
             _loadError.value = getApplication<Application>().getString(R.string.product_detail_error)

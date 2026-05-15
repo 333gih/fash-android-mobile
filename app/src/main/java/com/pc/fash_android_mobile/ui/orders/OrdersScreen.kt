@@ -13,7 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -69,20 +68,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
-import com.pc.fash_android_mobile.ui.components.FashBottomPromoAdStrip
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashPillFilterChip
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
-import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.order.OrderItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
-
-private const val OrdersAdHeightFraction = 0.18f
-private val OrdersAdMinHeight = 72.dp
 
 private data class OrderStatusFilterChipDef(
     val filter: OrderStatusFilter,
@@ -210,18 +205,16 @@ fun OrdersScreen(
             onSelect = viewModel::selectStatusFilter,
         )
 
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
-            val adHeight = (maxHeight * OrdersAdHeightFraction).coerceAtLeast(OrdersAdMinHeight)
-            Column(Modifier.fillMaxSize()) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
                     when {
                     isLoading && buyingOrders.isEmpty() && sellingOrders.isEmpty() -> {
                         Box(
@@ -324,9 +317,10 @@ fun OrdersScreen(
                                             ) { _, order ->
                                                 OrderCard(
                                                     order = order,
+                                                    showReviewButton = selectedTab == 0,
                                                     isConfirming = confirmingOrderId == order.orderId,
                                                     onConfirmReceipt = { viewModel.confirmReceipt(order.orderId) },
-                                                    onReview = { /* TODO */ },
+                                                    onReview = { onOrderClick(order) },
                                                     onClick = { onOrderClick(order) },
                                                 )
                                             }
@@ -339,21 +333,13 @@ fun OrdersScreen(
                     }
                 }
 
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                )
-                FashPromoSliderBlock(
-                    slides = promoSlides,
-                    onSlideClick = onPromoSlideClick,
-                )
-                FashBottomPromoAdStrip(
-                    modifier = Modifier
-                        .height(adHeight)
-                        .fillMaxWidth(),
-                    onExploreClick = onExploreClick,
-                )
-            }
+            FashPromoSliderAdFooter(
+                modifier = Modifier.fillMaxWidth(),
+                onExploreClick = onExploreClick,
+                slides = promoSlides,
+                onSlideClick = onPromoSlideClick,
+                edgeToEdgeAdStrip = true,
+            )
         }
     }
 }
@@ -455,6 +441,7 @@ private fun OrdersEmptyHint(
 @Composable
 private fun OrderCard(
     order: OrderItem,
+    showReviewButton: Boolean,
     isConfirming: Boolean,
     onConfirmReceipt: () -> Unit,
     onReview: () -> Unit,
@@ -541,7 +528,7 @@ private fun OrderCard(
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
-                } else if (order.canReview) {
+                } else if (showReviewButton && order.canReview) {
                     OutlinedButton(
                         onClick = onReview,
                         modifier = Modifier.align(Alignment.End),

@@ -12,7 +12,10 @@ import com.google.firebase.messaging.RemoteMessage
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.MainActivity
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
+import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import org.json.JSONObject
 
 /**
  * Handles FCM token refresh and incoming messages.
@@ -32,6 +35,14 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         if (message.data["inbox_refresh"] == "1") {
             (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
+        }
+        if (message.data["type"] == "admin.app_promo_interstitial") {
+            val raw = message.data["promo_payload"]?.takeIf { it.isNotBlank() } ?: return
+            val promo = runCatching {
+                parseRemoteAppPromoPayload(JSONObject(raw))?.toAppPromoCampaign()
+            }.getOrNull() ?: return
+            (applicationContext as? FashApplication)?.requestShowAppPromo(promo)
+            if (shouldSuppressTrayForPresence()) return
         }
         if (shouldSuppressTrayForPresence()) return
 

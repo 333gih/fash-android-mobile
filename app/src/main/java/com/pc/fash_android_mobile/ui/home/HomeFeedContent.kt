@@ -64,6 +64,8 @@ fun HomeFeedContent(
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onNavigateToExplore: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
+    /** Home journey “Đang giao” — opens dedicated in-transit hub (not the full orders list). */
+    onDeliveringJourneyClick: () -> Unit = onOrdersClick,
     onNavigateToChat: () -> Unit = {},
     /** e.g. open Profile for saved items / account context. */
     onNavigateToSaved: () -> Unit = {},
@@ -78,6 +80,12 @@ fun HomeFeedContent(
     val loadError by viewModel.loadError.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollHomeToTop.collect {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     val showStickyPromo by remember {
         derivedStateOf {
@@ -115,7 +123,7 @@ fun HomeFeedContent(
                 item {
                     BuyerHomeJourneyRow(
                         stats = buyerStats,
-                        onDeliveringClick = onOrdersClick,
+                        onDeliveringClick = onDeliveringJourneyClick,
                         onSavedClick = onNavigateToSaved,
                         onMessagesClick = onNavigateToChat,
                     )

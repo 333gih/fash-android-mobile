@@ -67,6 +67,25 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _ackMeetingReverifyInFlight = MutableStateFlow(false)
     val ackMeetingReverifyInFlight: StateFlow<Boolean> = _ackMeetingReverifyInFlight.asStateFlow()
 
+    /**
+     * Incremented when the user taps “Đã lưu” on Home so [ProfileScreen] opens the wishlist tab
+     * and animates scroll to pin the tab chrome.
+     */
+    private val _wishlistTabOpenGeneration = MutableStateFlow(0L)
+    val wishlistTabOpenGeneration: StateFlow<Long> = _wishlistTabOpenGeneration.asStateFlow()
+
+    private val _scrollProfileToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollProfileToTop: SharedFlow<Unit> = _scrollProfileToTop.asSharedFlow()
+
+    fun requestWishlistTabFromHome() {
+        _wishlistTabOpenGeneration.update { it + 1L }
+    }
+
+    /** Bottom nav re-tap on Profile — scroll list to top (pairs with [refresh]). */
+    fun requestScrollProfileToTop() {
+        viewModelScope.launch { _scrollProfileToTop.emit(Unit) }
+    }
+
     private var loadProfileJob: Job? = null
 
     /** Session user id we last reconciled [profile] against; used to detect account switch without a full process restart. */
@@ -89,6 +108,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
      */
     fun clearCachedProfile() {
         lastLoadedProfileForUserId = null
+        _wishlistTabOpenGeneration.value = 0L
         clearProfileCachesOnly()
     }
 

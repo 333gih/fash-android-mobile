@@ -7,7 +7,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -475,6 +474,30 @@ fun ProfileScreen(
                 val listState = remember(selectedTab) { LazyListState(0, 0) }
                 val scrollScope = rememberCoroutineScope()
                 val pullState = rememberPullToRefreshState()
+                LaunchedEffect(Unit) {
+                    viewModel.scrollProfileToTop.collect {
+                        listState.animateScrollToItem(0)
+                    }
+                }
+                val wishlistTabOpenGen by viewModel.wishlistTabOpenGeneration.collectAsState()
+                /** 0 = Selling, 1 = Sold, 2 = Saved (wishlist) — see [ProfileCollapsingScrollLayout] tab labels. */
+                val wishlistTabIndex = 2
+
+                LaunchedEffect(wishlistTabOpenGen, selectedTab) {
+                    if (wishlistTabOpenGen == 0L) return@LaunchedEffect
+                    if (selectedTab != wishlistTabIndex) {
+                        selectedTab = wishlistTabIndex
+                        return@LaunchedEffect
+                    }
+                    delay(90)
+                    val total = listState.layoutInfo.totalItemsCount
+                    scrollScope.launch {
+                        when {
+                            total > 2 -> runCatching { listState.animateScrollToItem(2, scrollOffset = 0) }
+                            total > 1 -> runCatching { listState.animateScrollToItem(1, scrollOffset = 0) }
+                        }
+                    }
+                }
                 val items = when (selectedTab) {
                     0 -> sellingListings
                     1 -> soldListings
@@ -509,6 +532,7 @@ fun ProfileScreen(
                                         onNavigateToExploreFromProfile(null, null, id, name, null, null)
                                     },
                                 )
+                                ProfileTrustCard(profile = profile)
                                 ProfileStats(
                                     profile = profile,
                                     onFollowersClick = { onOpenFollowConnections(1) },
@@ -726,14 +750,13 @@ internal fun SellerProfileHeader(
     )
 }
 
-/**
- * Prominent trust block for **seller storefront** — placed under the hero/identity, above follower stats.
- */
+/** Same trust/rating card on own profile and seller storefront — matches [ProfileStats] chrome. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ProfileSellerTrustBanner(profile: ProfileInfo?) {
+internal fun ProfileTrustCard(profile: ProfileInfo?) {
     val p = profile ?: return
     val scheme = MaterialTheme.colorScheme
+    val cardShape = RoundedCornerShape(FashTheme.spacing.radiusCard)
     val hasShop = (p.productCount ?: 0) > 0
     val ratingVal = p.rating
     val reviewCount = p.reviewCount
@@ -743,27 +766,27 @@ internal fun ProfileSellerTrustBanner(profile: ProfileInfo?) {
     val fast = p.hasFastDelivery
     if (!hasRatingScore && !showNewShopLine && rep == null && !fast) return
 
+    val showRatingRow = hasRatingScore || showNewShopLine
     val starTint = if (hasRatingScore) {
-        Color(0xFFFFC107)
+        FashColors.Primary
     } else {
-        scheme.onSurfaceVariant.copy(alpha = 0.4f)
+        scheme.onSurfaceVariant.copy(alpha = 0.45f)
     }
-
-    val showRatingBlock = hasRatingScore || showNewShopLine
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(bottom = 8.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = scheme.primaryContainer.copy(alpha = 0.28f),
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
+        shape = cardShape,
+        color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
-            if (showRatingBlock) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (showRatingRow) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -771,79 +794,73 @@ internal fun ProfileSellerTrustBanner(profile: ProfileInfo?) {
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = null,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(22.dp),
                         tint = starTint,
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         when {
                             hasRatingScore && reviewCount != null && reviewCount >= 0 -> {
-                                val r = ratingVal!!
                                 Text(
-                                    text = String.format(Locale.getDefault(), "%.1f", r),
-                                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                    text = String.format(Locale.getDefault(), "%.1f", ratingVal!!),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                    ),
                                     color = scheme.onSurface,
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = stringResource(R.string.profile_seller_trust_reviews_count, reviewCount),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = stringResource(
+                                        R.string.profile_seller_trust_reviews_count,
+                                        reviewCount,
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = scheme.onSurfaceVariant,
                                 )
                             }
                             hasRatingScore -> {
-                                val r = ratingVal!!
                                 Text(
-                                    text = String.format(Locale.getDefault(), "%.1f", r),
-                                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                    text = String.format(Locale.getDefault(), "%.1f", ratingVal!!),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                    ),
                                     color = scheme.onSurface,
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = stringResource(R.string.profile_seller_trust_subtitle_score_only),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = scheme.onSurfaceVariant,
                                 )
                             }
                             else -> {
                                 Text(
                                     text = stringResource(R.string.profile_rating_none_seller),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = scheme.onSurface,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Medium,
+                                    ),
+                                    color = scheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
                 }
             }
-            if (showRatingBlock && (rep != null || fast)) {
-                Spacer(modifier = Modifier.height(14.dp))
-            }
             if (rep != null || fast) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     rep?.let { pts ->
-                        Text(
+                        ProfileTrustBadge(
                             text = stringResource(R.string.profile_reputation_points, pts),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.primary,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(scheme.primaryContainer.copy(alpha = 0.5f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentColor = scheme.primary,
+                            containerColor = scheme.primaryContainer.copy(alpha = 0.45f),
                         )
                     }
                     if (fast) {
-                        Text(
+                        ProfileTrustBadge(
                             text = stringResource(R.string.profile_fast_delivery),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = FashColors.Success,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(FashColors.Success.copy(alpha = 0.18f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentColor = FashColors.Success,
+                            containerColor = FashColors.Success.copy(alpha = 0.12f),
                         )
                     }
                 }
@@ -852,90 +869,27 @@ internal fun ProfileSellerTrustBanner(profile: ProfileInfo?) {
     }
 }
 
+/** @deprecated Use [ProfileTrustCard] — kept as alias for storefront call sites. */
 @Composable
-private fun ProfileTrustAndBadgesRow(profile: ProfileInfo?) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
+internal fun ProfileSellerTrustBanner(profile: ProfileInfo?) {
+    ProfileTrustCard(profile = profile)
+}
+
+@Composable
+private fun ProfileTrustBadge(
+    text: String,
+    contentColor: androidx.compose.ui.graphics.Color,
+    containerColor: androidx.compose.ui.graphics.Color,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+        color = contentColor,
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 4.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val p = profile
-        val ratingVal = p?.rating
-        val reviewCount = p?.reviewCount
-        val hasShop = (p?.productCount ?: 0) > 0
-        var placedSomething = false
-
-        when {
-            ratingVal != null && ratingVal > 0f && reviewCount != null && reviewCount >= 0 -> {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.profile_rating_format, ratingVal, reviewCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-                placedSomething = true
-            }
-            ratingVal != null && ratingVal > 0f -> {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.profile_rating_score_only, ratingVal),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-                placedSomething = true
-            }
-            hasShop && (ratingVal == null || ratingVal <= 0f) -> {
-                Text(
-                    text = stringResource(R.string.profile_rating_none_seller),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-                placedSomething = true
-            }
-        }
-
-        p?.reputationPoints?.takeIf { it > 0 }?.let { pts ->
-            if (placedSomething) Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = stringResource(R.string.profile_reputation_points, pts),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(scheme.primaryContainer.copy(alpha = 0.35f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-            placedSomething = true
-        }
-
-        if (p?.hasFastDelivery == true) {
-            if (placedSomething) Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = stringResource(R.string.profile_fast_delivery),
-                style = MaterialTheme.typography.labelSmall,
-                color = FashColors.Success,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FashColors.Success.copy(alpha = 0.15f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
-    }
+            .clip(RoundedCornerShape(FashTheme.spacing.radiusSoftMin))
+            .background(containerColor)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 @Composable
@@ -943,8 +897,6 @@ internal fun ProfileStats(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
     onFollowersClick: () -> Unit = {},
     onFollowingClick: () -> Unit = {},
-    /** When false (e.g. seller storefront), trust/rating is shown in [ProfileSellerTrustBanner] instead. */
-    showTrustAndBadgesRow: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     Surface(
@@ -992,11 +944,7 @@ internal fun ProfileStats(
             )
         }
     }
-    if (showTrustAndBadgesRow) {
-        ProfileTrustAndBadgesRow(profile = profile)
-    } else {
-        Spacer(modifier = Modifier.height(8.dp))
-    }
+    Spacer(modifier = Modifier.height(4.dp))
     if (profile?.meetingNoShowWarning == true) {
         Row(
             modifier = Modifier

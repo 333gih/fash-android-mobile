@@ -72,6 +72,13 @@ class PendingPaymentViewModel(application: Application) : AndroidViewModel(appli
         realtimeJob = null
     }
 
+    /** Clears banner + stops polling when the user signs out (prevents showing another buyer’s orders). */
+    fun clearForLogout() {
+        stopMonitoring()
+        _banner.value = null
+        expiredSnackbarEmitted.clear()
+    }
+
     /** When local countdown reaches zero (UI tick). Idempotent per [orderId] for snackbar. */
     fun onDeadlineElapsed(orderId: String) {
         if (orderId.isBlank() || orderId in expiredSnackbarEmitted) return
@@ -119,13 +126,11 @@ class PendingPaymentViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             val response = withContext(Dispatchers.IO) {
                 orderRepository.getPendingPaymentOrders().getOrNull()
-            } ?: return@launch
-
-            if (response.orders.isEmpty()) {
+            }
+            if (response == null || response.orders.isEmpty()) {
                 if (_banner.value != null) _banner.value = null
                 return@launch
             }
-
             val now = System.currentTimeMillis()
             val rows = response.orders
                 .asSequence()

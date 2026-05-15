@@ -73,7 +73,8 @@ data class FashPromoSlideDef(
     val navigation: FashPromoNav? = null,
 )
 
-private val FashPromoCardHeight = 112.dp
+/** Promo carousel card height — shared with [FashBottomPromoAdStrip] on Orders / Notifications. */
+val FashPromoCarouselCardHeight = 112.dp
 private const val AutoAdvanceMs = 6_500L
 
 fun defaultFashPromoSlides(scheme: ColorScheme): List<FashPromoSlideDef> = listOf(
@@ -220,7 +221,7 @@ private fun FashPromoCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(FashPromoCardHeight)
+            .height(FashPromoCarouselCardHeight)
             .semantics(mergeDescendants = true) {
                 this.contentDescription = contentDescription
             }

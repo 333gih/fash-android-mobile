@@ -18,4 +18,16 @@ object BusinessFlowConfig {
      */
     val maxOffersPerConversation: Int
         get() = BuildConfig.CHAT_MAX_OFFERS_PER_CONVERSATION
+
+    /**
+     * Env: `C2C_SHIP_FULFILLMENT_ENABLED` — ship path in chat fulfillment chooser (meetup vs ship).
+     */
+    val c2cShipFulfillmentEnabled: Boolean
+        get() = BuildConfig.C2C_SHIP_FULFILLMENT_ENABLED
+
+    /**
+     * Env: `C2C_SHIP_ONLINE_PAYMENT_ENABLED` — in-app checkout / payment step for the ship path.
+     */
+    val c2cShipOnlinePaymentEnabled: Boolean
+        get() = BuildConfig.C2C_SHIP_ONLINE_PAYMENT_ENABLED
 }

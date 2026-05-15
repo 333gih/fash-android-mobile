@@ -1422,7 +1422,7 @@ internal fun OrderStickyBottomBar(
     val st = d.status.trim().lowercase()
     val showPay = role == OrderViewerRole.Buyer && st == "payment_pending"
     val showConfirm = role == OrderViewerRole.Buyer && d.canConfirm
-    val showReview = role == OrderViewerRole.Buyer && d.canReview
+    val showReview = role == OrderViewerRole.Buyer && d.canReview && d.buyerReview == null
     val showConfirmHandoff = role == OrderViewerRole.Seller && d.sellerShowsConfirmHandoffCta()
     val showShip = role == OrderViewerRole.Seller && st == "payment_held" && d.canShip && !showConfirmHandoff
     val showChat =

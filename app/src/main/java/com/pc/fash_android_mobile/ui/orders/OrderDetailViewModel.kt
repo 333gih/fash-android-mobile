@@ -251,6 +251,15 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
      * Loads order detail for [orderId]. Clears cached detail when switching to a different order
      * so the UI never shows another order’s data while waiting.
      */
+    fun clearCachesForSignedOutUser() {
+        _requestedOrderId.value = null
+        _detail.value = null
+        _isLoading.value = false
+        _isRefreshing.value = false
+        _loadError.value = null
+        _busyAction.value = OrderDetailBusyAction.None
+    }
+
     fun load(orderId: String) {
         val clean = orderId.trim()
         if (clean.isBlank()) {

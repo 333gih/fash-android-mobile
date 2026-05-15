@@ -737,6 +737,44 @@ class UserRepository(
     }
 
     /**
+     * `PATCH /users/me/notifications/read-all` — marks every unread inbox row read for current user.
+     * @return Number of rows updated (`data.updated_count`).
+     */
+    fun markAllNotificationsRead(): Result<Int> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/notifications/read-all")
+        val resBody = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .patch("{}".toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(body).optString("error", body).ifBlank { body }
+                } catch (_: Exception) {
+                    body
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            body
+        }
+        parseNotificationsReadAllCount(resBody)
+    }
+
+    private fun parseNotificationsReadAllCount(json: String): Int {
+        val root = JSONObject(json.trim())
+        val data = when {
+            root.has("data") && root.get("data") is JSONObject -> root.getJSONObject("data")
+            else -> root
+        }
+        return data.optInt("updated_count", data.optInt("UpdatedCount", 0)).coerceAtLeast(0)
+    }
+
+    /**
      * `PATCH /users/me/notifications/{id}/read` — marks read for current user.
      * 404 when not found or already read.
      */

@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -318,67 +319,144 @@ private fun CategoryTreeSection(
     selectedId: String,
     onSelectLeaf: (CategoryTreeNode) -> Unit,
 ) {
+    var expandedRootId by remember { mutableStateOf<String?>(null) }
+    var depthPath by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    LaunchedEffect(roots, selectedId) {
+        val lid = selectedId.trim()
+        if (lid.isEmpty()) return@LaunchedEffect
+        val full = findNodePathFromRootsToId(roots, lid) ?: return@LaunchedEffect
+        expandedRootId = full.first().id
+        depthPath = if (full.size <= 1) {
+            emptyList()
+        } else {
+            full.dropLast(1).drop(1).map { it.id }
+        }
+    }
+
+    val expandedRoot = remember(expandedRootId, roots) {
+        expandedRootId?.let { id -> roots.find { it.id == id } }
+    }
+    val currentNode: CategoryTreeNode? = remember(expandedRoot, depthPath) {
+        val root = expandedRoot ?: return@remember null
+        var node = root
+        for (pid in depthPath) {
+            node = node.children.find { it.id == pid } ?: return@remember null
+        }
+        node
+    }
+    val subcategories = currentNode?.children.orEmpty()
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        roots.forEach { root ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
-                color = PostListingColors.fieldSurface(),
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+            color = PostListingColors.fieldSurface(),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                Text(
+                    text = stringResource(R.string.post_category_parents_heading),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    CategoryNodeBlock(
-                        node = root,
-                        selectedId = selectedId,
-                        onSelectLeaf = onSelectLeaf,
-                        depth = 0,
+                    roots.forEach { root ->
+                        val isExpandedRoot = expandedRootId == root.id
+                        val containsSelection = selectedId.isNotBlank() && root.containsDescendant(selectedId)
+                        PostSelectablePill(
+                            text = root.name,
+                            selected = isExpandedRoot || selectedId == root.id || containsSelection,
+                            onClick = {
+                                when {
+                                    root.children.isEmpty() -> onSelectLeaf(root)
+                                    expandedRootId == root.id -> {
+                                        expandedRootId = null
+                                        depthPath = emptyList()
+                                    }
+                                    else -> {
+                                        expandedRootId = root.id
+                                        depthPath = emptyList()
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+
+                if (expandedRoot != null && subcategories.isNotEmpty()) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
                     )
+                    if (depthPath.isNotEmpty()) {
+                        TextButton(
+                            onClick = { depthPath = depthPath.dropLast(1) },
+                            colors = ButtonDefaults.textButtonColors(contentColor = FashColors.Primary),
+                        ) {
+                            Text(stringResource(R.string.post_category_level_up))
+                        }
+                    }
+                    Text(
+                        text = stringResource(
+                            R.string.post_category_children_heading,
+                            currentNode?.name ?: expandedRoot!!.name,
+                        ),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        subcategories.forEach { child ->
+                            val isLeaf = child.children.isEmpty()
+                            val childHighlightsSelection =
+                                selectedId.isNotBlank() && child.containsDescendant(selectedId)
+                            PostSelectablePill(
+                                text = child.name,
+                                selected = selectedId == child.id || childHighlightsSelection,
+                                onClick = {
+                                    when {
+                                        isLeaf -> onSelectLeaf(child)
+                                        else -> depthPath = depthPath + child.id
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun CategoryNodeBlock(
-    node: CategoryTreeNode,
-    selectedId: String,
-    onSelectLeaf: (CategoryTreeNode) -> Unit,
-    depth: Int = 0,
-) {
-    if (node.children.isEmpty()) {
-        PostSelectablePill(
-            text = node.name,
-            selected = selectedId == node.id,
-            onClick = { onSelectLeaf(node) },
-        )
-    } else {
-        val indent = (depth * 10).coerceAtMost(28).dp
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(start = indent),
-        ) {
-            Text(
-                text = node.name,
-                style = if (depth == 0) {
-                    MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                } else {
-                    MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-                },
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                node.children.forEach { child ->
-                    CategoryNodeBlock(child, selectedId, onSelectLeaf, depth + 1)
-                }
-            }
+/** Path from the matching root down to [targetId] (inclusive), or null if not found. */
+private fun findNodePathFromRootsToId(
+    roots: List<CategoryTreeNode>,
+    targetId: String,
+): List<CategoryTreeNode>? {
+    val path = mutableListOf<CategoryTreeNode>()
+    fun dfs(nodes: List<CategoryTreeNode>): Boolean {
+        for (n in nodes) {
+            path.add(n)
+            if (n.id == targetId) return true
+            if (dfs(n.children)) return true
+            path.removeAt(path.lastIndex)
         }
+        return false
     }
+    return if (dfs(roots)) path else null
+}
+
+private fun CategoryTreeNode.containsDescendant(targetId: String): Boolean {
+    if (id == targetId) return true
+    return children.any { it.containsDescendant(targetId) }
 }
 
 @Composable

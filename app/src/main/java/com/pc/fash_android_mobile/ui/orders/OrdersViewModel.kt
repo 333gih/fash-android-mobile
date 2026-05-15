@@ -94,6 +94,15 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
         sellingResult.onSuccess { _sellingOrders.value = it }.onFailure { /* keep list */ }
     }
 
+    /** Clears order lists when the user signs out so Orders tab never shows the previous account. */
+    fun clearCachesForSignedOutUser() {
+        _buyingOrders.value = emptyList()
+        _sellingOrders.value = emptyList()
+        _loadError.value = null
+        _isLoading.value = false
+        _isRefreshing.value = false
+    }
+
     fun loadOrders() {
         viewModelScope.launch {
             _isLoading.value = true

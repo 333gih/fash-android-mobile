@@ -63,6 +63,8 @@ import com.pc.fash_android_mobile.ui.explore.ExplorePrimarySection
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
+import com.pc.fash_android_mobile.ui.home.HomeDeliveringScreen
+import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
@@ -75,6 +77,8 @@ import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.ui.chat.ChatDetailScreen
 import com.pc.fash_android_mobile.ui.chat.ChatDetailViewModel
+import com.pc.fash_android_mobile.ui.chat.ChatShipFlowArgs
+import com.pc.fash_android_mobile.ui.chat.ChatShipFulfillmentScreen
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.profile.EditProfileScreen
 import com.pc.fash_android_mobile.ui.profile.EditProfileViewModel
@@ -85,6 +89,8 @@ import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavBottomBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavScreen
 import com.pc.fash_android_mobile.ui.main.MainTab
+import com.pc.fash_android_mobile.ui.navigation.SellerShopEntrySource
+import com.pc.fash_android_mobile.ui.navigation.SellerShopRestoreContext
 import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
@@ -100,8 +106,19 @@ import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
-import com.pc.fash_android_mobile.ui.components.FashWelcomeBannerDialog
+import com.pc.fash_android_mobile.ui.components.FashAppPromoOverlayDialog
+import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
+import com.pc.fash_android_mobile.data.promo.AppPromoCampaignKind
+import com.pc.fash_android_mobile.data.promo.AppPromoCampaignResolver
+import com.pc.fash_android_mobile.data.promo.AppPromoCampaignStore
+import com.pc.fash_android_mobile.data.promo.AppPromoGateContext
+import com.pc.fash_android_mobile.data.promo.AppPromoNavigation
+import com.pc.fash_android_mobile.data.promo.AppPromoPendingQueue
+import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
+import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
+import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
+import com.pc.fash_android_mobile.ui.components.rememberSerialSnackbarChannel
 import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
 import com.pc.fash_android_mobile.ui.theme.FashLightAppearance
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
@@ -122,11 +139,12 @@ import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
-import com.pc.fash_android_mobile.data.welcome.WelcomeDialogStore
+import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -142,15 +160,6 @@ private const val ACCESS_STATUS_POLL_ATTEMPTS = 5
 /** Initial GET setup-status retries after login / cold start (transient network / cold LB). */
 private const val SETUP_STATUS_INITIAL_RETRY_MS = 450L
 private const val SETUP_STATUS_INITIAL_ATTEMPTS = 4
-
-/** How the seller shop overlay was opened — restores the correct screen when closing (e.g. tag taps). */
-private enum class SellerShopEntrySource {
-    None,
-    ProductDetail,
-    Explore,
-    /** Opened from chat header; closing shop restores [conversationIdToRestoreAfterSellerShop]. */
-    Chat,
-}
 
 /**
  * After [UserRepository.onboard] (username step) succeeds, the access-status endpoint can briefly still
@@ -183,6 +192,7 @@ class MainActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val onboardingViewModel: OnboardingViewModel by viewModels()
     private val homeViewModel: HomeViewModel by viewModels()
+    private val homeDeliveringViewModel: HomeDeliveringViewModel by viewModels()
     private val exploreViewModel: ExploreViewModel by viewModels()
     private val productDetailViewModel: ProductDetailViewModel by viewModels()
     private val editListingViewModel: EditListingViewModel by viewModels()
@@ -253,22 +263,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val snackbarHostState = remember { SnackbarHostState() }
+            val enqueueSnackbarSerial = rememberSerialSnackbarChannel(snackbarHostState)
             LaunchedEffect(Unit) {
-                launch { loginViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { onboardingViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { homeViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { exploreViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { productDetailViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { postViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { editProfileViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { chatViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { chatDetailViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { checkoutViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { ordersViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { orderDetailViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { addressBookViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { sellerProfileViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
-                launch { profileViewModel.events.collect { snackbarHostState.showSnackbar(it) } }
+                launch { loginViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { onboardingViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { homeViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { exploreViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { productDetailViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { postViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { editProfileViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { chatViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { chatDetailViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { checkoutViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { ordersViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { orderDetailViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { addressBookViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { sellerProfileViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { profileViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
             }
 
             val email by loginViewModel.email.collectAsState()
@@ -287,15 +298,16 @@ class MainActivity : ComponentActivity() {
             // Show snackbar when the server force-expires the session, then navigate to login
             LaunchedEffect(sessionExpiredMessage) {
                 val msg = sessionExpiredMessage ?: return@LaunchedEffect
-                snackbarHostState.showSnackbar(msg)
-                authManager.clearSessionExpiredMessage()
+                enqueueSnackbarSerial {
+                    showSnackbar(msg)
+                    authManager.clearSessionExpiredMessage()
+                }
             }
             // Not saveable: a persisted false would skip re-fetching access-status after process restore (wrong home).
             var needsOnboarding by remember { mutableStateOf<Boolean?>(null) }
             var setupGateFetchFailed by remember { mutableStateOf(false) }
             var setupGateAttempt by remember { mutableIntStateOf(0) }
             val setupGateRecheckGen by fashApp.setupGateRecheckGeneration.collectAsState()
-            val postLoginDataRefreshGen by fashApp.postLoginDataRefreshGeneration.collectAsState()
             val mainScope = rememberCoroutineScope()
             val isLoggingOut by loginViewModel.isLoggingOut.collectAsState()
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
@@ -360,8 +372,13 @@ class MainActivity : ComponentActivity() {
                 var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
                 /** Hoisted for [FashSnackbarHost] — main bottom nav vs chat composer vs fullscreen overlays. */
                 var snackbarBottomChromeInset by remember { mutableStateOf(0.dp) }
-                /** One-time welcome dialog after home is available; persisted in [WelcomeDialogStore]. */
-                var showWelcomeBanner by remember { mutableStateOf(false) }
+                /** Blocking center interstitial after home (welcome, KYC, rating, …). */
+                var activePromoCampaign by remember { mutableStateOf<AppPromoCampaign?>(null) }
+                var pendingPromoMainTab by remember { mutableIntStateOf(-1) }
+                var pendingPromoOpenOrders by remember { mutableStateOf(false) }
+                val meetingReverifyRequired by profileViewModel.meetingSchedulingReverifyRequired.collectAsState()
+                /** Guided main-shell tour after welcome (or immediately if welcome already dismissed). */
+                var showFeatureTour by remember { mutableStateOf(false) }
                 val notifPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
                 ) { }
@@ -369,16 +386,32 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(isAuthenticated) {
                     if (isAuthenticated) {
                         realtimeManager.connect()
+                        pendingPaymentViewModel.startMonitoring()
                     } else {
                         realtimeManager.disconnect()
+                        pendingPaymentViewModel.clearForLogout()
                         profileViewModel.clearCachedProfile()
+                        homeViewModel.clearCachesForSignedOutUser()
+                        homeDeliveringViewModel.clearCachesForSignedOutUser()
+                        exploreViewModel.clearCachesForSignedOutUser()
+                        chatViewModel.clearCachesForSignedOutUser()
+                        chatDetailViewModel.clearCachesForSignedOutUser()
+                        ordersViewModel.clearCachesForSignedOutUser()
+                        orderDetailViewModel.clearCachesForSignedOutUser()
+                        notificationsViewModel.clearCachesForSignedOutUser()
+                        featuredSellersViewModel.clearCachesForSignedOutUser()
+                        addressBookViewModel.clearCachesForSignedOutUser()
+                        postViewModel.clearCachesForSignedOutUser()
+                        productDetailViewModel.clearCachesForSignedOutUser()
+                        followConnectionsViewModel.clearCachesForSignedOutUser()
                         needsOnboarding = null
                         fashApp.resetSetupGateRecheckGeneration()
                         setupGateAttempt = 0
                         setupGateFetchFailed = false
                         selectedConversationId = null
                         snackbarBottomChromeInset = 0.dp
-                        showWelcomeBanner = false
+                        activePromoCampaign = null
+                        showFeatureTour = false
                     }
                 }
 
@@ -389,34 +422,70 @@ class MainActivity : ComponentActivity() {
                     profileViewModel.onAuthenticatedSessionReady()
                 }
 
-                /** After any successful login path, refetch feeds and inbox counts now that JWT-backed APIs apply. */
-                LaunchedEffect(splashFinished, isAuthenticated, postLoginDataRefreshGen) {
+                /** After splash + authenticated session, reload tab feeds and inbox (cold start + account switch). */
+                LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
-                    if (postLoginDataRefreshGen == 0L) return@LaunchedEffect
                     homeViewModel.refresh()
                     exploreViewModel.refresh()
                     notificationsViewModel.refreshUnreadSummary()
+                    chatViewModel.loadConversations()
                 }
 
+                // Resolve app-open promo only once the setup gate has settled on main shell.
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
-                    if (!splashFinished || !isAuthenticated) {
-                        showWelcomeBanner = false
-                        return@LaunchedEffect
-                    }
-                    if (needsOnboarding == null) {
-                        showWelcomeBanner = false
-                        return@LaunchedEffect
-                    }
-                    if (needsOnboarding == true) {
-                        showWelcomeBanner = false
+                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) {
+                        activePromoCampaign = null
+                        if (needsOnboarding != false) {
+                            showFeatureTour = false
+                        }
                         return@LaunchedEffect
                     }
                     delay(550)
                     val appCtx = notificationSnackbarContext.applicationContext
-                    val already = withContext(Dispatchers.IO) {
-                        WelcomeDialogStore.isDismissedForCurrentVersion(appCtx)
+                    val openCount = withContext(Dispatchers.IO) {
+                        AppPromoCampaignStore.incrementAppOpenCount(appCtx)
                     }
-                    showWelcomeBanner = !already
+                    withContext(Dispatchers.IO) {
+                        fashApp.appPromoInterstitialRepository.fetchActiveCampaigns()
+                            .getOrNull()
+                            ?.filter { it.scheduleType == "on_app_open" || it.scheduleType == null }
+                            ?.forEach { AppPromoPendingQueue.enqueue(it) }
+                    }
+                    val gate = AppPromoGateContext(
+                        splashFinished = splashFinished,
+                        isAuthenticated = isAuthenticated,
+                        needsOnboarding = false,
+                        blockPromoBecauseOtherUi = selectedConversationId != null,
+                        meetingKycReverifyRequired = meetingReverifyRequired,
+                        identityVerifyUrlAvailable = AppEnvironment.identityReverifyUrl.isNotBlank(),
+                        sellerPackagePromoEnabled = AppEnvironment.isDev,
+                        appOpenCount = openCount,
+                    )
+                    activePromoCampaign = withContext(Dispatchers.IO) {
+                        AppPromoCampaignResolver.resolve(gate, appCtx)
+                    }
+                }
+
+                LaunchedEffect(selectedConversationId) {
+                    if (selectedConversationId != null) {
+                        activePromoCampaign = null
+                    }
+                }
+
+                LaunchedEffect(activePromoCampaign, splashFinished, isAuthenticated, needsOnboarding) {
+                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) {
+                        showFeatureTour = false
+                        return@LaunchedEffect
+                    }
+                    if (activePromoCampaign != null) {
+                        showFeatureTour = false
+                        return@LaunchedEffect
+                    }
+                    delay(400)
+                    val appCtx = notificationSnackbarContext.applicationContext
+                    showFeatureTour = withContext(Dispatchers.IO) {
+                        !AppFeatureTourStore.isCompletedForCurrentVersion(appCtx)
+                    }
                 }
 
                 LaunchedEffect(isAuthenticated) {
@@ -461,24 +530,44 @@ class MainActivity : ComponentActivity() {
                         val after = notificationsViewModel.unreadCount.value
                         prevUnread = after
                         if (after > before) {
-                            val result = snackbarHostState.showSnackbar(
-                                message = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar),
-                                actionLabel = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar_action),
-                                duration = SnackbarDuration.Short,
-                            )
-                            if (result == SnackbarResult.ActionPerformed) {
-                                fashApp.requestOpenNotificationInbox()
+                            enqueueSnackbarSerial {
+                                val result = showSnackbar(
+                                    message = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar),
+                                    actionLabel = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar_action),
+                                    duration = SnackbarDuration.Short,
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    fashApp.requestOpenNotificationInbox()
+                                }
                             }
                         }
                     }
                 }
 
-                LaunchedEffect(splashFinished, isAuthenticated) {
+                LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     realtimeManager.events.collect { event ->
-                        if (event is RealtimeEvent.InboxRefresh) {
-                            fashApp.requestInboxUnreadRefreshDebounced()
+                        when (event) {
+                            is RealtimeEvent.InboxRefresh ->
+                                fashApp.requestInboxUnreadRefreshDebounced()
+                            is RealtimeEvent.AppPromoShow -> {
+                                if (needsOnboarding != false || selectedConversationId != null) return@collect
+                                parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()?.let { promo ->
+                                    AppPromoPendingQueue.enqueue(promo)
+                                    activePromoCampaign = promo
+                                }
+                            }
+                            else -> Unit
                         }
+                    }
+                }
+
+                LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
+                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) return@LaunchedEffect
+                    fashApp.appPromoShowSignals.collect { promo ->
+                        if (selectedConversationId != null) return@collect
+                        AppPromoPendingQueue.enqueue(promo)
+                        activePromoCampaign = promo
                     }
                 }
 
@@ -729,12 +818,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
                                     var sellerShopEntrySource by remember { mutableStateOf(SellerShopEntrySource.None) }
-                                    /** When opening seller shop from chat, restore this conversation on shop back. */
-                                    var conversationIdToRestoreAfterSellerShop by rememberSaveable {
-                                        mutableStateOf<String?>(null)
+                                    /** Snapshot for restoring the screen under seller shop on back. */
+                                    var sellerShopRestoreContext by remember {
+                                        mutableStateOf(SellerShopRestoreContext())
                                     }
-                                    /** Snapshot [ExploreViewModel.primarySection] when opening seller from Explore (Listings vs Sellers). */
-                                    var exploreSectionWhenSellerOpened by remember { mutableStateOf<ExplorePrimarySection?>(null) }
                                     /** True briefly after closing seller shop to block PDP from applying Explore filters (pointer replay). */
                                     var suppressPdpExploreNav by remember { mutableStateOf(false) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -746,15 +833,27 @@ class MainActivity : ComponentActivity() {
                                     var selectedOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     /** Order detail as a medium-height sheet over chat (keeps conversation open). */
                                     var chatOrderDetailOverlayId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var chatShipFlowArgs by remember { mutableStateOf<ChatShipFlowArgs?>(null) }
                                     var addressFlowOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
+                                    var showHomeDeliveringScreen by rememberSaveable { mutableStateOf(false) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
+                                    LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders) {
+                                        if (pendingPromoMainTab >= 0) {
+                                            selectedTab = pendingPromoMainTab
+                                            pendingPromoMainTab = -1
+                                        }
+                                        if (pendingPromoOpenOrders) {
+                                            showOrdersScreen = true
+                                            pendingPromoOpenOrders = false
+                                        }
+                                    }
                                     val pendingInboxOpenId by fashApp.pendingInboxNotificationId.collectAsState()
                                     val inboxOpenGen by fashApp.inboxOpenRequestGeneration.collectAsState()
                                     val scope = rememberCoroutineScope()
@@ -764,19 +863,36 @@ class MainActivity : ComponentActivity() {
                                      */
                                     val dismissSellerShopOverlay: () -> Unit = {
                                         val entry = sellerShopEntrySource
-                                        val exploreSection = exploreSectionWhenSellerOpened
-                                        val restoreChatId = conversationIdToRestoreAfterSellerShop
+                                        val restore = sellerShopRestoreContext
                                         suppressPdpExploreNav = true
                                         sellerShopUsername = null
                                         sellerShopEntrySource = SellerShopEntrySource.None
-                                        exploreSectionWhenSellerOpened = null
-                                        conversationIdToRestoreAfterSellerShop = null
-                                        if (entry == SellerShopEntrySource.Explore) {
-                                            selectedTab = MainTab.Explore.ordinal
-                                            exploreSection?.let { exploreViewModel.setPrimarySection(it) }
-                                        }
-                                        if (entry == SellerShopEntrySource.Chat && !restoreChatId.isNullOrBlank()) {
-                                            selectedConversationId = restoreChatId
+                                        sellerShopRestoreContext = SellerShopRestoreContext()
+                                        when (entry) {
+                                            SellerShopEntrySource.Explore -> {
+                                                selectedTab = MainTab.Explore.ordinal
+                                                restore.exploreSection?.let { exploreViewModel.setPrimarySection(it) }
+                                            }
+                                            SellerShopEntrySource.Chat -> {
+                                                restore.chatConversationId?.let { selectedConversationId = it }
+                                            }
+                                            SellerShopEntrySource.FollowConnections -> {
+                                                followConnectionsInitialTab = restore.followConnectionsTab
+                                                showFollowConnections = true
+                                            }
+                                            SellerShopEntrySource.FeaturedSellers -> {
+                                                showFeaturedSellersAll = true
+                                            }
+                                            SellerShopEntrySource.Orders -> {
+                                                showOrdersScreen = true
+                                            }
+                                            SellerShopEntrySource.HomeDelivering -> {
+                                                showHomeDeliveringScreen = true
+                                            }
+                                            SellerShopEntrySource.OrderDetail -> {
+                                                restore.orderId?.let { selectedOrderId = it }
+                                            }
+                                            else -> Unit
                                         }
                                         scope.launch {
                                             delay(100)
@@ -796,14 +912,16 @@ class MainActivity : ComponentActivity() {
                                     val context = LocalContext.current
                                     LaunchedEffect(Unit) {
                                         editListingViewModel.events.collect { msg ->
-                                            snackbarHostState.showSnackbar(msg)
-                                            if (msg == context.getString(R.string.edit_listing_saved) ||
-                                                msg == context.getString(R.string.edit_listing_deleted)
-                                            ) {
-                                                editListingId = null
-                                                homeViewModel.loadFeed()
-                                                exploreViewModel.loadAll()
-                                                profileViewModel.loadProfile()
+                                            enqueueSnackbarSerial {
+                                                showSnackbar(msg)
+                                                if (msg == context.getString(R.string.edit_listing_saved) ||
+                                                    msg == context.getString(R.string.edit_listing_deleted)
+                                                ) {
+                                                    editListingId = null
+                                                    homeViewModel.loadFeed()
+                                                    exploreViewModel.loadAll()
+                                                    profileViewModel.loadProfile()
+                                                }
                                             }
                                         }
                                     }
@@ -875,6 +993,7 @@ class MainActivity : ComponentActivity() {
                                         showShippingAddressList,
                                         showAddAddressScreen,
                                         showOrdersScreen,
+                                        showHomeDeliveringScreen,
                                         showFollowConnections,
                                         showFeaturedSellersAll,
                                     ) {
@@ -888,6 +1007,7 @@ class MainActivity : ComponentActivity() {
                                                 showShippingAddressList ||
                                                 showAddAddressScreen ||
                                                 showOrdersScreen ||
+                                                showHomeDeliveringScreen ||
                                                 showFollowConnections ||
                                                 showFeaturedSellersAll
                                         when {
@@ -916,24 +1036,21 @@ class MainActivity : ComponentActivity() {
                                     val usePendingPaymentAnchorPlacement =
                                         anchorTopPx != null && pendingPaymentBannerExpanded
                                     LaunchedEffect(Unit) {
-                                        pendingPaymentViewModel.startMonitoring()
-                                    }
-                                    LaunchedEffect(Unit) {
                                         pendingPaymentViewModel.events.collect { ev ->
-                                            when (ev) {
-                                                is PendingPaymentEvent.Expired -> {
-                                                    snackbarHostState.showSnackbar(
-                                                        message = context.getString(R.string.pending_payment_expired_snackbar),
-                                                        duration = SnackbarDuration.Long,
-                                                    )
-                                                }
-                                                PendingPaymentEvent.CancelSuccess -> {
-                                                    snackbarHostState.showSnackbar(
-                                                        context.getString(R.string.order_cancel_success),
-                                                    )
-                                                }
-                                                is PendingPaymentEvent.CancelFailed -> {
-                                                    snackbarHostState.showSnackbar(ev.message)
+                                            enqueueSnackbarSerial {
+                                                when (ev) {
+                                                    is PendingPaymentEvent.Expired -> {
+                                                        showSnackbar(
+                                                            message = context.getString(R.string.pending_payment_expired_snackbar),
+                                                            duration = SnackbarDuration.Long,
+                                                        )
+                                                    }
+                                                    PendingPaymentEvent.CancelSuccess -> {
+                                                        showSnackbar(context.getString(R.string.order_cancel_success))
+                                                    }
+                                                    is PendingPaymentEvent.CancelFailed -> {
+                                                        showSnackbar(ev.message)
+                                                    }
                                                 }
                                             }
                                         }
@@ -1018,6 +1135,7 @@ class MainActivity : ComponentActivity() {
                                                 showShippingAddressList = true
                                             },
                                             onOrdersClick = { showOrdersScreen = true },
+                                            onHomeDeliveringJourneyClick = { showHomeDeliveringScreen = true },
                                             onOpenFollowConnections = { tab ->
                                                 followConnectionsInitialTab = tab
                                                 showFollowConnections = true
@@ -1027,7 +1145,9 @@ class MainActivity : ComponentActivity() {
                                                 val u = seller.username.trim()
                                                 if (u.isNotEmpty()) {
                                                     sellerShopEntrySource = SellerShopEntrySource.Explore
-                                                    exploreSectionWhenSellerOpened = exploreViewModel.primarySection.value
+                                                    sellerShopRestoreContext = SellerShopRestoreContext(
+                                                        exploreSection = exploreViewModel.primarySection.value,
+                                                    )
                                                     sellerShopUsername = u
                                                 }
                                             },
@@ -1050,13 +1170,14 @@ class MainActivity : ComponentActivity() {
                                                 selectedTab = MainTab.Explore.ordinal
                                                 sellerShopUsername = null
                                                 sellerShopEntrySource = SellerShopEntrySource.None
-                                                exploreSectionWhenSellerOpened = null
-                                                conversationIdToRestoreAfterSellerShop = null
+                                                sellerShopRestoreContext = SellerShopRestoreContext()
                                             },
                                             promoSlides = mappedPromoSlides,
                                             onPromoSlideClick = handlePromoClick,
                                             selectedTab = selectedTab,
                                             onTabChange = { selectedTab = it },
+                                            featureTourActive = showFeatureTour,
+                                            onFeatureTourFinished = { showFeatureTour = false },
                                             )
                                         PendingPaymentBanner(
                                             data = pendingPaymentBanner,
@@ -1137,9 +1258,11 @@ class MainActivity : ComponentActivity() {
                                                                 productDetailViewModel.setOpeningChat(false)
                                                                 selectedListingId = null
                                                                 selectedTab = MainTab.Chat.ordinal
-                                                                snackbarHostState.showSnackbar(
-                                                                    it.message ?: getString(R.string.chat_load_error),
-                                                                )
+                                                                enqueueSnackbarSerial {
+                                                                    showSnackbar(
+                                                                        it.message ?: getString(R.string.chat_load_error),
+                                                                    )
+                                                                }
                                                             },
                                                         )
                                                     }
@@ -1149,9 +1272,9 @@ class MainActivity : ComponentActivity() {
                                                         val price =
                                                             productDetailViewModel.detail.value?.priceVnd ?: 0L
                                                         if (price <= 0L) {
-                                                            snackbarHostState.showSnackbar(
-                                                                getString(R.string.feed_action_error),
-                                                            )
+                                                            enqueueSnackbarSerial {
+                                                                showSnackbar(getString(R.string.feed_action_error))
+                                                            }
                                                             return@launch
                                                         }
                                                         val result = withContext(Dispatchers.IO) {
@@ -1163,10 +1286,12 @@ class MainActivity : ComponentActivity() {
                                                                 selectedOrderId = oid
                                                             },
                                                             onFailure = {
-                                                                snackbarHostState.showSnackbar(
-                                                                    it.message
-                                                                        ?: getString(R.string.feed_action_error),
-                                                                )
+                                                                enqueueSnackbarSerial {
+                                                                    showSnackbar(
+                                                                        it.message
+                                                                            ?: getString(R.string.feed_action_error),
+                                                                    )
+                                                                }
                                                             },
                                                         )
                                                     }
@@ -1200,7 +1325,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onVisitSellerShop = { username ->
                                                     sellerShopEntrySource = SellerShopEntrySource.ProductDetail
-                                                    exploreSectionWhenSellerOpened = null
+                                                    sellerShopRestoreContext = SellerShopRestoreContext()
                                                     sellerShopUsername = username
                                                 },
                                                 onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
@@ -1214,12 +1339,11 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                     selectedListingId = null
                                                     selectedTab = MainTab.Explore.ordinal
-                                                    conversationIdToRestoreAfterSellerShop = null
+                                                    sellerShopRestoreContext = SellerShopRestoreContext()
                                                 },
                                             )
                                         }
                                         if (sellerShopUsername != null) {
-                                            BackHandler { dismissSellerShopOverlay() }
                                             SellerProfileScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1251,8 +1375,7 @@ class MainActivity : ComponentActivity() {
                                                     selectedTab = MainTab.Explore.ordinal
                                                     sellerShopUsername = null
                                                     sellerShopEntrySource = SellerShopEntrySource.None
-                                                    exploreSectionWhenSellerOpened = null
-                                                    conversationIdToRestoreAfterSellerShop = null
+                                                    sellerShopRestoreContext = SellerShopRestoreContext()
                                                 },
                                                 onPromoSlideClick = handlePromoClick,
                                                 promoSlides = mappedPromoSlides,
@@ -1262,7 +1385,6 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         if (editListingId != null) {
-                                            BackHandler { editListingId = null }
                                             EditListingScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1297,6 +1419,7 @@ class MainActivity : ComponentActivity() {
                                                 otherInboxUnreadCount = otherInboxUnread,
                                                 onBack = {
                                                     chatOrderDetailOverlayId = null
+                                                    chatShipFlowArgs = null
                                                     selectedConversationId = null
                                                     selectedConversationItem = null
                                                     chatViewModel.loadConversations()
@@ -1317,6 +1440,13 @@ class MainActivity : ComponentActivity() {
                                                 onPayNow = { orderId, _, _ ->
                                                     chatOrderDetailOverlayId = orderId
                                                 },
+                                                onStartShipFulfillment = { orderId, listingId, amountVnd ->
+                                                    chatShipFlowArgs = ChatShipFlowArgs(
+                                                        orderId = orderId,
+                                                        listingId = listingId,
+                                                        agreedAmountVnd = amountVnd,
+                                                    )
+                                                },
                                                 onOrderDetails = { orderId ->
                                                     val oid = orderId.trim().takeIf { it.isNotEmpty() }
                                                     if (oid != null) {
@@ -1328,12 +1458,13 @@ class MainActivity : ComponentActivity() {
                                                     val u = username.trim()
                                                     if (u.isNotEmpty()) {
                                                         chatOrderDetailOverlayId = null
-                                                        conversationIdToRestoreAfterSellerShop = selectedConversationId
+                                                        sellerShopRestoreContext = SellerShopRestoreContext(
+                                                            chatConversationId = selectedConversationId,
+                                                        )
                                                         selectedConversationId = null
                                                         selectedConversationItem = null
                                                         chatViewModel.loadConversations()
                                                         chatViewModel.refreshUnreadCount()
-                                                        exploreSectionWhenSellerOpened = null
                                                         sellerShopEntrySource = SellerShopEntrySource.Chat
                                                         sellerShopUsername = u
                                                     }
@@ -1369,12 +1500,13 @@ class MainActivity : ComponentActivity() {
                                                     val u = username.trim()
                                                     if (u.isNotEmpty()) {
                                                         chatOrderDetailOverlayId = null
-                                                        conversationIdToRestoreAfterSellerShop = selectedConversationId
+                                                        sellerShopRestoreContext = SellerShopRestoreContext(
+                                                            chatConversationId = selectedConversationId,
+                                                        )
                                                         selectedConversationId = null
                                                         selectedConversationItem = null
                                                         chatViewModel.loadConversations()
                                                         chatViewModel.refreshUnreadCount()
-                                                        exploreSectionWhenSellerOpened = null
                                                         sellerShopEntrySource = SellerShopEntrySource.Chat
                                                         sellerShopUsername = u
                                                     }
@@ -1396,6 +1528,32 @@ class MainActivity : ComponentActivity() {
                                                         selectedListingId = listingId
                                                     }
                                                 },
+                                            )
+                                        }
+                                        if (selectedConversationId != null && chatShipFlowArgs != null) {
+                                            ChatShipFulfillmentScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                args = chatShipFlowArgs!!,
+                                                onBack = { chatShipFlowArgs = null },
+                                                orderDetailViewModel = orderDetailViewModel,
+                                                onOpenShippingAddressList = {
+                                                    addressFlowOrderId = chatShipFlowArgs?.orderId
+                                                    showShippingAddressList = true
+                                                },
+                                                onOpenAddShippingAddress = {
+                                                    addressFlowOrderId = chatShipFlowArgs?.orderId
+                                                    showAddAddressScreen = true
+                                                    addAddressOpenedFromList = false
+                                                },
+                                                onContinueToCheckout = { listingId, amountVnd, existingOid ->
+                                                    chatShipFlowArgs = null
+                                                    selectedCheckoutListingId = listingId
+                                                    selectedCheckoutOfferPrice = amountVnd
+                                                    checkoutExistingOrderId = existingOid
+                                                },
+                                                shipOnlinePaymentEnabled = BusinessFlowConfig.c2cShipOnlinePaymentEnabled,
                                             )
                                         }
                                         selectedOrderId?.let { orderIdForDetail ->
@@ -1429,8 +1587,10 @@ class MainActivity : ComponentActivity() {
                                                     onOpenUserProfile = { username ->
                                                         val u = username.trim()
                                                         if (u.isNotEmpty()) {
-                                                            selectedOrderId = null
-                                                            sellerShopEntrySource = SellerShopEntrySource.None
+                                                            sellerShopRestoreContext = SellerShopRestoreContext(
+                                                                orderId = selectedOrderId,
+                                                            )
+                                                            sellerShopEntrySource = SellerShopEntrySource.OrderDetail
                                                             sellerShopUsername = u
                                                         }
                                                     },
@@ -1451,10 +1611,6 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                         if (showShippingAddressList && !showAddAddressScreen) {
-                                            BackHandler {
-                                                showShippingAddressList = false
-                                                addressFlowOrderId = null
-                                            }
                                             ShippingAddressListScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1476,15 +1632,6 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         if (showAddAddressScreen) {
-                                            BackHandler {
-                                                val fromList = addAddressOpenedFromList
-                                                showAddAddressScreen = false
-                                                if (fromList) {
-                                                    addAddressOpenedFromList = false
-                                                } else {
-                                                    addressFlowOrderId = null
-                                                }
-                                            }
                                             AddEditAddressScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1550,13 +1697,31 @@ class MainActivity : ComponentActivity() {
                                                 promoSlides = mappedPromoSlides,
                                                 onPromoSlideClick = handlePromoClick,
                                                 onOrderClick = { order ->
-                                                    showOrdersScreen = false
                                                     selectedOrderId = order.orderId
                                                 },
                                             )
                                         }
+                                        if (showHomeDeliveringScreen) {
+                                            HomeDeliveringScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                viewModel = homeDeliveringViewModel,
+                                                onBack = { showHomeDeliveringScreen = false },
+                                                onOrderClick = { order ->
+                                                    selectedOrderId = order.orderId
+                                                },
+                                                onOpenAllOrders = {
+                                                    showHomeDeliveringScreen = false
+                                                    showOrdersScreen = true
+                                                },
+                                                onDataMutated = {
+                                                    homeViewModel.refresh()
+                                                    ordersViewModel.refreshOrders()
+                                                },
+                                            )
+                                        }
                                         if (showFollowConnections) {
-                                            BackHandler { showFollowConnections = false }
                                             FollowConnectionsScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1567,10 +1732,20 @@ class MainActivity : ComponentActivity() {
                                                     showFollowConnections = false
                                                     selectedTab = MainTab.Explore.ordinal
                                                 },
+                                                onUserClick = { user ->
+                                                    val u = user.username.trim()
+                                                    if (u.isNotEmpty()) {
+                                                        sellerShopEntrySource =
+                                                            SellerShopEntrySource.FollowConnections
+                                                        sellerShopRestoreContext = SellerShopRestoreContext(
+                                                            followConnectionsTab = followConnectionsInitialTab,
+                                                        )
+                                                        sellerShopUsername = u
+                                                    }
+                                                },
                                             )
                                         }
                                         if (showFeaturedSellersAll) {
-                                            BackHandler { showFeaturedSellersAll = false }
                                             FeaturedSellersScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1580,11 +1755,12 @@ class MainActivity : ComponentActivity() {
                                                 onSellerClick = { seller ->
                                                     val u = seller.username.trim()
                                                     if (u.isNotEmpty()) {
-                                                        sellerShopEntrySource = SellerShopEntrySource.Explore
-                                                        exploreSectionWhenSellerOpened = exploreViewModel.primarySection.value
+                                                        sellerShopEntrySource = SellerShopEntrySource.FeaturedSellers
+                                                        sellerShopRestoreContext = SellerShopRestoreContext(
+                                                            reopenFeaturedSellers = true,
+                                                        )
                                                         sellerShopUsername = u
                                                     }
-                                                    showFeaturedSellersAll = false
                                                 },
                                                 onListingClick = { lid, sellerId ->
                                                     val myId =
@@ -1595,9 +1771,104 @@ class MainActivity : ComponentActivity() {
                                                     } else {
                                                         selectedListingId = lid
                                                     }
-                                                    showFeaturedSellersAll = false
                                                 },
                                             )
+                                        }
+                                        val hasMainOverlayBack = remember(
+                                            showFeaturedSellersAll,
+                                            sellerShopUsername,
+                                            showFollowConnections,
+                                            showHomeDeliveringScreen,
+                                            showOrdersScreen,
+                                            selectedCheckoutListingId,
+                                            showAddAddressScreen,
+                                            showShippingAddressList,
+                                            selectedOrderId,
+                                            chatShipFlowArgs,
+                                            selectedConversationId,
+                                            chatOrderDetailOverlayId,
+                                            showEditProfile,
+                                            editListingId,
+                                            selectedListingId,
+                                        ) {
+                                            showFeaturedSellersAll ||
+                                                sellerShopUsername != null ||
+                                                showFollowConnections ||
+                                                showHomeDeliveringScreen ||
+                                                showOrdersScreen ||
+                                                selectedCheckoutListingId != null ||
+                                                showAddAddressScreen ||
+                                                showShippingAddressList ||
+                                                selectedOrderId != null ||
+                                                (selectedConversationId != null && chatShipFlowArgs != null) ||
+                                                selectedConversationId != null ||
+                                                chatOrderDetailOverlayId != null ||
+                                                showEditProfile ||
+                                                editListingId != null ||
+                                                selectedListingId != null
+                                        }
+                                        BackHandler(enabled = hasMainOverlayBack) {
+                                            when {
+                                                showFeaturedSellersAll && sellerShopUsername == null -> {
+                                                    showFeaturedSellersAll = false
+                                                }
+                                                sellerShopUsername != null -> {
+                                                    dismissSellerShopOverlay()
+                                                }
+                                                showFollowConnections -> {
+                                                    showFollowConnections = false
+                                                }
+                                                showHomeDeliveringScreen && selectedOrderId == null -> {
+                                                    showHomeDeliveringScreen = false
+                                                }
+                                                selectedCheckoutListingId != null -> {
+                                                    selectedCheckoutListingId = null
+                                                    selectedCheckoutOfferPrice = 0L
+                                                    checkoutExistingOrderId = null
+                                                }
+                                                showAddAddressScreen -> {
+                                                    val fromList = addAddressOpenedFromList
+                                                    showAddAddressScreen = false
+                                                    if (fromList) {
+                                                        addAddressOpenedFromList = false
+                                                    } else {
+                                                        addressFlowOrderId = null
+                                                    }
+                                                }
+                                                showShippingAddressList -> {
+                                                    showShippingAddressList = false
+                                                    addressFlowOrderId = null
+                                                }
+                                                selectedOrderId != null -> {
+                                                    selectedOrderId = null
+                                                }
+                                                selectedConversationId != null && chatShipFlowArgs != null -> {
+                                                    chatShipFlowArgs = null
+                                                }
+                                                chatOrderDetailOverlayId != null -> {
+                                                    chatOrderDetailOverlayId = null
+                                                }
+                                                selectedConversationId != null -> {
+                                                    chatOrderDetailOverlayId = null
+                                                    chatShipFlowArgs = null
+                                                    selectedConversationId = null
+                                                    selectedConversationItem = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
+                                                }
+                                                showEditProfile -> {
+                                                    showEditProfile = false
+                                                }
+                                                editListingId != null -> {
+                                                    editListingId = null
+                                                }
+                                                showOrdersScreen -> {
+                                                    showOrdersScreen = false
+                                                }
+                                                selectedListingId != null -> {
+                                                    selectedListingId = null
+                                                }
+                                            }
                                         }
                                             }
                                         }
@@ -1683,13 +1954,110 @@ class MainActivity : ComponentActivity() {
                     isAuthenticated && needsOnboarding == false -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
-                FashWelcomeBannerDialog(
-                    visible = showWelcomeBanner,
+                // Full-screen interstitial must sit above main shell / login (window-level Dialog).
+                FashAppPromoOverlayDialog(
+                    campaign = activePromoCampaign,
                     onDismiss = {
-                        WelcomeDialogStore.markDismissedForCurrentVersion(notificationSnackbarContext.applicationContext)
-                        showWelcomeBanner = false
+                        activePromoCampaign?.let { campaign ->
+                            AppPromoCampaignStore.markDismissed(
+                                notificationSnackbarContext.applicationContext,
+                                campaign,
+                            )
+                        }
+                        activePromoCampaign = null
                     },
-                    bottomOverlayInset = welcomeBottomInset,
+                    onPrimaryClick = { campaign ->
+                        when (campaign.kind) {
+                            AppPromoCampaignKind.Remote -> {
+                                AppPromoCampaignStore.markDismissed(
+                                    notificationSnackbarContext.applicationContext,
+                                    campaign,
+                                )
+                                activePromoCampaign = null
+                                AppPromoNavigation.applyPrimary(
+                                    activity = this@MainActivity,
+                                    campaign = campaign,
+                                    onTab = { tab -> pendingPromoMainTab = tab.ordinal },
+                                    onOpenOrders = { pendingPromoOpenOrders = true },
+                                )
+                            }
+                            AppPromoCampaignKind.Welcome -> {
+                                AppPromoCampaignStore.markDismissed(
+                                    notificationSnackbarContext.applicationContext,
+                                    campaign,
+                                )
+                                activePromoCampaign = null
+                            }
+                            AppPromoCampaignKind.AppRating -> {
+                                AppPromoCampaignStore.markDismissed(
+                                    notificationSnackbarContext.applicationContext,
+                                    campaign,
+                                )
+                                activePromoCampaign = null
+                                runCatching {
+                                    startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse(
+                                                "market://details?id=${BuildConfig.APPLICATION_ID}",
+                                            ),
+                                        ),
+                                    )
+                                }.onFailure {
+                                    startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse(
+                                                "https://play.google.com/store/apps/details?id=${BuildConfig.APPLICATION_ID}",
+                                            ),
+                                        ),
+                                    )
+                                }
+                            }
+                            AppPromoCampaignKind.KycVerification -> {
+                                AppPromoCampaignStore.markDismissed(
+                                    notificationSnackbarContext.applicationContext,
+                                    campaign,
+                                )
+                                activePromoCampaign = null
+                                val verifyUrl = AppEnvironment.identityReverifyUrl.trim()
+                                if (verifyUrl.isNotEmpty()) {
+                                    runCatching {
+                                        CustomTabsIntent.Builder()
+                                            .setShowTitle(true)
+                                            .build()
+                                            .launchUrl(
+                                                this@MainActivity,
+                                                Uri.parse(verifyUrl),
+                                            )
+                                    }
+                                }
+                            }
+                            AppPromoCampaignKind.SellerPackage -> {
+                                AppPromoCampaignStore.markDismissed(
+                                    notificationSnackbarContext.applicationContext,
+                                    campaign,
+                                )
+                                activePromoCampaign = null
+                                pendingPromoMainTab = MainTab.Post.ordinal
+                            }
+                        }
+                    },
+                    onSecondaryClick = { campaign ->
+                        AppPromoCampaignStore.markDismissed(
+                            notificationSnackbarContext.applicationContext,
+                            campaign,
+                        )
+                        if (campaign.kind == AppPromoCampaignKind.Remote) {
+                            AppPromoNavigation.applySecondary(
+                                activity = this@MainActivity,
+                                campaign = campaign,
+                                onTab = { tab -> pendingPromoMainTab = tab.ordinal },
+                                onOpenOrders = { pendingPromoOpenOrders = true },
+                            )
+                        }
+                        activePromoCampaign = null
+                    },
                 )
                 FashGlobalDialogHost(
                     message = dialogMessage,

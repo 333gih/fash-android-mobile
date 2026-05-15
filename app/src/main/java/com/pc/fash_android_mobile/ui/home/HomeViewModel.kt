@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,6 +60,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private val _scrollHomeToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollHomeToTop: SharedFlow<Unit> = _scrollHomeToTop.asSharedFlow()
 
     /** True when last load failed (network/server error). User can retry. */
     private val _loadError = MutableStateFlow(false)
@@ -149,6 +153,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun retryLoad() {
         loadFeed()
+    }
+
+    /**
+     * Clears user-specific feed state when the session ends so the shell never briefly shows
+     * the previous account’s home after logout / account switch.
+     */
+    fun clearCachesForSignedOutUser() {
+        _items.value = emptyList()
+        _likedIds.value = emptySet()
+        _savedIds.value = emptySet()
+        _followingIds.value = emptySet()
+        _buyerStats.value = BuyerHomeStats()
+        _loadError.value = false
+        _isLoading.value = false
+        _isRefreshing.value = false
+    }
+
+    /** Bottom nav re-tap on Home — scroll feed to top (pairs with [refresh]). */
+    fun requestScrollHomeToTop() {
+        viewModelScope.launch { _scrollHomeToTop.emit(Unit) }
     }
 
     fun refresh() {

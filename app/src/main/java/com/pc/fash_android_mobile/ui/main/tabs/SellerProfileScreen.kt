@@ -10,14 +10,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -62,23 +65,12 @@ import com.pc.fash_android_mobile.data.user.SellerFocusBrand
 import com.pc.fash_android_mobile.data.user.SellerFocusCategory
 import com.pc.fash_android_mobile.data.user.SellerFocusTag
 import com.pc.fash_android_mobile.data.user.SellerListingFocus
-import com.pc.fash_android_mobile.ui.components.FashBottomPromoAdStrip
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
-import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooterContentHeight
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.launch
-
-/** Divider + [FashPromoSliderBlock] (~padding + card). */
-private val SellerProfilePromoSliderApproxHeight = 124.dp
-
-/**
- * Explore strip on seller profile: shorter than [com.pc.fash_android_mobile.ui.orders.OrdersScreen]
- * so more of the grid stays visible while the bottom promo is pinned.
- */
-private const val SellerProfileBottomAdHeightFraction = 0.10f
-private val SellerProfileBottomAdMinHeight = 56.dp
-private val SellerProfileBottomAdMaxHeight = 64.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,9 +123,18 @@ fun SellerProfileScreen(
     val listState = remember(selectedTab) { LazyListState(0, 0) }
     val scrollScope = rememberCoroutineScope()
     val collapseProgress = rememberProfileHeaderCollapseProgress(listState)
+    val showPromoFooter by rememberProfilePromoFooterVisible(listState)
+
+    LaunchedEffect(selectedTab) {
+        listState.scrollToItem(0, 0)
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        // Match NotificationScreen: bottom inset handled inside edge-to-edge ad strip.
+        contentWindowInsets = WindowInsets.safeDrawing.only(
+            WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+        ),
         topBar = {
             TopAppBar(
                 title = {
@@ -165,8 +166,7 @@ fun SellerProfileScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(scheme.background)
-                .padding(paddingValues),
+                .background(scheme.background),
         ) {
             when {
                 isLoading && profile == null -> {
@@ -200,101 +200,90 @@ fun SellerProfileScreen(
                 }
                 else -> {
                     val items = if (selectedTab == 0) sellingListings else soldListings
-                    val tabsPinned by remember {
-                        derivedStateOf { listState.firstVisibleItemIndex > 0 }
-                    }
-                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                        val adHeight =
-                            (maxHeight * SellerProfileBottomAdHeightFraction)
-                                .coerceAtLeast(SellerProfileBottomAdMinHeight)
-                                .coerceAtMost(SellerProfileBottomAdMaxHeight)
-                        val pinnedBottomInset =
-                            1.dp + SellerProfilePromoSliderApproxHeight + adHeight
-                        ProfileCollapsingScrollLayout(
-                            listState = listState,
-                            expandedHeader = {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    SellerProfileHeader(
-                                        profile = profile,
-                                        onAestheticTagClick = { name, id ->
-                                            onNavigateToExploreFromProfile(null, null, id, name, null, null)
-                                        },
-                                    )
-                                    ProfileSellerTrustBanner(profile = profile)
-                                    ProfileStats(
-                                        profile = profile,
-                                        showTrustAndBadgesRow = false,
-                                    )
-                                    if (profile != null && viewModel.canFollowSeller()) {
-                                        SellerFollowRow(
-                                            isFollowing = isFollowing,
-                                            inFlight = followInFlight,
-                                            onToggle = { viewModel.toggleFollow() },
+                    val pinnedBottomInset = FashPromoSliderAdFooterContentHeight
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                        ) {
+                            ProfileCollapsingScrollLayout(
+                                listState = listState,
+                                expandedHeader = {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        SellerProfileHeader(
+                                            profile = profile,
+                                            onAestheticTagClick = { name, id ->
+                                                onNavigateToExploreFromProfile(null, null, id, name, null, null)
+                                            },
+                                        )
+                                        ProfileTrustCard(profile = profile)
+                                        ProfileStats(profile = profile)
+                                        if (profile != null && viewModel.canFollowSeller()) {
+                                            SellerFollowRow(
+                                                isFollowing = isFollowing,
+                                                inFlight = followInFlight,
+                                                onToggle = { viewModel.toggleFollow() },
+                                            )
+                                        }
+                                        SellerListingFocusSection(
+                                            focus = sellerFocus,
+                                            forbidden = sellerFocusForbidden,
+                                            loading = sellerFocusLoading,
+                                            onCategoryClick = { categoryId, label ->
+                                                onNavigateToExploreFromProfile(categoryId, null, null, label, null, null)
+                                            },
+                                            onBrandClick = { brandId, name ->
+                                                onNavigateToExploreFromProfile(null, brandId, null, name, null, null)
+                                            },
+                                            onAestheticTagClick = { tagId, name ->
+                                                onNavigateToExploreFromProfile(null, null, tagId, name, null, null)
+                                            },
                                         )
                                     }
-                                    SellerListingFocusSection(
-                                        focus = sellerFocus,
-                                        forbidden = sellerFocusForbidden,
-                                        loading = sellerFocusLoading,
-                                        onCategoryClick = { categoryId, label ->
-                                            onNavigateToExploreFromProfile(categoryId, null, null, label, null, null)
-                                        },
-                                        onBrandClick = { brandId, name ->
-                                            onNavigateToExploreFromProfile(null, brandId, null, name, null, null)
-                                        },
-                                        onAestheticTagClick = { tagId, name ->
-                                            onNavigateToExploreFromProfile(null, null, tagId, name, null, null)
+                                },
+                                compactHeader = {
+                                    ProfileCompactHeaderBar(
+                                        profile = profile,
+                                        onClick = {
+                                            scrollScope.launch {
+                                                listState.animateScrollToItem(0)
+                                            }
                                         },
                                     )
-                                }
-                            },
-                            compactHeader = {
-                                ProfileCompactHeaderBar(
-                                    profile = profile,
-                                    onClick = {
-                                        scrollScope.launch {
-                                            listState.animateScrollToItem(0)
-                                        }
-                                    },
-                                )
-                            },
-                            selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it },
-                            items = items,
-                            wishlistTabVisible = false,
-                            onListingClick = { item -> onListingClick(item.id, item.sellerId ?: profile?.userId) },
-                            showListingQuickActions = true,
-                            onListingLike = { viewModel.toggleLike(it) },
-                            onListingSave = { viewModel.toggleSave(it) },
-                            additionalBottomInset = if (tabsPinned) pinnedBottomInset else 0.dp,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                                },
+                                selectedTab = selectedTab,
+                                onTabSelected = { selectedTab = it },
+                                items = items,
+                                wishlistTabVisible = false,
+                                onListingClick = { item ->
+                                    onListingClick(item.id, item.sellerId ?: profile?.userId)
+                                },
+                                showListingQuickActions = true,
+                                onListingLike = { viewModel.toggleLike(it) },
+                                onListingSave = { viewModel.toggleSave(it) },
+                                additionalBottomInset = if (showPromoFooter) pinnedBottomInset else 0.dp,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         AnimatedVisibility(
-                            visible = tabsPinned,
+                            visible = showPromoFooter,
                             enter = fadeIn(animationSpec = tween(240)) +
                                 slideInVertically(animationSpec = tween(240)) { full -> full / 3 },
                             exit = fadeOut(animationSpec = tween(200)) +
                                 slideOutVertically(animationSpec = tween(200)) { full -> full / 4 },
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth(),
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                HorizontalDivider(
-                                    thickness = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                )
-                                FashPromoSliderBlock(
-                                    slides = promoSlides,
-                                    onSlideClick = onPromoSlideClick,
-                                )
-                                FashBottomPromoAdStrip(
-                                    modifier = Modifier
-                                        .height(adHeight)
-                                        .fillMaxWidth(),
-                                    onExploreClick = onExploreClick,
-                                )
-                            }
+                            FashPromoSliderAdFooter(
+                                modifier = Modifier.fillMaxWidth(),
+                                onExploreClick = onExploreClick,
+                                slides = promoSlides,
+                                onSlideClick = onPromoSlideClick,
+                                edgeToEdgeAdStrip = true,
+                            )
                         }
                     }
                 }

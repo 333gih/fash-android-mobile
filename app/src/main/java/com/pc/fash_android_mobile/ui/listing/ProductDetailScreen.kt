@@ -2,7 +2,6 @@
 
 package com.pc.fash_android_mobile.ui.listing
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -182,7 +181,6 @@ fun ProductDetailScreen(
         viewModel.loadDetail(listingId)
     }
 
-    BackHandler(onBack = onBack)
 
     Box(modifier = modifier.fillMaxSize()) {
         when {

@@ -277,11 +277,12 @@ class ChatDetailViewModel(
                         }
                     }
                     is RealtimeEvent.OrderStatusChanged -> {
-                        val knownOrderId = _orderId.value
+                        val known = _orderId.value?.trim()?.takeIf { it.isNotEmpty() }
+                        val evOid = event.orderId.trim().takeIf { it.isNotEmpty() }
                         when {
-                            knownOrderId != null && event.orderId == knownOrderId ->
-                                _orderStatus.value = event.newStatus
-                            sameConversation(event.conversationId, conversationId) && knownOrderId == null ->
+                            known != null && evOid != null && known.equals(evOid, ignoreCase = true) ->
+                                viewModelScope.launch { fetchOrderStatus(known) }
+                            sameConversation(event.conversationId, conversationId) && known == null ->
                                 viewModelScope.launch { checkForOrderId(conversationId) }
                         }
                     }
@@ -611,6 +612,57 @@ class ChatDetailViewModel(
             _isLoading.value = false
             startRealtimeAndPolling(item.conversationId)
         }
+    }
+
+    /**
+     * Stops realtime listeners and clears thread state when the user signs out so another account
+     * never sees the previous user's messages or order banners.
+     */
+    fun clearCachesForSignedOutUser() {
+        wsJob?.cancel()
+        wsJob = null
+        pollingJob?.cancel()
+        pollingJob = null
+        typingTimeoutJob?.cancel()
+        typingTimeoutJob = null
+        silentPollDebounceJob?.cancel()
+        silentPollDebounceJob = null
+        _detail.value?.conversationId?.trim()?.takeIf { it.isNotEmpty() }?.let { cid ->
+            runCatching { realtimeManager.unsubscribeFromConversation(cid) }
+        }
+        _detail.value = null
+        _messages.value = emptyList()
+        _inputText.value = ""
+        _isReporting.value = false
+        _showReportDialog.value = false
+        _reportBannerPulseAt.value = 0L
+        _isLoading.value = false
+        _isMessagesLoading.value = false
+        _isSending.value = false
+        _isRespondingToOffer.value = false
+        _isCreatingOffer.value = false
+        _isCreatingCounterOffer.value = false
+        _isDealWorking.value = false
+        _counterOfferSheet.value = null
+        _activeDeal.value = null
+        _pendingDealReviewDealId.value = null
+        _isProposingMeeting.value = false
+        _meetingMutationInFlight.value = false
+        _showMeetingIdentityReverifyDialog.value = false
+        _ackMeetingReverifyInFlight.value = false
+        _orderId.value = null
+        _orderStatus.value = null
+        _orderMeetupDeadlineAt.value = null
+        _orderMeetingAppointmentStatus.value = null
+        _orderMeetingScheduledAt.value = null
+        _orderCanConfirmHandoff.value = false
+        _orderMeetingSosUnlocked.value = false
+        _orderMeetupBothPartiesCheckedIn.value = false
+        _confirmHandoffInFlight.value = false
+        _loadError.value = null
+        _showOfferDialog.value = false
+        _acceptedOfferForCheckout.value = null
+        _isOtherTyping.value = false
     }
 
     /**
@@ -1389,7 +1441,14 @@ class ChatDetailViewModel(
         syncOrderIdStateFromConversationDetail(d)
     }
 
-    /** When the server clears [ConversationDetail.orderId], drop local order state. */
+    /**
+     * When the server clears [ConversationDetail.orderId], drop local order state.
+     *
+     * When [orderId] is unchanged, we still refresh order fields (status, meetup grace, …) from
+     * `GET /orders/:id` on every conversation detail sync. Otherwise the chat deal banner can stay
+     * stuck on an old status (e.g. `in_transit`) after the buyer confirms receipt or leaves a review,
+     * if realtime `OrderStatusChanged` was missed.
+     */
     private fun syncOrderIdStateFromConversationDetail(d: ConversationDetail) {
         val oid = d.orderId?.trim()?.takeIf { it.isNotEmpty() }
         when {
@@ -1406,8 +1465,10 @@ class ChatDetailViewModel(
                     _confirmHandoffInFlight.value = false
                 }
             }
-            _orderId.value != oid -> {
-                _orderId.value = oid
+            else -> {
+                if (_orderId.value != oid) {
+                    _orderId.value = oid
+                }
                 viewModelScope.launch { fetchOrderStatus(oid) }
             }
         }

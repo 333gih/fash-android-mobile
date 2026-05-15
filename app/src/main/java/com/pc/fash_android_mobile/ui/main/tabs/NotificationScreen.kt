@@ -1,18 +1,21 @@
 package com.pc.fash_android_mobile.ui.main.tabs
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -32,8 +35,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -44,6 +49,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,11 +61,11 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
-import com.pc.fash_android_mobile.ui.components.FashBottomPromoAdStrip
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
-import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
+import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.notifications.NotificationDetailScreen
 import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -68,9 +74,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-
-private const val NotificationAdHeightFraction = 0.18f
-private val NotificationAdMinHeight = 72.dp
 
 /**
  * In-app notification inbox: `GET …/users/me/notifications` with keyset paging and read via PATCH.
@@ -98,9 +101,15 @@ fun NotificationScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val inboxUnavailable by viewModel.inboxUnavailable.collectAsState()
+    val unreadCount by viewModel.unreadCount.collectAsState()
+    val markAllReadBusy by viewModel.markAllReadBusy.collectAsState()
     val selectedDetailId by viewModel.selectedDetailId.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val canMarkAllRead = !inboxUnavailable &&
+        !markAllReadBusy &&
+        (unreadCount > 0 || items.any { it.isUnread })
 
     DisposableEffect(Unit) {
         onDispose { viewModel.closeDetail() }
@@ -108,6 +117,12 @@ fun NotificationScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refresh()
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
     }
 
     LaunchedEffect(listState, items.size, hasMore, loadMoreBusy, isLoading) {
@@ -134,6 +149,12 @@ fun NotificationScreen(
     ) {
         Box(Modifier.fillMaxSize()) {
             Scaffold(
+                // Match OrdersScreen: do not reserve bottom system bar in content padding — the promo
+                // footer (FashBottomPromoAdStrip edgeToEdge) applies navigation-bar padding internally.
+                contentWindowInsets = WindowInsets.safeDrawing.only(
+                    WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+                ),
+                snackbarHost = { FashSnackbarHost(hostState = snackbarHostState) },
                 topBar = {
                     TopAppBar(
                         title = {
@@ -152,6 +173,40 @@ fun NotificationScreen(
                                 )
                             }
                         },
+                        actions = {
+                            if (markAllReadBusy) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = FashTheme.spacing.editorialStart - 4.dp)
+                                        .size(48.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        color = FashColors.Primary,
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                            } else {
+                                TextButton(
+                                    onClick = { viewModel.markAllRead() },
+                                    enabled = canMarkAllRead,
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = FashColors.Primary,
+                                        disabledContentColor = scheme.onSurface.copy(alpha = 0.38f),
+                                    ),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.notification_mark_all_read),
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = scheme.surface,
                             titleContentColor = scheme.onSurface,
@@ -159,18 +214,16 @@ fun NotificationScreen(
                     )
                 },
             ) { paddingValues ->
-                BoxWithConstraints(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
                 ) {
-                    val adHeight = (maxHeight * NotificationAdHeightFraction).coerceAtLeast(NotificationAdMinHeight)
-                    Column(Modifier.fillMaxSize()) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                        ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
                             when {
                                 isLoading && items.isEmpty() -> {
                                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -296,27 +349,16 @@ fun NotificationScreen(
                             }
                         }
 
-                        HorizontalDivider(
-                            thickness = 1.dp,
-                            color = scheme.outlineVariant.copy(alpha = 0.35f),
-                        )
-                        FashPromoSliderBlock(
-                            slides = promoSlides,
-                            onSlideClick = onPromoSlideClick,
-                        )
-                        FashBottomPromoAdStrip(
-                            modifier = Modifier
-                                .height(adHeight)
-                                .fillMaxWidth(),
-                            onExploreClick = onExploreClick,
-                        )
-                    }
+                    FashPromoSliderAdFooter(
+                        modifier = Modifier.fillMaxWidth(),
+                        onExploreClick = onExploreClick,
+                        slides = promoSlides,
+                        onSlideClick = onPromoSlideClick,
+                        edgeToEdgeAdStrip = true,
+                    )
                 }
             }
 
-            if (detailItem != null) {
-                BackHandler { viewModel.closeDetail() }
-            }
             detailItem?.let { item ->
                 NotificationDetailScreen(
                     item = item,

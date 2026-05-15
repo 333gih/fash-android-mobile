@@ -86,6 +86,15 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
+    fun clearCachesForSignedOutUser() {
+        _items.value = emptyList()
+        _previewCoverUrlsBySellerKey.value = emptyMap()
+        _loadError.value = false
+        _loadErrorDetail.value = null
+        _isLoading.value = false
+        _isRefreshing.value = false
+    }
+
     fun ensurePreviewCoversLoaded(seller: FeaturedSellerItem) {
         val key = sellerKey(seller)
         if (key.isBlank()) return

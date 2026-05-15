@@ -119,6 +119,20 @@ class FollowConnectionsViewModel(application: Application) : AndroidViewModel(ap
         }
     }
 
+    fun clearCachesForSignedOutUser() {
+        _selectedTab.value = 0
+        _following.value = emptyList()
+        _followers.value = emptyList()
+        _followingTotal.value = 0
+        _followersTotal.value = 0
+        _followingLoading.value = false
+        _followersLoading.value = false
+        _followingLoadingMore.value = false
+        _followersLoadingMore.value = false
+        _followingFailed.value = false
+        _followersFailed.value = false
+    }
+
     private suspend fun loadTab(tab: Int, refresh: Boolean) {
         if (tab == 0) loadFollowing(refresh) else loadFollowers(refresh)
     }

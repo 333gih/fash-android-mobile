@@ -642,6 +642,18 @@ class OrderRepository(
                 .ifBlank { listing.optString("CoverImageURL", "") },
             imageUrlsArr,
         )
+        val buyerReview = parseBuyerReview(o)
+        val apiCanReviewExplicit = when {
+            o.has("can_review") -> o.optBoolean("can_review", false)
+            o.has("CanReview") -> o.optBoolean("CanReview", false)
+            else -> null
+        }
+        val defaultReviewEligible = rawStatus == "delivered_confirmed"
+        val canReview = when {
+            buyerReview != null -> false
+            apiCanReviewExplicit != null -> apiCanReviewExplicit
+            else -> defaultReviewEligible
+        }
         return OrderItem(
             orderId = o.optString("id", o.optString("ID", o.optString("order_id", ""))),
             listingId = o.optString("listing_id", o.optString("ListingID", listing.optString("id", listing.optString("ID", "")))),
@@ -651,7 +663,7 @@ class OrderRepository(
             priceVnd = o.optLong("amount_vnd", o.optLong("AmountVND", listing.optLong("price", listing.optLong("Price", 0L)))),
             status = rawStatus,
             canConfirm = o.optBoolean("can_confirm", rawStatus == "in_transit"),
-            canReview = o.optBoolean("can_review", rawStatus == "delivered_confirmed"),
+            canReview = canReview,
             createdAt = o.optIsoFirst("created_at", "CreatedAt", "createdAt"),
         )
     }

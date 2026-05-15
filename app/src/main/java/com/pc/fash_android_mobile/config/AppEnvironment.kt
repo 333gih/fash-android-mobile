@@ -212,4 +212,11 @@ object AppEnvironment {
     /** From env `IDENTITY_REVERIFY_URL` — optional Custom Tabs target for meetup identity re-verification. */
     val identityReverifyUrl: String
         get() = BuildConfig.IDENTITY_REVERIFY_URL.trim()
+
+    /**
+     * From env `SHIPPING` ([BuildConfig.SHIPPING_ENABLED]) — gates the Home “Đang giao” hub: live order list vs
+     * “coming soon” placeholder until logistics tracking is rolled out for this environment.
+     */
+    val shippingEnabled: Boolean
+        get() = BuildConfig.SHIPPING_ENABLED
 }

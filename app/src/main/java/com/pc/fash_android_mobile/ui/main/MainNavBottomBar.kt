@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -36,9 +38,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.onboarding.FeatureTourAnchor
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 
@@ -62,18 +67,23 @@ val ChatComposerBarOverlayInset = 100.dp
 
 /**
  * Bottom bar with a centered Post action (FAB). Slots share equal width; icons and labels align
- * on one row without a raised FAB that breaks the bar’s top edge.
+ * on one row without a raised FAB that breaks the bar's top edge.
  */
 @Composable
 fun MainNavBottomBar(
     selectedTab: Int,
     chatUnreadCount: Int,
     onTabChange: (Int) -> Unit,
-    /** Tap Explore while Explore is already selected (e.g. scroll Explore to top). */
-    onExploreReselected: () -> Unit = {},
-    /** Tap Chat while Chat is already selected — reload inbox from API. */
-    onChatReselected: () -> Unit = {},
+    /**
+     * Tap the already-selected tab — host should reload that tab and drive [isTabNavLoading].
+     */
+    onTabReselected: (MainTab) -> Unit = {},
+    /** When true, the tab icon shows a spinner instead of its glyph (re-tap reload in progress). */
+    isTabNavLoading: (MainTab) -> Boolean = { false },
     modifier: Modifier = Modifier,
+    /** When true, reports anchor bounds for the first-launch feature tour overlay. */
+    tourAnchorsEnabled: Boolean = false,
+    onTourAnchorPositioned: (FeatureTourAnchor, LayoutCoordinates?) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
     Surface(
@@ -99,42 +109,79 @@ fun MainNavBottomBar(
                 MainNavSideItem(
                     tab = MainTab.Home,
                     selected = selectedTab == MainTab.Home.ordinal,
+                    showLoading = isTabNavLoading(MainTab.Home),
                     chatUnreadCount = 0,
-                    onClick = { onTabChange(MainTab.Home.ordinal) },
+                    onClick = {
+                        if (selectedTab == MainTab.Home.ordinal) {
+                            onTabReselected(MainTab.Home)
+                        } else {
+                            onTabChange(MainTab.Home.ordinal)
+                        }
+                    },
+                    tourAnchorsEnabled = tourAnchorsEnabled,
+                    tourAnchor = FeatureTourAnchor.BottomHome,
+                    onTourAnchorPositioned = onTourAnchorPositioned,
                 )
                 MainNavSideItem(
                     tab = MainTab.Explore,
                     selected = selectedTab == MainTab.Explore.ordinal,
+                    showLoading = isTabNavLoading(MainTab.Explore),
                     chatUnreadCount = 0,
                     onClick = {
                         if (selectedTab == MainTab.Explore.ordinal) {
-                            onExploreReselected()
+                            onTabReselected(MainTab.Explore)
                         } else {
                             onTabChange(MainTab.Explore.ordinal)
                         }
                     },
+                    tourAnchorsEnabled = tourAnchorsEnabled,
+                    tourAnchor = FeatureTourAnchor.BottomExplore,
+                    onTourAnchorPositioned = onTourAnchorPositioned,
                 )
                 MainNavPostFab(
                     selected = selectedTab == MainTab.Post.ordinal,
-                    onClick = { onTabChange(MainTab.Post.ordinal) },
+                    showLoading = isTabNavLoading(MainTab.Post),
+                    onClick = {
+                        if (selectedTab == MainTab.Post.ordinal) {
+                            onTabReselected(MainTab.Post)
+                        } else {
+                            onTabChange(MainTab.Post.ordinal)
+                        }
+                    },
+                    tourAnchorsEnabled = tourAnchorsEnabled,
+                    onTourAnchorPositioned = onTourAnchorPositioned,
                 )
                 MainNavSideItem(
                     tab = MainTab.Chat,
                     selected = selectedTab == MainTab.Chat.ordinal,
+                    showLoading = isTabNavLoading(MainTab.Chat),
                     chatUnreadCount = chatUnreadCount,
                     onClick = {
                         if (selectedTab == MainTab.Chat.ordinal) {
-                            onChatReselected()
+                            onTabReselected(MainTab.Chat)
                         } else {
                             onTabChange(MainTab.Chat.ordinal)
                         }
                     },
+                    tourAnchorsEnabled = tourAnchorsEnabled,
+                    tourAnchor = FeatureTourAnchor.BottomChat,
+                    onTourAnchorPositioned = onTourAnchorPositioned,
                 )
                 MainNavSideItem(
                     tab = MainTab.Profile,
                     selected = selectedTab == MainTab.Profile.ordinal,
+                    showLoading = isTabNavLoading(MainTab.Profile),
                     chatUnreadCount = 0,
-                    onClick = { onTabChange(MainTab.Profile.ordinal) },
+                    onClick = {
+                        if (selectedTab == MainTab.Profile.ordinal) {
+                            onTabReselected(MainTab.Profile)
+                        } else {
+                            onTabChange(MainTab.Profile.ordinal)
+                        }
+                    },
+                    tourAnchorsEnabled = tourAnchorsEnabled,
+                    tourAnchor = FeatureTourAnchor.BottomProfile,
+                    onTourAnchorPositioned = onTourAnchorPositioned,
                 )
             }
         }
@@ -145,52 +192,77 @@ fun MainNavBottomBar(
 private fun RowScope.MainNavSideItem(
     tab: MainTab,
     selected: Boolean,
+    showLoading: Boolean,
     chatUnreadCount: Int,
     onClick: () -> Unit,
+    tourAnchorsEnabled: Boolean,
+    tourAnchor: FeatureTourAnchor,
+    onTourAnchorPositioned: (FeatureTourAnchor, LayoutCoordinates?) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val iconTint = if (selected) FashColors.Primary else scheme.onSurfaceVariant
     Column(
         modifier = Modifier
             .weight(1f)
             .heightIn(min = NavSlotMinHeight)
-            .clickable(onClick = onClick)
+            .clickable(enabled = !showLoading, onClick = onClick)
             .semantics { role = Role.Tab }
+            .then(
+                if (tourAnchorsEnabled) {
+                    Modifier.onGloballyPositioned { coords ->
+                        onTourAnchorPositioned(tourAnchor, coords.takeIf { it.isAttached })
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        if (tab == MainTab.Chat && chatUnreadCount > 0) {
-            BadgedBox(
-                badge = {
-                    androidx.compose.material3.Badge(containerColor = FashColors.Primary) {
-                        Text(
-                            text = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = FashColors.Primary.fashReadableOn(),
-                        )
-                    }
-                },
-            ) {
+        Box(
+            modifier = Modifier.size(NavIconSize),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (showLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = FashColors.Primary,
+                    strokeWidth = 2.dp,
+                )
+            } else if (tab == MainTab.Chat && chatUnreadCount > 0) {
+                BadgedBox(
+                    badge = {
+                        androidx.compose.material3.Badge(containerColor = FashColors.Primary) {
+                            Text(
+                                text = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FashColors.Primary.fashReadableOn(),
+                            )
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = stringResource(tab.labelRes),
+                        tint = iconTint,
+                        modifier = Modifier.size(NavIconSize),
+                    )
+                }
+            } else {
                 Icon(
                     imageVector = tab.icon,
                     contentDescription = stringResource(tab.labelRes),
-                    tint = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
+                    tint = iconTint,
                     modifier = Modifier.size(NavIconSize),
                 )
             }
-        } else {
-            Icon(
-                imageVector = tab.icon,
-                contentDescription = stringResource(tab.labelRes),
-                tint = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
-                modifier = Modifier.size(NavIconSize),
-            )
         }
         Spacer(Modifier.height(NavIconLabelGap))
         Text(
             text = stringResource(tab.labelRes),
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected) FashColors.Primary else scheme.onSurfaceVariant,
+            color = iconTint,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -201,7 +273,10 @@ private fun RowScope.MainNavSideItem(
 @Composable
 private fun RowScope.MainNavPostFab(
     selected: Boolean,
+    showLoading: Boolean,
     onClick: () -> Unit,
+    tourAnchorsEnabled: Boolean,
+    onTourAnchorPositioned: (FeatureTourAnchor, LayoutCoordinates?) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val scale by animateFloatAsState(
@@ -218,7 +293,19 @@ private fun RowScope.MainNavPostFab(
             .weight(1f)
             .heightIn(min = NavSlotMinHeight)
             .padding(horizontal = 2.dp)
-            .semantics { role = Role.Tab },
+            .semantics { role = Role.Tab }
+            .then(
+                if (tourAnchorsEnabled) {
+                    Modifier.onGloballyPositioned { coords ->
+                        onTourAnchorPositioned(
+                            FeatureTourAnchor.BottomPostFab,
+                            coords.takeIf { it.isAttached },
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -240,11 +327,19 @@ private fun RowScope.MainNavPostFab(
                 hoveredElevation = elevation + 1.dp,
             ),
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = stringResource(R.string.nav_post_fab_cd),
-                modifier = Modifier.size(26.dp),
-            )
+            if (showLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = FashColors.Primary.fashReadableOn(),
+                    strokeWidth = 2.5.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.nav_post_fab_cd),
+                    modifier = Modifier.size(26.dp),
+                )
+            }
         }
         Spacer(Modifier.height(NavIconLabelGap))
         Text(
@@ -257,7 +352,7 @@ private fun RowScope.MainNavPostFab(
             textAlign = TextAlign.Center,
             maxLines = 1,
             modifier = Modifier
-                .clickable(onClick = onClick)
+                .clickable(enabled = !showLoading, onClick = onClick)
                 .padding(vertical = 2.dp),
         )
     }

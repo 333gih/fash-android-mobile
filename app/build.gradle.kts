@@ -239,6 +239,29 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
      * user can still complete verification elsewhere and tap “I've finished” to POST ack.
      */
     buildConfigField("String", "IDENTITY_REVERIFY_URL", buildConfigStringLiteral(envOrEmpty("IDENTITY_REVERIFY_URL")))
+
+    /**
+     * C2C chat: after a deal exists, offer **ship + online payment** path from the fulfillment chooser.
+     * When false, the Ship option shows as coming soon / disabled (copy from strings).
+     */
+    val c2cShipFulfillmentEnabled =
+        envVal("C2C_SHIP_FULFILLMENT_ENABLED")?.equals("true", ignoreCase = true) ?: true
+    buildConfigField("boolean", "C2C_SHIP_FULFILLMENT_ENABLED", c2cShipFulfillmentEnabled.toString())
+    /**
+     * When false, ship flow still opens for address / copy but checkout / PSP is gated as in development.
+     */
+    val c2cShipOnlinePaymentEnabled =
+        envVal("C2C_SHIP_ONLINE_PAYMENT_ENABLED")?.equals("true", ignoreCase = true) ?: true
+    buildConfigField("boolean", "C2C_SHIP_ONLINE_PAYMENT_ENABLED", c2cShipOnlinePaymentEnabled.toString())
+
+    /**
+     * From env `SHIPPING` — when true, Home “Đang giao” opens a screen with live in-transit buying orders.
+     * When false or unset as `false`, that screen shows a “coming soon” state (feature not enabled for this build).
+     * Omit or set `true` to show real order data (default true preserves existing behaviour).
+     */
+    val shippingEnabled =
+        envVal("SHIPPING")?.equals("true", ignoreCase = true) ?: true
+    buildConfigField("boolean", "SHIPPING_ENABLED", shippingEnabled.toString())
 }
 
 android {

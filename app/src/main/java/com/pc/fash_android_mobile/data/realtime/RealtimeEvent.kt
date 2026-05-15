@@ -75,6 +75,9 @@ sealed class RealtimeEvent {
     /** In-app notification inbox / unread badge should refresh from core (`type: inbox.refresh`). */
     object InboxRefresh : RealtimeEvent()
 
+    /** Admin promo interstitial (`type: app.promo.show`) — show blocking dialog from payload. */
+    data class AppPromoShow(val campaignJson: org.json.JSONObject) : RealtimeEvent()
+
     /** Server pong response (`type: pong`). */
     object Pong : RealtimeEvent()
 

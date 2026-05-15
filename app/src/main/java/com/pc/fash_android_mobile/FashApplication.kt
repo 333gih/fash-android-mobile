@@ -10,6 +10,8 @@ import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.deal.DealRepository
 import com.pc.fash_android_mobile.data.advertising.AdvertisingRepository
+import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
+import com.pc.fash_android_mobile.data.promo.AppPromoInterstitialRepository
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
@@ -101,17 +103,6 @@ class FashApplication : Application(), ImageLoaderFactory {
     }
 
     /**
-     * Incremented after OTP / password / social login succeeds so [MainActivity] can refresh
-     * Home, Explore, and notification counts while the user token is now valid (feeds may differ for authed users).
-     */
-    private val _postLoginDataRefreshGeneration = MutableStateFlow(0L)
-    val postLoginDataRefreshGeneration = _postLoginDataRefreshGeneration.asStateFlow()
-
-    fun requestPostLoginDataRefresh() {
-        _postLoginDataRefreshGeneration.update { it + 1L }
-    }
-
-    /**
      * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until
      * the coroutine finishes, which defeats IO dispatchers and causes "failed to complete startup"
      * ANRs when EncryptedSharedPreferences / keystore is slow under memory pressure.
@@ -128,8 +119,21 @@ class FashApplication : Application(), ImageLoaderFactory {
     )
     val inboxUnreadRefreshSignals: SharedFlow<Unit> = _inboxUnreadRefreshSignals.asSharedFlow()
 
+    /** Admin promo interstitial from FCM data payload (backup when WS missed). */
+    private val _appPromoShowSignals = MutableSharedFlow<AppPromoCampaign>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val appPromoShowSignals: SharedFlow<AppPromoCampaign> = _appPromoShowSignals.asSharedFlow()
+
     @Volatile
     private var inboxUnreadRefreshJob: Job? = null
+
+    fun requestShowAppPromo(campaign: AppPromoCampaign) {
+        applicationScope.launch {
+            _appPromoShowSignals.emit(campaign)
+        }
+    }
 
     /** Debounced so burst FCM / WS frames do not hammer the API. */
     fun requestInboxUnreadRefreshDebounced() {
@@ -178,6 +182,15 @@ class FashApplication : Application(), ImageLoaderFactory {
     /** Core-service promo / advertising CMS (`GET /app/advertising/slides`). */
     val advertisingRepository: AdvertisingRepository by lazy {
         AdvertisingRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
+
+    /** Admin promo interstitials pull backup (`GET /app/promo-interstitials/active`). */
+    val appPromoInterstitialRepository: AppPromoInterstitialRepository by lazy {
+        AppPromoInterstitialRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),

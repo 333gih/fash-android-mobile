@@ -85,6 +85,11 @@ class AddressBookViewModel(
         }
     }
 
+    fun clearCachesForSignedOutUser() {
+        _addresses.value = emptyList()
+        _loading.value = false
+    }
+
     fun loadProvincesIfNeeded() {
         if (_provinces.value.isNotEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {

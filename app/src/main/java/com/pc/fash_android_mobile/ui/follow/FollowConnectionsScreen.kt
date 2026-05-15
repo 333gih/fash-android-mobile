@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.follow
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,7 @@ fun FollowConnectionsScreen(
     onBack: () -> Unit,
     /** Same pattern as chat empty inbox — opens Explore. */
     onExploreClick: () -> Unit = {},
+    onUserClick: (UserSearchResult) -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
     val following by viewModel.following.collectAsState()
@@ -147,6 +149,7 @@ fun FollowConnectionsScreen(
                             isLoadingMore = followingLoadingMore,
                             onRetry = { viewModel.retryActiveTab() },
                             onLoadMore = { viewModel.loadMoreFollowing() },
+                            onUserClick = onUserClick,
                             emptyContent = {
                                 FollowConnectionsEmptyState(
                                     isFollowingTab = true,
@@ -162,6 +165,7 @@ fun FollowConnectionsScreen(
                             isLoadingMore = followersLoadingMore,
                             onRetry = { viewModel.retryActiveTab() },
                             onLoadMore = { viewModel.loadMoreFollowers() },
+                            onUserClick = onUserClick,
                             emptyContent = {
                                 FollowConnectionsEmptyState(
                                     isFollowingTab = false,
@@ -253,6 +257,7 @@ private fun FollowUserList(
     isLoadingMore: Boolean,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
+    onUserClick: (UserSearchResult) -> Unit,
     emptyContent: @Composable () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -303,7 +308,10 @@ private fun FollowUserList(
                     users,
                     key = { it.userId.ifBlank { it.username } },
                 ) { user ->
-                    FollowUserRow(user = user)
+                    FollowUserRow(
+                        user = user,
+                        onClick = { onUserClick(user) },
+                    )
                 }
                 if (hasMore) {
                     item {
@@ -328,10 +336,15 @@ private fun FollowUserList(
 }
 
 @Composable
-private fun FollowUserRow(user: UserSearchResult) {
+private fun FollowUserRow(
+    user: UserSearchResult,
+    onClick: () -> Unit,
+) {
+    val name = user.displayName.trim().ifBlank { user.username }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -341,7 +354,6 @@ private fun FollowUserRow(user: UserSearchResult) {
             size = 48.dp,
         )
         Column(modifier = Modifier.padding(start = 14.dp)) {
-            val name = user.displayName.trim().ifBlank { user.username }
             Text(
                 text = name,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),

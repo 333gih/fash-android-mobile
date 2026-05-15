@@ -64,8 +64,8 @@ import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
@@ -143,6 +143,7 @@ import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAvatar
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
+import com.pc.fash_android_mobile.ui.components.rememberSerialSnackbarChannel
 import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
@@ -172,6 +173,11 @@ fun ChatDetailScreen(
      * Carries [orderId], [listingId], and the last accepted offer amount for [CheckoutScreen].
      */
     onPayNow: (orderId: String, listingId: String, acceptedAmountVnd: Long) -> Unit = { _, _, _ -> },
+    /**
+     * Buyer/seller chose **Ship** in the fulfillment sheet — host should push [ChatShipFulfillmentScreen]
+     * (or equivalent) for address + checkout handoff.
+     */
+    onStartShipFulfillment: (orderId: String, listingId: String, agreedAmountVnd: Long) -> Unit = { _, _, _ -> },
     /** Called when any party taps the banner area (view order details). */
     onOrderDetails: (orderId: String) -> Unit = {},
     /** Legacy callback kept for backward compat; not triggered by the offer→order flow. */
@@ -240,18 +246,21 @@ fun ChatDetailScreen(
         ?: detail?.orderId?.trim()?.takeIf { it.isNotEmpty() }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val enqueueSnackbarSerial = rememberSerialSnackbarChannel(snackbarHostState)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { msg ->
-            snackbarHostState.showSnackbar(msg)
+            enqueueSnackbarSerial { showSnackbar(msg) }
         }
     }
 
     LaunchedEffect(Unit) {
         viewModel.suggestReopenListing.collect {
-            snackbarHostState.showSnackbar(context.getString(R.string.chat_meeting_cancel_suggest_reopen))
+            enqueueSnackbarSerial {
+                showSnackbar(context.getString(R.string.chat_meeting_cancel_suggest_reopen))
+            }
         }
     }
 
@@ -428,6 +437,7 @@ fun ChatDetailScreen(
             else -> {
                 val d = detail!!
                 var showMeetingSheet by remember { mutableStateOf(false) }
+                var showFulfillmentChoiceSheet by remember { mutableStateOf(false) }
                 val maxOffers = BusinessFlowConfig.maxOffersPerConversation
                 val orderStatusNorm = orderStatus?.trim()?.lowercase().orEmpty()
                 /**
@@ -538,14 +548,14 @@ fun ChatDetailScreen(
                                 null
                             },
                             confirmHandoffInProgress = confirmHandoffInFlight,
-                            onScheduleMeetup = if (
+                            onOpenFulfillmentChoice = if (
                                 hasLinkedOrder &&
                                 orderStatusNorm != "cancelled" &&
                                 orderStatusNorm != "delivered_confirmed" &&
                                 orderStatusNorm != "disputed" &&
                                 !hasActiveMeetupBlockingSchedule
                             ) {
-                                { showMeetingSheet = true }
+                                { showFulfillmentChoiceSheet = true }
                             } else {
                                 null
                             },
@@ -938,6 +948,27 @@ fun ChatDetailScreen(
                         )
                     }
 
+                    if (showFulfillmentChoiceSheet) {
+                        FulfillmentChoiceBottomSheet(
+                            onDismiss = { showFulfillmentChoiceSheet = false },
+                            onChooseMeetup = {
+                                showFulfillmentChoiceSheet = false
+                                showMeetingSheet = true
+                            },
+                            onChooseShip = {
+                                showFulfillmentChoiceSheet = false
+                                val oid = conversationOrderId
+                                if (oid != null) {
+                                    onStartShipFulfillment(
+                                        oid,
+                                        d.product?.listingId.orEmpty(),
+                                        acceptedOfferAmount,
+                                    )
+                                }
+                            },
+                            shipFulfillmentEnabled = BusinessFlowConfig.c2cShipFulfillmentEnabled,
+                        )
+                    }
                     if (showMeetingSheet) {
                         val sheetLinkedOrder = conversationOrderId
                         MeetingProposalBottomSheet(
@@ -1234,8 +1265,8 @@ private fun DealBanner(
     /** Seller meetup handoff — `POST .../confirm-handoff`. */
     onConfirmHandoff: (() -> Unit)? = null,
     confirmHandoffInProgress: Boolean = false,
-    /** When non-null, shows an extra control to open the meetup sheet. */
-    onScheduleMeetup: (() -> Unit)? = null,
+    /** Opens meetup vs ship chooser (replaces legacy meetup-only CTA). */
+    onOpenFulfillmentChoice: (() -> Unit)? = null,
     /** Seller-only: successful order — suggest listing another product. */
     onSellerSuggestNewListing: (() -> Unit)? = null,
 ) {
@@ -1454,7 +1485,7 @@ private fun DealBanner(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = if (onScheduleMeetup != null) 8.dp else 12.dp)
+                    .padding(bottom = if (onOpenFulfillmentChoice != null) 8.dp else 12.dp)
                     .height(46.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
@@ -1471,9 +1502,9 @@ private fun DealBanner(
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 )
             }
-            if (onScheduleMeetup != null) {
+            if (onOpenFulfillmentChoice != null) {
                 OutlinedButton(
-                    onClick = onScheduleMeetup,
+                    onClick = onOpenFulfillmentChoice,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
@@ -1482,23 +1513,23 @@ private fun DealBanner(
                     border = BorderStroke(1.dp, appearance.accent.copy(alpha = 0.55f)),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Event,
+                        imageVector = Icons.Outlined.LocalShipping,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                         tint = appearance.accent,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.chat_c2c_schedule_meeting),
+                        text = stringResource(R.string.chat_fulfillment_banner_cta),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = appearance.accent,
                     )
                 }
             }
         }
-        if (onScheduleMeetup != null && !buyerNeedsToPay && s != "cancelled") {
+        if (onOpenFulfillmentChoice != null && !buyerNeedsToPay && s != "cancelled") {
             OutlinedButton(
-                onClick = onScheduleMeetup,
+                onClick = onOpenFulfillmentChoice,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -1507,14 +1538,14 @@ private fun DealBanner(
                 border = BorderStroke(1.dp, appearance.accent.copy(alpha = 0.55f)),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Event,
+                    imageVector = Icons.Outlined.LocalShipping,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = appearance.accent,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.chat_c2c_schedule_meeting),
+                    text = stringResource(R.string.chat_fulfillment_banner_cta),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = appearance.accent,
                 )

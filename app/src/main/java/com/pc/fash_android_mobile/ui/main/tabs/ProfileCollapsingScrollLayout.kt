@@ -42,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +88,23 @@ private fun listingStatusOverlayLabel(wire: String?): String? {
         "reserved" -> stringResource(R.string.listing_status_reserved)
         "deleted" -> stringResource(R.string.listing_status_deleted)
         else -> wire
+    }
+}
+
+/**
+ * Bottom promo chrome (slider + “Khám phá…” strip) on seller profile — visible only after the hero
+ * has scrolled away and the sticky tab row is pinned (lazy index 0 = expanded header).
+ *
+ * Must use [remember] keyed on [listState]: each profile tab has its own [LazyListState]; a
+ * [derivedStateOf] created once would keep reading a previous tab’s scroll position.
+ */
+@Composable
+fun rememberProfilePromoFooterVisible(listState: LazyListState): State<Boolean> {
+    return remember(listState) {
+        derivedStateOf {
+            // Index 0 = expanded hero; index 1+ = sticky tabs (+ grid) pinned under the top bar.
+            listState.firstVisibleItemIndex > 0
+        }
     }
 }
 

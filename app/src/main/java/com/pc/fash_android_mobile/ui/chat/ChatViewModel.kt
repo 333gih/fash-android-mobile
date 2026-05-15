@@ -255,6 +255,20 @@ class ChatViewModel(
         }
     }
 
+    /** Clears inbox rows and unread badge when the session ends (account switch / logout). */
+    fun clearCachesForSignedOutUser() {
+        lastSuccessfulInboxFetchMs = 0L
+        _allConversations.value = emptyList()
+        _conversationGroups.value = emptyList()
+        _conversations.value = emptyList()
+        _displayGroups.value = emptyList()
+        _expandedGroupListingIds.value = emptySet()
+        _unreadBadgeCount.value = 0
+        _loadError.value = null
+        _isLoading.value = false
+        _isRefreshing.value = false
+    }
+
     fun setFilter(filter: ChatFilter) {
         _selectedFilter.value = filter
         applyCurrentViewFilter()

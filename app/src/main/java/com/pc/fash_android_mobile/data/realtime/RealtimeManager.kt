@@ -456,6 +456,12 @@ class RealtimeManager(
                 )
                 "feed.refresh" -> RealtimeEvent.FeedRefresh
                 "inbox.refresh" -> RealtimeEvent.InboxRefresh
+                "app.promo.show" -> {
+                    val campaign = payload.optJSONObject("campaign")
+                        ?: json.optJSONObject("campaign")
+                        ?: JSONObject()
+                    RealtimeEvent.AppPromoShow(campaign)
+                }
                 "pong" -> RealtimeEvent.Pong
                 else -> RealtimeEvent.Unknown(type)
             }

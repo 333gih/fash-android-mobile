@@ -38,13 +38,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -73,7 +77,11 @@ import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserSearchResult
+import com.pc.fash_android_mobile.ui.onboarding.AppFeatureTourOverlay
+import com.pc.fash_android_mobile.ui.onboarding.AppTourStep
+import com.pc.fash_android_mobile.ui.onboarding.FeatureTourAnchor
 
 /** `FASH.` + screen suffix — same typography as Explore (medium mark + titleLarge). */
 @Composable
@@ -132,6 +140,8 @@ fun MainNavScreen(
     onEditProfile: () -> Unit = {},
     onShippingAddressesClick: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
+    /** Home journey “Đang giao” — dedicated hub (env-gated). Falls back to [onOrdersClick] when null. */
+    onHomeDeliveringJourneyClick: (() -> Unit)? = null,
     /** [initialTab] 0 = people you follow, 1 = followers. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     /** Explore featured sellers “See all” — full list from `GET /search/featured-sellers`. */
@@ -163,6 +173,9 @@ fun MainNavScreen(
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
+    /** First-launch spotlight tour; completion is stored in [AppFeatureTourStore]. */
+    featureTourActive: Boolean = false,
+    onFeatureTourFinished: () -> Unit = {},
 ) {
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
     /** Tracks overlay visibility to refresh server unread count when user leaves the inbox. */
@@ -170,6 +183,8 @@ fun MainNavScreen(
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
     var showChangePasswordScreen by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    var tourStep by remember { mutableStateOf(AppTourStep.Intro) }
+    val tourAnchors = remember { mutableStateMapOf<FeatureTourAnchor, LayoutCoordinates>() }
     val cpCurrent by changePasswordViewModel.currentPassword.collectAsState()
     val cpNew by changePasswordViewModel.newPassword.collectAsState()
     val cpConfirm by changePasswordViewModel.confirmPassword.collectAsState()
@@ -186,6 +201,45 @@ fun MainNavScreen(
         }
     }
     val tabs = MainTab.entries
+    val homeRefreshing by homeViewModel.isRefreshing.collectAsState()
+    val exploreRefreshing by exploreViewModel.isRefreshing.collectAsState()
+    val chatRefreshing by chatViewModel.isRefreshing.collectAsState()
+    val profileRefreshing by profileViewModel.isRefreshing.collectAsState()
+    val postNavReloading by postViewModel.navReselectLoading.collectAsState()
+
+    val onMainTabReselected: (MainTab) -> Unit = { tab ->
+        when (tab) {
+            MainTab.Home -> {
+                homeViewModel.requestScrollHomeToTop()
+                homeViewModel.refresh()
+            }
+            MainTab.Explore -> {
+                exploreViewModel.requestScrollExploreToTop()
+                exploreViewModel.refresh()
+            }
+            MainTab.Post -> postViewModel.reloadOnNavReselect()
+            MainTab.Chat -> chatViewModel.refresh()
+            MainTab.Profile -> {
+                profileViewModel.requestScrollProfileToTop()
+                profileViewModel.refresh()
+            }
+        }
+    }
+
+    val isMainTabNavLoading: (MainTab) -> Boolean = { tab ->
+        if (tabs.getOrNull(selectedTab) != tab) {
+            false
+        } else {
+            when (tab) {
+                MainTab.Home -> homeRefreshing
+                MainTab.Explore -> exploreRefreshing
+                MainTab.Post -> postNavReloading
+                MainTab.Chat -> chatRefreshing
+                MainTab.Profile -> profileRefreshing
+            }
+        }
+    }
+
     LaunchedEffect(inboxOpenRequestGeneration) {
         if (inboxOpenRequestGeneration <= 0L) return@LaunchedEffect
         showNotificationScreen = true
@@ -214,12 +268,50 @@ fun MainNavScreen(
         wasNotificationOverlayVisible = showNotificationScreen
     }
     val inboxUnreadTotal by notificationsViewModel.unreadCount.collectAsState()
+    val notificationDetailId by notificationsViewModel.selectedDetailId.collectAsState()
     val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val openExploreSearch: () -> Unit = {
         exploreViewModel.requestSearchBarExpanded()
         onTabChange(MainTab.Explore.ordinal)
     }
     val isPostListingFlow = tabs.getOrNull(selectedTab) == MainTab.Post
+    val featureTourVisible = featureTourActive &&
+        !showNotificationScreen &&
+        !showSettingsScreen &&
+        !showChangePasswordScreen
+
+    LaunchedEffect(featureTourActive) {
+        if (!featureTourActive) {
+            tourAnchors.clear()
+        } else {
+            tourStep = AppTourStep.Intro
+        }
+    }
+    LaunchedEffect(featureTourVisible, tourStep) {
+        if (!featureTourVisible) return@LaunchedEffect
+        tourStep.prepareTab()?.let { tab -> onTabChange(tab.ordinal) }
+    }
+    LaunchedEffect(selectedTab, featureTourActive) {
+        if (!featureTourActive) return@LaunchedEffect
+        val tab = tabs.getOrNull(selectedTab)
+        if (tab != MainTab.Home && tab != MainTab.Chat && tab != MainTab.Post) {
+            tourAnchors.remove(FeatureTourAnchor.TopActionsRow)
+        }
+    }
+
+    val featureTourActiveState = rememberUpdatedState(featureTourActive)
+    val onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = remember {
+        { coords ->
+            if (featureTourActiveState.value) {
+                val c = coords?.takeIf { it.isAttached }
+                if (c == null) {
+                    tourAnchors.remove(FeatureTourAnchor.TopActionsRow)
+                } else {
+                    tourAnchors[FeatureTourAnchor.TopActionsRow] = c
+                }
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
@@ -251,12 +343,16 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
+                    tourTopBarAnchorsEnabled = featureTourActive,
+                    onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 MainTab.Post -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
                     inboxUnreadCount = inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
+                    tourTopBarAnchorsEnabled = featureTourActive,
+                    onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 MainTab.Chat -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
@@ -264,6 +360,8 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
+                    tourTopBarAnchorsEnabled = featureTourActive,
+                    onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 else -> MainTopBar(
                     suffixRes = MainTab.Home.headerSuffixRes,
@@ -271,6 +369,8 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = { showNotificationScreen = true },
                     onOrdersClick = onOrdersClick,
+                    tourTopBarAnchorsEnabled = featureTourActive,
+                    onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 }
             }
@@ -284,10 +384,18 @@ fun MainNavScreen(
                         showNotificationScreen = false
                         onTabChange(index)
                     },
-                    onExploreReselected = { exploreViewModel.requestScrollExploreToTop() },
-                    onChatReselected = {
-                        chatViewModel.loadConversations()
-                        chatViewModel.refreshUnreadCount()
+                    onTabReselected = onMainTabReselected,
+                    isTabNavLoading = isMainTabNavLoading,
+                    tourAnchorsEnabled = featureTourActive,
+                    onTourAnchorPositioned = { key, coords ->
+                        if (featureTourActive) {
+                            val c = coords?.takeIf { it.isAttached }
+                            if (c == null) {
+                                tourAnchors.remove(key)
+                            } else {
+                                tourAnchors[key] = c
+                            }
+                        }
                     },
                 )
             }
@@ -307,15 +415,6 @@ fun MainNavScreen(
                 if (selectedTab in tabs.indices && tabs[selectedTab] == MainTab.Chat) {
                     chatViewModel.loadConversations()
                     chatViewModel.refreshUnreadCount()
-                }
-            }
-            if (!showNotificationScreen &&
-                selectedTab in tabs.indices &&
-                tabs[selectedTab] == MainTab.Explore &&
-                exploreSearchExpanded
-            ) {
-                BackHandler {
-                    exploreViewModel.setSearchBarExpanded(false)
                 }
             }
             AnimatedContent(
@@ -350,8 +449,12 @@ fun MainNavScreen(
                         onListingClick = onListingClick,
                         onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
                         onOrdersClick = onOrdersClick,
+                        onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: onOrdersClick,
                         onNavigateToChat = { onTabChange(MainTab.Chat.ordinal) },
-                        onNavigateToSaved = { onTabChange(MainTab.Profile.ordinal) },
+                        onNavigateToSaved = {
+                            profileViewModel.requestWishlistTabFromHome()
+                            onTabChange(MainTab.Profile.ordinal)
+                        },
                         onNavigateToPost = { onTabChange(MainTab.Post.ordinal) },
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
@@ -393,8 +496,23 @@ fun MainNavScreen(
             }
         }
     }
+    if (featureTourVisible) {
+        AppFeatureTourOverlay(
+            visible = true,
+            anchors = tourAnchors,
+            currentStep = tourStep,
+            onStepChange = { tourStep = it },
+            onSkip = {
+                AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
+                onFeatureTourFinished()
+            },
+            onFinish = {
+                AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
+                onFeatureTourFinished()
+            },
+        )
+    }
     if (showNotificationScreen) {
-        BackHandler { showNotificationScreen = false }
         NotificationScreen(
             modifier = Modifier.fillMaxSize(),
             viewModel = notificationsViewModel,
@@ -428,7 +546,6 @@ fun MainNavScreen(
         )
     }
     if (showSettingsScreen) {
-        BackHandler { showSettingsScreen = false }
         SettingsScreen(
             modifier = Modifier.fillMaxSize(),
             onBack = { showSettingsScreen = false },
@@ -454,7 +571,6 @@ fun MainNavScreen(
         )
     }
     if (showChangePasswordScreen) {
-        BackHandler { showChangePasswordScreen = false }
         ChangePasswordScreen(
             modifier = Modifier.fillMaxSize(),
             currentPassword = cpCurrent,
@@ -468,6 +584,49 @@ fun MainNavScreen(
             onSubmit = changePasswordViewModel::submit,
             onBack = { showChangePasswordScreen = false },
         )
+    }
+    val hasMainNavOverlayBack = remember(
+        featureTourVisible,
+        showChangePasswordScreen,
+        showSettingsScreen,
+        showNotificationScreen,
+        notificationDetailId,
+        selectedTab,
+        exploreSearchExpanded,
+    ) {
+        featureTourVisible ||
+            showChangePasswordScreen ||
+            showSettingsScreen ||
+            showNotificationScreen ||
+            (
+                selectedTab in tabs.indices &&
+                    tabs[selectedTab] == MainTab.Explore &&
+                    exploreSearchExpanded
+                )
+    }
+    BackHandler(enabled = hasMainNavOverlayBack) {
+        when {
+            showChangePasswordScreen -> showChangePasswordScreen = false
+            showSettingsScreen -> showSettingsScreen = false
+            showNotificationScreen && notificationDetailId != null -> {
+                notificationsViewModel.closeDetail()
+            }
+            showNotificationScreen -> showNotificationScreen = false
+            featureTourVisible -> {
+                if (tourStep == AppTourStep.Intro) {
+                    AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
+                    onFeatureTourFinished()
+                } else {
+                    val prev = AppTourStep.entries.getOrNull(tourStep.ordinal - 1)
+                    if (prev != null) tourStep = prev
+                }
+            }
+            selectedTab in tabs.indices &&
+                tabs[selectedTab] == MainTab.Explore &&
+                exploreSearchExpanded -> {
+                exploreViewModel.setSearchBarExpanded(false)
+            }
+        }
     }
     }
 }
@@ -547,28 +706,45 @@ private fun MainTopBar(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOrdersClick: (() -> Unit)? = null,
+    tourTopBarAnchorsEnabled: Boolean = false,
+    onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
 ) {
     androidx.compose.material3.TopAppBar(
         title = { FashScreenTitle(suffixRes = suffixRes) },
         actions = {
-            IconButton(onClick = onSearchClick) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = stringResource(R.string.search_label),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            FashInboxNotificationIconButton(
-                unreadCount = inboxUnreadCount,
-                onClick = onNotificationsClick,
-            )
-            onOrdersClick?.let { openOrders ->
-                IconButton(onClick = openOrders) {
-                    Icon(
-                        imageVector = Icons.Default.LocalMall,
-                        contentDescription = stringResource(R.string.orders_icon_cd),
-                        tint = FashColors.Primary,
+            Box(
+                modifier = if (tourTopBarAnchorsEnabled) {
+                    Modifier.onGloballyPositioned { coords ->
+                        onTourTopActionsPositioned(coords.takeIf { it.isAttached })
+                    }
+                } else {
+                    Modifier
+                },
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(onClick = onSearchClick) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = stringResource(R.string.search_label),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    FashInboxNotificationIconButton(
+                        unreadCount = inboxUnreadCount,
+                        onClick = onNotificationsClick,
                     )
+                    onOrdersClick?.let { openOrders ->
+                        IconButton(onClick = openOrders) {
+                            Icon(
+                                imageVector = Icons.Default.LocalMall,
+                                contentDescription = stringResource(R.string.orders_icon_cd),
+                                tint = FashColors.Primary,
+                            )
+                        }
+                    }
                 }
             }
         },

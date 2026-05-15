@@ -3,7 +3,6 @@ package com.pc.fash_android_mobile.ui.checkout
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -146,7 +145,6 @@ fun CheckoutScreen(
         viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
     }
 
-    BackHandler { onBack() }
 
     when {
         isLoading && detail == null -> Box(

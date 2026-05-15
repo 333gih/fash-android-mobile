@@ -4,11 +4,15 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
+import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,6 +52,12 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     /** Total unread from server ([UserRepository.getMyNotificationsUnreadCount]); not limited to the first inbox page. */
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
 
+    private val _markAllReadBusy = MutableStateFlow(false)
+    val markAllReadBusy: StateFlow<Boolean> = _markAllReadBusy.asStateFlow()
+
+    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val events: SharedFlow<String> = _events.asSharedFlow()
+
     init {
         refreshUnreadSummary()
     }
@@ -58,6 +68,49 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 userRepository.getMyNotificationsUnreadCount().getOrElse { 0 }
             }
             _unreadCount.value = n
+        }
+    }
+
+    fun clearCachesForSignedOutUser() {
+        _items.value = emptyList()
+        _unreadCount.value = 0
+        _loadError.value = null
+        _inboxUnavailable.value = false
+        _hasMore.value = false
+        _selectedDetailId.value = null
+        _isLoading.value = false
+        _isRefreshing.value = false
+        _loadMoreBusy.value = false
+        _markAllReadBusy.value = false
+    }
+
+    fun markAllRead() {
+        if (_markAllReadBusy.value || _inboxUnavailable.value) return
+        if (_unreadCount.value <= 0 && _items.value.none { it.isUnread }) return
+        viewModelScope.launch {
+            _markAllReadBusy.value = true
+            val result = withContext(Dispatchers.IO) { userRepository.markAllNotificationsRead() }
+            _markAllReadBusy.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = { updated ->
+                    val stamp = Instant.now().toString()
+                    _items.update { list -> list.map { row -> row.copy(readAtIso = row.readAtIso ?: stamp) } }
+                    _unreadCount.value = 0
+                    refreshUnreadSummary()
+                    val msg = when {
+                        updated > 0 -> app.getString(R.string.notification_mark_all_read_success, updated)
+                        else -> app.getString(R.string.notification_mark_all_read_none)
+                    }
+                    _events.tryEmit(msg)
+                },
+                onFailure = { e ->
+                    _events.tryEmit(
+                        e.message?.takeIf { it.isNotBlank() }
+                            ?: app.getString(R.string.notification_mark_all_read_error),
+                    )
+                },
+            )
         }
     }
 

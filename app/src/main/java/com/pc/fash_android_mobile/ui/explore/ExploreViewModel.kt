@@ -1023,6 +1023,17 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         loadAll()
     }
 
+    /** Clears listing/seller results and follow chips when the user signs out. */
+    fun clearCachesForSignedOutUser() {
+        _listings.value = emptyList()
+        _sellerBrowseResults.value = emptyList()
+        _sellerPreviewPosts.value = emptyMap()
+        _followingIds.value = emptySet()
+        _hasMore.value = true
+        _loadError.value = false
+        _sellersLoadError.value = false
+    }
+
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true

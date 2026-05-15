@@ -57,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -352,6 +353,8 @@ private fun MeetingMutationButtonContent(
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -550,11 +553,14 @@ fun MeetingProposalMessageCard(
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
                 when {
                     showConfirm -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
                             OutlinedButton(
                                 onClick = onWithdrawOrReject,
                                 enabled = !mutationInFlight,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
                             ) {
                                 MeetingMutationButtonContent(
@@ -566,7 +572,7 @@ fun MeetingProposalMessageCard(
                             Button(
                                 onClick = onConfirm,
                                 enabled = !mutationInFlight,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
                             ) {

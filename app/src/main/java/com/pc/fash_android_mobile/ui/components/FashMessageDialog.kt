@@ -1,5 +1,13 @@
 package com.pc.fash_android_mobile.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,30 +67,7 @@ fun FashGlobalDialogHost(
     bottomOverlayInset: Dp = 0.dp,
 ) {
     if (message == null) return
-    val resolvedTitle = message.title ?: when (message) {
-        is UiDialogMessage.Success -> stringResource(R.string.dialog_title_success)
-        is UiDialogMessage.Error -> stringResource(R.string.dialog_title_error)
-        is UiDialogMessage.Info -> stringResource(R.string.dialog_title_info)
-    }
     val scheme = MaterialTheme.colorScheme
-    val (iconVector, iconTint, iconCircleBg) = when (message) {
-        is UiDialogMessage.Success -> Triple(
-            Icons.Default.CheckCircle,
-            FashColors.Success,
-            FashColors.Success.copy(alpha = 0.14f),
-        )
-        is UiDialogMessage.Error -> Triple(
-            Icons.Default.ErrorOutline,
-            scheme.error,
-            scheme.errorContainer,
-        )
-        is UiDialogMessage.Info -> Triple(
-            Icons.Default.Info,
-            scheme.primary,
-            scheme.primaryContainer,
-        )
-    }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -121,80 +106,29 @@ fun FashGlobalDialogHost(
                         .padding(bottom = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { /* consume */ },
-                            ),
-                        shape = RoundedCornerShape(22.dp),
-                        color = scheme.surfaceContainerHigh,
-                        tonalElevation = 2.dp,
-                        shadowElevation = 8.dp,
-                        border = BorderStroke(
-                            1.dp,
-                            scheme.outlineVariant.copy(alpha = 0.45f),
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 22.dp, bottom = 10.dp)
-                                .padding(horizontal = 22.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .background(iconCircleBg, CircleShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = iconVector,
-                                    contentDescription = null,
-                                    tint = iconTint,
-                                    modifier = Modifier.size(30.dp),
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = resolvedTitle,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = scheme.onSurface,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = message.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = scheme.onSurfaceVariant,
-                                textAlign = TextAlign.Start,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TextButton(
-                                    onClick = onDismiss,
-                                    modifier = Modifier.heightIn(min = 48.dp),
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = scheme.primary,
-                                    ),
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.dialog_ok),
-                                        fontWeight = FontWeight.SemiBold,
-                                        style = MaterialTheme.typography.labelLarge,
+                    AnimatedContent(
+                        targetState = message,
+                        transitionSpec = {
+                            (
+                                fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                                    scaleIn(
+                                        initialScale = 0.94f,
+                                        animationSpec = tween(240, easing = FastOutSlowInEasing),
                                     )
-                                }
-                            }
-                        }
+                                ) togetherWith (
+                                fadeOut(animationSpec = tween(180)) +
+                                    scaleOut(
+                                        targetScale = 0.96f,
+                                        animationSpec = tween(200, easing = FastOutSlowInEasing),
+                                    )
+                                )
+                        },
+                        label = "fashGlobalDialogMessage",
+                    ) { msg ->
+                        FashGlobalDialogCard(
+                            message = msg,
+                            onDismiss = onDismiss,
+                        )
                     }
                 }
             }
@@ -202,6 +136,112 @@ fun FashGlobalDialogHost(
                 Spacer(Modifier.height(bottomOverlayInset))
             }
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+}
+
+@Composable
+private fun FashGlobalDialogCard(
+    message: UiDialogMessage,
+    onDismiss: () -> Unit,
+) {
+    val resolvedTitle = message.title ?: when (message) {
+        is UiDialogMessage.Success -> stringResource(R.string.dialog_title_success)
+        is UiDialogMessage.Error -> stringResource(R.string.dialog_title_error)
+        is UiDialogMessage.Info -> stringResource(R.string.dialog_title_info)
+    }
+    val scheme = MaterialTheme.colorScheme
+    val (iconVector, iconTint, iconCircleBg) = when (message) {
+        is UiDialogMessage.Success -> Triple(
+            Icons.Default.CheckCircle,
+            FashColors.Success,
+            FashColors.Success.copy(alpha = 0.14f),
+        )
+        is UiDialogMessage.Error -> Triple(
+            Icons.Default.ErrorOutline,
+            scheme.error,
+            scheme.errorContainer,
+        )
+        is UiDialogMessage.Info -> Triple(
+            Icons.Default.Info,
+            scheme.primary,
+            scheme.primaryContainer,
+        )
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { /* consume */ },
+            ),
+        shape = RoundedCornerShape(22.dp),
+        color = scheme.surfaceContainerHigh,
+        tonalElevation = 2.dp,
+        shadowElevation = 8.dp,
+        border = BorderStroke(
+            1.dp,
+            scheme.outlineVariant.copy(alpha = 0.45f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 22.dp, bottom = 10.dp)
+                .padding(horizontal = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(iconCircleBg, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = iconVector,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = resolvedTitle,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = message.message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = scheme.primary,
+                    ),
+                ) {
+                    Text(
+                        text = stringResource(R.string.dialog_ok),
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
         }
     }
 }

@@ -64,6 +64,10 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     private val _catalogLoading = MutableStateFlow(false)
     val catalogLoading: StateFlow<Boolean> = _catalogLoading.asStateFlow()
 
+    /** True while bottom-nav re-tap reloads catalog / profile for the Post tab. */
+    private val _navReselectLoading = MutableStateFlow(false)
+    val navReselectLoading: StateFlow<Boolean> = _navReselectLoading.asStateFlow()
+
     private val _catalogReady = MutableStateFlow(false)
     val catalogReady: StateFlow<Boolean> = _catalogReady.asStateFlow()
 
@@ -91,8 +95,28 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadCatalogIfNeeded() {
         if (_catalogReady.value || _catalogLoading.value) return
+        viewModelScope.launch { loadCatalogInternal() }
+    }
+
+    /** Bottom nav re-tap on Post — refresh listing metadata without leaving the current step. */
+    fun reloadOnNavReselect() {
+        viewModelScope.launch {
+            _navReselectLoading.value = true
+            try {
+                loadCatalogInternal(force = true)
+                loadProfileForPreview()
+                loadLocalShippingAddresses()
+                loadShippingAddresses()
+            } finally {
+                _navReselectLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun loadCatalogInternal(force: Boolean = false) {
+        if (!force && (_catalogReady.value || _catalogLoading.value)) return
         _catalogLoading.value = true
-        viewModelScope.launch(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             try {
                 commonServiceRepository.getCategoryTree().onSuccess { _categoryTree.value = it }
                 commonServiceRepository.getAestheticTags(all = true).onSuccess { tags ->
@@ -109,6 +133,16 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                 _catalogReady.value = true
             }
         }
+    }
+
+    /** Clears in-progress listing draft and user-specific preview state after logout. */
+    fun clearCachesForSignedOutUser() {
+        _draft.value = CreateListingDraft()
+        _step.value = 1
+        _meProfile.value = null
+        _localAddresses.value = emptyList()
+        _isUploading.value = false
+        _isSubmitting.value = false
     }
 
     fun searchBrands(query: String) {
