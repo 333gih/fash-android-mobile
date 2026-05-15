@@ -2,14 +2,13 @@ package com.pc.fash_android_mobile.ui.onboarding
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,19 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.ui.components.FashPillFilterChip
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
@@ -55,24 +51,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val CardCorner = RoundedCornerShape(16.dp)
-
-private val STYLE_EMOJI = mapOf(
-    "y2k" to "✨",
-    "vintage" to "🎞️",
-    "streetwear" to "🧢",
-    "minimalist" to "⬜",
-    "dark-academia" to "📚",
-    "cottagecore" to "🌿",
-    "bohemian" to "🧿",
-    "preppy" to "🎀",
-    "grunge" to "🖤",
-    "athleisure" to "👟",
-    "k-fashion" to "🇰🇷",
-)
-
-private fun CommonAestheticTagDto.emoji(): String = STYLE_EMOJI[name.lowercase()] ?: "◆"
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     modifier: Modifier = Modifier,
@@ -81,7 +60,7 @@ fun OnboardingScreen(
     isLoading: Boolean,
     isSubmitting: Boolean,
     progressStep: Int = 2,
-    progressTotal: Int = 3,
+    progressTotal: Int = OnboardingFlowProgress.TOTAL_STEPS,
     onToggleSelection: (CommonAestheticTagDto) -> Unit,
     onContinue: () -> Unit,
     onSkip: () -> Unit,
@@ -149,7 +128,13 @@ fun OnboardingScreen(
                     totalSteps = progressTotal,
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                OnboardingStepCaption(
+                    currentStep = progressStep,
+                    totalSteps = progressTotal,
+                    modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart),
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Column(
                     modifier = Modifier
@@ -170,13 +155,13 @@ fun OnboardingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             if (isLoading) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
                         .weight(1f)
+                        .fillMaxWidth()
                         .graphicsLayer {
                             alpha = gridAnim.value
                             translationY = (1f - gridAnim.value) * 20f
@@ -186,30 +171,34 @@ fun OnboardingScreen(
                     CircularProgressIndicator(color = FashColors.Primary)
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                Column(
                     modifier = Modifier
                         .weight(1f)
+                        .verticalScroll(rememberScrollState())
                         .graphicsLayer {
                             alpha = gridAnim.value
                             translationY = (1f - gridAnim.value) * 20f
                         }
-                        .padding(start = FashTheme.spacing.editorialStart, end = FashTheme.spacing.editorialEnd),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    userScrollEnabled = true,
+                        .padding(horizontal = FashTheme.spacing.editorialStart),
                 ) {
-                    items(tags, key = { it.id }) { tag ->
-                        StyleCard(
-                            tag = tag,
-                            isSelected = selectedIds.contains(tag.id),
-                            onClick = { onToggleSelection(tag) },
-                        )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        tags.forEach { tag ->
+                            val label = tag.displayName.ifBlank { tag.name }
+                            FashPillFilterChip(
+                                selected = selectedIds.contains(tag.id),
+                                onClick = { onToggleSelection(tag) },
+                                label = label,
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Column(
                 modifier = Modifier.graphicsLayer {
@@ -221,7 +210,7 @@ fun OnboardingScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = FashTheme.spacing.editorialStart, end = FashTheme.spacing.editorialEnd)
-                        .padding(bottom = 24.dp),
+                        .padding(bottom = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -234,7 +223,9 @@ fun OnboardingScreen(
                         text = stringResource(R.string.onboarding_skip),
                         style = MaterialTheme.typography.labelLarge,
                         color = FashColors.Primary,
-                        modifier = Modifier.clickable(onClick = onSkip),
+                        modifier = Modifier
+                            .padding(vertical = 8.dp)
+                            .clickable(onClick = onSkip),
                     )
                 }
 
@@ -266,71 +257,6 @@ fun OnboardingScreen(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StyleCard(
-    tag: CommonAestheticTagDto,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.04f else 1f,
-        animationSpec = spring(dampingRatio = 0.62f, stiffness = 380f),
-        label = "styleCardScale",
-    )
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(80.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(onClick = onClick),
-        shape = CardCorner,
-        color = if (isSelected) scheme.primaryContainer else scheme.surfaceContainerLow,
-        shadowElevation = if (isSelected) 4.dp else 0.dp,
-        border = if (isSelected) {
-            BorderStroke(1.5.dp, FashColors.Primary.copy(alpha = 0.82f))
-        } else {
-            null
-        },
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(18.dp),
-                    tint = FashColors.Primary,
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = tag.emoji(),
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Text(
-                    text = tag.displayName.ifBlank { tag.name },
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    ),
-                    color = if (isSelected) scheme.onPrimaryContainer else scheme.onSurface,
-                )
             }
         }
     }

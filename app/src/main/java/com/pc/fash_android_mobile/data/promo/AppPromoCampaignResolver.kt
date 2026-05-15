@@ -105,6 +105,6 @@ object AppPromoCampaignResolver {
     private fun AppPromoGateContext.baseEligible(): Boolean =
         splashFinished &&
             isAuthenticated &&
-            needsOnboarding == false &&
+            !profileSetupBlocksShellChrome() &&
             !blockPromoBecauseOtherUi
 }

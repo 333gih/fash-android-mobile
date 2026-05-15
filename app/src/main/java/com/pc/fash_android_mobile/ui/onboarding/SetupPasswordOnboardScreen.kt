@@ -92,6 +92,10 @@ fun SetupPasswordOnboardScreen(
                 currentStep = progressStep,
                 totalSteps = progressTotal,
             )
+            OnboardingStepCaption(
+                currentStep = progressStep,
+                totalSteps = progressTotal,
+            )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = stringResource(R.string.password_setup_title),

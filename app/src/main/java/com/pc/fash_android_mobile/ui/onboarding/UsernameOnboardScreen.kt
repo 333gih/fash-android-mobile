@@ -146,6 +146,10 @@ fun UsernameOnboardScreen(
                     currentStep = progressStep,
                     totalSteps = progressTotal,
                 )
+                OnboardingStepCaption(
+                    currentStep = progressStep,
+                    totalSteps = progressTotal,
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

@@ -9,17 +9,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
- * Common progress bar for the onboarding chain: OTP → Style selection → Profile setup.
- * @param currentStep 1-based step index (1=OTP, 2=Style, 3=Username)
- * @param totalSteps Total steps in the chain (default 3)
+ * Profile-setup progress (1…[totalSteps]): password → aesthetics → sizing → username.
+ * See [OnboardingFlowProgress].
  */
 @Composable
 fun OnboardingProgressBar(
@@ -42,5 +44,21 @@ fun OnboardingProgressBar(
             .clip(RoundedCornerShape(3.dp)),
         color = FashColors.Primary,
         trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+    )
+}
+
+@Composable
+fun OnboardingStepCaption(
+    currentStep: Int,
+    totalSteps: Int = OnboardingFlowProgress.TOTAL_STEPS,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = stringResource(R.string.onboarding_progress_step, currentStep, totalSteps),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
     )
 }

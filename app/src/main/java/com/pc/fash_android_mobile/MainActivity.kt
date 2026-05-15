@@ -93,6 +93,7 @@ import com.pc.fash_android_mobile.ui.navigation.SellerShopEntrySource
 import com.pc.fash_android_mobile.ui.navigation.SellerShopRestoreContext
 import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
+import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingStep
@@ -292,7 +293,6 @@ class MainActivity : ComponentActivity() {
             val password by loginViewModel.password.collectAsState()
             val usePasswordLogin by loginViewModel.usePasswordLogin.collectAsState()
             val isPasswordLoading by loginViewModel.isPasswordLoading.collectAsState()
-            val otpShowOnboardingProgress by loginViewModel.otpShowOnboardingProgress.collectAsState()
             val isAuthenticated by authManager.isAuthenticated.collectAsState(initial = false)
             val sessionExpiredMessage by authManager.sessionExpiredMessage.collectAsState()
             // Show snackbar when the server force-expires the session, then navigate to login
@@ -327,6 +327,11 @@ class MainActivity : ComponentActivity() {
             val onboardingSubmitting by onboardingViewModel.isSubmitting.collectAsState()
             val facebookOk = LoginViewModel.isFacebookConfigured()
             val googleOk = LoginViewModel.isGoogleConfigured()
+            val profileSetupBlocksShellChrome =
+                OnboardingFlowProgress.blocksShellPromosAndTours(needsOnboarding)
+            val onboardingProgressStep =
+                OnboardingFlowProgress.progressStep(onboardingStep)
+            val onboardingProgressTotal = OnboardingFlowProgress.TOTAL_STEPS
 
             ProvideAppLocale {
             val contextForTheme = LocalContext.current
@@ -431,16 +436,18 @@ class MainActivity : ComponentActivity() {
                     chatViewModel.loadConversations()
                 }
 
+                // Profile setup (loading gate or onboarding screens) blocks welcome promo + feature tour.
+                LaunchedEffect(profileSetupBlocksShellChrome) {
+                    if (profileSetupBlocksShellChrome) {
+                        activePromoCampaign = null
+                        showFeatureTour = false
+                    }
+                }
+
                 // Resolve app-open promo only once the setup gate has settled on main shell.
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
-                    if (needsOnboarding == true) {
-                        activePromoCampaign = null
-                        showFeatureTour = false
-                        return@LaunchedEffect
-                    }
-                    // Gate still loading — do not clear promos; WS may enqueue into PendingQueue meanwhile.
-                    if (needsOnboarding == null) return@LaunchedEffect
+                    if (profileSetupBlocksShellChrome) return@LaunchedEffect
                     if (selectedConversationId != null) return@LaunchedEffect
 
                     delay(550)
@@ -477,7 +484,7 @@ class MainActivity : ComponentActivity() {
                         activePromoCampaign = null
                         return@LaunchedEffect
                     }
-                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) return@LaunchedEffect
+                    if (!splashFinished || !isAuthenticated || profileSetupBlocksShellChrome) return@LaunchedEffect
                     val appCtx = notificationSnackbarContext.applicationContext
                     AppPromoPendingQueue.peekHighest()?.let { remote ->
                         if (!AppPromoCampaignStore.isDismissed(appCtx, remote)) {
@@ -487,7 +494,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 LaunchedEffect(activePromoCampaign, splashFinished, isAuthenticated, needsOnboarding) {
-                    if (!splashFinished || !isAuthenticated || needsOnboarding != false) {
+                    if (!splashFinished || !isAuthenticated || profileSetupBlocksShellChrome) {
                         showFeatureTour = false
                         return@LaunchedEffect
                     }
@@ -571,7 +578,7 @@ class MainActivity : ComponentActivity() {
                                 if (
                                     splashFinished &&
                                     isAuthenticated &&
-                                    needsOnboarding == false &&
+                                    !profileSetupBlocksShellChrome &&
                                     selectedConversationId == null
                                 ) {
                                     activePromoCampaign = promo
@@ -586,7 +593,7 @@ class MainActivity : ComponentActivity() {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     fashApp.appPromoShowSignals.collect { promo ->
                         AppPromoPendingQueue.enqueue(promo)
-                        if (needsOnboarding == false && selectedConversationId == null) {
+                        if (!profileSetupBlocksShellChrome && selectedConversationId == null) {
                             activePromoCampaign = promo
                         }
                     }
@@ -681,8 +688,8 @@ class MainActivity : ComponentActivity() {
                                             selectedIds = onboardingSelected,
                                             isLoading = onboardingLoading,
                                             isSubmitting = onboardingSubmitting,
-                                            progressStep = 1,
-                                            progressTotal = 4,
+                                            progressStep = onboardingProgressStep,
+                                            progressTotal = onboardingProgressTotal,
                                             onToggleSelection = onboardingViewModel::toggleSelection,
                                             onContinue = {
                                                 onboardingViewModel.submitAestheticTagsPut {
@@ -730,8 +737,8 @@ class MainActivity : ComponentActivity() {
                                                 onMeasurementSleeveChange = onboardingViewModel::onMeasurementSleeveChange,
                                                 canSubmit = canSizing,
                                                 isSubmitting = onboardingSubmitting,
-                                                progressStep = 2,
-                                                progressTotal = 4,
+                                                progressStep = onboardingProgressStep,
+                                                progressTotal = onboardingProgressTotal,
                                                 onComplete = {
                                                     onboardingViewModel.submitSizingOnly {
                                                         mainScope.launch {
@@ -768,8 +775,8 @@ class MainActivity : ComponentActivity() {
                                                 isUsernameValid = onboardingViewModel.isUsernameValid(),
                                                 canSubmit = canUsername,
                                                 isSubmitting = onboardingSubmitting,
-                                                progressStep = 3,
-                                                progressTotal = 4,
+                                                progressStep = onboardingProgressStep,
+                                                progressTotal = onboardingProgressTotal,
                                                 onComplete = {
                                                     onboardingViewModel.submitUsernameOnboard {
                                                         authManager.sessionStore.read()?.let { s ->
@@ -805,8 +812,8 @@ class MainActivity : ComponentActivity() {
                                                 onConfirmPasswordChange = onboardingViewModel::onSetupPasswordConfirmChange,
                                                 canSubmit = canPw,
                                                 isSubmitting = onboardingSubmitting,
-                                                progressStep = 4,
-                                                progressTotal = 4,
+                                                progressStep = onboardingProgressStep,
+                                                progressTotal = onboardingProgressTotal,
                                                 onComplete = {
                                                     onboardingViewModel.submitSetupPassword {
                                                         mainScope.launch {
@@ -1950,9 +1957,7 @@ class MainActivity : ComponentActivity() {
                                     onVerifyClick = loginViewModel::verifyOtpCode,
                                     onResendClick = loginViewModel::resendEmailOtp,
                                     onBackClick = loginViewModel::backFromOtp,
-                                    showOnboardingProgress = otpShowOnboardingProgress,
-                                    onboardingProgressStep = 1,
-                                    onboardingProgressTotal = 4,
+                                    showOnboardingProgress = false,
                                 )
                             }
                             FashSnackbarHost(
@@ -1975,9 +1980,9 @@ class MainActivity : ComponentActivity() {
                     isAuthenticated && needsOnboarding == false -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
-                // Full-screen interstitial must sit above main shell / login (window-level Dialog).
+                // Full-screen interstitial — only after profile setup (not during gate load / onboarding).
                 FashAppPromoOverlayDialog(
-                    campaign = activePromoCampaign,
+                    campaign = if (profileSetupBlocksShellChrome) null else activePromoCampaign,
                     onDismiss = {
                         activePromoCampaign?.let { campaign ->
                             AppPromoCampaignStore.markDismissed(

@@ -182,7 +182,8 @@
 
     <string name="onboarding_title">Chọn phong cách của bạn</string>
     <string name="onboarding_question">Phong cách của bạn?</string>
-    <string name="onboarding_subtitle">Tùy chọn — chọn thẻ hoặc bỏ qua</string>
+    <string name="onboarding_subtitle">Tùy chọn — chọn tối đa 3 phong cách hoặc bỏ qua</string>
+    <string name="onboarding_progress_step">Bước %1$d/%2$d</string>
     <string name="onboarding_selected_count">Đã chọn %1$d/%2$d</string>
     <string name="onboarding_skip">Bỏ qua</string>
     <string name="onboarding_continue">Tiếp tục</string>

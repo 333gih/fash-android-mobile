@@ -174,7 +174,8 @@
     <string name="change_password_save">Update</string>
     <string name="onboarding_title">Choose your style</string>
     <string name="onboarding_question">What is your style?</string>
-    <string name="onboarding_subtitle">Choose at least 3 to personalize your feed</string>
+    <string name="onboarding_subtitle">Optional — pick up to 3 styles or skip</string>
+    <string name="onboarding_progress_step">Step %1$d of %2$d</string>
     <string name="onboarding_selected_count">Selected %1$d/%2$d</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_continue">Continue</string>
