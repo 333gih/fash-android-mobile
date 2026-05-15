@@ -50,7 +50,9 @@ private fun firstNonBlankPayload(payload: JSONObject, root: JSONObject, vararg k
  * Manages the single long-lived WebSocket connection to the Fash realtime service.
  *
  * ### INTEGRATION.md compliance
- * - §2.1 Step 2 : token is URL-encoded in the query string (`?token=…&platform=android`)
+ * - §2.1 Auth: the **auth-service access JWT** from [sessionStore] is sent **twice** on the
+ *   handshake — URL-encoded `?token=…` (INTEGRATION.md) **and** `Authorization: Bearer …` so
+ *   API gateways that only inspect headers still validate the same token.
  * - §2.1 Step 4 : OkHttp handles WS-level pings automatically via [pingInterval]
  * - §2.1 Step 5 : [subscribeToConversation] tracks rooms so they are **re-subscribed
  *                 automatically on every reconnect** (fixes the silent-drop + reconnect bugs)
@@ -234,7 +236,10 @@ class RealtimeManager(
         _state.value = State.CONNECTING
 
         val wsUrl = buildWsUrl(token)
-        val request = Request.Builder().url(wsUrl).build()
+        val request = Request.Builder()
+            .url(wsUrl)
+            .header("Authorization", "Bearer $token")
+            .build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
 
@@ -354,9 +359,9 @@ class RealtimeManager(
     }
 
     /**
-     * Builds the WebSocket URL.
-     * INTEGRATION.md §1.3: token is passed as `?token=…` query parameter (not a header),
-     * and the scheme is converted from http/https to ws/wss.
+     * Builds the WebSocket URL with `?token=…&platform=android`.
+     * [token] is always the auth-service access JWT read from [sessionStore] after login/refresh.
+     * also sets `Authorization: Bearer` in [openSocket] — same value, for gateway parity.
      */
     private fun buildWsUrl(token: String): String {
         val normalised = realtimeBaseUrl.trimEnd('/')

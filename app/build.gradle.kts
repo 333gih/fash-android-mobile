@@ -60,6 +60,8 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("String", "ENVIRONMENT_NAME", buildConfigStringLiteral(envName))
     buildConfigField("String", "AUTH_SERVICE_BASE_URL", buildConfigStringLiteral(authBase))
     buildConfigField("String", "API_BASE_URL", buildConfigStringLiteral(apiBase))
+    val realtimeBaseFromEnv = envVal("REALTIME_BASE_URL") ?: ""
+    buildConfigField("String", "REALTIME_BASE_URL", buildConfigStringLiteral(realtimeBaseFromEnv))
     buildConfigField(
         "String",
         "AUTH_CLIENT_ID",

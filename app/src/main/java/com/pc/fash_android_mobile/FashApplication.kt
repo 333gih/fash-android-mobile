@@ -45,6 +45,25 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
+ * WebSocket base for [RealtimeManager]: prefer `REALTIME_BASE_URL` in env ([BuildConfig.REALTIME_BASE_URL]),
+ * else derive `api-core` → `api-realtime`, else legacy path swap / dev IP.
+ */
+private fun resolveRealtimeBaseUrl(): String {
+    val explicit = BuildConfig.REALTIME_BASE_URL.trim()
+    if (explicit.isNotEmpty()) return explicit
+
+    val api = BuildConfig.API_BASE_URL.trim()
+    val fromPath = api.replace("core-service", "realtime-service", ignoreCase = true)
+    if (fromPath.contains("realtime-service", ignoreCase = true)) {
+        return fromPath
+    }
+    val fromHost = api.replace("api-core.", "api-realtime.", ignoreCase = true)
+    if (fromHost != api) return fromHost
+
+    return "http://76.13.211.193/realtime-service/"
+}
+
+/**
  * Application-scoped auth and network dependencies.
  * Every secured OkHttpClient passes [AppAuthManager.onSessionCleared] with the
  * server-supplied reason so the UI can show an explanation when the session is
@@ -278,15 +297,11 @@ class FashApplication : Application(), ImageLoaderFactory {
      * Call [RealtimeManager.connect] once after a successful login and
      * [RealtimeManager.disconnect] on sign-out.
      *
-     * URL is derived from the existing API_BASE_URL (same host, realtime-service path)
-     * so no extra BuildConfig field is required — the app boots safely even without a
-     * full Gradle re-sync after adding REALTIME_BASE_URL to the env files.
+     * Base URL: [BuildConfig.REALTIME_BASE_URL] when set (e.g. `https://api-realtime.fashandcurious.com/`);
+     * otherwise [resolveRealtimeBaseUrl].
      */
     val realtimeManager: RealtimeManager by lazy {
-        val realtimeBaseUrl = BuildConfig.API_BASE_URL
-            .replace("core-service", "realtime-service")
-            .takeIf { it.contains("realtime-service") }
-            ?: "http://76.13.211.193/realtime-service/"
+        val realtimeBaseUrl = resolveRealtimeBaseUrl()
         RealtimeManager(
             sessionStore = authManager.sessionStore,
             realtimeBaseUrl = realtimeBaseUrl,
