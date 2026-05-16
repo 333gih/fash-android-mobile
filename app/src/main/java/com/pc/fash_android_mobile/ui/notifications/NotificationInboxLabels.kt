@@ -27,6 +27,7 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "admin.mobile_push.promo" -> R.string.notification_pt_admin_mobile_push_promo
         "admin.mobile_push.transactional" -> R.string.notification_pt_admin_mobile_push_transactional
         "admin.mobile_push.ops" -> R.string.notification_pt_admin_mobile_push_ops
+        "admin.app_promo_interstitial" -> R.string.notification_pt_admin_app_promo_interstitial
         else -> null
     }
 

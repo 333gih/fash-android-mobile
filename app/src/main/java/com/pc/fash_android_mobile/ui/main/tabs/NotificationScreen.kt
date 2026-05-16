@@ -92,6 +92,8 @@ fun NotificationScreen(
     onOpenChat: (String) -> Unit = {},
     onOpenFollowConnections: (Int) -> Unit = {},
     onOpenExplore: () -> Unit = {},
+    onPromoMainTab: (com.pc.fash_android_mobile.ui.main.MainTab) -> Unit = {},
+    onPromoOpenOrders: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val items by viewModel.items.collectAsState()
@@ -371,6 +373,8 @@ fun NotificationScreen(
                     onOpenChat = onOpenChat,
                     onOpenFollowConnections = onOpenFollowConnections,
                     onOpenExplore = onOpenExplore,
+                    onPromoMainTab = onPromoMainTab,
+                    onPromoOpenOrders = onPromoOpenOrders,
                 )
             }
         }

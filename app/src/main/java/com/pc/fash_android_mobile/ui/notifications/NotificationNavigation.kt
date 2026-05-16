@@ -17,6 +17,21 @@ data class NotificationDetailActions(
 )
 
 fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDetailActions {
+    parseAppPromoCampaignFromInbox(item)?.let { promo ->
+        val rich = promo.remoteMessage?.takeIf { it.isNotBlank() && it != item.body }
+        val image = promo.remoteImageUrls.firstOrNull()
+        return NotificationDetailActions(
+            orderId = null,
+            listingId = null,
+            sellerUserId = null,
+            conversationId = null,
+            openFollowersTab = false,
+            openFollowingTab = false,
+            openExploreTab = false,
+            richDetailBody = rich,
+            imageUrl = image,
+        )
+    }
     val data = item.dataMap
     val orderId = firstStringFromDataCi(data, "order_id", "marketplace_order_id", "orderId")
     val listingId = firstStringFromDataCi(data, "listing_id", "listingId")

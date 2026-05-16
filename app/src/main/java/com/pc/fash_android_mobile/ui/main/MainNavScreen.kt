@@ -554,6 +554,14 @@ fun MainNavScreen(
                 showNotificationScreen = false
                 onTabChange(MainTab.Explore.ordinal)
             },
+            onPromoMainTab = { tab ->
+                showNotificationScreen = false
+                onTabChange(tab.ordinal)
+            },
+            onPromoOpenOrders = {
+                showNotificationScreen = false
+                onOrdersClick()
+            },
         )
     }
     if (showSettingsScreen) {

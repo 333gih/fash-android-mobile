@@ -290,7 +290,7 @@ private fun FashPromoCard(
 }
 
 @Composable
-private fun FashPromoPageIndicator(
+internal fun FashPromoPageIndicator(
     pageCount: Int,
     currentPage: Int,
     modifier: Modifier = Modifier,

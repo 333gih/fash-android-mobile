@@ -24,6 +24,8 @@
     <string name="app_promo_cd_close">Đóng quảng cáo</string>
     <string name="app_promo_cd_expand">Phóng to để xem rõ hơn</string>
     <string name="app_promo_cd_collapse">Thu nhỏ hộp thoại</string>
+    <string name="app_promo_image_page">%1$d / %2$d</string>
+    <string name="app_promo_image_pager_cd">Ảnh quảng cáo %1$d trên %2$d — vuốt ngang để xem tiếp</string>
     <string name="app_promo_secondary_later">Để sau</string>
     <string name="app_promo_kyc_badge">Xác minh</string>
     <string name="app_promo_kyc_title">Hoàn tất xác minh danh tính</string>
@@ -350,6 +352,8 @@
     <string name="notification_pt_admin_mobile_push">Thông báo từ cổng quản trị</string>
     <string name="notification_pt_admin_mobile_push_announcement">Thông báo chung (cổng quản trị)</string>
     <string name="notification_pt_admin_mobile_push_promo">Khuyến mãi (cổng quản trị)</string>
+    <string name="notification_pt_admin_app_promo_interstitial">Ưu đãi trong ứng dụng</string>
+    <string name="notification_detail_promo_gallery_cd">Ảnh khuyến mãi %1$d / %2$d</string>
     <string name="notification_pt_admin_mobile_push_transactional">Giao dịch / vận hành (cổng quản trị)</string>
     <string name="notification_pt_admin_mobile_push_ops">Vận hành / bảo trì (cổng quản trị)</string>
     <string name="notification_data_label_listing">Tin đăng</string>

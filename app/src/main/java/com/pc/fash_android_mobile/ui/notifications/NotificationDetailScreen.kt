@@ -1,17 +1,25 @@
 package com.pc.fash_android_mobile.ui.notifications
 
+import android.app.Activity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,9 +39,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +52,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
+import com.pc.fash_android_mobile.data.promo.AppPromoNavigation
+import com.pc.fash_android_mobile.data.promo.sanitizePromoDisplayString
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.components.FashPromoPageIndicator
+import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.time.Instant
@@ -60,11 +77,26 @@ fun NotificationDetailScreen(
     onOpenChat: (String) -> Unit = {},
     onOpenFollowConnections: (Int) -> Unit = {},
     onOpenExplore: () -> Unit = {},
+    onPromoMainTab: (MainTab) -> Unit = {},
+    onPromoOpenOrders: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val promoCampaign = remember(item.id, item.dataMap, item.payloadType) {
+        parseAppPromoCampaignFromInbox(item)
+    }
     val actions = parseNotificationDetailActions(item)
-    val payloadLines = remember(item.id, item.dataMap, item.payloadType) { buildFriendlyPayloadLines(item) }
-    val rawPayloadText = remember(item.id, item.dataMap) { buildRawPayloadDump(item.dataMap) }
+    val payloadLines = remember(item.id, item.dataMap, item.payloadType) {
+        buildFriendlyPayloadLines(item)
+    }
+    val rawPayloadText = remember(item.id, item.dataMap) {
+        buildRawPayloadDump(item.dataMap)
+    }
+    val displayTitle = promoCampaign?.remoteTitle?.takeIf { it.isNotBlank() }
+        ?: item.title.ifBlank { stringResource(R.string.notification_detail_no_title) }
+    val displayBody = promoCampaign?.remoteMessage?.takeIf { it.isNotBlank() }
+        ?: item.body
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -101,30 +133,60 @@ fun NotificationDetailScreen(
                 .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            actions.imageUrl?.let { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(RoundedCornerShape(FashTheme.spacing.radiusCard)),
-                    contentScale = ContentScale.Crop,
-                )
+            if (promoCampaign != null) {
+                NotificationPromoMediaSection(campaign = promoCampaign)
+            } else {
+                actions.imageUrl?.let { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(FashTheme.spacing.radiusCard)),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+
+            sanitizePromoDisplayString(promoCampaign?.remoteBadge)?.let { badge ->
+                Surface(
+                    shape = RoundedCornerShape(percent = 50),
+                    color = scheme.primary.copy(alpha = 0.12f),
+                ) {
+                    Text(
+                        text = badge,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.primary,
+                    )
+                }
             }
 
             Text(
-                text = item.title.ifBlank { stringResource(R.string.notification_detail_no_title) },
+                text = displayTitle,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = scheme.onSurface,
             )
             Text(
-                text = item.body,
+                text = displayBody,
                 style = MaterialTheme.typography.bodyLarge,
                 color = scheme.onSurface,
             )
 
-            actions.richDetailBody?.takeIf { it.isNotBlank() && it != item.body }?.let { extra ->
+            if (promoCampaign != null) {
+                NotificationPromoCtaSection(
+                    campaign = promoCampaign,
+                    activity = activity,
+                    onAfterNavigate = onBack,
+                    onPromoMainTab = onPromoMainTab,
+                    onPromoOpenOrders = onPromoOpenOrders,
+                )
+            }
+
+            actions.richDetailBody?.takeIf {
+                promoCampaign == null && it.isNotBlank() && it != item.body
+            }?.let { extra ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
@@ -245,7 +307,11 @@ fun NotificationDetailScreen(
                 MetaRow(label = stringResource(R.string.notification_detail_source_event), value = sid)
             }
 
-            if (!item.dataMap.isNullOrEmpty() && (payloadLines.isNotEmpty() || rawPayloadText.isNotBlank())) {
+            if (
+                promoCampaign == null &&
+                !item.dataMap.isNullOrEmpty() &&
+                (payloadLines.isNotEmpty() || rawPayloadText.isNotBlank())
+            ) {
                 FriendlyPayloadCard(
                     lines = payloadLines,
                     rawDump = rawPayloadText,
@@ -415,6 +481,7 @@ private fun lineValueTitleOrPlain(title: String?, id: String?): LineValue {
 }
 
 private fun buildFriendlyPayloadLines(item: InboxNotificationItem): List<FriendlyPayloadLine> {
+    if (isAppPromoInboxNotification(item)) return emptyList()
     val data = item.dataMap ?: return emptyList()
     val pt = item.payloadType?.trim().orEmpty()
     val lines = mutableListOf<FriendlyPayloadLine>()
@@ -530,6 +597,20 @@ private val internalPayloadKeysLowercase: Set<String> = setOf(
     "starcount",
     "screen",
     "event",
+    "promo_payload",
+    "promopayload",
+    "campaign",
+    "campaign_id",
+    "campaignid",
+    "campaign_version",
+    "image_urls",
+    "imageurls",
+    "badge_label",
+    "badgelabel",
+    "primary_button",
+    "secondary_button",
+    "primary_button_label",
+    "secondary_button_label",
 )
 
 private fun buildRawPayloadDump(data: Map<String, Any?>?): String {
@@ -561,6 +642,153 @@ private fun MetaRow(label: String, value: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun NotificationPromoMediaSection(campaign: AppPromoCampaign) {
+    val urls = campaign.remoteImageUrls.filter { it.isNotBlank() }
+    if (urls.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
+    if (urls.size == 1) {
+        FashAsyncImage(
+            model = urls.first(),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(shape),
+            contentScale = ContentScale.Crop,
+        )
+        return
+    }
+    val pagerState = rememberPagerState(pageCount = { urls.size })
+    val currentPage = pagerState.currentPage
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .clip(shape),
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            FashAsyncImage(
+                model = urls[page],
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(40.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)),
+                    ),
+                ),
+        )
+        FashPromoPageIndicator(
+            pageCount = urls.size,
+            currentPage = currentPage,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 10.dp),
+        )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(10.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = Color.Black.copy(alpha = 0.55f),
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.notification_detail_promo_gallery_cd,
+                    currentPage + 1,
+                    urls.size,
+                ),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotificationPromoCtaSection(
+    campaign: AppPromoCampaign,
+    activity: Activity?,
+    onAfterNavigate: () -> Unit,
+    onPromoMainTab: (MainTab) -> Unit,
+    onPromoOpenOrders: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val primary = campaign.remotePrimaryLabel?.trim().orEmpty()
+    val secondary = sanitizePromoDisplayString(campaign.remoteSecondaryLabel)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        if (primary.isNotEmpty() && campaign.primaryAction != null && activity != null) {
+            Button(
+                onClick = {
+                    AppPromoNavigation.applyPrimary(
+                        activity = activity,
+                        campaign = campaign,
+                        onTab = { tab ->
+                            onPromoMainTab(tab)
+                            onAfterNavigate()
+                        },
+                        onOpenOrders = {
+                            onPromoOpenOrders()
+                            onAfterNavigate()
+                        },
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.primary,
+                    contentColor = scheme.onPrimary,
+                ),
+            ) {
+                Text(
+                    text = primary,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+        if (!secondary.isNullOrBlank() && campaign.secondaryAction != null && activity != null) {
+            TextButton(
+                onClick = {
+                    AppPromoNavigation.applySecondary(
+                        activity = activity,
+                        campaign = campaign,
+                        onTab = { tab ->
+                            onPromoMainTab(tab)
+                            onAfterNavigate()
+                        },
+                        onOpenOrders = {
+                            onPromoOpenOrders()
+                            onAfterNavigate()
+                        },
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = secondary,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

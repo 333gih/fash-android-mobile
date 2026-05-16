@@ -47,7 +47,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -282,17 +285,80 @@ private fun PromoHeroSection(
     val scheme = MaterialTheme.colorScheme
     if (kind == AppPromoCampaignKind.Remote && imageUrls.isNotEmpty()) {
         val pagerState = rememberPagerState(pageCount = { imageUrls.size })
+        val multiImage = imageUrls.size > 1
+        val currentPage = pagerState.currentPage
+        val pagerCd = if (multiImage) {
+            stringResource(
+                R.string.app_promo_image_pager_cd,
+                currentPage + 1,
+                imageUrls.size,
+            )
+        } else {
+            null
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(heroHeight),
         ) {
-            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (pagerCd != null) {
+                            Modifier.semantics { contentDescription = pagerCd }
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) { page ->
                 FashAsyncImage(
                     model = imageUrls[page],
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+            if (multiImage) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.5f),
+                                ),
+                            ),
+                        ),
+                )
+                FashPromoPageIndicator(
+                    pageCount = imageUrls.size,
+                    currentPage = currentPage,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 10.dp),
+                )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(10.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.Black.copy(alpha = 0.55f),
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.app_promo_image_page,
+                            currentPage + 1,
+                            imageUrls.size,
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White,
+                    )
+                }
             }
             sanitizePromoDisplayString(badge)?.let { label ->
                 Surface(

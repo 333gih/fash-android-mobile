@@ -23,6 +23,8 @@
     <string name="app_promo_cd_close">Close promotion</string>
     <string name="app_promo_cd_expand">Expand to read more clearly</string>
     <string name="app_promo_cd_collapse">Collapse dialog</string>
+    <string name="app_promo_image_page">%1$d / %2$d</string>
+    <string name="app_promo_image_pager_cd">Promo image %1$d of %2$d — swipe for more</string>
     <string name="app_promo_secondary_later">Maybe later</string>
     <string name="app_promo_kyc_badge">Verification</string>
     <string name="app_promo_kyc_title">Complete identity verification</string>
@@ -335,6 +337,8 @@
     <string name="notification_pt_admin_mobile_push">Admin message</string>
     <string name="notification_pt_admin_mobile_push_announcement">Announcement (admin)</string>
     <string name="notification_pt_admin_mobile_push_promo">Promotion (admin)</string>
+    <string name="notification_pt_admin_app_promo_interstitial">In-app promotion</string>
+    <string name="notification_detail_promo_gallery_cd">Promo image %1$d of %2$d</string>
     <string name="notification_pt_admin_mobile_push_transactional">Transactional / ops (admin)</string>
     <string name="notification_pt_admin_mobile_push_ops">Maintenance / ops (admin)</string>
     <string name="notification_data_label_listing">Listing</string>
