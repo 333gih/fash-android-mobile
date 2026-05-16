@@ -47,8 +47,8 @@ fun parseRemoteAppPromoPayload(json: JSONObject): RemoteAppPromoPayload? {
         )
     val secondaryObj = json.optJSONObject("secondary_button")
         ?: json.optJSONObject("secondaryButton")
-    val secondaryLabel = secondaryObj?.optString("label", "")?.trim()
-        ?: json.optString("secondary_button_label", "").trim().ifBlank { null }
+    val secondaryLabel = secondaryObj?.optStringOrNull("label")
+        ?: json.optStringOrNull("secondary_button_label", "secondaryButtonLabel")
     val secondaryAction = secondaryObj?.optJSONObject("action")?.toButtonAction()
     return RemoteAppPromoPayload(
         id = id,
@@ -56,14 +56,43 @@ fun parseRemoteAppPromoPayload(json: JSONObject): RemoteAppPromoPayload? {
         title = title,
         description = description,
         imageUrls = images,
-        badgeLabel = json.optString("badge_label", "").trim().ifBlank { null },
+        badgeLabel = json.optStringOrNull("badge_label", "badgeLabel"),
         primaryButtonLabel = primaryLabel,
         primaryAction = primaryAction,
         secondaryButtonLabel = secondaryLabel,
         secondaryAction = secondaryAction,
         priority = json.optInt("priority", 0),
-        scheduleType = json.optString("schedule_type", "").ifBlank { null },
+        scheduleType = json.optStringOrNull("schedule_type", "scheduleType"),
     )
+}
+
+/**
+ * [JSONObject.optString] returns the literal `"null"` when the JSON value is `null` ([JSONObject.NULL]).
+ * Admin sends `badge_label: null` when optional — must not render that on the promo card.
+ */
+internal fun JSONObject.optStringOrNull(vararg keys: String): String? {
+    for (key in keys) {
+        if (!has(key)) continue
+        when (val raw = opt(key)) {
+            null, JSONObject.NULL -> return null
+            is String -> {
+                val s = raw.trim()
+                if (s.isNotEmpty() && !s.equals("null", ignoreCase = true)) return s
+            }
+            else -> {
+                val s = raw.toString().trim()
+                if (s.isNotEmpty() && !s.equals("null", ignoreCase = true)) return s
+            }
+        }
+    }
+    return null
+}
+
+/** Normalizes values already stored on [AppPromoCampaign] before UI. */
+internal fun sanitizePromoDisplayString(value: String?): String? {
+    val s = value?.trim().orEmpty()
+    if (s.isEmpty() || s.equals("null", ignoreCase = true)) return null
+    return s
 }
 
 fun RemoteAppPromoPayload.toAppPromoCampaign(): AppPromoCampaign =

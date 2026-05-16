@@ -109,6 +109,16 @@ class OnboardingViewModel(
         _onboardingStep.value = resolveNextStep(status)
     }
 
+    /**
+     * Setup gate says the user can use the main shell without this flow. Aligns [onboardingStep]
+     * so shell chrome (promos / tour) is not blocked for returning users who never opened VM steps.
+     */
+    fun markProfileSetupGateSkippedForSession() {
+        lastAccessStatus = null
+        backStack.clear()
+        _onboardingStep.value = OnboardingStep.Completed
+    }
+
     private fun resolveNextStep(status: UserAccessStatus): OnboardingStep {
         val uid = currentUserId()
         val skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted

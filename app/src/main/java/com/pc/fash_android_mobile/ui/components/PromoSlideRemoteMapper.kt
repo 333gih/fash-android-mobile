@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.ui.components
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import com.pc.fash_android_mobile.data.advertising.AppAdvertisingSlideItem
+import com.pc.fash_android_mobile.data.promo.sanitizePromoDisplayString
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
@@ -30,7 +31,7 @@ fun AppAdvertisingSlideItem.toFashPromoSlideDef(scheme: ColorScheme): FashPromoS
         subtitleRes = null,
         gradient = gradient,
         border = border,
-        badgeText = badgeLabel.trim().ifEmpty { null },
+        badgeText = sanitizePromoDisplayString(badgeLabel),
         bannerImageUrl = bannerImageUrl.trim().ifEmpty { null },
         navigation = navigation,
     )

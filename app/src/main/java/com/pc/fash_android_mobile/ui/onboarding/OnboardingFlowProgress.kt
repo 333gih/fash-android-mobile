@@ -18,6 +18,10 @@ object OnboardingFlowProgress {
             OnboardingStep.Completed -> TOTAL_STEPS
         }
 
-    /** Promo dialogs, feature tour, and WS promos must wait until profile setup is finished. */
+    /**
+     * Promo dialogs, feature tour, and WS promos must wait until profile setup is finished.
+     * [MainActivity] also treats [com.pc.fash_android_mobile.ui.onboarding.OnboardingStep] as part
+     * of the gate when the server briefly reports [canAccessHome] before the client flow ends.
+     */
     fun blocksShellPromosAndTours(needsOnboarding: Boolean?): Boolean = needsOnboarding != false
 }

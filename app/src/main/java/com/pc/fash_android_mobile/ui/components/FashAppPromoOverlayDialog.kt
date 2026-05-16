@@ -56,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaignKind
+import com.pc.fash_android_mobile.data.promo.sanitizePromoDisplayString
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -92,9 +93,9 @@ fun FashAppPromoOverlayDialog(
     val primaryLabel = campaign.remotePrimaryLabel
         ?: campaign.primaryActionRes?.let { stringResource(it) }
         ?: return
-    val secondaryLabel = campaign.remoteSecondaryLabel
+    val secondaryLabel = sanitizePromoDisplayString(campaign.remoteSecondaryLabel)
         ?: campaign.secondaryActionRes?.let { stringResource(it) }
-    val badgeText = campaign.remoteBadge
+    val badgeText = sanitizePromoDisplayString(campaign.remoteBadge)
         ?: campaign.badgeRes?.let { stringResource(it) }
     var isExpanded by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(campaign.id, campaign.version) {
@@ -149,93 +150,17 @@ fun FashAppPromoOverlayDialog(
                 shadowElevation = 12.dp,
                 border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.4f)),
             ) {
-                Box(Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        PromoHeroSection(
-                            kind = campaign.kind,
-                            badge = badgeText,
-                            imageUrls = campaign.remoteImageUrls,
-                            heroHeight = heroHeight,
-                            iconSize = heroIconSize,
-                            iconBoxSize = heroBadgeIconBox,
-                        )
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = contentPadding),
-                        ) {
-                            Spacer(Modifier.height(if (isExpanded) 20.dp else 16.dp))
-                            Text(
-                                text = titleText,
-                                style = titleStyle,
-                                color = scheme.onSurface,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Spacer(Modifier.height(if (isExpanded) 10.dp else 8.dp))
-                            Text(
-                                text = messageText,
-                                style = messageStyle,
-                                color = scheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = contentPadding)
-                                .padding(
-                                    top = if (isExpanded) 22.dp else 18.dp,
-                                    bottom = if (isExpanded) 22.dp else 18.dp,
-                                ),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Button(
-                                onClick = { onPrimaryClick(campaign) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = if (isExpanded) 52.dp else 48.dp),
-                                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = scheme.primary,
-                                    contentColor = scheme.onPrimary,
-                                ),
-                            ) {
-                                Text(
-                                    text = primaryLabel,
-                                    style = MaterialTheme.typography.labelLarge.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                    ),
-                                )
-                            }
-                            secondaryLabel?.let { secondaryText ->
-                                TextButton(
-                                    onClick = {
-                                        if (onSecondaryClick != null) {
-                                            onSecondaryClick(campaign)
-                                        } else {
-                                            onDismiss()
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Text(
-                                        text = secondaryText,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = scheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                ) {
                     Row(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 4.dp, top = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(
                             onClick = { isExpanded = !isExpanded },
@@ -262,6 +187,81 @@ fun FashAppPromoOverlayDialog(
                                 contentDescription = stringResource(R.string.app_promo_cd_close),
                                 tint = scheme.onSurface,
                             )
+                        }
+                    }
+                    PromoHeroSection(
+                        kind = campaign.kind,
+                        badge = badgeText,
+                        imageUrls = campaign.remoteImageUrls,
+                        heroHeight = heroHeight,
+                        iconSize = heroIconSize,
+                        iconBoxSize = heroBadgeIconBox,
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = contentPadding),
+                    ) {
+                        Spacer(Modifier.height(if (isExpanded) 20.dp else 16.dp))
+                        Text(
+                            text = titleText,
+                            style = titleStyle,
+                            color = scheme.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(if (isExpanded) 10.dp else 8.dp))
+                        Text(
+                            text = messageText,
+                            style = messageStyle,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = contentPadding)
+                            .padding(
+                                top = if (isExpanded) 22.dp else 18.dp,
+                                bottom = if (isExpanded) 22.dp else 18.dp,
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Button(
+                            onClick = { onPrimaryClick(campaign) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = if (isExpanded) 52.dp else 48.dp),
+                            shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = scheme.primary,
+                                contentColor = scheme.onPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = primaryLabel,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                        }
+                        secondaryLabel?.let { secondaryText ->
+                            TextButton(
+                                onClick = {
+                                    if (onSecondaryClick != null) {
+                                        onSecondaryClick(campaign)
+                                    } else {
+                                        onDismiss()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text = secondaryText,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -294,7 +294,7 @@ private fun PromoHeroSection(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            badge?.let { label ->
+            sanitizePromoDisplayString(badge)?.let { label ->
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -374,7 +374,7 @@ private fun PromoHeroSection(
                 )
             }
         }
-        badge?.let { label ->
+        sanitizePromoDisplayString(badge)?.let { label ->
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)

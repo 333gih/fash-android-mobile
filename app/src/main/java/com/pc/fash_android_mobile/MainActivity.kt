@@ -27,7 +27,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -582,17 +581,15 @@ class MainActivity : ComponentActivity() {
                         delay(120)
                         val after = notificationsViewModel.unreadCount.value
                         prevUnread = after
-                        if (after > before) {
-                            enqueueSnackbarSerial {
-                                val result = showSnackbar(
-                                    message = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar),
-                                    actionLabel = notificationSnackbarContext.getString(R.string.notification_new_arrival_snackbar_action),
-                                    duration = SnackbarDuration.Short,
-                                )
-                                if (result == SnackbarResult.ActionPerformed) {
-                                    fashApp.requestOpenNotificationInbox()
-                                }
-                            }
+                        if (after > before && fashApp.inAppNotification.value == null) {
+                            fashApp.showInAppNotificationFromRealtime(
+                                title = notificationSnackbarContext.getString(R.string.notifications),
+                                body = notificationSnackbarContext.getString(
+                                    R.string.notification_new_arrival_snackbar,
+                                ),
+                                data = null,
+                                userNotificationId = null,
+                            )
                         }
                     }
                 }
@@ -2030,7 +2027,10 @@ class MainActivity : ComponentActivity() {
                                                     selectedConversationId = conv
                                                     selectedTab = MainTab.Chat.ordinal
                                                     fashApp.dismissInAppNotification()
+                                                    return@FashInAppNotificationBanner
                                                 }
+                                                fashApp.requestOpenNotificationInbox()
+                                                fashApp.dismissInAppNotification()
                                             },
                                             onDismissClick = { fashApp.dismissInAppNotification() },
                                         )

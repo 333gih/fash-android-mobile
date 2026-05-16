@@ -11,6 +11,7 @@ import com.pc.fash_android_mobile.R
 import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
+import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -368,6 +369,9 @@ class LoginViewModel(
             val result = withContext(Dispatchers.IO) {
                 authManager.logout(session.accessToken)
             }
+            withContext(Dispatchers.IO) {
+                clearCachedSocialSignInForLogout(app.applicationContext)
+            }
             _isLoggingOut.value = false
             result.fold(
                 onSuccess = {
@@ -393,6 +397,9 @@ class LoginViewModel(
             _isLoggingOut.value = true
             val result = withContext(Dispatchers.IO) {
                 authManager.logoutAll(session.accessToken)
+            }
+            withContext(Dispatchers.IO) {
+                clearCachedSocialSignInForLogout(app.applicationContext)
             }
             _isLoggingOut.value = false
             result.fold(

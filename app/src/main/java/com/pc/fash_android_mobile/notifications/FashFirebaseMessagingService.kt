@@ -44,7 +44,18 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             (applicationContext as? FashApplication)?.requestShowAppPromo(promo)
             if (shouldSuppressTrayForPresence()) return
         }
-        if (shouldSuppressTrayForPresence()) return
+        if (shouldSuppressTrayForPresence()) {
+            val inAppTitle = message.notification?.title ?: message.data["title"]
+            if (!inAppTitle.isNullOrBlank()) {
+                (applicationContext as? FashApplication)?.showInAppNotificationFromRealtime(
+                    title = inAppTitle,
+                    body = message.notification?.body ?: message.data["body"].orEmpty(),
+                    data = message.data,
+                    userNotificationId = message.data["user_notification_id"]?.trim()?.takeIf { it.isNotEmpty() },
+                )
+            }
+            return
+        }
 
         val title = message.notification?.title
             ?: message.data["title"]

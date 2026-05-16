@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.data.advertising
 
+import com.pc.fash_android_mobile.data.promo.optStringOrNull
 import org.json.JSONObject
 
 /** Wire DTO for `GET /api/v1/app/advertising/slides`. */
@@ -42,7 +43,7 @@ fun parseAppAdvertisingSlidesResponse(raw: String): AppAdvertisingSlidesResponse
                     contentType = o.optString("content_type", "announcement"),
                     advertiserScope = o.optString("advertiser_scope", "platform"),
                     partnerDisclosure = o.optString("partner_disclosure"),
-                    badgeLabel = o.optString("badge_label"),
+                    badgeLabel = o.optStringOrNull("badge_label", "badgeLabel").orEmpty(),
                     navigationType = navType,
                     navigationPayload = navPayload,
                 ),
