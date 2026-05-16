@@ -504,6 +504,32 @@ class RealtimeManager(
                 )
                 "feed.refresh" -> RealtimeEvent.FeedRefresh
                 "inbox.refresh" -> RealtimeEvent.InboxRefresh
+                "notification.show" -> {
+                    val title = firstNonBlankPayload(payload, json, "title", "Title")
+                    val body = firstNonBlankPayload(payload, json, "body", "Body")
+                    val dataObj = payload.optJSONObject("data") ?: json.optJSONObject("data")
+                    val dataMap = if (dataObj != null && dataObj.length() > 0) {
+                        buildMap {
+                            val it = dataObj.keys()
+                            while (it.hasNext()) {
+                                val k = it.next()
+                                put(k, dataObj.optString(k, "").trim())
+                            }
+                        }.filterValues { it.isNotEmpty() }.ifEmpty { null }
+                    } else {
+                        null
+                    }
+                    val nid = firstNonBlankPayload(
+                        payload, json,
+                        "user_notification_id", "userNotificationId", "UserNotificationID",
+                    ).ifBlank { null }
+                    RealtimeEvent.NotificationShow(
+                        title = title,
+                        body = body,
+                        data = dataMap,
+                        userNotificationId = nid,
+                    )
+                }
                 "app.promo.show" -> {
                     val campaign = payload.optJSONObject("campaign")
                         ?: json.optJSONObject("campaign")

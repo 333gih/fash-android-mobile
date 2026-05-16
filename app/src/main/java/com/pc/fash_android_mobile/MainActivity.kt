@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -59,6 +60,7 @@ import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
+import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
 import com.pc.fash_android_mobile.ui.explore.ExplorePrimarySection
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
@@ -119,6 +121,7 @@ import com.pc.fash_android_mobile.data.promo.AppPromoPendingQueue
 import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
 import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
 import com.pc.fash_android_mobile.BuildConfig
+import com.pc.fash_android_mobile.ui.components.FashInAppNotificationBanner
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.rememberSerialSnackbarChannel
 import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
@@ -174,6 +177,19 @@ private suspend fun refreshNeedsOnboardingFlag(repo: UserRepository): Boolean =
         // If we cannot confirm setup-status, stay in onboarding rather than opening main with a broken profile.
         onFailure = { true },
     )
+
+/**
+ * After a client onboarding step, access-status can briefly report [canAccessHome] true while the
+ * ViewModel still has steps left — keep the onboarding shell until [OnboardingStep.Completed].
+ */
+private suspend fun resolveShellNeedsOnboardingAfterStep(
+    repo: UserRepository,
+    onboardingVm: OnboardingViewModel,
+): Boolean {
+    val apiStillNeeds = refreshNeedsOnboardingFlag(repo)
+    val step = onboardingVm.onboardingStep.value
+    return apiStillNeeds || step != OnboardingStep.Completed
+}
 
 private suspend fun resolveNeedsOnboardingAfterProfileSubmit(repo: UserRepository): Boolean {
     repeat(ACCESS_STATUS_POLL_ATTEMPTS) { attempt ->
@@ -310,6 +326,18 @@ class MainActivity : ComponentActivity() {
             var setupGateAttempt by remember { mutableIntStateOf(0) }
             val setupGateRecheckGen by fashApp.setupGateRecheckGeneration.collectAsState()
             val mainScope = rememberCoroutineScope()
+            val clearLocalSessionAndSocial: () -> Unit = remember(mainScope) {
+                {
+                    mainScope.launch {
+                        withContext(Dispatchers.IO) {
+                            clearCachedSocialSignInForLogout(this@MainActivity.applicationContext)
+                        }
+                        authManager.sessionStore.clear()
+                        authManager.onSessionCleared()
+                    }
+                    Unit
+                }
+            }
             val isLoggingOut by loginViewModel.isLoggingOut.collectAsState()
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
             val onboardingTags by onboardingViewModel.tags.collectAsState()
@@ -329,7 +357,8 @@ class MainActivity : ComponentActivity() {
             val facebookOk = LoginViewModel.isFacebookConfigured()
             val googleOk = LoginViewModel.isGoogleConfigured()
             val profileSetupBlocksShellChrome =
-                OnboardingFlowProgress.blocksShellPromosAndTours(needsOnboarding)
+                OnboardingFlowProgress.blocksShellPromosAndTours(needsOnboarding) ||
+                    (isAuthenticated && onboardingStep != OnboardingStep.Completed)
             val onboardingProgressStep =
                 OnboardingFlowProgress.progressStep(onboardingStep)
             val onboardingProgressTotal = OnboardingFlowProgress.TOTAL_STEPS
@@ -412,6 +441,7 @@ class MainActivity : ComponentActivity() {
                         followConnectionsViewModel.clearCachesForSignedOutUser()
                         needsOnboarding = null
                         fashApp.resetSetupGateRecheckGeneration()
+                        fashApp.dismissInAppNotification()
                         setupGateAttempt = 0
                         setupGateFetchFailed = false
                         selectedConversationId = null
@@ -442,6 +472,7 @@ class MainActivity : ComponentActivity() {
                     if (profileSetupBlocksShellChrome) {
                         activePromoCampaign = null
                         showFeatureTour = false
+                        fashApp.uiDialog.dismiss()
                     }
                 }
 
@@ -570,8 +601,18 @@ class MainActivity : ComponentActivity() {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     realtimeManager.events.collect { event ->
                         when (event) {
-                            is RealtimeEvent.InboxRefresh ->
+                            is RealtimeEvent.InboxRefresh -> {
                                 fashApp.requestInboxUnreadRefreshDebounced()
+                            }
+                            is RealtimeEvent.NotificationShow -> {
+                                fashApp.showInAppNotificationFromRealtime(
+                                    title = event.title,
+                                    body = event.body,
+                                    data = event.data,
+                                    userNotificationId = event.userNotificationId,
+                                )
+                                fashApp.requestInboxUnreadRefreshDebounced()
+                            }
                             is RealtimeEvent.AppPromoShow -> {
                                 val promo = parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()
                                     ?: return@collect
@@ -626,6 +667,8 @@ class MainActivity : ComponentActivity() {
                         val (status, needOnboarding) = gate
                         if (needOnboarding) {
                             onboardingViewModel.applyInitialStepFromAccessStatus(status)
+                        } else {
+                            onboardingViewModel.markProfileSetupGateSkippedForSession()
                         }
                         needsOnboarding = needOnboarding
                     }
@@ -662,10 +705,7 @@ class MainActivity : ComponentActivity() {
                                             setupGateFetchFailed = false
                                             setupGateAttempt++
                                         },
-                                        onSignOut = {
-                                            authManager.sessionStore.clear()
-                                            authManager.onSessionCleared()
-                                        },
+                                        onSignOut = clearLocalSessionAndSocial,
                                     )
                                 }
                                 isAuthenticated && needsOnboarding == null -> FashWaitingScreen()
@@ -696,7 +736,10 @@ class MainActivity : ComponentActivity() {
                                                 onboardingViewModel.submitAestheticTagsPut {
                                                     mainScope.launch {
                                                         needsOnboarding = withContext(Dispatchers.IO) {
-                                                            refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                            resolveShellNeedsOnboardingAfterStep(
+                                                                userRepoOnboarding,
+                                                                onboardingViewModel,
+                                                            )
                                                         }
                                                     }
                                                 }
@@ -705,15 +748,15 @@ class MainActivity : ComponentActivity() {
                                                 onboardingViewModel.skipAestheticTagsPersistLocal {
                                                     mainScope.launch {
                                                         needsOnboarding = withContext(Dispatchers.IO) {
-                                                            refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                            resolveShellNeedsOnboardingAfterStep(
+                                                                userRepoOnboarding,
+                                                                onboardingViewModel,
+                                                            )
                                                         }
                                                     }
                                                 }
                                             },
-                                            onBack = {
-                                                authManager.sessionStore.clear()
-                                                authManager.onSessionCleared()
-                                            },
+                                            onBack = clearLocalSessionAndSocial,
                                         )
                                         OnboardingStep.SizingReference -> {
                                             val canSizing = remember(
@@ -744,7 +787,10 @@ class MainActivity : ComponentActivity() {
                                                     onboardingViewModel.submitSizingOnly {
                                                         mainScope.launch {
                                                             needsOnboarding = withContext(Dispatchers.IO) {
-                                                                refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                                resolveShellNeedsOnboardingAfterStep(
+                                                                    userRepoOnboarding,
+                                                                    onboardingViewModel,
+                                                                )
                                                             }
                                                         }
                                                     }
@@ -753,15 +799,17 @@ class MainActivity : ComponentActivity() {
                                                     onboardingViewModel.skipSizingPersistLocal {
                                                         mainScope.launch {
                                                             needsOnboarding = withContext(Dispatchers.IO) {
-                                                                refreshNeedsOnboardingFlag(userRepoOnboarding)
+                                                                resolveShellNeedsOnboardingAfterStep(
+                                                                    userRepoOnboarding,
+                                                                    onboardingViewModel,
+                                                                )
                                                             }
                                                         }
                                                     }
                                                 },
                                                 onBack = {
                                                     if (!onboardingViewModel.handleBack()) {
-                                                        authManager.sessionStore.clear()
-                                                        authManager.onSessionCleared()
+                                                        clearLocalSessionAndSocial()
                                                     }
                                                 },
                                             )
@@ -796,8 +844,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onBack = {
                                                     if (!onboardingViewModel.handleBack()) {
-                                                        authManager.sessionStore.clear()
-                                                        authManager.onSessionCleared()
+                                                        clearLocalSessionAndSocial()
                                                     }
                                                 },
                                             )
@@ -826,8 +873,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onBack = {
                                                     if (!onboardingViewModel.handleBack()) {
-                                                        authManager.sessionStore.clear()
-                                                        authManager.onSessionCleared()
+                                                        clearLocalSessionAndSocial()
                                                     }
                                                 },
                                             )
@@ -1931,6 +1977,63 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
+                                        val inApp by fashApp.inAppNotification.collectAsState()
+                                        LaunchedEffect(inApp?.shownAt) {
+                                            val token = inApp?.shownAt ?: return@LaunchedEffect
+                                            delay(4500)
+                                            if (fashApp.inAppNotification.value?.shownAt == token) {
+                                                fashApp.dismissInAppNotification()
+                                            }
+                                        }
+                                        val showInAppBanner = inApp != null &&
+                                            !profileSetupBlocksShellChrome &&
+                                            (inApp?.title?.isNotBlank() == true || inApp?.body?.isNotBlank() == true)
+                                        FashInAppNotificationBanner(
+                                            visible = showInAppBanner,
+                                            title = inApp?.title.orEmpty(),
+                                            body = inApp?.body.orEmpty(),
+                                            modifier = Modifier
+                                                .align(Alignment.TopCenter)
+                                                .zIndex(24f),
+                                            onClick = {
+                                                val s = inApp ?: return@FashInAppNotificationBanner
+                                                val data = s.data
+                                                val deepNid = data?.entries
+                                                    ?.find { it.key.equals("deep_link", ignoreCase = true) }
+                                                    ?.value
+                                                    ?.let { InboxDeepLinks.parseNotificationIdFromDeepLinkString(it) }
+                                                val nid = s.userNotificationId?.takeIf { it.isNotBlank() }
+                                                    ?: data?.get("user_notification_id")?.trim()?.takeIf { it.isNotEmpty() }
+                                                    ?: deepNid
+                                                if (!nid.isNullOrBlank()) {
+                                                    fashApp.pendingInboxNotificationId.value = nid
+                                                    fashApp.requestOpenNotificationInbox()
+                                                    fashApp.dismissInAppNotification()
+                                                    return@FashInAppNotificationBanner
+                                                }
+                                                val conv = data?.entries?.find { e ->
+                                                    e.key.equals("conversation_id", ignoreCase = true) ||
+                                                        e.key.equals("conversationId", ignoreCase = true)
+                                                }?.value?.trim()?.takeIf { it.isNotEmpty() }
+                                                val nav = data?.entries?.find { e ->
+                                                    e.key.equals("nav_target", ignoreCase = true) ||
+                                                        e.key.equals("navTarget", ignoreCase = true)
+                                                }?.value?.trim()?.lowercase()
+                                                val ptype = data?.get("type")?.trim()?.lowercase().orEmpty()
+                                                val isChat = nav == "chat" ||
+                                                    ptype.contains("chat")
+                                                if (!conv.isNullOrBlank() && isChat) {
+                                                    selectedListingId = null
+                                                    selectedOrderId = null
+                                                    editListingId = null
+                                                    chatOrderDetailOverlayId = null
+                                                    selectedConversationId = conv
+                                                    selectedTab = MainTab.Chat.ordinal
+                                                    fashApp.dismissInAppNotification()
+                                                }
+                                            },
+                                            onDismissClick = { fashApp.dismissInAppNotification() },
+                                        )
                                             }
                                         }
                                     }
@@ -2119,7 +2222,7 @@ class MainActivity : ComponentActivity() {
                     },
                 )
                 FashGlobalDialogHost(
-                    message = dialogMessage,
+                    message = if (profileSetupBlocksShellChrome) null else dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
                     bottomOverlayInset = welcomeBottomInset,
                 )

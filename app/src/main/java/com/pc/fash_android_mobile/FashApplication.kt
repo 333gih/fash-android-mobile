@@ -145,12 +145,38 @@ class FashApplication : Application(), ImageLoaderFactory {
     )
     val appPromoShowSignals: SharedFlow<AppPromoCampaign> = _appPromoShowSignals.asSharedFlow()
 
+    private val _inAppNotification = MutableStateFlow<FashInAppNotificationSession?>(null)
+    /** WebSocket-driven toast when user is online (mirrors FCM payload shape). */
+    val inAppNotification: StateFlow<FashInAppNotificationSession?> = _inAppNotification.asStateFlow()
+
     @Volatile
     private var inboxUnreadRefreshJob: Job? = null
 
     fun requestShowAppPromo(campaign: AppPromoCampaign) {
         applicationScope.launch {
             _appPromoShowSignals.emit(campaign)
+        }
+    }
+
+    fun showInAppNotificationFromRealtime(
+        title: String,
+        body: String,
+        data: Map<String, String>?,
+        userNotificationId: String?,
+    ) {
+        applicationScope.launch {
+            _inAppNotification.value = FashInAppNotificationSession(
+                title = title.trim(),
+                body = body.trim(),
+                data = data,
+                userNotificationId = userNotificationId?.trim()?.takeIf { it.isNotEmpty() },
+            )
+        }
+    }
+
+    fun dismissInAppNotification() {
+        applicationScope.launch {
+            _inAppNotification.value = null
         }
     }
 
@@ -326,3 +352,12 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 }
+
+/** Payload for transient in-app notification banner ([FashApplication.inAppNotification]). */
+data class FashInAppNotificationSession(
+    val title: String,
+    val body: String,
+    val data: Map<String, String>?,
+    val userNotificationId: String?,
+    val shownAt: Long = System.nanoTime(),
+)

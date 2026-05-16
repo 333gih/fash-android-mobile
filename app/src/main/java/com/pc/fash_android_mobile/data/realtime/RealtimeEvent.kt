@@ -75,6 +75,15 @@ sealed class RealtimeEvent {
     /** In-app notification inbox / unread badge should refresh from core (`type: inbox.refresh`). */
     object InboxRefresh : RealtimeEvent()
 
+    /** In-app toast delivered over WebSocket when user is online (`type: notification.show`). */
+    data class NotificationShow(
+        val title: String,
+        val body: String,
+        /** FCM-shaped string map for deep links / nav (may be null or empty). */
+        val data: Map<String, String>?,
+        val userNotificationId: String?,
+    ) : RealtimeEvent()
+
     /** Admin promo interstitial (`type: app.promo.show`) — show blocking dialog from payload. */
     data class AppPromoShow(val campaignJson: org.json.JSONObject) : RealtimeEvent()
 

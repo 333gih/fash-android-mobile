@@ -72,6 +72,17 @@ class ChatViewModel(
                         silentRefreshConversations()
                         refreshUnreadCount()
                     }
+                    is RealtimeEvent.NotificationShow -> {
+                        val t = event.data?.get("type")?.trim()?.lowercase().orEmpty()
+                        if (t.contains("chat") || t == "marketplace.chat.message" ||
+                            t == "marketplace.chat.offer_received" ||
+                            t == "marketplace.chat.offer_accepted" ||
+                            t == "marketplace.chat.offer_declined"
+                        ) {
+                            silentRefreshConversations()
+                            refreshUnreadCount()
+                        }
+                    }
                     else -> Unit
                 }
             }
