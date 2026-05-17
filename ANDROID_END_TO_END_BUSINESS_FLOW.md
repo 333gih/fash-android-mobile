@@ -270,7 +270,7 @@ flowchart TD
 
 ## 4. After order cancel (buyer, unpaid)
 
-`POST /orders/:order_id/cancel` only applies to **`payment_pending`** orders. On success, the service clears the conversation–order link, sets the listing back to **active**, and **reopens** conversations for that listing.
+`POST /orders/:order_id/cancel` applies to buyer orders in **`payment_pending`** (online escrow) or **`cash_meetup_open`** (cash / meetup). Works even when checkout is disabled server-side. On success: order → **cancelled**, listing → **active**, conversation `order_id` cleared, other chats **reopened**. Android: `OrderBuyerCancelPolicy`, `OrderRepository.cancelOrder`, UI on order detail / chat fulfillment / ship flow / checkout.
 
 Then the app may call again:
 

@@ -122,7 +122,9 @@ fun CheckoutScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val canCancelPendingOrder =
         existingOrderId != null &&
-            orderDetail?.status?.trim()?.equals("payment_pending", ignoreCase = true) == true
+            com.pc.fash_android_mobile.data.order.OrderBuyerCancelPolicy.buyerCanCancel(
+                orderDetail?.status,
+            )
 
     LaunchedEffect(listingId, overridePriceVnd, existingOrderId) {
         viewModel.loadListing(listingId, overridePriceVnd, existingOrderId)

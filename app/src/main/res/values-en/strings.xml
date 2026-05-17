@@ -1168,7 +1168,7 @@
     <string name="order_detail_pay">Continue</string>
     <string name="order_cancel_order">Cancel order</string>
     <string name="order_cancel_confirm_title">Cancel this order?</string>
-    <string name="order_cancel_confirm_body">This order will be cancelled in its current state. Continue?</string>
+    <string name="order_cancel_confirm_body">The order will be cancelled and the listing may become available again. Continue?</string>
     <string name="order_cancel_confirm_action">Cancel order</string>
     <string name="order_cancel_confirm_dismiss">Not now</string>
     <string name="order_cancel_success">Order cancelled. You can chat to negotiate again if the listing is still available.</string>

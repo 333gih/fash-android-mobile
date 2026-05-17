@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.pc.fash_android_mobile.data.chat.MyConversationReport
+import com.pc.fash_android_mobile.data.order.OrderBuyerCancelPolicy
 import com.pc.fash_android_mobile.data.order.sellerConfirmHandoffCtaVisible
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import androidx.compose.foundation.shape.CircleShape
@@ -969,8 +970,8 @@ fun ChatDetailScreen(
                                 }
                             },
                             shipFulfillmentEnabled = BusinessFlowConfig.c2cShipFulfillmentEnabled,
-                            orderCancellable = d.isBuyer && orderStatusNorm == "payment_pending",
-                            onCancelOrder = if (d.isBuyer && orderStatusNorm == "payment_pending") {
+                            orderCancellable = d.isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(orderStatusNorm),
+                            onCancelOrder = if (d.isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(orderStatusNorm)) {
                                 { viewModel.cancelLinkedOrder() }
                             } else {
                                 null

@@ -434,7 +434,7 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /** Buyer cancels a `payment_pending` order (`POST /orders/{id}/cancel`). */
+    /** Buyer cancels via `POST /orders/{id}/cancel` (`payment_pending` or `cash_meetup_open`). */
     fun cancelOrder(orderId: String) {
         if (orderId.isBlank()) return
         viewModelScope.launch {

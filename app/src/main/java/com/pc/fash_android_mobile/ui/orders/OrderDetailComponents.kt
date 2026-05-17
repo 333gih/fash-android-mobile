@@ -61,6 +61,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.data.order.OrderBuyerReview
+import com.pc.fash_android_mobile.data.order.OrderBuyerCancelPolicy
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderMeetingAppointment
 import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
@@ -1421,6 +1422,7 @@ internal fun OrderStickyBottomBar(
 ) {
     val st = d.status.trim().lowercase()
     val showPay = role == OrderViewerRole.Buyer && st == "payment_pending"
+    val showCancelOrder = role == OrderViewerRole.Buyer && OrderBuyerCancelPolicy.buyerCanCancel(st)
     val showConfirm = role == OrderViewerRole.Buyer && d.canConfirm
     val showReview = role == OrderViewerRole.Buyer && d.canReview && d.buyerReview == null
     val showConfirmHandoff = role == OrderViewerRole.Seller && d.sellerShowsConfirmHandoffCta()
@@ -1552,6 +1554,8 @@ internal fun OrderStickyBottomBar(
                 ) {
                     Text(stringResource(R.string.order_detail_pay), style = labelStyle)
                 }
+            }
+            if (showCancelOrder) {
                 val cancelBusy = busy == OrderDetailBusyAction.CancelOrder
                 OutlinedButton(
                     onClick = onCancelOrder,

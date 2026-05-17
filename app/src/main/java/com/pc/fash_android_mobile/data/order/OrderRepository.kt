@@ -87,7 +87,8 @@ class OrderRepository(
 
     /**
      * Buyer cancels an unpaid order.
-     * `POST /orders/{order_id}/cancel` — 403 if not buyer, 404 if missing, 409 + `ORDER_NOT_CANCELLABLE` if not `payment_pending`.
+     * `POST /orders/{order_id}/cancel` — buyer only; 409 `ORDER_NOT_CANCELLABLE` unless
+     * `payment_pending` or `cash_meetup_open` (listing → active, conversation order link cleared).
      */
     fun cancelOrder(orderId: String): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/cancel")

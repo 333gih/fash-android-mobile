@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.address.ShippingAddress
+import com.pc.fash_android_mobile.data.order.OrderBuyerCancelPolicy
 import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
@@ -125,7 +126,7 @@ fun ChatShipFulfillmentScreen(
         ShipFlowSource.BuyNow -> R.string.chat_ship_flow_title_buy_now
         ShipFlowSource.Chat -> R.string.chat_ship_flow_title
     }
-    val showCancel = isBuyer && st == "payment_pending" && onCancelOrder != null
+    val showCancel = isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(st) && onCancelOrder != null
 
     Scaffold(
         modifier = modifier.fillMaxSize(),

@@ -1211,7 +1211,7 @@
     <string name="order_detail_pay">Tiếp tục</string>
     <string name="order_cancel_order">Hủy đơn</string>
     <string name="order_cancel_confirm_title">Hủy đơn hàng?</string>
-    <string name="order_cancel_confirm_body">Đơn ở trạng thái hiện tại sẽ bị hủy. Bạn có chắc chắn?</string>
+    <string name="order_cancel_confirm_body">Đơn sẽ bị hủy và tin đăng có thể mở lại cho người mua khác. Bạn có chắc chắn?</string>
     <string name="order_cancel_confirm_action">Hủy đơn</string>
     <string name="order_cancel_confirm_dismiss">Để sau</string>
     <string name="order_cancel_success">Đã hủy đơn. Bạn có thể trò chuyện để thương lượng lại nếu sản phẩm vẫn còn bán.</string>
