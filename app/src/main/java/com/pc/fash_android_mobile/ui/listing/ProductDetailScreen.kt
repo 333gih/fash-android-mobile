@@ -111,8 +111,10 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.data.listing.ListingShippingAddress
 import com.pc.fash_android_mobile.data.user.ProfileInfo
+import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
+import com.pc.fash_android_mobile.ui.feed.formatListingPriceVnd
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -175,10 +177,18 @@ fun ProductDetailScreen(
     val loadError by viewModel.loadError.collectAsState()
     val isOpeningChat by viewModel.isOpeningChat.collectAsState()
     val bottomBarMode by viewModel.bottomBarMode.collectAsState()
+    val buyerActiveOrder by viewModel.buyerActiveOrder.collectAsState()
+    val showPurchaseGuide by viewModel.showPurchaseGuide.collectAsState()
     val scheme = MaterialTheme.colorScheme
 
     LaunchedEffect(listingId) {
         viewModel.loadDetail(listingId)
+    }
+
+    if (showPurchaseGuide) {
+        ProductPurchaseGuideDialog(
+            onDismiss = { viewModel.dismissPurchaseGuide() },
+        )
     }
 
 
@@ -279,6 +289,16 @@ fun ProductDetailScreen(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
                                 )
+                                DetailSocialProofRow(detail = d)
+                                buyerActiveOrder?.let { order ->
+                                    if (order.amountVnd >= 1000L) {
+                                        DealAgreedPriceBanner(
+                                            amountVnd = order.amountVnd,
+                                            fromBuyNow = order.status.equals("payment_pending", ignoreCase = true),
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                        )
+                                    }
+                                }
                                 DetailAttributeGrid(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
@@ -308,6 +328,7 @@ fun ProductDetailScreen(
                         DetailBottomBar(
                             mode = bottomBarMode,
                             chatLoading = isOpeningChat,
+                            buyerOrderAmountVnd = buyerActiveOrder?.amountVnd ?: 0L,
                             onChat = { onChat(d.id) },
                             onBuyNow = { onBuyNow(d.id) },
                         )
@@ -1262,9 +1283,98 @@ private fun DetailMoreFromSeller(
 }
 
 @Composable
+private fun DetailSocialProofRow(detail: ListingDetail) {
+    val scheme = MaterialTheme.colorScheme
+    val views = detail.viewCount.coerceAtLeast(0)
+    val likes = detail.likeCount.coerceAtLeast(0)
+    val saves = detail.saveCount.coerceAtLeast(0)
+    if (views == 0 && likes == 0 && saves == 0) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        if (views > 0) {
+            DetailSocialProofChip(
+                icon = Icons.Filled.Visibility,
+                label = stringResource(R.string.product_social_views, views),
+            )
+        }
+        if (likes > 0) {
+            DetailSocialProofChip(
+                icon = Icons.Filled.Favorite,
+                label = stringResource(R.string.product_social_likes, likes),
+            )
+        }
+        if (saves > 0) {
+            DetailSocialProofChip(
+                icon = Icons.Filled.Bookmark,
+                label = stringResource(R.string.product_social_saves, saves),
+            )
+        }
+    }
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = scheme.outlineVariant.copy(alpha = 0.5f),
+    )
+}
+
+@Composable
+private fun DetailSocialProofChip(
+    icon: ImageVector,
+    label: String,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = scheme.onSurfaceVariant,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ProductPurchaseGuideDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Message,
+                contentDescription = null,
+                tint = FashColors.Primary,
+            )
+        },
+        title = { Text(stringResource(R.string.product_purchase_guide_title)) },
+        text = {
+            Text(
+                text = stringResource(R.string.product_purchase_guide_body),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.product_purchase_guide_got_it))
+            }
+        },
+    )
+}
+
+@Composable
 private fun DetailBottomBar(
     mode: ProductBottomBarMode,
     chatLoading: Boolean,
+    buyerOrderAmountVnd: Long = 0L,
     onChat: () -> Unit,
     onBuyNow: () -> Unit,
 ) {
@@ -1339,7 +1449,41 @@ private fun DetailBottomBar(
             }
         }
         ProductBottomBarMode.ReservedOther -> StatusBar(stringResource(R.string.product_reserved_other), Color(0xFFFFF8E1), Color(0xFFF57C00))
-        ProductBottomBarMode.ReservedBuyer -> StatusBar(stringResource(R.string.product_reserved_buyer), Color(0xFFE8F5E9), Color(0xFF2E7D32))
+        ProductBottomBarMode.ReservedBuyer -> {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(scheme.surface)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = if (buyerOrderAmountVnd >= 1000L) {
+                        stringResource(
+                            R.string.product_reserved_buyer_continue,
+                            formatListingPriceVnd(buyerOrderAmountVnd),
+                        )
+                    } else {
+                        stringResource(R.string.product_reserved_buyer)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = onBuyNow,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.product_continue_checkout),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
+            }
+        }
         ProductBottomBarMode.Sold -> StatusBar(
             stringResource(R.string.product_listing_sold_bar),
             scheme.surfaceContainerHighest,

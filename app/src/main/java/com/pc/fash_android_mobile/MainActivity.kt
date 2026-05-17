@@ -80,6 +80,7 @@ import com.pc.fash_android_mobile.ui.chat.ChatDetailScreen
 import com.pc.fash_android_mobile.ui.chat.ChatDetailViewModel
 import com.pc.fash_android_mobile.ui.chat.ChatShipFlowArgs
 import com.pc.fash_android_mobile.ui.chat.ChatShipFulfillmentScreen
+import com.pc.fash_android_mobile.ui.chat.ShipFlowSource
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.profile.EditProfileScreen
 import com.pc.fash_android_mobile.ui.profile.EditProfileViewModel
@@ -906,6 +907,7 @@ class MainActivity : ComponentActivity() {
                                     /** Order detail as a medium-height sheet over chat (keeps conversation open). */
                                     var chatOrderDetailOverlayId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var chatShipFlowArgs by remember { mutableStateOf<ChatShipFlowArgs?>(null) }
+                                    var showShipFlowCancelConfirm by remember { mutableStateOf(false) }
                                     var addressFlowOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
@@ -1091,6 +1093,7 @@ class MainActivity : ComponentActivity() {
                                         selectedListingId,
                                         selectedOrderId,
                                         selectedCheckoutListingId,
+                                        chatShipFlowArgs,
                                         sellerShopUsername,
                                         editListingId,
                                         showEditProfile,
@@ -1105,6 +1108,7 @@ class MainActivity : ComponentActivity() {
                                             selectedListingId != null ||
                                                 selectedOrderId != null ||
                                                 selectedCheckoutListingId != null ||
+                                                chatShipFlowArgs != null ||
                                                 sellerShopUsername != null ||
                                                 editListingId != null ||
                                                 showEditProfile ||
@@ -1381,13 +1385,34 @@ class MainActivity : ComponentActivity() {
                                                             }
                                                             return@launch
                                                         }
+                                                        val existing = withContext(Dispatchers.IO) {
+                                                            productDetailViewModel.findBuyerActiveOrderForListing(
+                                                                listingId,
+                                                            )
+                                                        }
+                                                        if (existing != null) {
+                                                            selectedListingId = null
+                                                            chatShipFlowArgs = ChatShipFlowArgs(
+                                                                orderId = existing.orderId,
+                                                                listingId = listingId,
+                                                                agreedAmountVnd = existing.amountVnd.takeIf { it > 0 }
+                                                                    ?: price,
+                                                                source = ShipFlowSource.BuyNow,
+                                                            )
+                                                            return@launch
+                                                        }
                                                         val result = withContext(Dispatchers.IO) {
                                                             orderRepository.createOrder(listingId, price)
                                                         }
                                                         result.fold(
                                                             onSuccess = { oid ->
                                                                 selectedListingId = null
-                                                                selectedOrderId = oid
+                                                                chatShipFlowArgs = ChatShipFlowArgs(
+                                                                    orderId = oid,
+                                                                    listingId = listingId,
+                                                                    agreedAmountVnd = price,
+                                                                    source = ShipFlowSource.BuyNow,
+                                                                )
                                                             },
                                                             onFailure = {
                                                                 enqueueSnackbarSerial {
@@ -1549,6 +1574,7 @@ class MainActivity : ComponentActivity() {
                                                         orderId = orderId,
                                                         listingId = listingId,
                                                         agreedAmountVnd = amountVnd,
+                                                        source = ShipFlowSource.Chat,
                                                     )
                                                 },
                                                 onOrderDetails = { orderId ->
@@ -1634,7 +1660,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (selectedConversationId != null && chatShipFlowArgs != null) {
+                                        if (chatShipFlowArgs != null) {
                                             ChatShipFulfillmentScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1642,6 +1668,7 @@ class MainActivity : ComponentActivity() {
                                                 args = chatShipFlowArgs!!,
                                                 onBack = { chatShipFlowArgs = null },
                                                 orderDetailViewModel = orderDetailViewModel,
+                                                addressBookViewModel = addressBookViewModel,
                                                 onOpenShippingAddressList = {
                                                     addressFlowOrderId = chatShipFlowArgs?.orderId
                                                     showShippingAddressList = true
@@ -1658,6 +1685,43 @@ class MainActivity : ComponentActivity() {
                                                     checkoutExistingOrderId = existingOid
                                                 },
                                                 shipOnlinePaymentEnabled = BusinessFlowConfig.c2cShipOnlinePaymentEnabled,
+                                                onCancelOrder = { showShipFlowCancelConfirm = true },
+                                            )
+                                        }
+                                        if (showShipFlowCancelConfirm) {
+                                            AlertDialog(
+                                                onDismissRequest = { showShipFlowCancelConfirm = false },
+                                                title = {
+                                                    Text(context.getString(R.string.order_cancel_confirm_title))
+                                                },
+                                                text = {
+                                                    Text(context.getString(R.string.order_cancel_confirm_body))
+                                                },
+                                                confirmButton = {
+                                                    TextButton(
+                                                        onClick = {
+                                                            val oid = chatShipFlowArgs?.orderId?.trim().orEmpty()
+                                                            showShipFlowCancelConfirm = false
+                                                            if (oid.isNotEmpty()) {
+                                                                orderDetailViewModel.cancelOrder(oid)
+                                                                chatShipFlowArgs = null
+                                                                selectedConversationId?.let {
+                                                                    chatDetailViewModel.loadConversation(it)
+                                                                }
+                                                            }
+                                                        },
+                                                    ) {
+                                                        Text(
+                                                            context.getString(R.string.order_cancel_confirm_action),
+                                                            color = MaterialTheme.colorScheme.error,
+                                                        )
+                                                    }
+                                                },
+                                                dismissButton = {
+                                                    TextButton(onClick = { showShipFlowCancelConfirm = false }) {
+                                                        Text(context.getString(R.string.order_cancel_confirm_dismiss))
+                                                    }
+                                                },
                                             )
                                         }
                                         selectedOrderId?.let { orderIdForDetail ->
@@ -1730,6 +1794,10 @@ class MainActivity : ComponentActivity() {
                                                     showAddAddressScreen = true
                                                 },
                                                 onConfirmed = {
+                                                    val oid = addressFlowOrderId?.trim().orEmpty()
+                                                    if (oid.isNotEmpty()) {
+                                                        orderDetailViewModel.load(oid)
+                                                    }
                                                     showShippingAddressList = false
                                                     addressFlowOrderId = null
                                                 },
@@ -1904,7 +1972,7 @@ class MainActivity : ComponentActivity() {
                                                 showAddAddressScreen ||
                                                 showShippingAddressList ||
                                                 selectedOrderId != null ||
-                                                (selectedConversationId != null && chatShipFlowArgs != null) ||
+                                                chatShipFlowArgs != null ||
                                                 selectedConversationId != null ||
                                                 chatOrderDetailOverlayId != null ||
                                                 showEditProfile ||
@@ -1943,11 +2011,11 @@ class MainActivity : ComponentActivity() {
                                                     showShippingAddressList = false
                                                     addressFlowOrderId = null
                                                 }
+                                                chatShipFlowArgs != null -> {
+                                                    chatShipFlowArgs = null
+                                                }
                                                 selectedOrderId != null -> {
                                                     selectedOrderId = null
-                                                }
-                                                selectedConversationId != null && chatShipFlowArgs != null -> {
-                                                    chatShipFlowArgs = null
                                                 }
                                                 chatOrderDetailOverlayId != null -> {
                                                     chatOrderDetailOverlayId = null

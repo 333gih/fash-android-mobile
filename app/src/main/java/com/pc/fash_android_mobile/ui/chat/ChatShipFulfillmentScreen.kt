@@ -47,17 +47,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.data.order.effectiveBuyerTotal
+import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
+import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
 import com.pc.fash_android_mobile.ui.feed.formatListingPriceVnd
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 
-/** Args for [ChatShipFulfillmentScreen] — opened from chat after user picks Ship. */
+enum class ShipFlowSource {
+    Chat,
+    BuyNow,
+}
+
+/** Args for [ChatShipFulfillmentScreen] — chat ship path or listing Buy now. */
 data class ChatShipFlowArgs(
     val orderId: String,
     val listingId: String,
     val agreedAmountVnd: Long,
+    val source: ShipFlowSource = ShipFlowSource.Chat,
 )
 
 private enum class ShipFlowStep {
@@ -71,11 +80,13 @@ fun ChatShipFulfillmentScreen(
     args: ChatShipFlowArgs,
     onBack: () -> Unit,
     orderDetailViewModel: OrderDetailViewModel,
+    addressBookViewModel: AddressBookViewModel,
     onOpenShippingAddressList: () -> Unit,
     onOpenAddShippingAddress: () -> Unit,
     /** Opens in-app checkout for this order (same contract as order overlay → checkout). */
     onContinueToCheckout: (listingId: String, amountVnd: Long, orderId: String) -> Unit,
     shipOnlinePaymentEnabled: Boolean,
+    onCancelOrder: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var step by remember { mutableIntStateOf(0) }
@@ -83,16 +94,38 @@ fun ChatShipFulfillmentScreen(
 
     val detail by orderDetailViewModel.detail.collectAsState()
     val isLoading by orderDetailViewModel.isLoading.collectAsState()
+    val savedAddresses by addressBookViewModel.addresses.collectAsState()
 
     LaunchedEffect(args.orderId) {
+        addressBookViewModel.refresh()
         orderDetailViewModel.load(args.orderId)
     }
 
     val isBuyer = orderDetailViewModel.isCurrentUserBuyer()
     val isSeller = orderDetailViewModel.isCurrentUserSeller()
     val st = detail?.status?.trim()?.lowercase().orEmpty()
-    val hasAddress = !detail?.shippingAddressFormatted.isNullOrBlank() ||
+    val localAddress: ShippingAddress? = remember(args.orderId, savedAddresses) {
+        addressBookViewModel.getSelectionForOrder(args.orderId)
+    }
+    val serverHasAddress = !detail?.shippingAddressFormatted.isNullOrBlank() ||
         (!detail?.recipientName.isNullOrBlank() && !detail?.recipientPhone.isNullOrBlank())
+    val hasAddress = serverHasAddress || localAddress != null
+    val displayName = detail?.recipientName?.trim()?.takeIf { it.isNotEmpty() }
+        ?: localAddress?.recipientName?.trim().orEmpty()
+    val displayPhone = detail?.recipientPhone?.trim()?.takeIf { it.isNotEmpty() }
+        ?: localAddress?.phone?.trim().orEmpty()
+    val displayAddressLine = detail?.shippingAddressFormatted?.trim()?.takeIf { it.isNotEmpty() }
+        ?: localAddress?.formattedAddressLine().orEmpty()
+    val agreedAmount = when {
+        args.agreedAmountVnd > 0L -> args.agreedAmountVnd
+        detail != null && detail!!.amountVnd > 0L -> detail!!.amountVnd
+        else -> 0L
+    }
+    val titleRes = when (args.source) {
+        ShipFlowSource.BuyNow -> R.string.chat_ship_flow_title_buy_now
+        ShipFlowSource.Chat -> R.string.chat_ship_flow_title
+    }
+    val showCancel = isBuyer && st == "payment_pending" && onCancelOrder != null
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -100,7 +133,7 @@ fun ChatShipFulfillmentScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.chat_ship_flow_title),
+                        text = stringResource(titleRes),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     )
                 },
@@ -173,15 +206,16 @@ fun ChatShipFulfillmentScreen(
                             stringResource(R.string.chat_ship_flow_order_fallback_title)
                         },
                         orderId = args.orderId,
-                        amountLabel = formatListingPriceVnd(
-                            when {
-                                detail != null && detail!!.amountVnd > 0L -> detail!!.amountVnd
-                                args.agreedAmountVnd > 0L -> args.agreedAmountVnd
-                                else -> 0L
-                            },
-                        ),
+                        amountLabel = formatListingPriceVnd(agreedAmount),
                         statusLabel = st.ifBlank { "—" },
                     )
+
+                    if (agreedAmount >= 1000L) {
+                        DealAgreedPriceBanner(
+                            amountVnd = agreedAmount,
+                            fromBuyNow = args.source == ShipFlowSource.BuyNow,
+                        )
+                    }
 
                     when (currentStep) {
                         ShipFlowStep.Shipping -> {
@@ -225,20 +259,20 @@ fun ChatShipFulfillmentScreen(
                                                     )
                                                 }
                                                 Spacer(Modifier.height(8.dp))
-                                                detail?.recipientName?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                                                displayName.takeIf { it.isNotEmpty() }?.let {
                                                     Text(
                                                         text = it,
                                                         style = MaterialTheme.typography.bodyMedium,
                                                     )
                                                 }
-                                                detail?.recipientPhone?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                                                displayPhone.takeIf { it.isNotEmpty() }?.let {
                                                     Text(
                                                         text = it,
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     )
                                                 }
-                                                detail?.shippingAddressFormatted?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                                                displayAddressLine.takeIf { it.isNotEmpty() }?.let {
                                                     Spacer(Modifier.height(6.dp))
                                                     Text(
                                                         text = it,
@@ -270,6 +304,7 @@ fun ChatShipFulfillmentScreen(
                                     Spacer(Modifier.height(8.dp))
                                     Button(
                                         onClick = { step = 1 },
+                                        enabled = hasAddress,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
                                     ) {
@@ -277,6 +312,21 @@ fun ChatShipFulfillmentScreen(
                                             text = stringResource(R.string.chat_ship_flow_continue_to_payment),
                                             color = FashColors.Primary.fashReadableOn(),
                                         )
+                                    }
+                                    if (showCancel) {
+                                        OutlinedButton(
+                                            onClick = onCancelOrder,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.error.copy(alpha = 0.45f),
+                                            ),
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.order_cancel_order),
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
                                     }
                                 }
                                 isSeller -> {

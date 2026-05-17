@@ -132,6 +132,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
+import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatMapsUrlRules
 import com.pc.fash_android_mobile.data.chat.ChatMessage
@@ -527,6 +528,7 @@ fun ChatDetailScreen(
                         DealBanner(
                             isBuyer = d.isBuyer,
                             orderStatus = orderStatus,
+                            agreedAmountVnd = acceptedOfferAmount,
                             statusSubtitle = orderStatusSubtitle,
                             meetupPayByFormatted = orderMeetupDeadlineAt?.takeIf { it.isNotBlank() }?.let { raw ->
                                 formatOrderDateTime(raw)
@@ -967,6 +969,12 @@ fun ChatDetailScreen(
                                 }
                             },
                             shipFulfillmentEnabled = BusinessFlowConfig.c2cShipFulfillmentEnabled,
+                            orderCancellable = d.isBuyer && orderStatusNorm == "payment_pending",
+                            onCancelOrder = if (d.isBuyer && orderStatusNorm == "payment_pending") {
+                                { viewModel.cancelLinkedOrder() }
+                            } else {
+                                null
+                            },
                         )
                     }
                     if (showMeetingSheet) {
@@ -1254,6 +1262,8 @@ private fun chatOrderStatusSubtitleForChat(isBuyer: Boolean, orderStatusRaw: Str
 private fun DealBanner(
     isBuyer: Boolean,
     orderStatus: String?,
+    /** Accepted offer amount for agreed-price banner (0 = hidden). */
+    agreedAmountVnd: Long = 0L,
     /** Role-specific line so both parties see what the order state means for them. */
     statusSubtitle: String? = null,
     /** When set, shows meetup-linked payment cutoff (server `meetup_deadline_at`). */
@@ -1345,6 +1355,16 @@ private fun DealBanner(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 10.dp),
+            )
+        }
+
+        if (agreedAmountVnd >= 1000L && s != "cancelled") {
+            DealAgreedPriceBanner(
+                amountVnd = agreedAmountVnd,
+                fromBuyNow = false,
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 8.dp),
             )
         }
 

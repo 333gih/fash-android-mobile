@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material3.AlertDialog
@@ -48,9 +49,40 @@ fun FulfillmentChoiceBottomSheet(
     /** Opens ship flow when [shipFulfillmentEnabled] is true. */
     onChooseShip: () -> Unit,
     shipFulfillmentEnabled: Boolean,
+    /** Buyer can cancel unpaid order from this sheet (payment_pending). */
+    orderCancellable: Boolean = false,
+    onCancelOrder: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showShipDisabledDialog by remember { mutableStateOf(false) }
+    var showCancelConfirm by remember { mutableStateOf(false) }
+
+    if (showCancelConfirm && onCancelOrder != null) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            title = { Text(stringResource(R.string.order_cancel_confirm_title)) },
+            text = { Text(stringResource(R.string.order_cancel_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCancelConfirm = false
+                        onDismiss()
+                        onCancelOrder()
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.order_cancel_confirm_action),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) {
+                    Text(stringResource(R.string.order_cancel_confirm_dismiss))
+                }
+            },
+        )
+    }
 
     if (showShipDisabledDialog) {
         AlertDialog(
@@ -131,6 +163,19 @@ fun FulfillmentChoiceBottomSheet(
                     onChooseShip()
                 },
             )
+            if (orderCancellable && onCancelOrder != null) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+                )
+                FulfillmentOptionRow(
+                    icon = Icons.Outlined.Cancel,
+                    title = stringResource(R.string.chat_fulfillment_cancel_order_title),
+                    subtitle = stringResource(R.string.chat_fulfillment_cancel_order_subtitle),
+                    onClick = { showCancelConfirm = true },
+                    accentDestructive = true,
+                )
+            }
         }
     }
 }
@@ -143,8 +188,17 @@ private fun FulfillmentOptionRow(
     onClick: () -> Unit,
     enabled: Boolean = true,
     dimmed: Boolean = false,
+    accentDestructive: Boolean = false,
 ) {
     val alpha = if (dimmed) 0.55f else 1f
+    val iconTint = when {
+        accentDestructive -> MaterialTheme.colorScheme.error.copy(alpha = alpha)
+        else -> FashColors.Primary.copy(alpha = alpha)
+    }
+    val titleColor = when {
+        accentDestructive -> MaterialTheme.colorScheme.error.copy(alpha = alpha)
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -163,14 +217,14 @@ private fun FulfillmentOptionRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = FashColors.Primary.copy(alpha = alpha),
+                tint = iconTint,
                 modifier = Modifier.size(28.dp),
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                    color = titleColor,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(

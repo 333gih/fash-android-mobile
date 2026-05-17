@@ -58,6 +58,8 @@ class ChatDetailViewModel(
         (application as FashApplication).chatRepository
     private val orderRepository: OrderRepository =
         (application as FashApplication).orderRepository
+    private val orderCancelCoordinator =
+        (application as FashApplication).orderCancelCoordinator
     private val dealRepository: DealRepository =
         (application as FashApplication).dealRepository
     private val realtimeManager: RealtimeManager =
@@ -96,6 +98,9 @@ class ChatDetailViewModel(
 
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
+
+    private val _isCancellingOrder = MutableStateFlow(false)
+    val isCancellingOrder: StateFlow<Boolean> = _isCancellingOrder.asStateFlow()
 
     private val _isRespondingToOffer = MutableStateFlow(false)
     val isRespondingToOffer: StateFlow<Boolean> = _isRespondingToOffer.asStateFlow()
@@ -1271,6 +1276,49 @@ class ChatDetailViewModel(
                     _events.tryEmit(it.message ?: app.getString(R.string.chat_offline_deal_error))
                 },
             )
+        }
+    }
+
+    /** Buyer cancels linked `payment_pending` order; reloads conversation + order state. */
+    fun cancelLinkedOrder() {
+        val oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val convId = _detail.value?.conversationId?.trim().orEmpty()
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _isCancellingOrder.value = true
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(oid) }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(app.getString(R.string.order_cancel_success))
+                        withContext(Dispatchers.IO) {
+                            orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
+                                oid,
+                                app.getString(R.string.chat_message_order_cancelled_by_buyer),
+                            )
+                        }
+                        fetchOrderStatus(oid)
+                        if (convId.isNotEmpty()) {
+                            loadConversation(convId)
+                        }
+                    },
+                    onFailure = { e ->
+                        _events.tryEmit(mapCancelOrderError(app, e))
+                    },
+                )
+            } finally {
+                _isCancellingOrder.value = false
+            }
+        }
+    }
+
+    private fun mapCancelOrderError(app: Application, e: Throwable): String {
+        val code = e.message?.trim().orEmpty()
+        return when (code) {
+            "ORDER_NOT_CANCELLABLE" -> app.getString(R.string.order_cancel_error_not_cancellable)
+            "FORBIDDEN" -> app.getString(R.string.order_cancel_error_forbidden)
+            "NOT_FOUND" -> app.getString(R.string.order_cancel_error_not_found)
+            else -> e.message?.takeIf { it.isNotBlank() } ?: app.getString(R.string.order_cancel_error_generic)
         }
     }
 
