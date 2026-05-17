@@ -908,19 +908,23 @@ class ChatRepository(
             else -> false
         }
 
+        val content = m.optString("Content", m.optString("content", m.optString("text", "")))
+        val orderCancelled = parseOrderCancelledPayload(rawType, content)
+
         return ChatMessage(
             messageId = m.optString("ID", m.optString("id", m.optString("message_id", ""))),
-            text = m.optString("Content", m.optString("content", m.optString("text", ""))),
+            text = content,
             isFromMe = isFromMe,
             senderId = senderId,
             timestamp = m.optString("CreatedAt", m.optString("created_at", m.optString("timestamp", m.optString("sent_at", "")))),
             isRead = isRead,
-            messageType = rawType,
+            messageType = if (orderCancelled != null && rawType == "text") "order_cancelled" else rawType,
             offerAmountVnd = offerAmount,
             offerStatus = offerStatus,
             outboundState = OutboundSendState.NONE,
             systemSubtype = systemSubtype,
             meetingAppointment = meetingAppointment,
+            orderCancelled = orderCancelled,
         )
     }
 
@@ -1132,6 +1136,8 @@ data class ChatMessage(
     val systemSubtype: String? = null,
     /** When [messageType] is `meeting_proposal`, filled from API `meeting_appointment`. */
     val meetingAppointment: MeetingAppointmentPayload? = null,
+    /** When [messageType] is `order_cancelled` or legacy embedded cancel text. */
+    val orderCancelled: OrderCancelledChatPayload? = null,
 )
 
 data class PriceOffer(

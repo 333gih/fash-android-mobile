@@ -434,32 +434,12 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /** Buyer cancels via `POST /orders/{id}/cancel` (`payment_pending` or `cash_meetup_open`). */
-    fun cancelOrder(orderId: String) {
+    /** After cancel flow (reason + feedback); reload order detail. */
+    fun onOrderCancelFlowComplete(orderId: String) {
         if (orderId.isBlank()) return
         viewModelScope.launch {
-            _busyAction.value = OrderDetailBusyAction.CancelOrder
-            val app = getApplication<Application>()
-            try {
-                val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(orderId) }
-                result.fold(
-                    onSuccess = {
-                        _events.tryEmit(app.getString(R.string.order_cancel_success))
-                        withContext(Dispatchers.IO) {
-                            orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
-                                orderId,
-                                app.getString(R.string.chat_message_order_cancelled_by_buyer),
-                            )
-                        }
-                        load(orderId)
-                    },
-                    onFailure = { e ->
-                        _events.tryEmit(mapCancelOrderError(e))
-                    },
-                )
-            } finally {
-                _busyAction.value = OrderDetailBusyAction.None
-            }
+            _events.tryEmit(getApplication<Application>().getString(R.string.order_cancel_success))
+            load(orderId)
         }
     }
 

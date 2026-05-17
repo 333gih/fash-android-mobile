@@ -9,6 +9,9 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.data.chat.ConversationListingGroup
+import com.pc.fash_android_mobile.data.chat.isOrderCancelledChatMessage
+import com.pc.fash_android_mobile.data.chat.isOrderCancelledEmbeddedMessage
+import com.pc.fash_android_mobile.data.chat.orderCancelledChatPreviewText
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -454,7 +457,19 @@ class ChatViewModel(
                 else -> app.getString(R.string.chat_inbox_preview_offer_generic, amtStr)
             }
         }
-        return item.lastMessageText.trim().ifBlank {
+        val rawLast = item.lastMessageText.trim()
+        val lastType = item.lastMessageType.trim()
+        if (isOrderCancelledChatMessage(lastType, rawLast) ||
+            lastType.equals("order_cancelled", ignoreCase = true) ||
+            rawLast == app.getString(R.string.chat_inbox_preview_order_cancelled_short)
+        ) {
+            return when {
+                isSeller -> app.getString(R.string.chat_inbox_preview_order_cancelled_seller)
+                else -> orderCancelledChatPreviewText(rawLast, app.getString(R.string.chat_inbox_preview_order_cancelled_short))
+                    ?: app.getString(R.string.chat_inbox_preview_order_cancelled_short)
+            }
+        }
+        return rawLast.ifBlank {
             app.getString(R.string.chat_inbox_preview_placeholder)
         }
     }
@@ -490,6 +505,8 @@ class ChatViewModel(
         val isOfferRow = item.lastMessageType.equals("offer", ignoreCase = true) ||
             item.lastOfferAmountVnd > 0L
         if (isOfferRow) return false
-        return item.lastMessageText.trim().isBlank()
+        val rawLast = item.lastMessageText.trim()
+        if (isOrderCancelledChatMessage(item.lastMessageType, rawLast)) return false
+        return rawLast.isBlank()
     }
 }

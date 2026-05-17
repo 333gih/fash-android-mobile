@@ -103,7 +103,7 @@ fun OrderDetailScreen(
     var showShipDialog by remember { mutableStateOf(false) }
     var trackingInput by remember { mutableStateOf("") }
     var carrierInput by remember { mutableStateOf("") }
-    var showCancelConfirm by remember { mutableStateOf(false) }
+    var orderIdPendingCancel by remember { mutableStateOf<String?>(null) }
     var showOpenDisputeDialog by remember { mutableStateOf(false) }
     var showEvidenceDialog by remember { mutableStateOf(false) }
     var openDisputeDesc by remember { mutableStateOf("") }
@@ -342,6 +342,18 @@ fun OrderDetailScreen(
                         ) {
                             OrderHeroCard(d = d, role = role, formatDate = formatDate)
                         }
+                        if (
+                            d.status.trim().lowercase() == "fulfillment_pending" &&
+                            d.remainingSeconds > 0L &&
+                            d.expiryKind == "fulfillment_choice"
+                        ) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OrderExpiryCountdownBanner(
+                                remainingSeconds = d.remainingSeconds,
+                                expiryKind = d.expiryKind,
+                                isBuyer = role == OrderViewerRole.Buyer,
+                            )
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         OrderTimelineSection(d = d, formatDate = formatDate)
                         Spacer(modifier = Modifier.height(12.dp))
@@ -530,7 +542,7 @@ fun OrderDetailScreen(
                             onPay = {
                                 onNavigateToPayment(d.listingId, d.amountVnd, d.orderId)
                             },
-                            onCancelOrder = { showCancelConfirm = true },
+                            onCancelOrder = { orderIdPendingCancel = d.orderId },
                             onConfirmReceipt = { viewModel.confirmReceipt(d.orderId) },
                             onReview = { showReviewDialog = true },
                             onShip = {
@@ -613,30 +625,14 @@ fun OrderDetailScreen(
         )
     }
 
-    if (showCancelConfirm && detail != null) {
-        val d = detail!!
-        AlertDialog(
-            onDismissRequest = { showCancelConfirm = false },
-            title = { Text(stringResource(R.string.order_cancel_confirm_title)) },
-            text = { Text(stringResource(R.string.order_cancel_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCancelConfirm = false
-                        viewModel.cancelOrder(d.orderId)
-                    },
-                    enabled = !isBlocking,
-                ) {
-                    Text(stringResource(R.string.order_cancel_confirm_action))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelConfirm = false }) {
-                    Text(stringResource(R.string.order_cancel_confirm_dismiss))
-                }
-            },
-        )
-    }
+    OrderCancelFlowHost(
+        orderId = orderIdPendingCancel,
+        onDismiss = { orderIdPendingCancel = null },
+        onSuccess = { oid ->
+            orderIdPendingCancel = null
+            viewModel.onOrderCancelFlowComplete(oid)
+        },
+    )
 
     if (showShipDialog && detail != null) {
         val d = detail!!

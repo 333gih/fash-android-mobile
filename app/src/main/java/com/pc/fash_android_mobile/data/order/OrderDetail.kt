@@ -56,6 +56,8 @@ data class OrderDetail(
     val platformFeeVnd: Long,
     val sellerPayoutVnd: Long,
     val status: String,
+    /** `online_escrow` | `cash_meetup` | `pending` (awaiting buyer choice). */
+    val fulfillmentChannel: String = "",
     val trackingNumber: String,
     val carrier: String,
     val listingTitle: String,
@@ -109,6 +111,12 @@ data class OrderDetail(
      * (typically `scheduled_at + 30m` at meetup confirm while still `payment_pending`).
      */
     val meetupDeadlineAt: String = "",
+    /** RFC3339 auto-cancel instant from GET order (`order_expires_at`). */
+    val orderExpiresAt: String = "",
+    /** Seconds until [orderExpiresAt]; 0 when past due. */
+    val remainingSeconds: Long = 0L,
+    /** `fulfillment_choice` | `payment` | `meetup_payment` */
+    val expiryKind: String = "",
     /**
      * Seller-only: `POST /orders/:id/confirm-handoff` available (meetup / in-person handoff after scheduled time).
      */

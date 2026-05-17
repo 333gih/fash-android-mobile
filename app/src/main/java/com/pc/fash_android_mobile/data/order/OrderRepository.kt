@@ -90,12 +90,29 @@ class OrderRepository(
      * `POST /orders/{order_id}/cancel` — buyer only; 409 `ORDER_NOT_CANCELLABLE` unless
      * `payment_pending` or `cash_meetup_open` (listing → active, conversation order link cleared).
      */
-    fun cancelOrder(orderId: String): Result<Unit> = runCatching {
+    /**
+     * `POST /orders/{order_id}/fulfillment` — buyer picks meetup vs online from `fulfillment_pending`.
+     * @param fulfillment `cash_meetup` or `online_escrow`
+     */
+    fun chooseOrderFulfillment(orderId: String, fulfillment: String): Result<OrderDetail> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/fulfillment")
+        val json = JSONObject()
+            .put("fulfillment", fulfillment.trim().lowercase())
+            .toString()
+        parseOrderDetail(executePostJson(url, json))
+    }
+
+    fun cancelOrder(orderId: String, reasonCode: String, reasonNote: String = ""): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/cancel")
+        val json = JSONObject()
+            .put("reason_code", reasonCode.trim().lowercase())
+            .put("reason_note", reasonNote.trim())
+            .toString()
         securedClient.newCall(
             Request.Builder()
                 .url(url)
-                .post(ByteArray(0).toRequestBody(null))
+                .post(json.toRequestBody(JSON_MEDIA))
+                .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("User-Agent", "FashAndroid/1.0")
                 .build(),
@@ -126,6 +143,39 @@ class OrderRepository(
                         } catch (_: Exception) {
                             b
                         }
+                        error(msg.ifBlank { "HTTP ${response.code}" })
+                    }
+                }
+            }
+        }
+    }
+
+    /** `POST /orders/{order_id}/cancellation-feedback` — buyer 1–5 after cancel. */
+    fun submitCancellationFeedback(orderId: String, rating: Int, comment: String = ""): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/cancellation-feedback")
+        val json = JSONObject()
+            .put("rating", rating.coerceIn(1, 5))
+            .put("comment", comment.trim())
+            .toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .post(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                val b = response.body?.string().orEmpty()
+                val code = try { JSONObject(b).optString("code", "") } catch (_: Exception) { "" }
+                when {
+                    response.code == 409 && code == "ORDER_CANCELLATION_FEEDBACK_EXISTS" ->
+                        error("ORDER_CANCELLATION_FEEDBACK_EXISTS")
+                    else -> {
+                        val msg = try {
+                            JSONObject(b).optString("error", JSONObject(b).optString("message", b))
+                        } catch (_: Exception) { b }
                         error(msg.ifBlank { "HTTP ${response.code}" })
                     }
                 }
@@ -398,6 +448,10 @@ class OrderRepository(
             platformFeeVnd = o.optLong("platform_fee_vnd", o.optLong("PlatformFeeVND", 0L)),
             sellerPayoutVnd = o.optLong("seller_payout_vnd", o.optLong("SellerPayoutVND", 0L)),
             status = rawStatus,
+            fulfillmentChannel = o.optString(
+                "fulfillment_channel",
+                o.optString("FulfillmentChannel", o.optString("fulfillmentChannel", "")),
+            ).trim().lowercase(),
             trackingNumber = trackingNumber,
             carrier = o.optString("carrier", o.optString("Carrier", "")),
             listingTitle = listing.optString("Title", listing.optString("title", "")),
@@ -435,6 +489,9 @@ class OrderRepository(
             meetingAppointment = meetingAppointment,
             meetingGrace = meetingGrace,
             meetupDeadlineAt = meetupDeadlineAt,
+            orderExpiresAt = o.optIsoFirst("order_expires_at", "OrderExpiresAt"),
+            remainingSeconds = o.optLong("remaining_seconds", o.optLong("RemainingSeconds", 0L)),
+            expiryKind = o.optString("expiry_kind", o.optString("ExpiryKind", "")).trim().lowercase(),
             canConfirmHandoff = canConfirmHandoff,
             canAcknowledgeOfflineCash = canAcknowledgeOfflineCash,
         )

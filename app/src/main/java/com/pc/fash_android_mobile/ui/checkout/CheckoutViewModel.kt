@@ -116,15 +116,14 @@ class CheckoutViewModel(
     private var pollingJob: Job? = null
     private var pendingSuccess: ((String) -> Unit)? = null
 
-    /**
-     * Channel ids must match backend / payment-service enabled gateways (lowercase).
-     * See ADDING_PAYMENT_PROVIDER.md — e.g. momo, vnpay, tpbank.
-     */
-    val paymentMethods = listOf(
+    private val defaultPaymentMethods = listOf(
         PaymentMethodOption("momo", "Ví MoMo"),
         PaymentMethodOption("vnpay", "VNPay"),
         PaymentMethodOption("tpbank", "Chuyển khoản TPBank"),
     )
+
+    private val _paymentMethods = MutableStateFlow(defaultPaymentMethods)
+    val paymentMethods: StateFlow<List<PaymentMethodOption>> = _paymentMethods.asStateFlow()
 
     fun loadListing(listingId: String, overridePriceVnd: Long = 0L, existingOrderId: String? = null) {
         _overridePriceVnd.value = overridePriceVnd
@@ -142,9 +141,13 @@ class CheckoutViewModel(
             _orderDetail.value = null
             _shippingAddressForDisplay.value = null
             coroutineScope {
+                val methodsAsync = async(Dispatchers.IO) { corePaymentRepository.listPaymentMethods() }
                 val listingAsync = async(Dispatchers.IO) { listingRepository.getListingDetail(listingId) }
                 val orderAsync = oid?.let { id ->
                     async(Dispatchers.IO) { orderRepository.getOrderDetail(id) }
+                }
+                methodsAsync.await().getOrNull()?.takeIf { it.isNotEmpty() }?.let { list ->
+                    _paymentMethods.value = list.map { PaymentMethodOption(it.id, it.name) }
                 }
                 val listingResult = listingAsync.await()
                 val orderResult = orderAsync?.await()
@@ -281,33 +284,11 @@ class CheckoutViewModel(
      * Creates or reuses order, calls core **proxied** payment initiate (returns gateway URL), opens URL in UI,
      * then polls order status until **payment_held** or terminal state.
      */
-    /** Cancels an existing `payment_pending` order (buyer); used when resuming checkout for an unpaid order. */
-    fun cancelPendingOrder(onSuccess: () -> Unit) {
-        val oid = _existingOrderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        val st = _orderDetail.value?.status?.trim()?.lowercase().orEmpty()
-        if (st != "payment_pending") return
-        if (_isCancelling.value || _isSubmitting.value) return
-        viewModelScope.launch {
-            _isCancelling.value = true
-            val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(oid) }
-            _isCancelling.value = false
-            val app = getApplication<Application>()
-            result.fold(
-                onSuccess = {
-                    withContext(Dispatchers.IO) {
-                        orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
-                            oid,
-                            app.getString(R.string.chat_message_order_cancelled_by_buyer),
-                        )
-                    }
-                    _events.tryEmit(app.getString(R.string.order_cancel_success))
-                    onSuccess()
-                },
-                onFailure = { e ->
-                    _events.tryEmit(mapCancelOrderError(e))
-                },
-            )
-        }
+    /** After cancel flow from checkout (reason + feedback on server). */
+    fun onCancelFlowComplete(onSuccess: () -> Unit) {
+        val app = getApplication<Application>()
+        _events.tryEmit(app.getString(R.string.order_cancel_success))
+        onSuccess()
     }
 
     private fun mapCancelOrderError(e: Throwable): String {
@@ -345,8 +326,9 @@ class CheckoutViewModel(
             withContext(Dispatchers.IO) { orderRepository.getOrderDetail(orderId) }.getOrNull()?.let {
                 _orderDetail.value = it
             }
-            val idx = _selectedPaymentIndex.value.coerceIn(0, paymentMethods.lastIndex)
-            val method = paymentMethods[idx]
+            val methods = _paymentMethods.value
+            val idx = _selectedPaymentIndex.value.coerceIn(0, methods.lastIndex)
+            val method = methods[idx]
             val initResult = withContext(Dispatchers.IO) {
                 corePaymentRepository.initiatePayment(
                     orderId = orderId,

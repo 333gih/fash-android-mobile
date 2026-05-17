@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -139,7 +140,9 @@ import com.pc.fash_android_mobile.data.chat.ChatMapsUrlRules
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.deal.DealRecord
-import com.pc.fash_android_mobile.data.chat.parseOrderCancelledEmbeddedMessage
+import com.pc.fash_android_mobile.data.chat.OrderCancelledChatPayload
+import com.pc.fash_android_mobile.data.chat.parseOrderCancelledPayload
+import com.pc.fash_android_mobile.data.order.OrderCancelReasons
 import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAvatar
@@ -224,11 +227,14 @@ fun ChatDetailScreen(
     val orderId by viewModel.orderId.collectAsState()
     val orderStatus by viewModel.orderStatus.collectAsState()
     val orderMeetupDeadlineAt by viewModel.orderMeetupDeadlineAt.collectAsState()
+    val orderRemainingSeconds by viewModel.orderRemainingSeconds.collectAsState()
+    val orderExpiryKind by viewModel.orderExpiryKind.collectAsState()
     val orderCanConfirmHandoff by viewModel.orderCanConfirmHandoff.collectAsState()
     val orderMeetupBothPartiesCheckedIn by viewModel.orderMeetupBothPartiesCheckedIn.collectAsState()
     val confirmHandoffInFlight by viewModel.confirmHandoffInFlight.collectAsState()
     val orderMeetingAppointmentStatus by viewModel.orderMeetingAppointmentStatus.collectAsState()
     val orderMeetingScheduledAt by viewModel.orderMeetingScheduledAt.collectAsState()
+    val linkedOrderAmountVnd by viewModel.linkedOrderAmountVnd.collectAsState()
     val isOtherTyping by viewModel.isOtherTyping.collectAsState()
     val meetingMutationInFlight by viewModel.meetingMutationInFlight.collectAsState()
     val isProposingMeeting by viewModel.isProposingMeeting.collectAsState()
@@ -246,6 +252,8 @@ fun ChatDetailScreen(
     /** Escrow order linked to this thread — prefer VM state, fall back to [ConversationDetail.orderId] from API. */
     val conversationOrderId = orderId?.trim()?.takeIf { it.isNotEmpty() }
         ?: detail?.orderId?.trim()?.takeIf { it.isNotEmpty() }
+
+    var orderIdPendingCancel by remember { mutableStateOf<String?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val enqueueSnackbarSerial = rememberSerialSnackbarChannel(snackbarHostState)
@@ -514,6 +522,13 @@ fun ChatDetailScreen(
                         .maxByOrNull { it.timestamp }
                         ?.offerAmountVnd ?: 0L
                 }
+                val dealAgreedAmountVnd = remember(acceptedOfferAmount, linkedOrderAmountVnd) {
+                    when {
+                        acceptedOfferAmount >= 1000L -> acceptedOfferAmount
+                        linkedOrderAmountVnd >= 1000L -> linkedOrderAmountVnd
+                        else -> 0L
+                    }
+                }
 
                 Column(
                     modifier = Modifier
@@ -529,8 +544,10 @@ fun ChatDetailScreen(
                         DealBanner(
                             isBuyer = d.isBuyer,
                             orderStatus = orderStatus,
-                            agreedAmountVnd = acceptedOfferAmount,
+                            agreedAmountVnd = dealAgreedAmountVnd,
                             statusSubtitle = orderStatusSubtitle,
+                            orderRemainingSeconds = orderRemainingSeconds,
+                            orderExpiryKind = orderExpiryKind,
                             meetupPayByFormatted = orderMeetupDeadlineAt?.takeIf { it.isNotBlank() }?.let { raw ->
                                 formatOrderDateTime(raw)
                             },
@@ -541,7 +558,7 @@ fun ChatDetailScreen(
                                     onPayNow(
                                         oid,
                                         d.product?.listingId.orEmpty(),
-                                        acceptedOfferAmount,
+                                        dealAgreedAmountVnd,
                                     )
                                 }
                             },
@@ -552,13 +569,21 @@ fun ChatDetailScreen(
                             },
                             confirmHandoffInProgress = confirmHandoffInFlight,
                             onOpenFulfillmentChoice = if (
+                                d.isBuyer &&
                                 hasLinkedOrder &&
-                                orderStatusNorm != "cancelled" &&
-                                orderStatusNorm != "delivered_confirmed" &&
-                                orderStatusNorm != "disputed" &&
-                                !hasActiveMeetupBlockingSchedule
+                                orderStatusNorm == "fulfillment_pending"
                             ) {
                                 { showFulfillmentChoiceSheet = true }
+                            } else {
+                                null
+                            },
+                            onScheduleMeetup = if (
+                                d.isBuyer &&
+                                hasLinkedOrder &&
+                                orderStatusNorm == "cash_meetup_open" &&
+                                !hasActiveMeetupBlockingSchedule
+                            ) {
+                                { showMeetingSheet = true }
                             } else {
                                 null
                             },
@@ -567,6 +592,7 @@ fun ChatDetailScreen(
                             } else {
                                 null
                             },
+                            priceFromBuyNow = acceptedOfferAmount < 1000L && dealAgreedAmountVnd >= 1000L,
                         )
                     }
 
@@ -850,21 +876,34 @@ fun ChatDetailScreen(
                                                 },
                                                 formatTime = viewModel::formatTime,
                                             )
+                                            "order_cancelled" -> {
+                                                val payload = msg.orderCancelled
+                                                    ?: parseOrderCancelledPayload(msg.messageType, msg.text)
+                                                if (payload != null) {
+                                                    OrderCancelledCardBubble(
+                                                        message = msg,
+                                                        payload = payload,
+                                                        isBuyer = d.isBuyer,
+                                                        formatTime = viewModel::formatTime,
+                                                        onViewOrder = { onOrderDetails(payload.orderId) },
+                                                    )
+                                                }
+                                            }
                                             "system" -> SystemMessageBubble(
                                                 message = msg,
                                                 formatTime = viewModel::formatTime,
                                             )
                                             else -> if (msg.text.isNotBlank()) {
-                                                val cancelledPair = remember(msg.messageId, msg.text) {
-                                                    parseOrderCancelledEmbeddedMessage(msg.text)
+                                                val legacyPayload = remember(msg.messageId, msg.text) {
+                                                    parseOrderCancelledPayload("text", msg.text)
                                                 }
-                                                if (cancelledPair != null) {
-                                                    OrderCancelledNoticeBubble(
+                                                if (legacyPayload != null) {
+                                                    OrderCancelledCardBubble(
                                                         message = msg,
-                                                        displayText = cancelledPair.second,
+                                                        payload = legacyPayload,
+                                                        isBuyer = d.isBuyer,
                                                         formatTime = viewModel::formatTime,
-                                                        onViewOrder = { onOrderDetails(cancelledPair.first) },
-                                                        onDeleteRequest = { viewModel.deleteMessage(msg) },
+                                                        onViewOrder = { onOrderDetails(legacyPayload.orderId) },
                                                     )
                                                 } else {
                                                     MessageBubble(
@@ -956,23 +995,28 @@ fun ChatDetailScreen(
                             onDismiss = { showFulfillmentChoiceSheet = false },
                             onChooseMeetup = {
                                 showFulfillmentChoiceSheet = false
-                                showMeetingSheet = true
+                                viewModel.ensureFulfillmentCashMeetup { /* status → cash_meetup_open; schedule meet separately */ }
                             },
                             onChooseShip = {
                                 showFulfillmentChoiceSheet = false
                                 val oid = conversationOrderId
                                 if (oid != null) {
-                                    onStartShipFulfillment(
-                                        oid,
-                                        d.product?.listingId.orEmpty(),
-                                        acceptedOfferAmount,
-                                    )
+                                    viewModel.ensureFulfillmentOnlineEscrow {
+                                        onStartShipFulfillment(
+                                            oid,
+                                            d.product?.listingId.orEmpty(),
+                                            acceptedOfferAmount,
+                                        )
+                                    }
                                 }
                             },
                             shipFulfillmentEnabled = BusinessFlowConfig.c2cShipFulfillmentEnabled,
                             orderCancellable = d.isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(orderStatusNorm),
                             onCancelOrder = if (d.isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(orderStatusNorm)) {
-                                { viewModel.cancelLinkedOrder() }
+                                {
+                                    showFulfillmentChoiceSheet = false
+                                    conversationOrderId?.let { orderIdPendingCancel = it }
+                                }
                             } else {
                                 null
                             },
@@ -1019,6 +1063,14 @@ fun ChatDetailScreen(
             }
         }
     }
+    com.pc.fash_android_mobile.ui.orders.OrderCancelFlowHost(
+        orderId = orderIdPendingCancel,
+        onDismiss = { orderIdPendingCancel = null },
+        onSuccess = { oid ->
+            orderIdPendingCancel = null
+            viewModel.onOrderCancelFlowComplete(oid)
+        },
+    )
     val overlayOid = orderDetailOverlayOrderId?.trim()?.takeIf { it.isNotEmpty() }
     val ovm = orderDetailViewModel
     val avm = addressBookViewModel
@@ -1239,6 +1291,7 @@ private fun chatOrderStatusSubtitleForChat(isBuyer: Boolean, orderStatusRaw: Str
             "cancelled" -> stringResource(R.string.chat_order_state_buyer_cancelled)
             "disputed" -> stringResource(R.string.chat_order_state_buyer_disputed)
             "cash_meetup_open" -> stringResource(R.string.chat_order_state_buyer_cash_meetup_open)
+            "fulfillment_pending" -> stringResource(R.string.chat_order_state_buyer_fulfillment_pending)
             else -> stringResource(R.string.chat_order_state_buyer_unknown, raw)
         }
     } else {
@@ -1250,6 +1303,7 @@ private fun chatOrderStatusSubtitleForChat(isBuyer: Boolean, orderStatusRaw: Str
             "cancelled" -> stringResource(R.string.chat_order_state_seller_cancelled)
             "disputed" -> stringResource(R.string.chat_order_state_seller_disputed)
             "cash_meetup_open" -> stringResource(R.string.chat_order_state_seller_cash_meetup_open)
+            "fulfillment_pending" -> stringResource(R.string.chat_order_state_seller_fulfillment_pending)
             else -> stringResource(R.string.chat_order_state_seller_unknown, raw)
         }
     }
@@ -1267,6 +1321,8 @@ private fun DealBanner(
     agreedAmountVnd: Long = 0L,
     /** Role-specific line so both parties see what the order state means for them. */
     statusSubtitle: String? = null,
+    orderRemainingSeconds: Long = 0L,
+    orderExpiryKind: String = "",
     /** When set, shows meetup-linked payment cutoff (server `meetup_deadline_at`). */
     meetupPayByFormatted: String? = null,
     /** Both parties checked in (`sos_unlocked` and/or both grace check-in timestamps on order). */
@@ -1276,17 +1332,28 @@ private fun DealBanner(
     /** Seller meetup handoff — `POST .../confirm-handoff`. */
     onConfirmHandoff: (() -> Unit)? = null,
     confirmHandoffInProgress: Boolean = false,
-    /** Opens meetup vs ship chooser (replaces legacy meetup-only CTA). */
+    /** Opens meetup vs ship chooser — only while `fulfillment_pending`. */
     onOpenFulfillmentChoice: (() -> Unit)? = null,
+    /** Buyer cash path: open meet scheduling when no active meetup yet. */
+    onScheduleMeetup: (() -> Unit)? = null,
     /** Seller-only: successful order — suggest listing another product. */
     onSellerSuggestNewListing: (() -> Unit)? = null,
+    /** True when agreed price comes from a buy-now order (no accepted-offer message). */
+    priceFromBuyNow: Boolean = false,
 ) {
     val s = orderStatus?.trim()?.lowercase().orEmpty()
     val buyerNeedsToPay = isBuyer && s == "payment_pending"
     val sellerWaitingForPayment = !isBuyer && s == "payment_pending"
-    val showPaymentDeadlineWarning = buyerNeedsToPay || sellerWaitingForPayment
+    val showExpiryCountdown = orderRemainingSeconds > 0L && when {
+        s == "fulfillment_pending" -> orderExpiryKind == "fulfillment_choice"
+        s == "payment_pending" -> orderExpiryKind == "payment" || orderExpiryKind == "meetup_payment"
+        else -> false
+    }
+    val showPaymentDeadlineWarning =
+        !showExpiryCountdown && (buyerNeedsToPay || sellerWaitingForPayment)
     val showMeetupPayBy =
-        showPaymentDeadlineWarning &&
+        !showExpiryCountdown &&
+            showPaymentDeadlineWarning &&
             !meetupPayByFormatted.isNullOrBlank()
 
     val appearance = dealBannerAppearance(
@@ -1327,6 +1394,8 @@ private fun DealBanner(
                         stringResource(R.string.chat_deal_banner_disputed)
                     s == "delivered_confirmed" ->
                         stringResource(R.string.chat_deal_banner_delivered)
+                    s == "fulfillment_pending" ->
+                        stringResource(R.string.chat_deal_banner_choose_fulfillment)
                     s == "cash_meetup_open" ->
                         stringResource(R.string.chat_deal_banner_cash_meetup)
                     s in listOf("payment_held", "in_transit") ->
@@ -1359,10 +1428,23 @@ private fun DealBanner(
             )
         }
 
-        if (agreedAmountVnd >= 1000L && s != "cancelled") {
+        if (agreedAmountVnd >= 1000L &&
+            (s == "fulfillment_pending" || s == "payment_pending")
+        ) {
             DealAgreedPriceBanner(
                 amountVnd = agreedAmountVnd,
-                fromBuyNow = false,
+                fromBuyNow = priceFromBuyNow,
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 8.dp),
+            )
+        }
+
+        if (showExpiryCountdown) {
+            com.pc.fash_android_mobile.ui.orders.OrderExpiryCountdownBanner(
+                remainingSeconds = orderRemainingSeconds,
+                expiryKind = orderExpiryKind,
+                isBuyer = isBuyer,
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
                     .padding(bottom = 8.dp),
@@ -1548,7 +1630,31 @@ private fun DealBanner(
                 }
             }
         }
-        if (onOpenFulfillmentChoice != null && !buyerNeedsToPay && s != "cancelled") {
+        if (onScheduleMeetup != null && s == "cash_meetup_open") {
+            OutlinedButton(
+                onClick = onScheduleMeetup,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, appearance.accent.copy(alpha = 0.55f)),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Event,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = appearance.accent,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.chat_deal_schedule_meetup_cta),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = appearance.accent,
+                )
+            }
+        }
+        if (onOpenFulfillmentChoice != null && s == "fulfillment_pending") {
             OutlinedButton(
                 onClick = onOpenFulfillmentChoice,
                 modifier = Modifier
@@ -1659,6 +1765,13 @@ private fun dealBannerAppearance(
             primaryText = Color(0xFFBF360C),
             accent = Color(0xFFE65100),
             leadingIcon = Icons.Filled.Warning,
+        )
+    statusNorm == "fulfillment_pending" ->
+        DealBannerAppearance(
+            background = Color(0xFFFFF8E1),
+            primaryText = Color(0xFF5D4037),
+            accent = Color(0xFFE65100),
+            leadingIcon = Icons.Outlined.LocalShipping,
         )
     statusNorm in listOf("payment_held", "in_transit", "cash_meetup_open") ->
         DealBannerAppearance(
@@ -2134,8 +2247,101 @@ private fun SystemMessageBubble(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Buyer-cancel notice (machine-readable first line stripped for display + view order)
+// Order cancelled card (offer-style, synced with core-service order_cancelled)
 // ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OrderCancelledCardBubble(
+    message: ChatMessage,
+    payload: OrderCancelledChatPayload,
+    isBuyer: Boolean,
+    formatTime: (String) -> String,
+    onViewOrder: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val whoText = when {
+        payload.cancelledBy.startsWith("system") ->
+            stringResource(R.string.chat_order_cancelled_by_system)
+        isBuyer && message.isFromMe ->
+            stringResource(R.string.chat_message_order_cancelled_by_buyer)
+        isBuyer ->
+            stringResource(R.string.chat_order_cancelled_by_buyer)
+        else ->
+            stringResource(R.string.chat_order_cancelled_by_buyer)
+    }
+    val reasonLabelRes = OrderCancelReasons.labelResForCode(payload.reasonCode)
+    val reasonLine = when {
+        reasonLabelRes != null -> stringResource(R.string.chat_order_cancelled_reason, stringResource(reasonLabelRes))
+        payload.reasonNote.isNotBlank() -> stringResource(R.string.chat_order_cancelled_reason, payload.reasonNote)
+        else -> null
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.surfaceContainerLow)
+                .border(
+                    width = 1.dp,
+                    color = scheme.error.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(16.dp),
+                )
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Cancel,
+                    contentDescription = null,
+                    tint = scheme.error,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = stringResource(R.string.chat_order_cancelled_card_label),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.error,
+                )
+            }
+            Text(
+                text = whoText,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+            )
+            reasonLine?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (payload.amountVnd > 0L) {
+                Text(
+                    text = formatPrice(payload.amountVnd),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = scheme.onSurface,
+                )
+            }
+            TextButton(onClick = onViewOrder) {
+                Text(stringResource(R.string.chat_order_cancelled_view_order))
+            }
+        }
+        Text(
+            text = formatTime(message.timestamp),
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
 
 @Composable
 private fun OrderCancelledNoticeBubble(

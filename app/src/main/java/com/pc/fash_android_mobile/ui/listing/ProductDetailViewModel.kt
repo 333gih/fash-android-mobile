@@ -253,7 +253,8 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             orderRepository.getBuyingOrders(50, 0)
         }.getOrNull() ?: return null
         val active = setOf(
-            "payment_pending", "payment_held", "in_transit", "pending", "cash_meetup_open",
+            "payment_pending", "payment_held", "in_transit", "pending",
+            "cash_meetup_open", "fulfillment_pending",
         )
         val match = orders.firstOrNull { o ->
             o.listingId.equals(listingId, ignoreCase = true) &&

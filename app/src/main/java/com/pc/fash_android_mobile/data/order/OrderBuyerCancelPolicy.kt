@@ -7,6 +7,7 @@ package com.pc.fash_android_mobile.data.order
 object OrderBuyerCancelPolicy {
 
     private val BUYER_CANCELLABLE_STATUSES = setOf(
+        "fulfillment_pending",
         "payment_pending",
         "cash_meetup_open",
     )

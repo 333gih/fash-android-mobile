@@ -6,7 +6,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
@@ -47,8 +49,16 @@ class CorePaymentRepository(
                     .put("city", s.city.trim()),
             )
         }
-        val body = executePostJson(url, json.toString())
+        val idem = UUID.randomUUID().toString()
+        val body = executePostJson(url, json.toString(), idempotencyKey = idem)
         parseInitiateResponse(body)
+    }
+
+    /** Enabled gateways from core → payment-service catalog. */
+    fun listPaymentMethods(): Result<List<PaymentGatewayOption>> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/payment-methods")
+        val raw = executeGet(url)
+        parsePaymentMethodsResponse(raw)
     }
 
     /**
@@ -61,7 +71,7 @@ class CorePaymentRepository(
         parseStatusResponse(body)
     }
 
-    private fun executePostJson(url: String, json: String): String {
+    private fun executePostJson(url: String, json: String, idempotencyKey: String? = null): String {
         return securedClient.newCall(
             Request.Builder()
                 .url(url)
@@ -69,6 +79,12 @@ class CorePaymentRepository(
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "FashAndroid/1.0")
+                .apply {
+                    idempotencyKey?.takeIf { it.isNotBlank() }?.let {
+                        header("X-Idempotency-Key", it)
+                        header("Idempotency-Key", it)
+                    }
+                }
                 .build(),
         ).execute().use { response ->
             val respBody = response.body?.string().orEmpty()
@@ -126,6 +142,26 @@ class CorePaymentRepository(
         )
     }
 
+    private fun parsePaymentMethodsResponse(raw: String): List<PaymentGatewayOption> {
+        val root = JSONObject(raw.trim().ifBlank { "{}" })
+        val arr = when {
+            root.has("payment_methods") -> root.getJSONArray("payment_methods")
+            root.has("data") && root.getJSONObject("data").has("payment_methods") ->
+                root.getJSONObject("data").getJSONArray("payment_methods")
+            else -> JSONArray()
+        }
+        val out = mutableListOf<PaymentGatewayOption>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (!o.optBoolean("enabled", true)) continue
+            val id = o.optString("id", o.optString("ID", "")).trim().lowercase()
+            if (id.isEmpty()) continue
+            val name = o.optString("name", o.optString("Name", id)).trim().ifBlank { id }
+            out.add(PaymentGatewayOption(id, name))
+        }
+        return out
+    }
+
     private fun parseStatusResponse(raw: String): PaymentStatusResult {
         val o = when {
             raw.trim().startsWith("{") -> try {
@@ -143,6 +179,11 @@ class CorePaymentRepository(
         )
     }
 }
+
+data class PaymentGatewayOption(
+    val id: String,
+    val name: String,
+)
 
 data class PaymentInitiateResult(
     val paymentUrl: String,

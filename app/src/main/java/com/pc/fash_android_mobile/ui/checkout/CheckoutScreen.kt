@@ -110,6 +110,7 @@ fun CheckoutScreen(
     val district by viewModel.district.collectAsState()
     val city by viewModel.city.collectAsState()
     val selectedPaymentIndex by viewModel.selectedPaymentIndex.collectAsState()
+    val paymentMethods by viewModel.paymentMethods.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -118,7 +119,7 @@ fun CheckoutScreen(
     val awaitingGateway by viewModel.awaitingGatewayReturn.collectAsState()
     val isCancelling by viewModel.isCancelling.collectAsState()
     val scheme = MaterialTheme.colorScheme
-    var showCancelConfirm by remember { mutableStateOf(false) }
+    var orderIdPendingCancel by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val canCancelPendingOrder =
         existingOrderId != null &&
@@ -208,7 +209,7 @@ fun CheckoutScreen(
                             enabled = canPay,
                             onClick = { viewModel.submitPayment(onSuccess) },
                             showCancelPendingOrder = canCancelPendingOrder,
-                            onCancelPendingOrder = { showCancelConfirm = true },
+                            onCancelPendingOrder = { existingOrderId?.let { orderIdPendingCancel = it } },
                             isCancelling = isCancelling,
                         )
                     },
@@ -244,7 +245,7 @@ fun CheckoutScreen(
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         PaymentMethodSection(
-                            methods = viewModel.paymentMethods,
+                            methods = paymentMethods,
                             selectedIndex = selectedPaymentIndex,
                             onSelect = viewModel::selectPaymentMethod,
                         )
@@ -264,29 +265,14 @@ fun CheckoutScreen(
         }
     }
 
-    if (showCancelConfirm && detail != null && existingOrderId != null) {
-        AlertDialog(
-            onDismissRequest = { showCancelConfirm = false },
-            title = { Text(stringResource(R.string.order_cancel_confirm_title)) },
-            text = { Text(stringResource(R.string.order_cancel_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCancelConfirm = false
-                        viewModel.cancelPendingOrder(onBack)
-                    },
-                    enabled = !isCancelling,
-                ) {
-                    Text(stringResource(R.string.order_cancel_confirm_action))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelConfirm = false }) {
-                    Text(stringResource(R.string.order_cancel_confirm_dismiss))
-                }
-            },
-        )
-    }
+    com.pc.fash_android_mobile.ui.orders.OrderCancelFlowHost(
+        orderId = orderIdPendingCancel,
+        onDismiss = { orderIdPendingCancel = null },
+        onSuccess = {
+            orderIdPendingCancel = null
+            viewModel.onCancelFlowComplete(onBack)
+        },
+    )
 }
 
 @Composable

@@ -907,7 +907,7 @@ class MainActivity : ComponentActivity() {
                                     /** Order detail as a medium-height sheet over chat (keeps conversation open). */
                                     var chatOrderDetailOverlayId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var chatShipFlowArgs by remember { mutableStateOf<ChatShipFlowArgs?>(null) }
-                                    var showShipFlowCancelConfirm by remember { mutableStateOf(false) }
+                                    var orderIdPendingCancel by remember { mutableStateOf<String?>(null) }
                                     var addressFlowOrderId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
@@ -1128,7 +1128,6 @@ class MainActivity : ComponentActivity() {
                                         snackbarBottomChromeInset = snackbarChromeInsetForMainApp
                                     }
                                     val pendingPaymentBanner by pendingPaymentViewModel.banner.collectAsState()
-                                    var pendingCancelPaymentOrder by remember { mutableStateOf<PendingPaymentOrderRow?>(null) }
                                     val pendingPaymentSliderRegistry = remember { PendingPaymentSliderRegistry() }
                                     var rootLayoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
                                     val pendingPaymentBannerExpanded =
@@ -1296,7 +1295,7 @@ class MainActivity : ComponentActivity() {
                                                 selectedCheckoutOfferPrice = row.amountVnd
                                                 checkoutExistingOrderId = row.orderId
                                             },
-                                            onCancelOrder = { row -> pendingCancelPaymentOrder = row },
+                                            onCancelOrder = { row -> orderIdPendingCancel = row.orderId },
                                             onDeadlineElapsed = pendingPaymentViewModel::onDeadlineElapsed,
                                             modifier = if (usePendingPaymentAnchorPlacement) {
                                                 Modifier
@@ -1312,33 +1311,19 @@ class MainActivity : ComponentActivity() {
                                                     .padding(bottom = 80.dp)
                                             },
                                         )
-                                        val rowToCancel = pendingCancelPaymentOrder
-                                        if (rowToCancel != null) {
-                                            AlertDialog(
-                                                onDismissRequest = { pendingCancelPaymentOrder = null },
-                                                title = {
-                                                    Text(context.getString(R.string.order_cancel_confirm_title))
-                                                },
-                                                text = {
-                                                    Text(context.getString(R.string.order_cancel_confirm_body))
-                                                },
-                                                confirmButton = {
-                                                    TextButton(
-                                                        onClick = {
-                                                            pendingCancelPaymentOrder = null
-                                                            pendingPaymentViewModel.cancelOrder(rowToCancel.orderId)
-                                                        },
-                                                    ) {
-                                                        Text(context.getString(R.string.order_cancel_confirm_action))
-                                                    }
-                                                },
-                                                dismissButton = {
-                                                    TextButton(onClick = { pendingCancelPaymentOrder = null }) {
-                                                        Text(context.getString(R.string.order_cancel_confirm_dismiss))
-                                                    }
-                                                },
-                                            )
-                                        }
+                                        com.pc.fash_android_mobile.ui.orders.OrderCancelFlowHost(
+                                            orderId = orderIdPendingCancel,
+                                            onDismiss = { orderIdPendingCancel = null },
+                                            onSuccess = { oid ->
+                                                orderIdPendingCancel = null
+                                                pendingPaymentViewModel.onCancelFlowComplete()
+                                                chatShipFlowArgs = null
+                                                orderDetailViewModel.onOrderCancelFlowComplete(oid)
+                                                selectedConversationId?.let {
+                                                    chatDetailViewModel.loadConversation(it)
+                                                }
+                                            },
+                                        )
                                         if (selectedListingId != null) {
                                             ProductDetailScreen(
                                                 modifier = Modifier
@@ -1390,14 +1375,27 @@ class MainActivity : ComponentActivity() {
                                                                 listingId,
                                                             )
                                                         }
-                                                        if (existing != null) {
+                                                        fun openBuyNowShipFlow(orderId: String, amountVnd: Long) {
                                                             selectedListingId = null
+                                                            sellerShopUsername = null
+                                                            sellerShopRestoreContext = SellerShopRestoreContext()
+                                                            sellerShopEntrySource = SellerShopEntrySource.None
                                                             chatShipFlowArgs = ChatShipFlowArgs(
-                                                                orderId = existing.orderId,
+                                                                orderId = orderId,
                                                                 listingId = listingId,
-                                                                agreedAmountVnd = existing.amountVnd.takeIf { it > 0 }
-                                                                    ?: price,
+                                                                agreedAmountVnd = amountVnd,
                                                                 source = ShipFlowSource.BuyNow,
+                                                            )
+                                                            chatDetailViewModel.syncLinkedOrderFromBuyNow(
+                                                                listingId,
+                                                                orderId,
+                                                            )
+                                                            pendingPaymentViewModel.refresh()
+                                                        }
+                                                        if (existing != null) {
+                                                            openBuyNowShipFlow(
+                                                                existing.orderId,
+                                                                existing.amountVnd.takeIf { it > 0 } ?: price,
                                                             )
                                                             return@launch
                                                         }
@@ -1406,13 +1404,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                         result.fold(
                                                             onSuccess = { oid ->
-                                                                selectedListingId = null
-                                                                chatShipFlowArgs = ChatShipFlowArgs(
-                                                                    orderId = oid,
-                                                                    listingId = listingId,
-                                                                    agreedAmountVnd = price,
-                                                                    source = ShipFlowSource.BuyNow,
-                                                                )
+                                                                openBuyNowShipFlow(oid, price)
                                                             },
                                                             onFailure = {
                                                                 enqueueSnackbarSerial {
@@ -1472,7 +1464,10 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (sellerShopUsername != null) {
+                                        if (sellerShopUsername != null &&
+                                            chatShipFlowArgs == null &&
+                                            selectedCheckoutListingId == null
+                                        ) {
                                             SellerProfileScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1660,70 +1655,6 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (chatShipFlowArgs != null) {
-                                            ChatShipFulfillmentScreen(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(MaterialTheme.colorScheme.surface),
-                                                args = chatShipFlowArgs!!,
-                                                onBack = { chatShipFlowArgs = null },
-                                                orderDetailViewModel = orderDetailViewModel,
-                                                addressBookViewModel = addressBookViewModel,
-                                                onOpenShippingAddressList = {
-                                                    addressFlowOrderId = chatShipFlowArgs?.orderId
-                                                    showShippingAddressList = true
-                                                },
-                                                onOpenAddShippingAddress = {
-                                                    addressFlowOrderId = chatShipFlowArgs?.orderId
-                                                    showAddAddressScreen = true
-                                                    addAddressOpenedFromList = false
-                                                },
-                                                onContinueToCheckout = { listingId, amountVnd, existingOid ->
-                                                    chatShipFlowArgs = null
-                                                    selectedCheckoutListingId = listingId
-                                                    selectedCheckoutOfferPrice = amountVnd
-                                                    checkoutExistingOrderId = existingOid
-                                                },
-                                                shipOnlinePaymentEnabled = BusinessFlowConfig.c2cShipOnlinePaymentEnabled,
-                                                onCancelOrder = { showShipFlowCancelConfirm = true },
-                                            )
-                                        }
-                                        if (showShipFlowCancelConfirm) {
-                                            AlertDialog(
-                                                onDismissRequest = { showShipFlowCancelConfirm = false },
-                                                title = {
-                                                    Text(context.getString(R.string.order_cancel_confirm_title))
-                                                },
-                                                text = {
-                                                    Text(context.getString(R.string.order_cancel_confirm_body))
-                                                },
-                                                confirmButton = {
-                                                    TextButton(
-                                                        onClick = {
-                                                            val oid = chatShipFlowArgs?.orderId?.trim().orEmpty()
-                                                            showShipFlowCancelConfirm = false
-                                                            if (oid.isNotEmpty()) {
-                                                                orderDetailViewModel.cancelOrder(oid)
-                                                                chatShipFlowArgs = null
-                                                                selectedConversationId?.let {
-                                                                    chatDetailViewModel.loadConversation(it)
-                                                                }
-                                                            }
-                                                        },
-                                                    ) {
-                                                        Text(
-                                                            context.getString(R.string.order_cancel_confirm_action),
-                                                            color = MaterialTheme.colorScheme.error,
-                                                        )
-                                                    }
-                                                },
-                                                dismissButton = {
-                                                    TextButton(onClick = { showShipFlowCancelConfirm = false }) {
-                                                        Text(context.getString(R.string.order_cancel_confirm_dismiss))
-                                                    }
-                                                },
-                                            )
-                                        }
                                         selectedOrderId?.let { orderIdForDetail ->
                                             key(orderIdForDetail) {
                                                 OrderDetailScreen(
@@ -1855,7 +1786,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (showOrdersScreen) {
+                                        if (showOrdersScreen && selectedOrderId == null) {
                                             com.pc.fash_android_mobile.ui.orders.OrdersScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1873,7 +1804,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (showHomeDeliveringScreen) {
+                                        if (showHomeDeliveringScreen && selectedOrderId == null) {
                                             HomeDeliveringScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -1943,6 +1874,37 @@ class MainActivity : ComponentActivity() {
                                                     } else {
                                                         selectedListingId = lid
                                                     }
+                                                },
+                                            )
+                                        }
+                                        if (chatShipFlowArgs != null) {
+                                            ChatShipFulfillmentScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                args = chatShipFlowArgs!!,
+                                                onBack = { chatShipFlowArgs = null },
+                                                orderDetailViewModel = orderDetailViewModel,
+                                                addressBookViewModel = addressBookViewModel,
+                                                onOpenShippingAddressList = {
+                                                    addressFlowOrderId = chatShipFlowArgs?.orderId
+                                                    showShippingAddressList = true
+                                                },
+                                                onOpenAddShippingAddress = {
+                                                    addressFlowOrderId = chatShipFlowArgs?.orderId
+                                                    showAddAddressScreen = true
+                                                    addAddressOpenedFromList = false
+                                                },
+                                                onContinueToCheckout = { listingId, amountVnd, existingOid ->
+                                                    chatShipFlowArgs = null
+                                                    selectedCheckoutListingId = listingId
+                                                    selectedCheckoutOfferPrice = amountVnd
+                                                    checkoutExistingOrderId = existingOid
+                                                },
+                                                shipOnlinePaymentEnabled = BusinessFlowConfig.c2cShipOnlinePaymentEnabled,
+                                                onCancelOrder = {
+                                                    chatShipFlowArgs?.orderId?.trim()?.takeIf { it.isNotEmpty() }
+                                                        ?.let { orderIdPendingCancel = it }
                                                 },
                                             )
                                         }

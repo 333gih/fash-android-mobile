@@ -156,6 +156,14 @@ class ChatDetailViewModel(
     /** ISO `meetup_deadline_at` from order detail when meetup-linked payment window applies. */
     private val _orderMeetupDeadlineAt = MutableStateFlow<String?>(null)
     val orderMeetupDeadlineAt: StateFlow<String?> = _orderMeetupDeadlineAt.asStateFlow()
+    private val _orderRemainingSeconds = MutableStateFlow(0L)
+    val orderRemainingSeconds: StateFlow<Long> = _orderRemainingSeconds.asStateFlow()
+    private val _orderExpiryKind = MutableStateFlow("")
+    val orderExpiryKind: StateFlow<String> = _orderExpiryKind.asStateFlow()
+
+    /** Agreed price from linked order (`GET /orders/:id`) — used when there is no accepted-offer message (buy now). */
+    private val _linkedOrderAmountVnd = MutableStateFlow(0L)
+    val linkedOrderAmountVnd: StateFlow<Long> = _linkedOrderAmountVnd.asStateFlow()
 
     /** Seller may call [confirmHandoff] (meetup handoff). */
     private val _orderCanConfirmHandoff = MutableStateFlow(false)
@@ -427,8 +435,10 @@ class ChatDetailViewModel(
                 val merged = mergeServerWithPendingLocal(newMsgs, _messages.value)
                 if (merged != _messages.value) {
                     _messages.value = merged
-                    syncPendingOfferFromMessages(merged, conversationId)
                     syncDetailClosedStateFromMessages(merged)
+                }
+                if (_messages.value.isNotEmpty()) {
+                    syncPendingOfferFromMessages(_messages.value, conversationId)
                 }
             }
         }
@@ -551,12 +561,15 @@ class ChatDetailViewModel(
             _orderId.value = null
             _orderStatus.value = null
             _orderMeetupDeadlineAt.value = null
+            _orderRemainingSeconds.value = 0L
+            _orderExpiryKind.value = ""
             _orderMeetingAppointmentStatus.value = null
             _orderMeetingScheduledAt.value = null
             _orderCanConfirmHandoff.value = false
             _orderMeetingSosUnlocked.value = false
             _orderMeetupBothPartiesCheckedIn.value = false
             _confirmHandoffInFlight.value = false
+            _linkedOrderAmountVnd.value = 0L
         } else {
             if (preservedOrderId != null) _orderId.value = preservedOrderId
             if (preservedOrderStatus != null) _orderStatus.value = preservedOrderStatus
@@ -617,6 +630,9 @@ class ChatDetailViewModel(
 
             msgJob.join()
             detailJob.join()
+            _messages.value.takeIf { it.isNotEmpty() }?.let { msgs ->
+                syncPendingOfferFromMessages(msgs, item.conversationId)
+            }
             _isLoading.value = false
             startRealtimeAndPolling(item.conversationId)
         }
@@ -667,6 +683,7 @@ class ChatDetailViewModel(
         _orderMeetingSosUnlocked.value = false
         _orderMeetupBothPartiesCheckedIn.value = false
         _confirmHandoffInFlight.value = false
+        _linkedOrderAmountVnd.value = 0L
         _loadError.value = null
         _showOfferDialog.value = false
         _acceptedOfferForCheckout.value = null
@@ -701,12 +718,15 @@ class ChatDetailViewModel(
             _orderId.value = null
             _orderStatus.value = null
             _orderMeetupDeadlineAt.value = null
+            _orderRemainingSeconds.value = 0L
+            _orderExpiryKind.value = ""
             _orderMeetingAppointmentStatus.value = null
             _orderMeetingScheduledAt.value = null
             _orderCanConfirmHandoff.value = false
             _orderMeetingSosUnlocked.value = false
             _orderMeetupBothPartiesCheckedIn.value = false
             _confirmHandoffInFlight.value = false
+            _linkedOrderAmountVnd.value = 0L
             _activeDeal.value = null
             _pendingDealReviewDealId.value = null
             _counterOfferSheet.value = null
@@ -1279,35 +1299,54 @@ class ChatDetailViewModel(
         }
     }
 
-    /** Buyer cancels linked `payment_pending` order; reloads conversation + order state. */
-    fun cancelLinkedOrder() {
-        val oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
+    /** Ensures `fulfillment_pending` → `online_escrow` / `payment_pending` before ship/checkout UI. */
+    fun ensureFulfillmentOnlineEscrow(onReady: () -> Unit) {
+        viewModelScope.launch {
+            if (ensureFulfillmentChosen("online_escrow")) onReady()
+        }
+    }
+
+    /** Ensures `fulfillment_pending` → `cash_meetup` / `cash_meetup_open` before meetup UI. */
+    fun ensureFulfillmentCashMeetup(onReady: () -> Unit) {
+        viewModelScope.launch {
+            if (ensureFulfillmentChosen("cash_meetup")) onReady()
+        }
+    }
+
+    private suspend fun ensureFulfillmentChosen(channel: String): Boolean {
+        val oid = _orderId.value?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+        val st = _orderStatus.value?.trim()?.lowercase().orEmpty()
+        if (st != "fulfillment_pending") return true
+        val app = getApplication<Application>()
+        val result = withContext(Dispatchers.IO) {
+            orderRepository.chooseOrderFulfillment(oid, channel)
+        }
+        return result.fold(
+            onSuccess = {
+                fetchOrderStatus(oid)
+                true
+            },
+            onFailure = {
+                _events.tryEmit(
+                    it.message?.takeIf { m -> m.isNotBlank() }
+                        ?: app.getString(R.string.chat_fulfillment_choose_failed),
+                )
+                false
+            },
+        )
+    }
+
+    /** After [OrderCancelFlowHost] completes (cancel reason recorded on server). */
+    fun onOrderCancelFlowComplete(orderId: String) {
+        val oid = orderId.trim()
+        if (oid.isEmpty()) return
         val convId = _detail.value?.conversationId?.trim().orEmpty()
         val app = getApplication<Application>()
         viewModelScope.launch {
-            _isCancellingOrder.value = true
-            try {
-                val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(oid) }
-                result.fold(
-                    onSuccess = {
-                        _events.tryEmit(app.getString(R.string.order_cancel_success))
-                        withContext(Dispatchers.IO) {
-                            orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
-                                oid,
-                                app.getString(R.string.chat_message_order_cancelled_by_buyer),
-                            )
-                        }
-                        fetchOrderStatus(oid)
-                        if (convId.isNotEmpty()) {
-                            loadConversation(convId)
-                        }
-                    },
-                    onFailure = { e ->
-                        _events.tryEmit(mapCancelOrderError(app, e))
-                    },
-                )
-            } finally {
-                _isCancellingOrder.value = false
+            _events.tryEmit(app.getString(R.string.order_cancel_success))
+            fetchOrderStatus(oid)
+            if (convId.isNotEmpty()) {
+                loadConversation(convId)
             }
         }
     }
@@ -1490,6 +1529,9 @@ class ChatDetailViewModel(
             _detail.value = merged
         }
         syncOrderIdStateFromConversationDetail(d)
+        _messages.value.takeIf { it.isNotEmpty() }?.let { msgs ->
+            syncPendingOfferFromMessages(msgs, d.conversationId)
+        }
     }
 
     /**
@@ -1504,25 +1546,100 @@ class ChatDetailViewModel(
         val oid = d.orderId?.trim()?.takeIf { it.isNotEmpty() }
         when {
             oid == null -> {
-                if (_orderId.value != null) {
-                    _orderId.value = null
-                    _orderStatus.value = null
-                    _orderMeetupDeadlineAt.value = null
-                    _orderMeetingAppointmentStatus.value = null
-                    _orderMeetingScheduledAt.value = null
-                    _orderCanConfirmHandoff.value = false
-                    _orderMeetingSosUnlocked.value = false
-                    _orderMeetupBothPartiesCheckedIn.value = false
-                    _confirmHandoffInFlight.value = false
+                val listingId = d.product?.listingId?.trim().orEmpty()
+                if (d.isBuyer && listingId.isNotEmpty()) {
+                    viewModelScope.launch {
+                        val resolved = resolveBuyerActiveOrderIdForListing(listingId)
+                        if (resolved != null) {
+                            linkOrderToThread(resolved, d.conversationId)
+                        } else {
+                            clearLinkedOrderState()
+                        }
+                    }
+                } else {
+                    clearLinkedOrderState()
                 }
             }
             else -> {
-                if (_orderId.value != oid) {
-                    _orderId.value = oid
-                }
-                viewModelScope.launch { fetchOrderStatus(oid) }
+                linkOrderToThread(oid, d.conversationId)
             }
         }
+    }
+
+    /**
+     * After listing **Buy now**, conversation GET may lag before `order_id` is set — prime chat if open.
+     */
+    fun syncLinkedOrderFromBuyNow(listingId: String, orderId: String) {
+        val oid = orderId.trim()
+        val lid = listingId.trim()
+        if (oid.isEmpty() || lid.isEmpty()) return
+        viewModelScope.launch {
+            val convIdFromOrder = withContext(Dispatchers.IO) {
+                orderRepository.getOrderDetail(oid).getOrNull()?.conversationId?.trim().orEmpty()
+            }
+            val cur = _detail.value
+            val targetConvId = when {
+                convIdFromOrder.isNotEmpty() -> convIdFromOrder
+                cur != null && cur.product?.listingId.equals(lid, ignoreCase = true) -> cur.conversationId
+                else -> ""
+            }
+            if (targetConvId.isNotEmpty()) {
+                linkOrderToThread(oid, targetConvId)
+            }
+        }
+    }
+
+    private fun linkOrderToThread(orderId: String, conversationId: String) {
+        val cur = _detail.value
+        if (cur != null && !cur.conversationId.equals(conversationId, ignoreCase = true)) return
+        if (_orderId.value != orderId) {
+            _orderId.value = orderId
+        }
+        if (cur != null && cur.orderId != orderId) {
+            _detail.value = cur.copy(orderId = orderId)
+        }
+        viewModelScope.launch { fetchOrderStatus(orderId) }
+    }
+
+    private fun clearLinkedOrderState() {
+        if (_orderId.value == null && _linkedOrderAmountVnd.value == 0L) return
+        _orderId.value = null
+        _orderStatus.value = null
+        _orderMeetupDeadlineAt.value = null
+        _orderRemainingSeconds.value = 0L
+        _orderExpiryKind.value = ""
+        _orderMeetingAppointmentStatus.value = null
+        _orderMeetingScheduledAt.value = null
+        _orderCanConfirmHandoff.value = false
+        _orderMeetingSosUnlocked.value = false
+        _orderMeetupBothPartiesCheckedIn.value = false
+        _confirmHandoffInFlight.value = false
+        _linkedOrderAmountVnd.value = 0L
+        clearPendingOfferOnDetail()
+    }
+
+    private suspend fun resolveBuyerActiveOrderIdForListing(listingId: String): String? {
+        val myId = sessionStore.read()?.userId?.trim().orEmpty()
+        if (myId.isBlank()) return null
+        val orders = withContext(Dispatchers.IO) {
+            orderRepository.getBuyingOrders(50, 0)
+        }.getOrNull() ?: return null
+        val active = BUYER_ACTIVE_ORDER_STATUSES
+        return orders.firstOrNull { o ->
+            o.listingId.equals(listingId, ignoreCase = true) &&
+                o.status.trim().lowercase() in active
+        }?.orderId?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    private companion object {
+        val BUYER_ACTIVE_ORDER_STATUSES = setOf(
+            "payment_pending",
+            "payment_held",
+            "in_transit",
+            "pending",
+            "cash_meetup_open",
+            "fulfillment_pending",
+        )
     }
 
     /** Same file path as [preferred] when query tokens rotate (e.g. presigned URLs). */
@@ -1582,8 +1699,11 @@ class ChatDetailViewModel(
         val result = withContext(Dispatchers.IO) { orderRepository.getOrderDetail(orderId) }
         val detail = result.getOrNull() ?: return
         _orderStatus.value = detail.status
+        _linkedOrderAmountVnd.value = detail.amountVnd.coerceAtLeast(0L)
         val deadline = detail.meetupDeadlineAt.trim().takeIf { it.isNotEmpty() }
         _orderMeetupDeadlineAt.value = deadline
+        _orderRemainingSeconds.value = detail.remainingSeconds.coerceAtLeast(0L)
+        _orderExpiryKind.value = detail.expiryKind.trim().lowercase()
         _orderCanConfirmHandoff.value = detail.canConfirmHandoff
         val grace = detail.meetingGrace
         _orderMeetingSosUnlocked.value = grace?.sosUnlocked == true
@@ -1597,6 +1717,13 @@ class ChatDetailViewModel(
             detail.meetingAppointment?.status?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
         _orderMeetingScheduledAt.value =
             detail.meetingAppointment?.scheduledAt?.trim()?.takeIf { it.isNotEmpty() }
+        if (detail.status.equals("cancelled", ignoreCase = true)) {
+            clearPendingOfferOnDetail()
+            _messages.value.takeIf { it.isNotEmpty() }?.let { msgs ->
+                val convId = _detail.value?.conversationId?.trim().orEmpty()
+                if (convId.isNotEmpty()) syncPendingOfferFromMessages(msgs, convId)
+            }
+        }
         // Keep [orderId] on detail so the deal row / order overlay stay available for cancelled orders too.
     }
 
@@ -1650,8 +1777,22 @@ class ChatDetailViewModel(
      * - Any offer with accepted status     → trigger [checkForOrderId] to get the auto-created order
      * - Otherwise                          → clear pendingOffer
      */
+    private fun clearPendingOfferOnDetail() {
+        val d = _detail.value ?: return
+        if (d.pendingOffer != null) _detail.value = d.copy(pendingOffer = null)
+    }
+
     private fun syncPendingOfferFromMessages(messages: List<ChatMessage>, conversationId: String) {
         val detail = _detail.value ?: return
+        val orderSt = _orderStatus.value?.trim()?.lowercase().orEmpty()
+        val hasActiveOrder = _orderId.value?.trim()?.isNotEmpty() == true &&
+            orderSt.isNotEmpty() &&
+            orderSt != "cancelled"
+        if (hasActiveOrder) {
+            if (detail.pendingOffer != null) _detail.value = detail.copy(pendingOffer = null)
+            return
+        }
+
         val latestNegotiation = messages
             .filter {
                 it.messageType == "offer" ||
@@ -1663,22 +1804,23 @@ class ChatDetailViewModel(
                 return
             }
 
+        val offerSt = latestNegotiation.offerStatus.trim().lowercase()
         val newPendingOffer: PriceOffer? = when {
-            latestNegotiation.offerStatus == "pending" && !latestNegotiation.isFromMe ->
+            offerSt == "pending" && !latestNegotiation.isFromMe ->
                 PriceOffer(
                     offerId = latestNegotiation.messageId,
                     amountVnd = latestNegotiation.offerAmountVnd,
                     proposedByMe = false,
                     status = "pending",
                 )
-            latestNegotiation.offerStatus == "pending" && latestNegotiation.isFromMe ->
+            offerSt == "pending" && latestNegotiation.isFromMe ->
                 PriceOffer(
                     offerId = latestNegotiation.messageId,
                     amountVnd = latestNegotiation.offerAmountVnd,
                     proposedByMe = true,
                     status = "pending",
                 )
-            latestNegotiation.offerStatus == "accepted" && _orderId.value == null -> {
+            offerSt == "accepted" && _orderId.value == null -> {
                 viewModelScope.launch { checkForOrderId(conversationId) }
                 null
             }

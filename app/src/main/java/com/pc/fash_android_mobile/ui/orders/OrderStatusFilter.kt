@@ -24,6 +24,7 @@ fun normalizeOrderStatus(raw: String): String = when (val s = raw.lowercase().tr
     "completed" -> "delivered_confirmed"
     "pending" -> "payment_pending"
     "cash_meetup_open" -> "cash_meetup_open"
+    "fulfillment_pending" -> "fulfillment_pending"
     else -> s
 }
 
@@ -66,6 +67,7 @@ fun orderStatusLabelForList(status: String): String {
         "cancelled" -> stringResource(R.string.order_status_cancelled)
         "disputed" -> stringResource(R.string.order_status_disputed)
         "cash_meetup_open" -> stringResource(R.string.order_status_cash_meetup_open)
+        "fulfillment_pending" -> stringResource(R.string.order_status_fulfillment_pending)
         else -> status.ifBlank { stringResource(R.string.order_status_unknown) }
     }
 }

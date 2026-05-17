@@ -55,35 +55,6 @@ fun FulfillmentChoiceBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showShipDisabledDialog by remember { mutableStateOf(false) }
-    var showCancelConfirm by remember { mutableStateOf(false) }
-
-    if (showCancelConfirm && onCancelOrder != null) {
-        AlertDialog(
-            onDismissRequest = { showCancelConfirm = false },
-            title = { Text(stringResource(R.string.order_cancel_confirm_title)) },
-            text = { Text(stringResource(R.string.order_cancel_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCancelConfirm = false
-                        onDismiss()
-                        onCancelOrder()
-                    },
-                ) {
-                    Text(
-                        stringResource(R.string.order_cancel_confirm_action),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelConfirm = false }) {
-                    Text(stringResource(R.string.order_cancel_confirm_dismiss))
-                }
-            },
-        )
-    }
-
     if (showShipDisabledDialog) {
         AlertDialog(
             onDismissRequest = { showShipDisabledDialog = false },
@@ -172,7 +143,10 @@ fun FulfillmentChoiceBottomSheet(
                     icon = Icons.Outlined.Cancel,
                     title = stringResource(R.string.chat_fulfillment_cancel_order_title),
                     subtitle = stringResource(R.string.chat_fulfillment_cancel_order_subtitle),
-                    onClick = { showCancelConfirm = true },
+                    onClick = {
+                        onDismiss()
+                        onCancelOrder?.invoke()
+                    },
                     accentDestructive = true,
                 )
             }

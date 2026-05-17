@@ -88,27 +88,11 @@ class PendingPaymentViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    /** Buyer cancels a pending-payment order from the global banner. */
-    fun cancelOrder(orderId: String) {
-        if (orderId.isBlank()) return
+    /** After cancel flow from global banner (reason + feedback on server). */
+    fun onCancelFlowComplete() {
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { orderRepository.cancelOrder(orderId) }
-            val app = getApplication<Application>()
-            result.fold(
-                onSuccess = {
-                    withContext(Dispatchers.IO) {
-                        orderCancelCoordinator.notifyBuyerCancelledOrderByOrderId(
-                            orderId,
-                            app.getString(R.string.chat_message_order_cancelled_by_buyer),
-                        )
-                    }
-                    refresh()
-                    _events.emit(PendingPaymentEvent.CancelSuccess)
-                },
-                onFailure = { e ->
-                    _events.emit(PendingPaymentEvent.CancelFailed(mapCancelOrderError(e)))
-                },
-            )
+            refresh()
+            _events.emit(PendingPaymentEvent.CancelSuccess)
         }
     }
 

@@ -19,6 +19,8 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "marketplace.chat.offer_declined" -> R.string.notification_pt_marketplace_chat_offer_declined
         "marketplace.order.created" -> R.string.notification_pt_marketplace_order_created
         "marketplace.order.shipped" -> R.string.notification_pt_marketplace_order_shipped
+        "marketplace.order.cancelled" -> R.string.notification_pt_marketplace_order_cancelled
+        "marketplace.order.meetup_aborted" -> R.string.notification_pt_marketplace_order_meetup_aborted
         "marketplace.order.funds_released" -> R.string.notification_pt_marketplace_order_funds_released
         "marketplace.order.dispute_opened" -> R.string.notification_pt_marketplace_order_dispute_opened
         "marketplace.review.received" -> R.string.notification_pt_marketplace_review_received

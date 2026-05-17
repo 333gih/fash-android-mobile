@@ -205,6 +205,11 @@ private fun heroContent(
 ): Triple<String, String, Color> {
     val primary = FashColors.Primary
     return when (st) {
+        "fulfillment_pending" -> Triple(
+            stringResource(R.string.order_status_fulfillment_pending),
+            stringResource(R.string.order_hero_fulfillment_pending_sub),
+            primary,
+        )
         "payment_pending" -> when (role) {
             OrderViewerRole.Seller -> Triple(
                 stringResource(R.string.order_hero_seller_wait_payment_title),
@@ -334,6 +339,24 @@ internal fun OrderTimelineSection(
                         TimelineStepUi(
                             title = stringResource(R.string.order_timeline_dispute_open),
                             subtitle = d.disputeSummary,
+                            state = TimelineStepState.Current,
+                        ),
+                        isLast = true,
+                    )
+                }
+                "fulfillment_pending" -> {
+                    TimelineRow(
+                        TimelineStepUi(
+                            title = stringResource(R.string.order_timeline_placed),
+                            subtitle = d.createdAt.takeIf { it.isNotBlank() }?.let { formatDate(it) }.orEmpty(),
+                            state = TimelineStepState.Done,
+                        ),
+                        isLast = false,
+                    )
+                    TimelineRow(
+                        TimelineStepUi(
+                            title = stringResource(R.string.order_timeline_choose_fulfillment),
+                            subtitle = "",
                             state = TimelineStepState.Current,
                         ),
                         isLast = true,
@@ -970,6 +993,7 @@ private fun orderStatusLabelString(status: String): String = when (status.lowerc
     "cancelled" -> stringResource(R.string.order_status_cancelled)
     "disputed" -> stringResource(R.string.order_status_disputed)
     "cash_meetup_open" -> stringResource(R.string.order_status_cash_meetup_open)
+    "fulfillment_pending" -> stringResource(R.string.order_status_fulfillment_pending)
     else -> status.ifBlank { stringResource(R.string.order_status_unknown) }
 }
 
@@ -1423,6 +1447,9 @@ internal fun OrderStickyBottomBar(
     val st = d.status.trim().lowercase()
     val showPay = role == OrderViewerRole.Buyer && st == "payment_pending"
     val showCancelOrder = role == OrderViewerRole.Buyer && OrderBuyerCancelPolicy.buyerCanCancel(st)
+    val showContinueInChat = role == OrderViewerRole.Buyer &&
+        d.conversationId.isNotBlank() &&
+        (st == "fulfillment_pending" || st == "cash_meetup_open")
     val showConfirm = role == OrderViewerRole.Buyer && d.canConfirm
     val showReview = role == OrderViewerRole.Buyer && d.canReview && d.buyerReview == null
     val showConfirmHandoff = role == OrderViewerRole.Seller && d.sellerShowsConfirmHandoffCta()
@@ -1438,8 +1465,8 @@ internal fun OrderStickyBottomBar(
         role != OrderViewerRole.Viewer && st == "disputed"
 
     val idle = busy == OrderDetailBusyAction.None
-    val hasPrimary = showConfirmHandoff || showShip || showPay || showConfirm
-    val hasSecondary = showOpenDispute || showDisputeEvidence || showReview || showChat
+    val hasPrimary = showConfirmHandoff || showShip || showPay || showConfirm || showContinueInChat
+    val hasSecondary = showOpenDispute || showDisputeEvidence || showReview || showChat || showCancelOrder
 
     if (!hasPrimary && !hasSecondary) return
 
@@ -1477,6 +1504,25 @@ internal fun OrderStickyBottomBar(
             )
 
             // ── Primary (checkout / fulfilment) ─────────────────────────────────
+            if (showContinueInChat) {
+                val chatOn = FashColors.Primary.fashReadableOn()
+                Button(
+                    onClick = onChat,
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FashColors.Primary,
+                        contentColor = chatOn,
+                    ),
+                    shape = shape,
+                    elevation = flatElevation,
+                    contentPadding = compactPad,
+                ) {
+                    Text(stringResource(R.string.order_detail_continue_in_chat), style = labelStyle)
+                }
+            }
             if (showConfirmHandoff) {
                 val handoffBusy = busy == OrderDetailBusyAction.ConfirmHandoff
                 val handoffOn = FashColors.Primary.fashReadableOn()
