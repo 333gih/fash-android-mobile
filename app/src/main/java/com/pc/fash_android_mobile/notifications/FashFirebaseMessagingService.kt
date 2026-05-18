@@ -14,10 +14,9 @@ import com.pc.fash_android_mobile.MainActivity
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
-import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
-import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
+import com.pc.fash_android_mobile.data.promo.ADMIN_APP_PROMO_PAYLOAD_TYPE
+import com.pc.fash_android_mobile.data.promo.parseAppPromoFromPushData
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
-import org.json.JSONObject
 
 /**
  * Handles FCM token refresh and incoming messages.
@@ -45,12 +44,14 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         if (message.data["inbox_refresh"] == "1") {
             (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
         }
-        if (message.data["type"] == "admin.app_promo_interstitial") {
-            val raw = message.data["promo_payload"]?.takeIf { it.isNotBlank() } ?: return
-            val promo = runCatching {
-                parseRemoteAppPromoPayload(JSONObject(raw))?.toAppPromoCampaign()
-            }.getOrNull() ?: return
-            (applicationContext as? FashApplication)?.requestShowAppPromo(promo)
+        if (message.data["type"] == ADMIN_APP_PROMO_PAYLOAD_TYPE) {
+            parseAppPromoFromPushData(
+                data = message.data,
+                fallbackTitle = message.notification?.title ?: message.data["title"],
+                fallbackBody = message.notification?.body ?: message.data["body"],
+            )?.let { promo ->
+                (applicationContext as? FashApplication)?.requestShowAppPromo(promo)
+            }
             if (shouldSuppressTrayForPresence()) return
         }
         if (shouldSuppressTrayForPresence()) {

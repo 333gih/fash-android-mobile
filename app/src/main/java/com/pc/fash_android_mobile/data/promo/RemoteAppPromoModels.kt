@@ -27,18 +27,21 @@ data class RemoteAppPromoPayload(
 
 fun parseRemoteAppPromoPayload(json: JSONObject): RemoteAppPromoPayload? {
     val id = json.optString("id", "").trim()
+        .ifBlank { json.optString("campaign_id", "").trim() }
     if (id.isBlank()) return null
     val version = json.optInt("version", 1).coerceAtLeast(1)
     val title = json.optString("title", "").trim()
     val description = json.optString("description", "").trim()
+        .ifBlank { json.optString("body", "").trim() }
     if (title.isBlank() || description.isBlank()) return null
     val images = json.optJSONArray("image_urls")?.toStringList()
         ?: json.optJSONArray("imageUrls")?.toStringList()
         ?: emptyList()
     val primaryObj = json.optJSONObject("primary_button")
         ?: json.optJSONObject("primaryButton")
-    val primaryLabel = primaryObj?.optString("label", "")?.trim()
-        ?: json.optString("primary_button_label", "").trim()
+    val primaryLabel = primaryObj?.optStringOrNull("label")
+        ?: json.optStringOrNull("primary_button_label", "primaryButtonLabel")
+        ?: title.takeIf { it.isNotBlank() }
     if (primaryLabel.isNullOrBlank()) return null
     val primaryAction = primaryObj?.optJSONObject("action")?.toButtonAction()
         ?: AppPromoButtonAction(

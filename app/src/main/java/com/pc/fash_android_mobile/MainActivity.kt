@@ -119,6 +119,8 @@ import com.pc.fash_android_mobile.data.promo.AppPromoCampaignStore
 import com.pc.fash_android_mobile.data.promo.AppPromoGateContext
 import com.pc.fash_android_mobile.data.promo.AppPromoNavigation
 import com.pc.fash_android_mobile.data.promo.AppPromoPendingQueue
+import com.pc.fash_android_mobile.data.promo.isAppPromoPushData
+import com.pc.fash_android_mobile.data.promo.parseAppPromoFromPushData
 import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
 import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
 import com.pc.fash_android_mobile.BuildConfig
@@ -414,6 +416,17 @@ class MainActivity : ComponentActivity() {
                 var activePromoCampaign by remember { mutableStateOf<AppPromoCampaign?>(null) }
                 var pendingPromoMainTab by remember { mutableIntStateOf(-1) }
                 var pendingPromoOpenOrders by remember { mutableStateOf(false) }
+                fun presentAdminPromoIfEligible(promo: AppPromoCampaign) {
+                    AppPromoPendingQueue.enqueue(promo)
+                    if (
+                        splashFinished &&
+                        isAuthenticated &&
+                        !profileSetupBlocksShellChrome &&
+                        selectedConversationId == null
+                    ) {
+                        activePromoCampaign = promo
+                    }
+                }
                 val meetingReverifyRequired by profileViewModel.meetingSchedulingReverifyRequired.collectAsState()
                 /** Guided main-shell tour after welcome (or immediately if welcome already dismissed). */
                 var showFeatureTour by remember { mutableStateOf(false) }
@@ -607,9 +620,20 @@ class MainActivity : ComponentActivity() {
                             }
                             is RealtimeEvent.NotificationShow -> {
                                 // Account-switch hint is FCM-only by design; never surface it in-app.
+                                val pushData = event.data ?: emptyMap()
                                 val isAccountSwitchHint =
-                                    AccountSwitchDeepLinks.parseFromFcmData(event.data ?: emptyMap()) != null
+                                    AccountSwitchDeepLinks.parseFromFcmData(pushData) != null
                                 if (isAccountSwitchHint) return@collect
+                                if (isAppPromoPushData(pushData)) {
+                                    parseAppPromoFromPushData(
+                                        data = pushData,
+                                        fallbackTitle = event.title,
+                                        fallbackBody = event.body,
+                                    )?.let { promo ->
+                                        presentAdminPromoIfEligible(promo)
+                                    }
+                                    return@collect
+                                }
                                 fashApp.showInAppNotificationFromRealtime(
                                     title = event.title,
                                     body = event.body,
@@ -621,15 +645,7 @@ class MainActivity : ComponentActivity() {
                             is RealtimeEvent.AppPromoShow -> {
                                 val promo = parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()
                                     ?: return@collect
-                                AppPromoPendingQueue.enqueue(promo)
-                                if (
-                                    splashFinished &&
-                                    isAuthenticated &&
-                                    !profileSetupBlocksShellChrome &&
-                                    selectedConversationId == null
-                                ) {
-                                    activePromoCampaign = promo
-                                }
+                                presentAdminPromoIfEligible(promo)
                             }
                             else -> Unit
                         }
@@ -639,10 +655,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     fashApp.appPromoShowSignals.collect { promo ->
-                        AppPromoPendingQueue.enqueue(promo)
-                        if (!profileSetupBlocksShellChrome && selectedConversationId == null) {
-                            activePromoCampaign = promo
-                        }
+                        presentAdminPromoIfEligible(promo)
                     }
                 }
 

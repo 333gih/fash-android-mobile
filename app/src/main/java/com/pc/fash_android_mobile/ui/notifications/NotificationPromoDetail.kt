@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.notifications
 
+import com.pc.fash_android_mobile.data.promo.ADMIN_APP_PROMO_PAYLOAD_TYPE
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaignKind
 import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
@@ -71,8 +72,6 @@ fun parseAppPromoCampaignFromInbox(item: InboxNotificationItem): AppPromoCampaig
         secondaryAction = null,
     )
 }
-
-internal const val ADMIN_APP_PROMO_PAYLOAD_TYPE = "admin.app_promo_interstitial"
 
 private fun parsePromoJson(raw: String?): com.pc.fash_android_mobile.data.promo.RemoteAppPromoPayload? {
     if (raw.isNullOrBlank()) return null
