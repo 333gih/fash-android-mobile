@@ -35,12 +35,15 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        if (message.data["inbox_refresh"] == "1") {
-            (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
-        }
         AccountSwitchDeepLinks.parseFromFcmData(message.data)?.let { prompt ->
             handleAccountSwitchPrompt(prompt, message)
             return
+        }
+        if (!isNotificationForLoggedInUser(message)) {
+            return
+        }
+        if (message.data["inbox_refresh"] == "1") {
+            (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
         }
         if (message.data["type"] == "admin.app_promo_interstitial") {
             val raw = message.data["promo_payload"]?.takeIf { it.isNotBlank() } ?: return
@@ -107,6 +110,15 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         NotificationManagerCompat.from(this).notify(notifId, notification)
     }
 
+    private fun isNotificationForLoggedInUser(message: RemoteMessage): Boolean {
+        val app = applicationContext as? FashApplication ?: return true
+        val sessionUid = app.authManager.sessionStore.read()?.userId?.trim().orEmpty()
+        if (sessionUid.isEmpty()) return true
+        val rid = message.data["recipient_user_id"]?.trim().orEmpty()
+        if (rid.isEmpty()) return true
+        return sessionUid.equals(rid, ignoreCase = true)
+    }
+
     private fun shouldSuppressTrayForPresence(): Boolean {
         val lifecycle = ProcessLifecycleOwner.get().lifecycle.currentState
         if (!lifecycle.isAtLeast(Lifecycle.State.STARTED)) return false
@@ -121,7 +133,6 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             app.requestInboxUnreadRefreshDebounced()
             return
         }
-        app.requestInboxUnreadRefreshDebounced()
         val title = message.notification?.title
             ?: message.data["title"]
             ?: getString(R.string.account_switch_notification_title)
