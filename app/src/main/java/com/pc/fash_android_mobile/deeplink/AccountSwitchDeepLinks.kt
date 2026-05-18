@@ -2,7 +2,14 @@ package com.pc.fash_android_mobile.deeplink
 
 import android.content.Intent
 
-/** Parses FCM / notification-tap extras for multi-account switch prompts. */
+/**
+ * Parses FCM / notification-tap extras for the multi-account switch prompt.
+ *
+ * The hint is FCM-only by design — it never appears in the in-app inbox of the currently
+ * logged-in account because the row belongs to a DIFFERENT account on the same device.
+ * The dialog only surfaces after the user TAPS the FCM tray notification, which routes
+ * extras to [MainActivity] for [parseFromIntent].
+ */
 object AccountSwitchDeepLinks {
     const val EXTRA_PENDING_USER_ID = "pending_user_id"
     const val EXTRA_PENDING_EMAIL_MASKED = "pending_email_masked"

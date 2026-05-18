@@ -606,6 +606,10 @@ class MainActivity : ComponentActivity() {
                                 fashApp.requestInboxUnreadRefreshDebounced()
                             }
                             is RealtimeEvent.NotificationShow -> {
+                                // Account-switch hint is FCM-only by design; never surface it in-app.
+                                val isAccountSwitchHint =
+                                    AccountSwitchDeepLinks.parseFromFcmData(event.data ?: emptyMap()) != null
+                                if (isAccountSwitchHint) return@collect
                                 fashApp.showInAppNotificationFromRealtime(
                                     title = event.title,
                                     body = event.body,

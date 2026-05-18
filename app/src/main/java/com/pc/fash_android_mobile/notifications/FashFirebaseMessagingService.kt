@@ -121,11 +121,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             app.requestInboxUnreadRefreshDebounced()
             return
         }
-        val lifecycle = ProcessLifecycleOwner.get().lifecycle.currentState
-        if (lifecycle.isAtLeast(Lifecycle.State.STARTED)) {
-            app.requestAccountSwitchPrompt(prompt)
-            return
-        }
+        app.requestInboxUnreadRefreshDebounced()
         val title = message.notification?.title
             ?: message.data["title"]
             ?: getString(R.string.account_switch_notification_title)
