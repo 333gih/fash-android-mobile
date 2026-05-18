@@ -250,9 +250,16 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
-    /** Seller monetization packages (hardcoded catalog → future core-service GET). */
+    /** Seller utility packages (`GET /app/advertising/product-packages`) — Bearer via [SecuredApiClient]. */
     val sellerProductPackageRepository: com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackageRepository by lazy {
-        com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackageRepository()
+        com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackageRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+            localeTagProvider = {
+                AppLocale.currentTag(this@FashApplication)
+            },
+        )
     }
 
     /** Admin promo interstitials pull backup (`GET /app/promo-interstitials/active`). */
