@@ -31,9 +31,10 @@ data class SellerProductPackage(
     val features: List<SellerPackageFeature>,
 )
 
-/** [id] maps to string resources on the UI layer. */
+/** [id] is feature_key from CMS; [name] from API when present (else string resources). */
 data class SellerPackageFeature(
     val id: String,
     val included: Boolean,
     val highlight: String? = null,
+    val name: String? = null,
 )

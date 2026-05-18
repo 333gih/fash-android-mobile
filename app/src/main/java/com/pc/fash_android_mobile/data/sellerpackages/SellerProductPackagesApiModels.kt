@@ -39,11 +39,13 @@ private fun parseSellerProductPackageJson(o: JSONObject): SellerProductPackage? 
             val id = f.optString("id").trim()
             if (id.isEmpty()) continue
             val highlight = f.optString("highlight").trim().takeIf { it.isNotEmpty() }
+            val apiName = f.optString("name").trim().takeIf { it.isNotEmpty() }
             add(
                 SellerPackageFeature(
                     id = id,
-                    included = f.optBoolean("included", false),
+                    included = f.wireBoolean("included", "Included", default = false),
                     highlight = highlight,
+                    name = apiName,
                 ),
             )
         }
@@ -57,10 +59,10 @@ private fun parseSellerProductPackageJson(o: JSONObject): SellerProductPackage? 
         priceVnd = o.optLong("price_vnd", 0L),
         durationDays = o.optInt("duration_days", 30),
         tier = tier,
-        isReleased = o.optBoolean("is_released", false),
-        isBestSeller = o.optBoolean("is_best_seller", false),
+        isReleased = o.wireReleasedFlag(),
+        isBestSeller = o.wireBoolean("is_best_seller", "isBestSeller", "IsBestSeller", default = false),
         badgeLabel = badge,
-        active = o.optBoolean("active", true),
+        active = o.wireBoolean("active", "Active", default = true),
         features = features,
     )
 }

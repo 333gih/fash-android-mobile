@@ -232,7 +232,7 @@ private fun SellerPackageCard(
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             pkg.features.forEach { feature ->
-                val title = featureTitle(feature.id)
+                val title = featureTitle(feature.id, feature.name)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -286,10 +286,13 @@ private fun SellerPackageCard(
 }
 
 @Composable
-private fun featureTitle(featureId: String): String = when (featureId) {
+private fun featureTitle(featureId: String, apiName: String? = null): String {
+    apiName?.takeIf { it.isNotBlank() }?.let { return it }
+    return when (featureId) {
     "authenticity_verify" -> stringResource(R.string.seller_packages_feature_authenticity)
     "explore_boost" -> stringResource(R.string.seller_packages_feature_explore_boost)
     "fanpage_spotlight" -> stringResource(R.string.seller_packages_feature_fanpage)
     "social_tiktok_instagram" -> stringResource(R.string.seller_packages_feature_social)
     else -> featureId
+    }
 }

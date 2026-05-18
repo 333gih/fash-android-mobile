@@ -49,6 +49,11 @@ class SellerProductPackageRepository(
                 val parsed = parseSellerProductPackagesResponse(raw)
                 val visible = if (activeOnly) parsed.packages.filter { it.active } else parsed.packages
                 if (visible.isNotEmpty()) {
+                    if (Log.isLoggable(TAG, Log.DEBUG)) {
+                        visible.forEach { p ->
+                            Log.d(TAG, "package code=${p.code} isReleased=${p.isReleased} active=${p.active}")
+                        }
+                    }
                     return@runCatching parsed.copy(packages = visible)
                 }
             } catch (e: Exception) {
