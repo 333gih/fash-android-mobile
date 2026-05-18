@@ -69,11 +69,12 @@ class OrderRepository(
     /**
      * `POST /orders` — checkout. Returns new order id.
      */
-    fun createOrder(listingId: String, amountVnd: Long): Result<String> = runCatching {
+    fun createOrder(listingId: String, amountVnd: Long, shippingFeeVnd: Long = 0L): Result<String> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders")
         val json = JSONObject()
             .put("listing_id", listingId.trim())
             .put("amount_vnd", amountVnd)
+            .put("shipping_fee_vnd", shippingFeeVnd.coerceAtLeast(0L))
             .toString()
         val body = executePostJson(url, json)
         val o = JSONObject(body.trim())

@@ -118,7 +118,9 @@ class CheckoutViewModel(
 
     private val defaultPaymentMethods = listOf(
         PaymentMethodOption("momo", "Ví MoMo"),
+        PaymentMethodOption("zalopay", "ZaloPay"),
         PaymentMethodOption("vnpay", "VNPay"),
+        PaymentMethodOption("vietqr", "VietQR"),
         PaymentMethodOption("tpbank", "Chuyển khoản TPBank"),
     )
 
@@ -146,8 +148,11 @@ class CheckoutViewModel(
                 val orderAsync = oid?.let { id ->
                     async(Dispatchers.IO) { orderRepository.getOrderDetail(id) }
                 }
-                methodsAsync.await().getOrNull()?.takeIf { it.isNotEmpty() }?.let { list ->
-                    _paymentMethods.value = list.map { PaymentMethodOption(it.id, it.name) }
+                methodsAsync.await().getOrNull()?.let { list ->
+                    val enabled = list.filter { it.enabled }
+                    if (enabled.isNotEmpty()) {
+                        _paymentMethods.value = enabled.map { PaymentMethodOption(it.id, it.name) }
+                    }
                 }
                 val listingResult = listingAsync.await()
                 val orderResult = orderAsync?.await()
@@ -257,6 +262,7 @@ class CheckoutViewModel(
         }
 
     /** Legacy: platform fee for transparency (not added to buyer total in summary). */
+    /** Platform fee on goods only (10% of product line, not shipping). */
     val platformFeeVnd: Long
         get() {
             val od = _orderDetail.value
@@ -312,7 +318,7 @@ class CheckoutViewModel(
                 Result.success(existing)
             } else {
                 withContext(Dispatchers.IO) {
-                    orderRepository.createOrder(d.id, grandTotalVnd)
+                    orderRepository.createOrder(d.id, grandTotalVnd, shippingFeeVnd)
                 }
             }
             val orderId = orderIdResult.getOrElse { e ->
@@ -387,23 +393,8 @@ class CheckoutViewModel(
                         }
                     }
                 }
-                val paySt = withContext(Dispatchers.IO) {
-                    corePaymentRepository.getPaymentStatus(orderId).getOrNull()
-                }
-                if (paySt != null) {
-                    val esc = paySt.escrowStatus.lowercase()
-                    val looksPaid = paySt.paidAt.isNotBlank() ||
-                        esc.contains("held") || esc.contains("paid") ||
-                        esc.contains("complete") || esc.contains("success")
-                    if (looksPaid && !esc.contains("cancel")) {
-                        val refreshed = withContext(Dispatchers.IO) {
-                            orderRepository.getOrderDetail(orderId).getOrNull()
-                        }
-                        refreshed?.let { _orderDetail.value = it }
-                        finishPaidFlow(orderId)
-                        return@launch
-                    }
-                }
+                // Success only when core order is payment_held (payment-confirm succeeded).
+                // Escrow held in payment-service alone is not enough (webhook secret mismatch, etc.).
             }
             _awaitingGatewayReturn.value = false
             pendingSuccess = null
