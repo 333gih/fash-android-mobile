@@ -48,6 +48,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.pc.fash_android_mobile.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
