@@ -14,15 +14,19 @@ private const val USER_AGENT = "FashAndroid/1.0"
  */
 class AdvertisingRepository(
     private val securedClient: OkHttpClient,
+    private val localeTagProvider: () -> String = { "vi" },
 ) {
 
     private fun throwHttp(httpCode: Int, body: String): Nothing =
         throw CoreServiceHttpException(httpCode, CoreServiceErrors.parseErrorMessage(httpCode, body))
 
     private fun executeGet(url: String): String {
+        val locale = localeTagProvider().trim().ifBlank { "vi" }
         val request = Request.Builder()
             .url(url)
             .get()
+            .addHeader("Accept-Language", locale)
+            .addHeader("X-Fash-Lang", locale)
             .build()
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()

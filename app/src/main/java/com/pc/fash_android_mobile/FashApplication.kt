@@ -244,6 +244,9 @@ class FashApplication : Application(), ImageLoaderFactory {
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
+            localeTagProvider = {
+                com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(this@FashApplication)
+            },
         )
     }
 

@@ -95,6 +95,7 @@ import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.navigation.SellerShopEntrySource
 import com.pc.fash_android_mobile.ui.navigation.SellerShopRestoreContext
 import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
@@ -140,7 +141,6 @@ import com.pc.fash_android_mobile.ui.orders.LocalPendingPaymentRootCoordinates
 import com.pc.fash_android_mobile.ui.orders.LocalPendingPaymentSliderRegistry
 import com.pc.fash_android_mobile.ui.orders.PendingPaymentBanner
 import com.pc.fash_android_mobile.ui.orders.PendingPaymentEvent
-import com.pc.fash_android_mobile.ui.orders.PendingPaymentOrderRow
 import com.pc.fash_android_mobile.ui.orders.PendingPaymentSliderRegistry
 import com.pc.fash_android_mobile.ui.orders.PendingPaymentViewModel
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
@@ -148,7 +148,6 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
-import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
@@ -1061,6 +1060,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                     val chatUnreadCount by chatViewModel.unreadBadgeCount.collectAsState()
                                     val remotePromo by promoSlidesViewModel.remoteSlides.collectAsState()
+                                    val localeRev by AppLocale.localeRevisionFlow.collectAsState()
+                                    LaunchedEffect(localeRev) {
+                                        promoSlidesViewModel.refresh()
+                                    }
                                     val scheme = MaterialTheme.colorScheme
                                     val mappedPromoSlides = remember(remotePromo, scheme) {
                                         val rp = remotePromo
@@ -1068,6 +1071,7 @@ class MainActivity : ComponentActivity() {
                                             rp == null -> null
                                             rp.isEmpty() -> null
                                             else -> rp.map { it.toFashPromoSlideDef(scheme) }
+                                                .ifEmpty { null }
                                         }
                                     }
                                     val handlePromoClick: (FashPromoSlideDef, Int) -> Unit = { slide, _ ->

@@ -210,14 +210,15 @@ private fun FashPromoCard(
     contentDescription: String,
     onClick: () -> Unit,
 ) {
-    val titleColor = slide.gradient.fashReadableOnGradient()
+    val banner = slide.bannerImageUrl?.takeIf { it.isNotBlank() }
+    val titleColor = if (banner != null) Color.White else slide.gradient.fashReadableOnGradient()
     val subtitleColor = titleColor.copy(alpha = 0.92f)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusCard)
     val titleStr = slide.titleText?.takeIf { it.isNotBlank() }
         ?: slide.titleRes?.let { stringResource(it) }.orEmpty()
     val subtitleStr = slide.subtitleText?.takeIf { it.isNotBlank() }
         ?: slide.subtitleRes?.let { stringResource(it) }.orEmpty()
-    val banner = slide.bannerImageUrl?.takeIf { it.isNotBlank() }
+    val useImageBackground = banner != null
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -231,28 +232,29 @@ private fun FashPromoCard(
             )
             .clickable(onClick = onClick),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.horizontalGradient(slide.gradient)),
-        )
-        if (banner != null) {
+        if (useImageBackground) {
             FashAsyncImage(
                 model = banner,
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(0.42f),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
-                        Brush.horizontalGradient(
-                            slide.gradient.map { it.copy(alpha = 0.72f) },
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.55f),
+                            0.45f to Color.Black.copy(alpha = 0.28f),
+                            1f to Color.Black.copy(alpha = 0.62f),
                         ),
                     ),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.horizontalGradient(slide.gradient)),
             )
         }
         Text(
