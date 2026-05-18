@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.ui.main
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
@@ -10,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+private const val TAG = "PromoSlidesViewModel"
 
 /**
  * Loads promo carousel copy from core-service CMS. [remoteSlides] null means "not loaded yet or error — use UI defaults";
@@ -29,8 +32,17 @@ class PromoSlidesViewModel(application: Application) : AndroidViewModel(applicat
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             repo.getSlides("promo_slider_main").fold(
-                onSuccess = { res -> _remoteSlides.value = res.items },
-                onFailure = { _remoteSlides.value = null },
+                onSuccess = { res ->
+                    Log.i(
+                        TAG,
+                        "CMS slides: ${res.items.size} item(s) placement=${res.placementKey}",
+                    )
+                    _remoteSlides.value = res.items
+                },
+                onFailure = { e ->
+                    Log.w(TAG, "CMS slides failed — UI uses defaultFashPromoSlides", e)
+                    _remoteSlides.value = null
+                },
             )
         }
     }

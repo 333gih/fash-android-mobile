@@ -238,14 +238,14 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
-    /** Core-service promo / advertising CMS (`GET /app/advertising/slides`). */
+    /** Core-service promo / advertising CMS (`GET /app/advertising/slides`) — Bearer via [SecuredApiClient]. */
     val advertisingRepository: AdvertisingRepository by lazy {
         AdvertisingRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
             localeTagProvider = {
-                com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(this@FashApplication)
+                AppLocale.currentTag(this@FashApplication)
             },
         )
     }

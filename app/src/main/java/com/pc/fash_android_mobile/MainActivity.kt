@@ -1064,6 +1064,16 @@ class MainActivity : ComponentActivity() {
                                     LaunchedEffect(localeRev) {
                                         promoSlidesViewModel.refresh()
                                     }
+                                    ReloadWhenVisible(
+                                        !showOrdersScreen &&
+                                            !showHomeDeliveringScreen &&
+                                            sellerShopUsername == null &&
+                                            !showEditProfile &&
+                                            !showFeaturedSellersAll,
+                                        selectedTab,
+                                    ) {
+                                        promoSlidesViewModel.refresh()
+                                    }
                                     val scheme = MaterialTheme.colorScheme
                                     val mappedPromoSlides = remember(remotePromo, scheme) {
                                         val rp = remotePromo
