@@ -7,7 +7,7 @@ import com.pc.fash_android_mobile.data.promo.sanitizePromoDisplayString
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
- * Maps API style presets to the same gradients as [defaultFashPromoSlides].
+ * Maps core-service CMS slides to in-app promo card visuals.
  */
 fun AppAdvertisingSlideItem.toFashPromoSlideDef(scheme: ColorScheme): FashPromoSlideDef {
     val gradient = when (stylePreset.trim()) {

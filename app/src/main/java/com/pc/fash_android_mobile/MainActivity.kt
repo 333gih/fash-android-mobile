@@ -1076,13 +1076,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     val scheme = MaterialTheme.colorScheme
                                     val mappedPromoSlides = remember(remotePromo, scheme) {
-                                        val rp = remotePromo
-                                        when {
-                                            rp == null -> null
-                                            rp.isEmpty() -> null
-                                            else -> rp.map { it.toFashPromoSlideDef(scheme) }
-                                                .ifEmpty { null }
-                                        }
+                                        remotePromo.map { it.toFashPromoSlideDef(scheme) }
                                     }
                                     val handlePromoClick: (FashPromoSlideDef, Int) -> Unit = { slide, _ ->
                                         val nav = slide.navigation

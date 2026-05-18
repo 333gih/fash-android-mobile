@@ -71,7 +71,7 @@ fun HomeFeedContent(
     onNavigateToSaved: () -> Unit = {},
     onNavigateToPost: () -> Unit = {},
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> onNavigateToExplore() },
-    promoSlides: List<FashPromoSlideDef>? = null,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
 ) {
     val items by viewModel.items.collectAsState()
     val buyerStats by viewModel.buyerStats.collectAsState()

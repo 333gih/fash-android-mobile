@@ -32,7 +32,7 @@ val FashPromoSliderAdFooterContentHeight =
 fun FashPromoSliderAdFooter(
     modifier: Modifier = Modifier,
     onExploreClick: () -> Unit,
-    slides: List<FashPromoSlideDef>? = null,
+    slides: List<FashPromoSlideDef> = emptyList(),
     onSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     edgeToEdgeAdStrip: Boolean = false,
 ) {

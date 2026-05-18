@@ -88,7 +88,7 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     onConversationClick: (ConversationItem) -> Unit = {},
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
-    promoSlides: List<FashPromoSlideDef>? = null,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val displayGroups by viewModel.displayGroups.collectAsState()

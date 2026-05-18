@@ -169,7 +169,7 @@ fun MainNavScreen(
         countryIso2: String?,
     ) -> Unit = { _, _, _, _, _, _ -> },
     /** When null, screens use built-in promo copy; otherwise from core-service CMS. */
-    promoSlides: List<FashPromoSlideDef>? = null,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     selectedTab: Int,
     onTabChange: (Int) -> Unit,

@@ -86,7 +86,7 @@ fun NotificationScreen(
     onBack: () -> Unit,
     onExploreClick: () -> Unit = {},
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
-    promoSlides: List<FashPromoSlideDef>? = null,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
     onOpenOrder: (String) -> Unit = {},
     onOpenListing: (String, String?) -> Unit = { _, _ -> },
     onOpenChat: (String) -> Unit = {},

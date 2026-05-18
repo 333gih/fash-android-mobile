@@ -96,7 +96,7 @@ fun SellerProfileScreen(
     ) -> Unit = { _, _, _, _, _, _ -> },
     /** Same default promo deck as Orders / Explore; tap usually opens Explore. */
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
-    promoSlides: List<FashPromoSlideDef>? = null,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
     /** Bottom strip below the promo slider — same as Orders / Notifications. */
     onExploreClick: () -> Unit = {},
 ) {

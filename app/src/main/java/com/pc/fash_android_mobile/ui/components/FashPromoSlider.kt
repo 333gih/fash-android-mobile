@@ -19,14 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -77,59 +75,32 @@ data class FashPromoSlideDef(
 val FashPromoCarouselCardHeight = 112.dp
 private const val AutoAdvanceMs = 6_500L
 
-fun defaultFashPromoSlides(scheme: ColorScheme): List<FashPromoSlideDef> = listOf(
-    FashPromoSlideDef(
-        id = "bundle_shipping",
-        titleRes = R.string.orders_promo_slide1_title,
-        subtitleRes = R.string.orders_promo_slide1_subtitle,
-        gradient = listOf(FashColors.PrimaryDeep, FashColors.Primary),
-    ),
-    FashPromoSlideDef(
-        id = "protected_payments",
-        titleRes = R.string.orders_promo_slide2_title,
-        subtitleRes = R.string.orders_promo_slide2_subtitle,
-        gradient = listOf(FashColors.SecondaryWarm, FashColors.TertiaryAccent),
-    ),
-    FashPromoSlideDef(
-        id = "seller_perks",
-        titleRes = R.string.orders_promo_slide3_title,
-        subtitleRes = R.string.orders_promo_slide3_subtitle,
-        gradient = listOf(scheme.surfaceContainerLow, scheme.surfaceVariant),
-        border = scheme.outlineVariant.copy(alpha = 0.65f),
-    ),
-)
-
 /**
  * Horizontal promo pager (gradient cards, dots overlaid).
  *
- * **Default slides** ([defaultFashPromoSlides], `orders_promo_*` strings) are shared with
- * Orders, Notifications, Home, Explore, and Chat — pass [slides] only when overriding (e.g. CMS).
- *
- * @param slides When null, uses [defaultFashPromoSlides]. Pass empty list to hide the block.
+ * @param slides CMS slides from core-service only; empty list hides the block.
  * @param reportPendingPaymentAnchor When true, registers bounds for global pending-payment banner placement (above slider).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FashPromoSlider(
     modifier: Modifier = Modifier,
-    slides: List<FashPromoSlideDef>? = null,
+    slides: List<FashPromoSlideDef> = emptyList(),
     reportPendingPaymentAnchor: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,
     ),
     onSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val resolved = slides ?: remember(scheme) { defaultFashPromoSlides(scheme) }
-    if (resolved.isEmpty()) return
+    if (slides.isEmpty()) return
 
-    val pagerState = rememberPagerState(pageCount = { resolved.size })
+    val pagerState = rememberPagerState(pageCount = { slides.size })
 
-    LaunchedEffect(pagerState, resolved.size) {
-        if (resolved.size <= 1) return@LaunchedEffect
+    LaunchedEffect(pagerState, slides.size) {
+        if (slides.size <= 1) return@LaunchedEffect
         while (isActive) {
             delay(AutoAdvanceMs)
-            val next = (pagerState.currentPage + 1) % resolved.size
+            val next = (pagerState.currentPage + 1) % slides.size
             runCatching { pagerState.animateScrollToPage(next) }
         }
     }
@@ -147,11 +118,11 @@ fun FashPromoSlider(
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.CenterVertically,
         ) { page ->
-            val slide = resolved[page]
+            val slide = slides[page]
             val cd = stringResource(
                 R.string.orders_promo_pager_cd,
                 page + 1,
-                resolved.size,
+                slides.size,
             )
             FashPromoCard(
                 slide = slide,
@@ -162,9 +133,9 @@ fun FashPromoSlider(
             )
         }
 
-        if (resolved.size > 1) {
+        if (slides.size > 1) {
             FashPromoPageIndicator(
-                pageCount = resolved.size,
+                pageCount = slides.size,
                 currentPage = pagerState.currentPage,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -176,12 +147,12 @@ fun FashPromoSlider(
 
 /**
  * [Surface] (surfaceContainerLow) + [FashPromoSlider] — same chrome as Orders / Notifications
- * inline promo blocks. Use [slides] = null for the shared default deck.
+ * inline promo blocks.
  */
 @Composable
 fun FashPromoSliderBlock(
     modifier: Modifier = Modifier,
-    slides: List<FashPromoSlideDef>? = null,
+    slides: List<FashPromoSlideDef> = emptyList(),
     reportPendingPaymentAnchor: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,

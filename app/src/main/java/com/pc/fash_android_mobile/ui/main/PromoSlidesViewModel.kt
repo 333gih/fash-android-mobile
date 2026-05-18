@@ -15,15 +15,14 @@ import kotlinx.coroutines.launch
 private const val TAG = "PromoSlidesViewModel"
 
 /**
- * Loads promo carousel copy from core-service CMS. [remoteSlides] null means "not loaded yet or error — use UI defaults";
- * non-null empty list means server returned no live items (also falls back to defaults in the UI layer if desired).
+ * Loads promo carousel from core-service CMS only. Empty list when API fails or no live slides.
  */
 class PromoSlidesViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repo = (application as FashApplication).advertisingRepository
 
-    private val _remoteSlides = MutableStateFlow<List<AppAdvertisingSlideItem>?>(null)
-    val remoteSlides: StateFlow<List<AppAdvertisingSlideItem>?> = _remoteSlides.asStateFlow()
+    private val _remoteSlides = MutableStateFlow<List<AppAdvertisingSlideItem>>(emptyList())
+    val remoteSlides: StateFlow<List<AppAdvertisingSlideItem>> = _remoteSlides.asStateFlow()
 
     init {
         refresh()
@@ -33,15 +32,12 @@ class PromoSlidesViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch(Dispatchers.IO) {
             repo.getSlides("promo_slider_main").fold(
                 onSuccess = { res ->
-                    Log.i(
-                        TAG,
-                        "CMS slides: ${res.items.size} item(s) placement=${res.placementKey}",
-                    )
+                    Log.i(TAG, "CMS slides: ${res.items.size} item(s)")
                     _remoteSlides.value = res.items
                 },
                 onFailure = { e ->
-                    Log.w(TAG, "CMS slides failed — UI uses defaultFashPromoSlides", e)
-                    _remoteSlides.value = null
+                    Log.w(TAG, "CMS slides failed — carousel hidden", e)
+                    _remoteSlides.value = emptyList()
                 },
             )
         }

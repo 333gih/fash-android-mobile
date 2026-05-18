@@ -144,9 +144,9 @@ fun ExploreScreen(
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     /** “See all” in the featured sellers header. */
     onSeeAllFeaturedSellersClick: () -> Unit = {},
-    /** Same promo deck as Orders / Notifications ([FashPromoSlider]); `null` uses defaults. */
+    /** Same promo deck as Orders / Notifications ([FashPromoSlider]); from core-service CMS only. */
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
-    promoSlides: List<FashPromoSlideDef>? = null,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
