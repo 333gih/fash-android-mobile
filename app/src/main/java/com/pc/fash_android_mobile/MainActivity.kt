@@ -1782,6 +1782,7 @@ class MainActivity : ComponentActivity() {
                                                     selectedCheckoutListingId = null
                                                     selectedCheckoutOfferPrice = 0L
                                                     checkoutExistingOrderId = null
+                                                    selectedOrderId = paidOrderId
                                                     orderDetailViewModel.load(paidOrderId)
                                                 },
                                             )

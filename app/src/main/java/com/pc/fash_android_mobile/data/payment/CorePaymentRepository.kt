@@ -89,12 +89,7 @@ class CorePaymentRepository(
         ).execute().use { response ->
             val respBody = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try {
-                    JSONObject(respBody).optString("error", respBody).ifBlank { respBody }
-                } catch (_: Exception) {
-                    respBody
-                }
-                error("HTTP ${response.code}: $msg")
+                error("HTTP ${response.code}: ${parseApiErrorMessage(respBody)}")
             }
             respBody.ifBlank { "{}" }
         }
@@ -111,14 +106,35 @@ class CorePaymentRepository(
         ).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try {
-                    JSONObject(body).optString("error", body).ifBlank { body }
-                } catch (_: Exception) {
-                    body
-                }
-                error("HTTP ${response.code}: $msg")
+                error("HTTP ${response.code}: ${parseApiErrorMessage(body)}")
             }
             body
+        }
+    }
+
+    private fun parseApiErrorMessage(raw: String): String {
+        return try {
+            val o = JSONObject(raw.trim().ifBlank { "{}" })
+            when (o.optString("error_code", "").uppercase()) {
+                "PAYMENT_METHOD_UNAVAILABLE" ->
+                    "Phương thức thanh toán chưa được bật trên máy chủ. Thử lại sau hoặc chọn phương thức khác."
+                "ORDER_NOT_PAYABLE" ->
+                    "Đơn hàng không ở trạng thái chờ thanh toán."
+                "SELLER_PAYOUT_NOT_CONFIGURED" ->
+                    "Người bán chưa cấu hình tài khoản nhận tiền."
+                "FEE_CALCULATION_ERROR", "ORDER_FEE_MISMATCH" ->
+                    "Lỗi tính phí đơn hàng. Hủy đơn và tạo lại."
+                else -> {
+                    val err = o.optString("error", raw).ifBlank { raw }
+                    if (err.contains("not awaiting payment", ignoreCase = true)) {
+                        "Đơn không còn ở bước thanh toán. Mở Đơn hàng để xem trạng thái mới nhất."
+                    } else {
+                        err
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            raw
         }
     }
 

@@ -116,16 +116,12 @@ class CheckoutViewModel(
     private var pollingJob: Job? = null
     private var pendingSuccess: ((String) -> Unit)? = null
 
-    private val defaultPaymentMethods = listOf(
-        PaymentMethodOption("momo", "Ví MoMo"),
-        PaymentMethodOption("zalopay", "ZaloPay"),
-        PaymentMethodOption("vnpay", "VNPay"),
-        PaymentMethodOption("vietqr", "VietQR"),
-        PaymentMethodOption("tpbank", "Chuyển khoản TPBank"),
-    )
-
-    private val _paymentMethods = MutableStateFlow(defaultPaymentMethods)
+    private val _paymentMethods = MutableStateFlow<List<PaymentMethodOption>>(emptyList())
     val paymentMethods: StateFlow<List<PaymentMethodOption>> = _paymentMethods.asStateFlow()
+
+    /** Set when core/payment-service returns no enabled gateways (do not show fake defaults). */
+    private val _paymentMethodsError = MutableStateFlow<String?>(null)
+    val paymentMethodsError: StateFlow<String?> = _paymentMethodsError.asStateFlow()
 
     fun loadListing(listingId: String, overridePriceVnd: Long = 0L, existingOrderId: String? = null) {
         _overridePriceVnd.value = overridePriceVnd
@@ -148,12 +144,26 @@ class CheckoutViewModel(
                 val orderAsync = oid?.let { id ->
                     async(Dispatchers.IO) { orderRepository.getOrderDetail(id) }
                 }
-                methodsAsync.await().getOrNull()?.let { list ->
-                    val enabled = list.filter { it.enabled }
-                    if (enabled.isNotEmpty()) {
-                        _paymentMethods.value = enabled.map { PaymentMethodOption(it.id, it.name) }
-                    }
-                }
+                _paymentMethodsError.value = null
+                methodsAsync.await().fold(
+                    onSuccess = { list ->
+                        if (list.isEmpty()) {
+                            _paymentMethods.value = emptyList()
+                            _paymentMethodsError.value = getApplication<Application>().getString(
+                                R.string.checkout_payment_methods_unavailable,
+                            )
+                        } else {
+                            _paymentMethods.value = list.map { PaymentMethodOption(it.id, it.name) }
+                            _selectedPaymentIndex.value = 0
+                        }
+                    },
+                    onFailure = {
+                        _paymentMethods.value = emptyList()
+                        _paymentMethodsError.value = getApplication<Application>().getString(
+                            R.string.checkout_payment_methods_load_failed,
+                        )
+                    },
+                )
                 val listingResult = listingAsync.await()
                 val orderResult = orderAsync?.await()
                 _isLoading.value = false
@@ -310,6 +320,15 @@ class CheckoutViewModel(
     fun submitPayment(onSuccess: (orderId: String) -> Unit) {
         if (!canSubmit() || _isSubmitting.value) return
         val d = _detail.value ?: return
+        val methods = _paymentMethods.value
+        if (methods.isEmpty()) {
+            val app = getApplication<Application>()
+            _events.tryEmit(
+                _paymentMethodsError.value
+                    ?: app.getString(R.string.checkout_payment_methods_unavailable),
+            )
+            return
+        }
         pendingSuccess = onSuccess
         viewModelScope.launch {
             _isSubmitting.value = true
@@ -329,10 +348,26 @@ class CheckoutViewModel(
                 )
                 return@launch
             }
-            withContext(Dispatchers.IO) { orderRepository.getOrderDetail(orderId) }.getOrNull()?.let {
-                _orderDetail.value = it
+            val freshOrder = withContext(Dispatchers.IO) {
+                orderRepository.getOrderDetail(orderId).getOrNull()
             }
-            val methods = _paymentMethods.value
+            if (freshOrder != null) {
+                _orderDetail.value = freshOrder
+                when (val block = paymentBlockReason(freshOrder.status)) {
+                    null -> { /* payment_pending — proceed */ }
+                    PaymentBlock.AlreadyPaid -> {
+                        _isSubmitting.value = false
+                        finishPaidFlow(orderId)
+                        return@launch
+                    }
+                    else -> {
+                        _isSubmitting.value = false
+                        pendingSuccess = null
+                        _events.tryEmit(paymentBlockMessage(block))
+                        return@launch
+                    }
+                }
+            }
             val idx = _selectedPaymentIndex.value.coerceIn(0, methods.lastIndex)
             val method = methods[idx]
             val initResult = withContext(Dispatchers.IO) {
@@ -412,6 +447,34 @@ class CheckoutViewModel(
     override fun onCleared() {
         super.onCleared()
         pollingJob?.cancel()
+    }
+
+    private enum class PaymentBlock {
+        NotPayable,
+        FulfillmentPending,
+        Cancelled,
+        AlreadyPaid,
+    }
+
+    /** Returns null when initiate is allowed (`payment_pending`). */
+    private fun paymentBlockReason(status: String): PaymentBlock? {
+        return when (status.trim().lowercase()) {
+            "payment_pending" -> null
+            "payment_held", "in_transit", "delivered_confirmed" -> PaymentBlock.AlreadyPaid
+            "fulfillment_pending" -> PaymentBlock.FulfillmentPending
+            "cancelled", "disputed" -> PaymentBlock.Cancelled
+            else -> PaymentBlock.NotPayable
+        }
+    }
+
+    private fun paymentBlockMessage(block: PaymentBlock): String {
+        val app = getApplication<Application>()
+        return when (block) {
+            PaymentBlock.AlreadyPaid -> app.getString(R.string.checkout_order_already_paid)
+            PaymentBlock.FulfillmentPending -> app.getString(R.string.checkout_order_fulfillment_pending)
+            PaymentBlock.Cancelled -> app.getString(R.string.checkout_order_cancelled)
+            PaymentBlock.NotPayable -> app.getString(R.string.checkout_order_not_payable)
+        }
     }
 
     private companion object {

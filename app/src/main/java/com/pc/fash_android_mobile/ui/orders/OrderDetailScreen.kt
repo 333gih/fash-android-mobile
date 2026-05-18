@@ -93,6 +93,7 @@ fun OrderDetailScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val busy by viewModel.busyAction.collectAsState()
+    val shipmentCarriers by viewModel.shipmentCarriers.collectAsState()
     val isBlocking = busy != OrderDetailBusyAction.None
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -551,6 +552,11 @@ fun OrderDetailScreen(
                                 showShipDialog = true
                             },
                             onConfirmHandoff = { viewModel.confirmHandoff(d.orderId) },
+                            onAdvanceMockShipment = if (BuildConfig.DEBUG && d.canAdvanceMockShipment) {
+                                { viewModel.advanceMockShipment(d.orderId) }
+                            } else {
+                                null
+                            },
                             onChat = {
                                 val cid = d.conversationId.trim()
                                 if (cid.isNotEmpty()) {
@@ -634,13 +640,39 @@ fun OrderDetailScreen(
         },
     )
 
+    LaunchedEffect(showShipDialog) {
+        if (showShipDialog) viewModel.loadShipmentCarriers()
+    }
+
     if (showShipDialog && detail != null) {
         val d = detail!!
+        var selectedCarrierId by remember(showShipDialog, shipmentCarriers) {
+            mutableStateOf(shipmentCarriers.firstOrNull()?.id.orEmpty())
+        }
         AlertDialog(
             onDismissRequest = { showShipDialog = false },
             title = { Text(stringResource(R.string.order_detail_ship_dialog_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (shipmentCarriers.isNotEmpty()) {
+                        shipmentCarriers.forEach { c ->
+                            OutlinedButton(
+                                onClick = { selectedCarrierId = c.id },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isBlocking,
+                            ) {
+                                Text(
+                                    text = if (selectedCarrierId == c.id) "✓ ${c.name}" else c.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.order_detail_ship_manual_section),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     OutlinedTextField(
                         value = trackingInput,
                         onValueChange = { trackingInput = it },
@@ -658,14 +690,27 @@ fun OrderDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showShipDialog = false
-                        viewModel.shipOrder(d.orderId, trackingInput, carrierInput)
-                    },
-                    enabled = !isBlocking && trackingInput.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.order_detail_ship_confirm))
+                Column {
+                    if (shipmentCarriers.isNotEmpty() && selectedCarrierId.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                showShipDialog = false
+                                viewModel.bookShipment(d.orderId, selectedCarrierId)
+                            },
+                            enabled = !isBlocking,
+                        ) {
+                            Text(stringResource(R.string.order_detail_ship_book_carrier))
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            showShipDialog = false
+                            viewModel.shipOrder(d.orderId, trackingInput, carrierInput)
+                        },
+                        enabled = !isBlocking && trackingInput.isNotBlank(),
+                    ) {
+                        Text(stringResource(R.string.order_detail_ship_confirm))
+                    }
                 }
             },
             dismissButton = {

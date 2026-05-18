@@ -248,6 +248,44 @@ class OrderRepository(
         )
     }
 
+    /** `GET /shipment/carriers` — courier catalog (mock until real integration). */
+    fun listShipmentCarriers(): Result<List<ShipmentCarrier>> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/shipment/carriers")
+        val body = executeGet(url)
+        val top = JSONObject(body.trim())
+        val root = if (top.has("data")) top.getJSONObject("data") else top
+        val arr = root.optJSONArray("carriers") ?: JSONArray()
+        val out = mutableListOf<ShipmentCarrier>()
+        for (i in 0 until arr.length()) {
+            val c = arr.optJSONObject(i) ?: continue
+            val id = c.optString("id", "").trim()
+            if (id.isEmpty()) continue
+            out.add(
+                ShipmentCarrier(
+                    id = id,
+                    name = c.optString("name", id),
+                    description = c.optString("description", ""),
+                ),
+            )
+        }
+        out
+    }
+
+    /**
+     * `POST /orders/{order_id}/shipment/book` — seller books mock/real courier label.
+     */
+    fun bookShipment(orderId: String, carrierId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/orders/${orderId.trim()}/shipment/book")
+        val json = JSONObject().put("carrier_id", carrierId.trim().lowercase()).toString()
+        executePostJson(url, json)
+    }
+
+    /** `POST /dev/shipment/{order_id}/advance` — mock tracking step (dev builds). */
+    fun advanceMockShipment(orderId: String): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/dev/shipment/${orderId.trim()}/advance")
+        executePostEmptyBody(url)
+    }
+
     /** `POST /orders/ship` */
     fun shipOrder(orderId: String, trackingNumber: String, carrier: String): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/ship")
@@ -404,7 +442,7 @@ class OrderRepository(
             apiCanReviewExplicit != null -> apiCanReviewExplicit
             else -> defaultReviewEligible
         }
-        val trackingNumber = o.optString("tracking_number", o.optString("TrackingNumber", ""))
+        var trackingNumber = o.optString("tracking_number", o.optString("TrackingNumber", ""))
         val shippingFee = o.optLong("shipping_fee_vnd", o.optLong("ShippingFeeVND", o.optLong("shipping_fee", 0L)))
         val discountVnd = o.optLong("discount_vnd", o.optLong("DiscountVND", o.optLong("discount_amount_vnd", 0L)))
         val buyerTotal = o.optLong("buyer_total_vnd", o.optLong("BuyerTotalVND", o.optLong("total_vnd", 0L)))
@@ -412,17 +450,35 @@ class OrderRepository(
             ?: o.optJSONObject("ShippingAddress")
             ?: o.optJSONObject("delivery_address")
             ?: JSONObject()
-        val shippingFormatted = buildShippingAddressString(shipAddr, o)
-        val recipientName = shipAddr.optString("recipient_name", shipAddr.optString("name", shipAddr.optString("RecipientName", "")))
+        var shippingFormatted = buildShippingAddressString(shipAddr, o)
+        if (shippingFormatted.isBlank()) {
+            shippingFormatted = buildShippingFromFlatOrderFields(o)
+        }
+        var recipientName = shipAddr.optString("recipient_name", shipAddr.optString("name", shipAddr.optString("RecipientName", "")))
             .ifBlank { o.optString("recipient_name", o.optString("RecipientName", "")) }
-        val recipientPhone = shipAddr.optString("phone", shipAddr.optString("Phone", ""))
+        if (recipientName.isBlank()) {
+            recipientName = o.optString("shipping_recipient_name", o.optString("ShippingRecipientName", ""))
+        }
+        var recipientPhone = shipAddr.optString("phone", shipAddr.optString("Phone", ""))
             .ifBlank { o.optString("recipient_phone", o.optString("RecipientPhone", "")) }
+        if (recipientPhone.isBlank()) {
+            recipientPhone = o.optString("shipping_recipient_phone", o.optString("ShippingRecipientPhone", ""))
+        }
+        val shipment = o.optJSONObject("shipment") ?: o.optJSONObject("Shipment") ?: JSONObject()
+        val trackingFromShipment = shipment.optString("tracking_number", shipment.optString("TrackingNumber", ""))
+        val trackingSummaryFromShipment = shipment.optString("tracking_status", shipment.optString("TrackingStatus", ""))
+        val canAdvanceMock = shipment.optBoolean("can_advance_mock", shipment.optBoolean("CanAdvanceMock", false))
+        if (trackingNumber.isBlank() && trackingFromShipment.isNotBlank()) {
+            trackingNumber = trackingFromShipment
+        }
         val trackingEmpty = trackingNumber.isBlank()
         val canShip = o.optBoolean("can_ship", o.optBoolean("CanShip", false)) ||
             (rawStatus == "payment_held" && trackingEmpty)
         val variantLabel = buildListingVariantLabel(listing)
         val convId = o.optString("conversation_id", o.optString("conversationId", o.optString("ConversationID", "")))
-        val trackingSummary = o.optString("tracking_status", o.optString("TrackingStatus", o.optString("last_tracking_event", "")))
+        val trackingSummary = trackingSummaryFromShipment.ifBlank {
+            o.optString("tracking_status", o.optString("TrackingStatus", o.optString("last_tracking_event", "")))
+        }
         val meetingAppointment = parseOrderMeetingAppointment(o)
         val meetingGrace = parseOrderMeetingGrace(o)
         val meetupDeadlineAt = o.optIsoFirst("meetup_deadline_at", "MeetupDeadlineAt")
@@ -495,7 +551,17 @@ class OrderRepository(
             expiryKind = o.optString("expiry_kind", o.optString("ExpiryKind", "")).trim().lowercase(),
             canConfirmHandoff = canConfirmHandoff,
             canAcknowledgeOfflineCash = canAcknowledgeOfflineCash,
+            canAdvanceMockShipment = canAdvanceMock,
         )
+    }
+
+    private fun buildShippingFromFlatOrderFields(order: JSONObject): String {
+        val parts = listOf(
+            order.optString("shipping_line1", order.optString("ShippingLine1", "")),
+            order.optString("shipping_district", order.optString("ShippingDistrict", "")),
+            order.optString("shipping_city", order.optString("ShippingCity", "")),
+        ).map { it.trim() }.filter { it.isNotEmpty() }
+        return parts.joinToString(", ")
     }
 
     private fun parseBuyerReview(order: JSONObject): OrderBuyerReview? {

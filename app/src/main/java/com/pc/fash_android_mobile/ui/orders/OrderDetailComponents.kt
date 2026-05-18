@@ -1440,6 +1440,8 @@ internal fun OrderStickyBottomBar(
     onShip: () -> Unit,
     /** Seller meetup / in-person handoff — mutually exclusive with [onShip] in normal flows. */
     onConfirmHandoff: () -> Unit = {},
+    /** Dev/staging mock courier step (`POST /dev/shipment/:id/advance`). */
+    onAdvanceMockShipment: (() -> Unit)? = null,
     onChat: () -> Unit,
     onOpenDispute: () -> Unit = {},
     onSubmitDisputeEvidence: () -> Unit = {},
@@ -1454,6 +1456,8 @@ internal fun OrderStickyBottomBar(
     val showReview = role == OrderViewerRole.Buyer && d.canReview && d.buyerReview == null
     val showConfirmHandoff = role == OrderViewerRole.Seller && d.sellerShowsConfirmHandoffCta()
     val showShip = role == OrderViewerRole.Seller && st == "payment_held" && d.canShip && !showConfirmHandoff
+    val showAdvanceMock = onAdvanceMockShipment != null &&
+        (st == "payment_held" || st == "in_transit")
     val showChat =
         d.conversationId.isNotBlank() &&
             (role == OrderViewerRole.Buyer || role == OrderViewerRole.Seller) &&
@@ -1465,7 +1469,7 @@ internal fun OrderStickyBottomBar(
         role != OrderViewerRole.Viewer && st == "disputed"
 
     val idle = busy == OrderDetailBusyAction.None
-    val hasPrimary = showConfirmHandoff || showShip || showPay || showConfirm || showContinueInChat
+    val hasPrimary = showConfirmHandoff || showShip || showPay || showConfirm || showContinueInChat || showAdvanceMock
     val hasSecondary = showOpenDispute || showDisputeEvidence || showReview || showChat || showCancelOrder
 
     if (!hasPrimary && !hasSecondary) return
@@ -1551,6 +1555,20 @@ internal fun OrderStickyBottomBar(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(stringResource(R.string.order_detail_confirm_handoff), style = labelStyle)
                     }
+                }
+            }
+            if (showAdvanceMock) {
+                OutlinedButton(
+                    onClick = { onAdvanceMockShipment?.invoke() },
+                    enabled = idle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(FashTheme.spacing.buttonHeight - 4.dp),
+                    shape = shape,
+                    border = stickyOutline,
+                    contentPadding = compactPad,
+                ) {
+                    Text(stringResource(R.string.order_detail_shipment_advance), style = labelStyle)
                 }
             }
             if (showShip) {

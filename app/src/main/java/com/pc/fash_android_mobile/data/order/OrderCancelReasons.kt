@@ -22,6 +22,13 @@ object OrderCancelReasons {
         OrderCancelReasonOption("other", R.string.order_cancel_reason_other, requiresNote = true),
     )
 
-    fun labelResForCode(code: String): Int? =
-        options.find { it.code == code.trim().lowercase() }?.labelRes
+    private val systemReasonLabels: Map<String, Int> = mapOf(
+        "payment_expired" to R.string.order_cancel_reason_payment_expired,
+        "meetup_not_possible" to R.string.order_cancel_reason_meetup_not_possible,
+    )
+
+    fun labelResForCode(code: String): Int? {
+        val key = code.trim().lowercase()
+        return systemReasonLabels[key] ?: options.find { it.code == key }?.labelRes
+    }
 }

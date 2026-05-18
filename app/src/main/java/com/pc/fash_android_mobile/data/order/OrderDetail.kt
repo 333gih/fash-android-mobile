@@ -123,6 +123,8 @@ data class OrderDetail(
     val canConfirmHandoff: Boolean = false,
     /** Seller: `POST /orders/:id/acknowledge-offline-cash` when API exposes the action. */
     val canAcknowledgeOfflineCash: Boolean = false,
+    /** Dev/staging: `POST /dev/shipment/:id/advance` when mock provider is active. */
+    val canAdvanceMockShipment: Boolean = false,
 )
 
 /** Product + shipping − discount when [buyerTotalVnd] is not set by the API. */

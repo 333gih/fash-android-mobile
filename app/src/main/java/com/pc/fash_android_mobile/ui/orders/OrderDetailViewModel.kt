@@ -10,6 +10,7 @@ import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
 import com.pc.fash_android_mobile.data.order.OrderRepository
+import com.pc.fash_android_mobile.data.order.ShipmentCarrier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +62,9 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
+
+    private val _shipmentCarriers = MutableStateFlow<List<ShipmentCarrier>>(emptyList())
+    val shipmentCarriers: StateFlow<List<ShipmentCarrier>> = _shipmentCarriers.asStateFlow()
 
     /**
      * True when the logged-in user is the buyer. Matches [AuthSession.userId] to the order's
@@ -206,6 +210,67 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                     onFailure = {
                         _events.tryEmit(
                             it.message ?: getApplication<Application>().getString(R.string.order_detail_confirm_handoff_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
+            }
+        }
+    }
+
+    fun loadShipmentCarriers() {
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.IO) {
+                orderRepository.listShipmentCarriers().getOrElse { emptyList() }
+            }
+            _shipmentCarriers.value = list
+        }
+    }
+
+    fun bookShipment(orderId: String, carrierId: String) {
+        val oid = orderId.trim()
+        val cid = carrierId.trim()
+        if (oid.isBlank() || cid.isBlank()) return
+        viewModelScope.launch {
+            _busyAction.value = OrderDetailBusyAction.Ship
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    orderRepository.bookShipment(oid, cid)
+                }
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(getApplication<Application>().getString(R.string.order_detail_ship_success))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: getApplication<Application>().getString(R.string.order_detail_ship_error),
+                        )
+                    },
+                )
+            } finally {
+                _busyAction.value = OrderDetailBusyAction.None
+            }
+        }
+    }
+
+    fun advanceMockShipment(orderId: String) {
+        val oid = orderId.trim()
+        if (oid.isBlank()) return
+        viewModelScope.launch {
+            _busyAction.value = OrderDetailBusyAction.Ship
+            try {
+                val result = withContext(Dispatchers.IO) { orderRepository.advanceMockShipment(oid) }
+                val app = getApplication<Application>()
+                result.fold(
+                    onSuccess = {
+                        _events.tryEmit(app.getString(R.string.order_detail_shipment_advance_ok))
+                        load(oid)
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message ?: app.getString(R.string.order_detail_ship_error),
                         )
                     },
                 )

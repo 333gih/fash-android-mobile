@@ -1096,6 +1096,12 @@
     <string name="checkout_district">District</string>
     <string name="checkout_city">City</string>
     <string name="checkout_payment_method_label">Choose payment method</string>
+    <string name="checkout_payment_methods_unavailable">No payment methods are available. Please try again later.</string>
+    <string name="checkout_payment_methods_load_failed">Could not load payment methods. Check your connection and try again.</string>
+    <string name="checkout_order_already_paid">This order is already paid. Check Orders for shipping updates.</string>
+    <string name="checkout_order_not_payable">This order is no longer awaiting payment. Open Orders for the latest status.</string>
+    <string name="checkout_order_fulfillment_pending">Choose online escrow in chat before paying in the app.</string>
+    <string name="checkout_order_cancelled">This order was cancelled or expired. Place a new order to buy again.</string>
     <string name="checkout_editorial_badge">EDITORIAL SELECTION</string>
     <string name="checkout_order_summary">Payment summary</string>
     <string name="checkout_shipping_fee">Shipping</string>
@@ -1194,6 +1200,7 @@
     <string name="order_cancel_reason_meetup_not_possible">Could not arrange meetup</string>
     <string name="order_cancel_reason_seller_slow">Seller slow to respond</string>
     <string name="order_cancel_reason_payment_problem">Payment issue</string>
+    <string name="order_cancel_reason_payment_expired">Payment time expired</string>
     <string name="order_cancel_reason_other">Other</string>
     <string name="order_cancel_feedback_title">Rate this experience</string>
     <string name="order_cancel_feedback_subtitle">Was cancelling clear and fair? Your feedback is recorded to improve the product.</string>
@@ -1351,6 +1358,10 @@
     <string name="order_detail_ship_carrier_label">Carrier</string>
     <string name="order_detail_ship_confirm">Confirm shipment</string>
     <string name="order_detail_ship_success">Shipment updated.</string>
+    <string name="order_detail_ship_book_carrier">Book shipment (mock)</string>
+    <string name="order_detail_ship_manual_section">Or enter tracking manually</string>
+    <string name="order_detail_shipment_advance_ok">Mock shipment status advanced.</string>
+    <string name="order_detail_shipment_advance">Advance mock shipment</string>
     <string name="order_detail_ship_error">Could not update shipment. Try again.</string>
     <string name="order_detail_ship_tracking_required">Enter a tracking number.</string>
 

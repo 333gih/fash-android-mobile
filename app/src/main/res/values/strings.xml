@@ -1138,6 +1138,12 @@
     <string name="checkout_district">Quận-Huyện</string>
     <string name="checkout_city">Thành phố</string>
     <string name="checkout_payment_method_label">Chọn phương thức</string>
+    <string name="checkout_payment_methods_unavailable">Chưa có phương thức thanh toán khả dụng. Vui lòng thử lại sau.</string>
+    <string name="checkout_payment_methods_load_failed">Không tải được danh sách thanh toán. Kiểm tra mạng và thử lại.</string>
+    <string name="checkout_order_already_paid">Đơn đã thanh toán. Xem mục Đơn hàng để theo dõi giao hàng.</string>
+    <string name="checkout_order_not_payable">Đơn không còn ở bước thanh toán. Mở Đơn hàng để xem trạng thái mới nhất.</string>
+    <string name="checkout_order_fulfillment_pending">Chưa chọn hình thức giao hàng (online/ký quỹ). Hoàn tất trong chat trước khi thanh toán.</string>
+    <string name="checkout_order_cancelled">Đơn đã hủy hoặc hết hạn. Tạo đơn mới nếu vẫn muốn mua.</string>
     <string name="checkout_editorial_badge">EDITORIAL SELECTION</string>
     <string name="checkout_order_summary">Tóm tắt thanh toán</string>
     <string name="checkout_shipping_fee">Phí vận chuyển</string>
@@ -1237,6 +1243,7 @@
     <string name="order_cancel_reason_meetup_not_possible">Không sắp xếp được gặp mặt</string>
     <string name="order_cancel_reason_seller_slow">Người bán phản hồi chậm</string>
     <string name="order_cancel_reason_payment_problem">Vấn đề thanh toán</string>
+    <string name="order_cancel_reason_payment_expired">Hết thời gian thanh toán</string>
     <string name="order_cancel_reason_other">Khác</string>
     <string name="order_cancel_feedback_title">Đánh giá trải nghiệm</string>
     <string name="order_cancel_feedback_subtitle">Quy trình hủy đơn có rõ ràng không? Phản hồi được lưu để cải thiện sản phẩm.</string>
@@ -1397,6 +1404,10 @@
     <string name="order_detail_ship_carrier_label">Đơn vị vận chuyển</string>
     <string name="order_detail_ship_confirm">Xác nhận gửi</string>
     <string name="order_detail_ship_success">Đã cập nhật gửi hàng.</string>
+    <string name="order_detail_ship_book_carrier">Đặt vận chuyển (mock)</string>
+    <string name="order_detail_ship_manual_section">Hoặc nhập mã vận đơn thủ công</string>
+    <string name="order_detail_shipment_advance_ok">Đã cập nhật trạng thái vận chuyển (mock).</string>
+    <string name="order_detail_shipment_advance">Tiến mock vận chuyển</string>
     <string name="order_detail_ship_error">Không cập nhật được gửi hàng. Thử lại.</string>
     <string name="order_detail_ship_tracking_required">Nhập mã vận đơn.</string>
 

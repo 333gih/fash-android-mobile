@@ -111,6 +111,7 @@ fun CheckoutScreen(
     val city by viewModel.city.collectAsState()
     val selectedPaymentIndex by viewModel.selectedPaymentIndex.collectAsState()
     val paymentMethods by viewModel.paymentMethods.collectAsState()
+    val paymentMethodsError by viewModel.paymentMethodsError.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -248,6 +249,7 @@ fun CheckoutScreen(
                             methods = paymentMethods,
                             selectedIndex = selectedPaymentIndex,
                             onSelect = viewModel::selectPaymentMethod,
+                            errorMessage = paymentMethodsError,
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         OrderSummarySection(
@@ -816,6 +818,7 @@ private fun PaymentMethodSection(
     methods: List<PaymentMethodOption>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
+    errorMessage: String? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(
@@ -841,6 +844,14 @@ private fun PaymentMethodSection(
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
+        if (!errorMessage.isNullOrBlank()) {
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             methods.forEachIndexed { index, method ->
                 val selected = index == selectedIndex
