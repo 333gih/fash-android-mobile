@@ -1519,4 +1519,27 @@
     <string name="chat_report_status_warned">Đã xử lý — người dùng được cảnh báo</string>
     <string name="chat_report_status_suspended">Đã xử lý — tài khoản bị tạm khóa</string>
     <string name="chat_report_status_unknown">Trạng thái: %1$s</string>
+
+    <!-- Seller product packages (monetization) -->
+    <string name="seller_packages_screen_title">Gói tiện ích người bán</string>
+    <string name="seller_packages_screen_subtitle">Nâng cấp để xác minh hàng Real/Fake, tăng hiển thị trên Khám phá và quảng bá trên kênh Fash.</string>
+    <string name="seller_packages_load_error">Không tải được danh sách gói.</string>
+    <string name="seller_packages_empty">Chưa có gói nào.</string>
+    <string name="seller_packages_price_per_month">%1$s / %2$d ngày</string>
+    <string name="seller_packages_buy_now">Mua ngay</string>
+    <string name="seller_packages_feature_authenticity">Xác minh hàng Real / Fake</string>
+    <string name="seller_packages_feature_explore_boost">Đẩy tin ưu tiên trên Khám phá</string>
+    <string name="seller_packages_feature_fanpage">Hiển thị trên fanpage Fash</string>
+    <string name="seller_packages_feature_social">Quảng bá TikTok &amp; Instagram của nền tảng</string>
+    <string name="seller_packages_checkout_title">Thanh toán gói</string>
+    <string name="seller_packages_checkout_duration">Thời hạn</string>
+    <string name="seller_packages_duration_days">%1$d ngày</string>
+    <string name="seller_packages_checkout_subtotal">Tạm tính</string>
+    <string name="seller_packages_checkout_total">Tổng thanh toán</string>
+    <string name="seller_packages_checkout_legal">Thanh toán sẽ được kích hoạt khi gói chính thức ra mắt. Giá có thể điều chỉnh trước khi phát hành.</string>
+    <string name="seller_packages_coming_soon_title">Sắp ra mắt</string>
+    <string name="seller_packages_coming_soon_body">Gói này chưa mở bán. Bạn có thể xem trước quyền lợi; thanh toán sẽ bật khi is_released = true trên hệ thống.</string>
+    <string name="seller_packages_coming_soon_cta">Sắp ra mắt</string>
+    <string name="seller_packages_pay_amount">Thanh toán %1$s</string>
+    <string name="seller_packages_back_to_list">Quay lại danh sách gói</string>
 </resources>

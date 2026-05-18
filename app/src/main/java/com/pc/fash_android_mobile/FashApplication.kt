@@ -250,6 +250,11 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
+    /** Seller monetization packages (hardcoded catalog → future core-service GET). */
+    val sellerProductPackageRepository: com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackageRepository by lazy {
+        com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackageRepository()
+    }
+
     /** Admin promo interstitials pull backup (`GET /app/promo-interstitials/active`). */
     val appPromoInterstitialRepository: AppPromoInterstitialRepository by lazy {
         AppPromoInterstitialRepository(

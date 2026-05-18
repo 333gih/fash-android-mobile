@@ -97,6 +97,10 @@ import com.pc.fash_android_mobile.ui.navigation.SellerShopRestoreContext
 import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
+import com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackage
+import com.pc.fash_android_mobile.ui.sellerpackages.SellerPackageCheckoutScreen
+import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesScreen
+import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
@@ -233,6 +237,7 @@ class MainActivity : ComponentActivity() {
     private val changePasswordViewModel: ChangePasswordViewModel by viewModels()
     private val notificationsViewModel: com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel by viewModels()
     private val promoSlidesViewModel: PromoSlidesViewModel by viewModels()
+    private val sellerProductPackagesViewModel: SellerProductPackagesViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
 
     private val fashApp get() = application as FashApplication
@@ -936,6 +941,8 @@ class MainActivity : ComponentActivity() {
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
+                                    var showSellerPackagesScreen by rememberSaveable { mutableStateOf(false) }
+                                    var sellerPackageCheckout by remember { mutableStateOf<SellerProductPackage?>(null) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders) {
                                         if (pendingPromoMainTab >= 0) {
@@ -1067,6 +1074,8 @@ class MainActivity : ComponentActivity() {
                                     ReloadWhenVisible(
                                         !showOrdersScreen &&
                                             !showHomeDeliveringScreen &&
+                                            !showSellerPackagesScreen &&
+                                            sellerPackageCheckout == null &&
                                             sellerShopUsername == null &&
                                             !showEditProfile &&
                                             !showFeaturedSellersAll,
@@ -1082,8 +1091,14 @@ class MainActivity : ComponentActivity() {
                                         val nav = slide.navigation
                                         val t = nav?.type?.trim()?.lowercase().orEmpty()
                                         when (t) {
+                                            "", "none" -> Unit
+                                            "in_app_explore" -> selectedTab = MainTab.Explore.ordinal
                                             "in_app_orders" -> showOrdersScreen = true
                                             "in_app_chat" -> selectedTab = MainTab.Chat.ordinal
+                                            "in_app_product_packages" -> {
+                                                sellerPackageCheckout = null
+                                                showSellerPackagesScreen = true
+                                            }
                                             "external_url" -> {
                                                 val url = nav?.payload?.trim().orEmpty()
                                                 if (url.isNotEmpty()) {
@@ -1100,7 +1115,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                             }
-                                            else -> selectedTab = MainTab.Explore.ordinal
+                                            else -> Unit
                                         }
                                     }
                                     val chatConversations by chatViewModel.conversations.collectAsState()
@@ -1144,6 +1159,8 @@ class MainActivity : ComponentActivity() {
                                                 showAddAddressScreen ||
                                                 showOrdersScreen ||
                                                 showHomeDeliveringScreen ||
+                                                showSellerPackagesScreen ||
+                                                sellerPackageCheckout != null ||
                                                 showFollowConnections ||
                                                 showFeaturedSellersAll
                                         when {
@@ -1853,6 +1870,26 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
+                                        if (sellerPackageCheckout != null) {
+                                            SellerPackageCheckoutScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                pkg = sellerPackageCheckout!!,
+                                                onBack = { sellerPackageCheckout = null },
+                                            )
+                                        } else if (showSellerPackagesScreen && selectedOrderId == null) {
+                                            SellerProductPackagesScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                viewModel = sellerProductPackagesViewModel,
+                                                onBack = { showSellerPackagesScreen = false },
+                                                onBuyPackage = { pkg ->
+                                                    sellerPackageCheckout = pkg
+                                                },
+                                            )
+                                        }
                                         if (showFollowConnections) {
                                             FollowConnectionsScreen(
                                                 modifier = Modifier
@@ -1942,6 +1979,8 @@ class MainActivity : ComponentActivity() {
                                             sellerShopUsername,
                                             showFollowConnections,
                                             showHomeDeliveringScreen,
+                                            showSellerPackagesScreen,
+                                            sellerPackageCheckout,
                                             showOrdersScreen,
                                             selectedCheckoutListingId,
                                             showAddAddressScreen,
@@ -1958,6 +1997,8 @@ class MainActivity : ComponentActivity() {
                                                 sellerShopUsername != null ||
                                                 showFollowConnections ||
                                                 showHomeDeliveringScreen ||
+                                                showSellerPackagesScreen ||
+                                                sellerPackageCheckout != null ||
                                                 showOrdersScreen ||
                                                 selectedCheckoutListingId != null ||
                                                 showAddAddressScreen ||
@@ -1983,6 +2024,12 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 showHomeDeliveringScreen && selectedOrderId == null -> {
                                                     showHomeDeliveringScreen = false
+                                                }
+                                                sellerPackageCheckout != null -> {
+                                                    sellerPackageCheckout = null
+                                                }
+                                                showSellerPackagesScreen -> {
+                                                    showSellerPackagesScreen = false
                                                 }
                                                 selectedCheckoutListingId != null -> {
                                                     selectedCheckoutListingId = null

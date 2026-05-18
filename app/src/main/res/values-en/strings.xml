@@ -1467,4 +1467,26 @@
     <string name="chat_report_status_warned">Action taken — user warned</string>
     <string name="chat_report_status_suspended">Action taken — user suspended</string>
     <string name="chat_report_status_unknown">Status: %1$s</string>
+
+    <string name="seller_packages_screen_title">Seller utility packages</string>
+    <string name="seller_packages_screen_subtitle">Upgrade to verify Real/Fake items, boost Explore visibility, and get featured on Fash channels.</string>
+    <string name="seller_packages_load_error">Could not load packages.</string>
+    <string name="seller_packages_empty">No packages available.</string>
+    <string name="seller_packages_price_per_month">%1$s / %2$d days</string>
+    <string name="seller_packages_buy_now">Buy now</string>
+    <string name="seller_packages_feature_authenticity">Real / Fake item verification</string>
+    <string name="seller_packages_feature_explore_boost">Priority boost on Explore</string>
+    <string name="seller_packages_feature_fanpage">Featured on Fash fanpage</string>
+    <string name="seller_packages_feature_social">Promo on platform TikTok &amp; Instagram</string>
+    <string name="seller_packages_checkout_title">Package checkout</string>
+    <string name="seller_packages_checkout_duration">Duration</string>
+    <string name="seller_packages_duration_days">%1$d days</string>
+    <string name="seller_packages_checkout_subtotal">Subtotal</string>
+    <string name="seller_packages_checkout_total">Total due</string>
+    <string name="seller_packages_checkout_legal">Payment goes live when the package is released. Price may change before launch.</string>
+    <string name="seller_packages_coming_soon_title">Coming soon</string>
+    <string name="seller_packages_coming_soon_body">This package is not on sale yet. Preview benefits now; checkout opens when is_released is true in the system.</string>
+    <string name="seller_packages_coming_soon_cta">Coming soon</string>
+    <string name="seller_packages_pay_amount">Pay %1$s</string>
+    <string name="seller_packages_back_to_list">Back to packages</string>
 </resources>
