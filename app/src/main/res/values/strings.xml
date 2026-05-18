@@ -1538,7 +1538,7 @@
     <string name="seller_packages_checkout_total">Tổng thanh toán</string>
     <string name="seller_packages_checkout_legal">Thanh toán sẽ được kích hoạt khi gói chính thức ra mắt. Giá có thể điều chỉnh trước khi phát hành.</string>
     <string name="seller_packages_coming_soon_title">Sắp ra mắt</string>
-    <string name="seller_packages_coming_soon_body">Gói này chưa mở bán. Bạn có thể xem trước quyền lợi; thanh toán sẽ bật khi is_released = true trên hệ thống.</string>
+    <string name="seller_packages_coming_soon_body">Gói này chưa mở bán. Bạn có thể xem trước quyền lợi; thanh toán sẽ được bật khi Fash chính thức phát hành gói.</string>
     <string name="seller_packages_coming_soon_cta">Sắp ra mắt</string>
     <string name="seller_packages_pay_amount">Thanh toán %1$s</string>
     <string name="seller_packages_back_to_list">Quay lại danh sách gói</string>

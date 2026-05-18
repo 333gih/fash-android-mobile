@@ -47,8 +47,9 @@ class SellerProductPackageRepository(
             try {
                 val raw = executeGet(url)
                 val parsed = parseSellerProductPackagesResponse(raw)
-                if (parsed.packages.isNotEmpty()) {
-                    return@runCatching parsed
+                val visible = if (activeOnly) parsed.packages.filter { it.active } else parsed.packages
+                if (visible.isNotEmpty()) {
+                    return@runCatching parsed.copy(packages = visible)
                 }
             } catch (e: Exception) {
                 last = e

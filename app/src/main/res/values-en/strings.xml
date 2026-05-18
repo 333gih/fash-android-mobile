@@ -1485,7 +1485,7 @@
     <string name="seller_packages_checkout_total">Total due</string>
     <string name="seller_packages_checkout_legal">Payment goes live when the package is released. Price may change before launch.</string>
     <string name="seller_packages_coming_soon_title">Coming soon</string>
-    <string name="seller_packages_coming_soon_body">This package is not on sale yet. Preview benefits now; checkout opens when is_released is true in the system.</string>
+    <string name="seller_packages_coming_soon_body">This package is not on sale yet. You can preview the benefits; checkout opens when Fash releases the package.</string>
     <string name="seller_packages_coming_soon_cta">Coming soon</string>
     <string name="seller_packages_pay_amount">Pay %1$s</string>
     <string name="seller_packages_back_to_list">Back to packages</string>

@@ -22,9 +22,11 @@ data class SellerProductPackage(
     val priceVnd: Long,
     val durationDays: Int,
     val tier: PackageTier,
+    /** When true, checkout allows payment; when false, checkout shows "Coming soon". */
     val isReleased: Boolean,
     val isBestSeller: Boolean,
     val badgeLabel: String?,
+    /** When false, package must not appear on the list (server filters with active_only=true). */
     val active: Boolean,
     val features: List<SellerPackageFeature>,
 )

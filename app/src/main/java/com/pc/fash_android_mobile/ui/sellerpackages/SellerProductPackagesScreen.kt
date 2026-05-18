@@ -31,6 +31,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -261,14 +262,24 @@ private fun SellerPackageCard(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onBuy,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (pkg.isBestSeller) FashColors.Primary else scheme.primary,
-                ),
-            ) {
-                Text(stringResource(R.string.seller_packages_buy_now))
+            val comingSoon = !pkg.isReleased
+            if (comingSoon) {
+                OutlinedButton(
+                    onClick = onBuy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.seller_packages_coming_soon_cta))
+                }
+            } else {
+                Button(
+                    onClick = onBuy,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (pkg.isBestSeller) FashColors.Primary else scheme.primary,
+                    ),
+                ) {
+                    Text(stringResource(R.string.seller_packages_buy_now))
+                }
             }
         }
     }
