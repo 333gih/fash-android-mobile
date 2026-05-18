@@ -146,6 +146,7 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.data.locale.AppLocale
+import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
@@ -243,6 +244,7 @@ class MainActivity : ComponentActivity() {
     private fun applyLaunchNavigationIntents(intent: Intent?) {
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
         InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
+        AccountSwitchDeepLinks.parseFromIntent(intent)?.let { fashApp.requestAccountSwitchPrompt(it) }
     }
 
     private val googleSignInLauncher = registerForActivityResult(
@@ -2252,6 +2254,52 @@ class MainActivity : ComponentActivity() {
                         activePromoCampaign = null
                     },
                 )
+                val accountSwitchPrompt by fashApp.pendingAccountSwitchPrompt.collectAsState()
+                accountSwitchPrompt?.let { prompt ->
+                    val activeUserId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                    if (activeUserId.isEmpty() || !activeUserId.equals(prompt.pendingUserId, ignoreCase = true)) {
+                        AlertDialog(
+                            onDismissRequest = { fashApp.clearAccountSwitchPrompt() },
+                            title = { Text(stringResource(R.string.account_switch_dialog_title)) },
+                            text = {
+                                Text(
+                                    stringResource(
+                                        R.string.account_switch_dialog_message,
+                                        prompt.emailMasked ?: "…",
+                                        prompt.unreadCount,
+                                    ),
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        fashApp.clearAccountSwitchPrompt()
+                                        val session = authManager.sessionStore.read()
+                                        mainScope.launch {
+                                            if (session != null) {
+                                                withContext(Dispatchers.IO) {
+                                                    authManager.logout(session.accessToken)
+                                                }
+                                            }
+                                            loginViewModel.prefillEmailForAccountSwitch(prompt.emailMasked)
+                                        }
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.account_switch_dialog_confirm))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { fashApp.clearAccountSwitchPrompt() }) {
+                                    Text(stringResource(R.string.account_switch_dialog_dismiss))
+                                }
+                            },
+                        )
+                    } else {
+                        LaunchedEffect(prompt.pendingUserId) {
+                            fashApp.clearAccountSwitchPrompt()
+                        }
+                    }
+                }
                 FashGlobalDialogHost(
                     message = if (profileSetupBlocksShellChrome) null else dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },

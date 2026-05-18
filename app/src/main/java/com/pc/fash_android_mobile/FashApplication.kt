@@ -27,6 +27,7 @@ import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.ui.UiDialogController
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
 import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
 import kotlinx.coroutines.CoroutineScope
@@ -94,6 +95,19 @@ class FashApplication : Application(), ImageLoaderFactory {
      * Ledger row id from FCM / `fash://inbox/{id}`. Consumed when main shell opens the inbox detail sheet.
      */
     val pendingInboxNotificationId = MutableStateFlow<String?>(null)
+
+    /** Multi-account FCM: user B is active but account A has new inbox rows. */
+    val pendingAccountSwitchPrompt = MutableStateFlow<AccountSwitchPrompt?>(null)
+
+    fun requestAccountSwitchPrompt(prompt: AccountSwitchPrompt) {
+        applicationScope.launch {
+            pendingAccountSwitchPrompt.value = prompt
+        }
+    }
+
+    fun clearAccountSwitchPrompt() {
+        pendingAccountSwitchPrompt.value = null
+    }
 
     /**
      * Incremented when the user should land on the inbox list (e.g. snackbar “Open” after unread increased).

@@ -93,6 +93,18 @@ class LoginViewModel(
         _email.update { value }
     }
 
+    /** Pre-fills login email after an account-switch notification (masked email may be incomplete). */
+    fun prefillEmailForAccountSwitch(email: String?) {
+        val trimmed = email?.trim().orEmpty()
+        if (trimmed.isNotEmpty() && trimmed.contains("@")) {
+            _email.value = trimmed
+        }
+        _loginStep.value = LoginStep.Email
+        _usePasswordLogin.value = false
+        _otpCode.value = ""
+        _password.value = ""
+    }
+
     fun onOtpChange(value: String) {
         _otpCode.value = value.filter { it.isDigit() }.take(OTP_LENGTH)
     }

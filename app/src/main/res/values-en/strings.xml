@@ -158,6 +158,12 @@
     <string name="settings_about_env_line">Environment: %1$s · %2$s</string>
     <string name="settings_footer_hint">API language prefix follows app language when the server uses locale-prefixed paths.</string>
     <string name="logout_success">Signed out successfully.</string>
+    <string name="account_switch_notification_title">Notification for another account</string>
+    <string name="account_switch_notification_body">%1$s · %2$d new notifications</string>
+    <string name="account_switch_dialog_title">Sign in to another account?</string>
+    <string name="account_switch_dialog_message">Account %1$s has %2$d new notifications. Sign out of the current account and sign in to view them.</string>
+    <string name="account_switch_dialog_confirm">Sign out and sign in</string>
+    <string name="account_switch_dialog_dismiss">Not now</string>
     <string name="logout_failed">Sign out failed.</string>
     <string name="password_setup_title">Create a password</string>
     <string name="password_setup_subtitle">Choose a password between 8 and 72 characters to protect your account. You’ll use it when signing in with email and password.</string>

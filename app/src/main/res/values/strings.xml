@@ -166,6 +166,13 @@
     <string name="logout_success">Đã đăng xuất.</string>
     <string name="logout_failed">Đăng xuất thất bại.</string>
 
+    <string name="account_switch_notification_title">Thông báo cho tài khoản khác</string>
+    <string name="account_switch_notification_body">%1$s · %2$d thông báo mới</string>
+    <string name="account_switch_dialog_title">Đăng nhập tài khoản khác?</string>
+    <string name="account_switch_dialog_message">Tài khoản %1$s có %2$d thông báo mới. Bạn cần đăng xuất tài khoản hiện tại và đăng nhập lại để xem.</string>
+    <string name="account_switch_dialog_confirm">Đăng xuất và đăng nhập</string>
+    <string name="account_switch_dialog_dismiss">Để sau</string>
+
     <string name="password_setup_title">Tạo mật khẩu</string>
     <string name="password_setup_subtitle">Đặt mật khẩu từ 8–72 ký tự để bảo vệ tài khoản. Bạn sẽ dùng khi đăng nhập bằng mật khẩu.</string>
     <string name="password_setup_continue">Lưu mật khẩu</string>

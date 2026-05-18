@@ -12,6 +12,8 @@ import com.google.firebase.messaging.RemoteMessage
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.MainActivity
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
+import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
 import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -35,6 +37,10 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         if (message.data["inbox_refresh"] == "1") {
             (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
+        }
+        AccountSwitchDeepLinks.parseFromFcmData(message.data)?.let { prompt ->
+            handleAccountSwitchPrompt(prompt, message)
+            return
         }
         if (message.data["type"] == "admin.app_promo_interstitial") {
             val raw = message.data["promo_payload"]?.takeIf { it.isNotBlank() } ?: return
@@ -108,12 +114,71 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         return app.realtimeManager.state.value == RealtimeManager.State.CONNECTED
     }
 
+    private fun handleAccountSwitchPrompt(prompt: AccountSwitchPrompt, message: RemoteMessage) {
+        val app = applicationContext as? FashApplication ?: return
+        val activeUserId = app.authManager.sessionStore.read()?.userId?.trim().orEmpty()
+        if (activeUserId.isNotEmpty() && activeUserId.equals(prompt.pendingUserId, ignoreCase = true)) {
+            app.requestInboxUnreadRefreshDebounced()
+            return
+        }
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle.currentState
+        if (lifecycle.isAtLeast(Lifecycle.State.STARTED)) {
+            app.requestAccountSwitchPrompt(prompt)
+            return
+        }
+        val title = message.notification?.title
+            ?: message.data["title"]
+            ?: getString(R.string.account_switch_notification_title)
+        val body = message.notification?.body
+            ?: message.data["body"]
+            ?: getString(R.string.account_switch_notification_body, prompt.emailMasked ?: "…", prompt.unreadCount)
+        showAccountSwitchTray(title, body, prompt)
+    }
+
+    private fun showAccountSwitchTray(
+        title: String,
+        body: String,
+        prompt: AccountSwitchPrompt,
+    ) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(AccountSwitchDeepLinks.EXTRA_PENDING_USER_ID, prompt.pendingUserId)
+            prompt.emailMasked?.let { putExtra(AccountSwitchDeepLinks.EXTRA_PENDING_EMAIL_MASKED, it) }
+            putExtra(AccountSwitchDeepLinks.EXTRA_UNREAD_COUNT, prompt.unreadCount)
+        }
+        val pending = PendingIntent.getActivity(
+            this,
+            ("account_switch_" + prompt.pendingUserId).hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, FashNotificationChannels.GENERAL)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .apply {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                    setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+                }
+            }
+            .build()
+        NotificationManagerCompat.from(this).notify(
+            ("account_switch_" + prompt.pendingUserId).hashCode() and 0x7FFFFFFF,
+            notification,
+        )
+    }
+
     private fun resolveChannelId(message: RemoteMessage): String {
         message.notification?.channelId?.takeIf { it.isNotBlank() }?.let { return it }
         message.data["channel_id"]?.takeIf { it.isNotBlank() }?.let { return it }
         return when (message.data["type"]?.lowercase()) {
             "chat", "message", "message.new" -> FashNotificationChannels.CHAT
             "order", "orders" -> FashNotificationChannels.ORDERS
+            AccountSwitchDeepLinks.FCM_TYPE -> FashNotificationChannels.GENERAL
             else -> FashNotificationChannels.GENERAL
         }
     }
