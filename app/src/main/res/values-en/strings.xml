@@ -1468,7 +1468,7 @@
     <string name="chat_report_status_suspended">Action taken — user suspended</string>
     <string name="chat_report_status_unknown">Status: %1$s</string>
 
-    <string name="seller_packages_screen_title">Seller utility packages</string>
+    <string name="seller_packages_screen_title">Utility packages</string>
     <string name="seller_packages_screen_subtitle">Upgrade to verify Real/Fake items, boost Explore visibility, and get featured on Fash channels.</string>
     <string name="seller_packages_load_error">Could not load packages.</string>
     <string name="seller_packages_empty">No packages available.</string>
@@ -1479,6 +1479,7 @@
     <string name="seller_packages_feature_fanpage">Featured on Fash fanpage</string>
     <string name="seller_packages_feature_social">Promo on platform TikTok &amp; Instagram</string>
     <string name="seller_packages_checkout_title">Package checkout</string>
+    <string name="seller_packages_checkout_features">Included benefits</string>
     <string name="seller_packages_checkout_duration">Duration</string>
     <string name="seller_packages_duration_days">%1$d days</string>
     <string name="seller_packages_checkout_subtotal">Subtotal</string>

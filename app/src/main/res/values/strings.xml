@@ -1521,7 +1521,7 @@
     <string name="chat_report_status_unknown">Trạng thái: %1$s</string>
 
     <!-- Seller product packages (monetization) -->
-    <string name="seller_packages_screen_title">Gói tiện ích người bán</string>
+    <string name="seller_packages_screen_title">Các gói tiện ích</string>
     <string name="seller_packages_screen_subtitle">Nâng cấp để xác minh hàng Real/Fake, tăng hiển thị trên Khám phá và quảng bá trên kênh Fash.</string>
     <string name="seller_packages_load_error">Không tải được danh sách gói.</string>
     <string name="seller_packages_empty">Chưa có gói nào.</string>
@@ -1532,6 +1532,7 @@
     <string name="seller_packages_feature_fanpage">Hiển thị trên fanpage Fash</string>
     <string name="seller_packages_feature_social">Quảng bá TikTok &amp; Instagram của nền tảng</string>
     <string name="seller_packages_checkout_title">Thanh toán gói</string>
+    <string name="seller_packages_checkout_features">Tiện ích trong gói</string>
     <string name="seller_packages_checkout_duration">Thời hạn</string>
     <string name="seller_packages_duration_days">%1$d ngày</string>
     <string name="seller_packages_checkout_subtotal">Tạm tính</string>

@@ -26,10 +26,6 @@ class SellerProductPackagesViewModel(application: Application) : AndroidViewMode
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
 
-    init {
-        refresh()
-    }
-
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true

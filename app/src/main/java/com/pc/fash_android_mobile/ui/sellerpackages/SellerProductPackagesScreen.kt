@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.Star
@@ -38,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -63,6 +62,10 @@ fun SellerProductPackagesScreen(
     val packages by viewModel.packages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -231,36 +234,7 @@ private fun SellerPackageCard(
                 ),
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-            pkg.features.forEach { feature ->
-                val title = featureTitle(feature.id, feature.name)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = if (feature.included) Icons.Outlined.Check else Icons.Outlined.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (feature.included) FashColors.Primary else scheme.outline,
-                    )
-                    Column(modifier = Modifier.padding(start = 10.dp)) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (feature.included) scheme.onSurface else scheme.onSurfaceVariant,
-                        )
-                        feature.highlight?.takeIf { it.isNotBlank() && feature.included }?.let { h ->
-                            Text(
-                                text = h,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = scheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
+            SellerPackageFeaturesList(features = pkg.features)
             Spacer(modifier = Modifier.height(16.dp))
             val comingSoon = !pkg.isReleased
             if (comingSoon) {
@@ -285,14 +259,3 @@ private fun SellerPackageCard(
     }
 }
 
-@Composable
-private fun featureTitle(featureId: String, apiName: String? = null): String {
-    apiName?.takeIf { it.isNotBlank() }?.let { return it }
-    return when (featureId) {
-    "authenticity_verify" -> stringResource(R.string.seller_packages_feature_authenticity)
-    "explore_boost" -> stringResource(R.string.seller_packages_feature_explore_boost)
-    "fanpage_spotlight" -> stringResource(R.string.seller_packages_feature_fanpage)
-    "social_tiktok_instagram" -> stringResource(R.string.seller_packages_feature_social)
-    else -> featureId
-    }
-}

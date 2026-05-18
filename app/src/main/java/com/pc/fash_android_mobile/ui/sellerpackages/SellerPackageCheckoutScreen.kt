@@ -173,6 +173,13 @@ fun SellerPackageCheckoutScreen(
                         color = scheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
                     )
+                    if (pkg.features.isNotEmpty()) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        SellerPackageFeaturesList(
+                            features = pkg.features,
+                            sectionTitle = stringResource(R.string.seller_packages_checkout_features),
+                        )
+                    }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                     checkoutRow(
                         label = stringResource(R.string.seller_packages_checkout_duration),
