@@ -96,6 +96,18 @@ class FashApplication : Application(), ImageLoaderFactory {
      */
     val pendingInboxNotificationId = MutableStateFlow<String?>(null)
 
+    /**
+     * When set, invite HTTPS / fash deep links included `?r=...` for referral attribution on first onboard.
+     * Cleared after successful username onboard.
+     */
+    val pendingReferralToken = MutableStateFlow<String?>(null)
+
+    /**
+     * When true, authenticated main shell should open the invite-friends screen once (from `fash://invite`).
+     * Cleared after consumption.
+     */
+    val pendingOpenInviteFriends = MutableStateFlow(false)
+
     /** Multi-account FCM: user B is active but account A has new inbox rows. */
     val pendingAccountSwitchPrompt = MutableStateFlow<AccountSwitchPrompt?>(null)
 

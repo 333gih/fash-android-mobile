@@ -109,15 +109,19 @@ class UserRepository(
         }
     }
 
-    fun onboard(username: String, aestheticTags: List<String>): Result<Unit> = runCatching {
+    fun onboard(username: String, aestheticTags: List<String>, referralToken: String? = null): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/users/onboard")
         val json = JSONObject()
             .put("username", username)
             .put("aesthetic_tags", JSONArray(aestheticTags))
-            .toString()
+        val rt = referralToken?.trim().orEmpty()
+        if (rt.isNotEmpty()) {
+            json.put("referral_token", rt)
+        }
+        val bodyStr = json.toString()
         val request = Request.Builder()
             .url(url)
-            .post(json.toRequestBody(JSON_MEDIA))
+            .post(bodyStr.toRequestBody(JSON_MEDIA))
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .header("User-Agent", "FashAndroid/1.0")
@@ -130,6 +134,26 @@ class UserRepository(
             }
         }
     }
+
+    /**
+     * `GET /users/me/referral-invite-token` — returns JWT when core has referral signing enabled; otherwise null.
+     */
+    fun getReferralInviteTokenOrNull(): String? = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/referral-invite-token")
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        val body = securedClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@runCatching null
+            response.body?.string().orEmpty()
+        }
+        val data = JSONObject(body).optJSONObject("data") ?: return@runCatching null
+        if (!data.optBoolean("enabled", false)) return@runCatching null
+        data.optString("referral_token", "").trim().takeIf { it.isNotEmpty() }
+    }.getOrNull()
 
     /**
      * Auth-service `POST .../auth/change-password` (via [AppEnvironment.authServicePath]) — set first password

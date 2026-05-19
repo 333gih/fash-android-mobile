@@ -88,6 +88,29 @@
                     android:host="${listingShareHost}"
                     android:pathPrefix="/p/l/" />
             </intent-filter>
+            <!-- HTTPS invite (linkified in SMS/chat); same host as LISTING_SHARE_BASE_URL -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="https"
+                    android:host="${listingShareHost}"
+                    android:pathPrefix="/invite" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="http"
+                    android:host="${listingShareHost}"
+                    android:pathPrefix="/invite" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
@@ -110,6 +133,17 @@
                     android:scheme="fash"
                     android:host="inbox"
                     android:pathPrefix="/" />
+            </intent-filter>
+            <!-- Invite friends share link: fash://invite?ref=username -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="fash"
+                    android:host="invite" />
             </intent-filter>
         </activity>
     </application>

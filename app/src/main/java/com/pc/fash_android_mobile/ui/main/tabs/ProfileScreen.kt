@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.Button
@@ -403,6 +404,7 @@ fun ProfileScreen(
     isLoggingOut: Boolean = false,
     onEditProfile: () -> Unit = { },
     onShippingAddressesClick: () -> Unit = { },
+    onInviteFriendsClick: () -> Unit = { },
     onOrdersClick: () -> Unit = { },
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     /** 0 = Following tab, 1 = Followers — same as [com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen]. */
@@ -558,6 +560,7 @@ fun ProfileScreen(
                                     )
                                 }
                                 ProfileShippingAddressesRow(onClick = onShippingAddressesClick)
+                                ProfileInviteFriendsRow(onClick = onInviteFriendsClick)
                             }
                         },
                         compactHeader = {
@@ -661,6 +664,55 @@ private fun ProfileMeetingIdentityReverifyBanner(
                     Text(stringResource(R.string.meeting_identity_reverify_ack_done))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ProfileInviteFriendsRow(onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.PersonAdd,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(28.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.profile_invite_friends_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.profile_invite_friends_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+            )
         }
     }
 }

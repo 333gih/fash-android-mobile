@@ -1543,4 +1543,27 @@
     <string name="seller_packages_coming_soon_cta">Sắp ra mắt</string>
     <string name="seller_packages_pay_amount">Thanh toán %1$s</string>
     <string name="seller_packages_back_to_list">Quay lại danh sách gói</string>
+
+    <!-- Invite friends (growth + referral messaging) -->
+    <string name="invite_screen_title">Mời bạn bè</string>
+    <string name="invite_screen_hero_kicker">Cùng nhau lớn mạnh</string>
+    <string name="invite_screen_hero_title">Mang Fash tới hội bạn thân</string>
+    <string name="invite_screen_hero_body">Gửi một tin nhắn ngắn gọn với link tải app và deep link mở thẳng Fash — bạn bè dễ bấm, dễ tham gia cùng cộng đồng second-hand.</string>
+    <string name="invite_benefits_section_title">Vì sao nên mời?</string>
+    <string name="invite_benefit_priority_title">Điểm ưu tiên trải nghiệm</string>
+    <string name="invite_benefit_priority_body">Fash đang xây chương trình ưu tiên cho người dùng tích cực mời bạn — mời càng nhiều bạn thật tham gia, bạn càng có lợi thế khi mở các tính năng và ưu đãi mới.</string>
+    <string name="invite_benefit_promos_title">Ưu đãi &amp; khuyến mãi</string>
+    <string name="invite_benefit_promos_body">Các đợt khuyến mãi trong tương lai có thể ưu tiên nhóm người dùng đã đóng góp cho sự phát triển cộng đồng — mời bạn là cách thể hiện bạn tin vào Fash.</string>
+    <string name="invite_benefit_circle_title">Vòng tròn thời trang của bạn</string>
+    <string name="invite_benefit_circle_body">Mua bán second-hand thú vị hơn khi bạn bè cùng ở một sàn: chat nhanh, tin cậy, và feed “đúng gu” hơn.</string>
+    <string name="invite_cta_share">Chia sẻ lời mời</string>
+    <string name="invite_cta_copy">Sao chép tin nhắn mẫu</string>
+    <string name="invite_share_subject">Tham gia Fash cùng mình</string>
+    <string name="invite_share_chooser_title">Gửi lời mời qua…</string>
+    <string name="invite_share_body_format">Tham gia Fash cùng mình — sàn thời trang second-hand.\n\n🔗 Link tham gia (https — bấm được trong chat/SMS): %1$s\n\n📲 Chưa cài app? Tải trên Play Store: %2$s\n\nMỗi lượt mời bạn thật giúp cộng đồng lớn hơn; Fash đang chuẩn bị điểm ưu tiên &amp; ưu đãi cho những ai đồng hành cùng nền tảng.</string>
+    <string name="invite_copy_clipboard_label">Lời mời Fash</string>
+    <string name="invite_copied">Đã sao chép tin nhắn mẫu.</string>
+    <string name="invite_fine_print">Link dùng trong tin nhắn là https://…/invite (tự thành link xanh). Đã cài app có thể mở thẳng màn mời bè; chưa cài thì mở trình duyệt — cần trang /invite trên web hoặc chuyển hướng tới Play Store. Trong app vẫn hỗ trợ fash://invite?ref=… nhưng hầu hết app chat không biến nó thành link bấm được.</string>
+    <string name="profile_invite_friends_title">Mời bạn tham gia Fash</string>
+    <string name="profile_invite_friends_subtitle">Chia sẻ link &amp; nhận lợi thế khi cộng đồng lớn hơn.</string>
 </resources>

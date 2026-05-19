@@ -1490,4 +1490,27 @@
     <string name="seller_packages_coming_soon_cta">Coming soon</string>
     <string name="seller_packages_pay_amount">Pay %1$s</string>
     <string name="seller_packages_back_to_list">Back to packages</string>
+
+    <!-- Invite friends (growth + referral messaging) -->
+    <string name="invite_screen_title">Invite friends</string>
+    <string name="invite_screen_hero_kicker">Grow together</string>
+    <string name="invite_screen_hero_title">Bring your circle to Fash</string>
+    <string name="invite_screen_hero_body">Send a short message with the Play Store link plus an in-app deep link — one tap for friends who already installed Fash.</string>
+    <string name="invite_benefits_section_title">Why invite?</string>
+    <string name="invite_benefit_priority_title">Priority experience points</string>
+    <string name="invite_benefit_priority_body">Fash is building a priority program for members who grow the community. More genuine invites can mean more weight when we roll out new perks and early access.</string>
+    <string name="invite_benefit_promos_title">Promos &amp; rewards</string>
+    <string name="invite_benefit_promos_body">Future campaigns may favor members who helped the marketplace scale — inviting friends is a clear signal you believe in the community.</string>
+    <string name="invite_benefit_circle_title">Your fashion circle</string>
+    <string name="invite_benefit_circle_body">Pre-loved shopping is better with friends on the same app: faster chats, more trust, and a feed that feels closer to your style.</string>
+    <string name="invite_cta_share">Share invite</string>
+    <string name="invite_cta_copy">Copy message</string>
+    <string name="invite_share_subject">Join me on Fash</string>
+    <string name="invite_share_chooser_title">Send invite via…</string>
+    <string name="invite_share_body_format">Join me on Fash — a pre-loved fashion marketplace.\n\n🔗 Tap to join (HTTPS — linkified in chat/SMS): %1$s\n\n📲 New here? Get the app on Play Store: %2$s\n\nReal invites help the community grow; we are preparing priority perks for members who bring friends in.</string>
+    <string name="invite_copy_clipboard_label">Fash invite</string>
+    <string name="invite_copied">Message copied to clipboard.</string>
+    <string name="invite_fine_print">Messages use https://…/invite so apps underline a tappable link. Installed users can open the invite screen directly; without the app, the link opens in a browser — host a small /invite page or redirect to Play Store. fash://invite?ref=… still works inside the app but usually stays plain text in chat.</string>
+    <string name="profile_invite_friends_title">Invite friends to Fash</string>
+    <string name="profile_invite_friends_subtitle">Share your link and grow priority perks as the community scales.</string>
 </resources>

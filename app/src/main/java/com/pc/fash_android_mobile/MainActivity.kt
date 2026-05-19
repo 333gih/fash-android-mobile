@@ -68,6 +68,7 @@ import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.home.HomeDeliveringScreen
 import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
+import com.pc.fash_android_mobile.ui.invite.InviteFriendsScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
@@ -154,6 +155,7 @@ import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
+import com.pc.fash_android_mobile.deeplink.InviteDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
@@ -249,6 +251,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyLaunchNavigationIntents(intent: Intent?) {
+        if (InviteDeepLinks.parseInviteOpenFromIntent(intent)) {
+            fashApp.pendingOpenInviteFriends.value = true
+        }
+        InviteDeepLinks.parseReferralTokenFromIntent(intent)?.let { fashApp.pendingReferralToken.value = it }
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
         InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
         AccountSwitchDeepLinks.parseFromIntent(intent)?.let { fashApp.requestAccountSwitchPrompt(it) }
@@ -942,7 +948,14 @@ class MainActivity : ComponentActivity() {
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var showSellerPackagesScreen by rememberSaveable { mutableStateOf(false) }
+                                    var showInviteFriendsScreen by rememberSaveable { mutableStateOf(false) }
                                     var sellerPackageCheckout by remember { mutableStateOf<SellerProductPackage?>(null) }
+                                    val pendingInviteFriends by fashApp.pendingOpenInviteFriends.collectAsState()
+                                    LaunchedEffect(pendingInviteFriends) {
+                                        if (!pendingInviteFriends) return@LaunchedEffect
+                                        showInviteFriendsScreen = true
+                                        fashApp.pendingOpenInviteFriends.value = false
+                                    }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders) {
                                         if (pendingPromoMainTab >= 0) {
@@ -1067,6 +1080,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     val chatUnreadCount by chatViewModel.unreadBadgeCount.collectAsState()
                                     val remotePromo by promoSlidesViewModel.remoteSlides.collectAsState()
+                                    val profileForInvite by profileViewModel.profile.collectAsState()
                                     val localeRev by AppLocale.localeRevisionFlow.collectAsState()
                                     LaunchedEffect(localeRev) {
                                         promoSlidesViewModel.refresh()
@@ -1075,6 +1089,7 @@ class MainActivity : ComponentActivity() {
                                         !showOrdersScreen &&
                                             !showHomeDeliveringScreen &&
                                             !showSellerPackagesScreen &&
+                                            !showInviteFriendsScreen &&
                                             sellerPackageCheckout == null &&
                                             sellerShopUsername == null &&
                                             !showEditProfile &&
@@ -1098,6 +1113,9 @@ class MainActivity : ComponentActivity() {
                                             "in_app_product_packages" -> {
                                                 sellerPackageCheckout = null
                                                 showSellerPackagesScreen = true
+                                            }
+                                            "in_app_invite_friends" -> {
+                                                showInviteFriendsScreen = true
                                             }
                                             "external_url" -> {
                                                 val url = nav?.payload?.trim().orEmpty()
@@ -1146,6 +1164,7 @@ class MainActivity : ComponentActivity() {
                                         showHomeDeliveringScreen,
                                         showFollowConnections,
                                         showFeaturedSellersAll,
+                                        showInviteFriendsScreen,
                                     ) {
                                         val fullscreenOverlay =
                                             selectedListingId != null ||
@@ -1162,7 +1181,8 @@ class MainActivity : ComponentActivity() {
                                                 showSellerPackagesScreen ||
                                                 sellerPackageCheckout != null ||
                                                 showFollowConnections ||
-                                                showFeaturedSellersAll
+                                                showFeaturedSellersAll ||
+                                                showInviteFriendsScreen
                                         when {
                                             selectedConversationId != null -> ChatComposerBarOverlayInset
                                             fullscreenOverlay -> 0.dp
@@ -1286,6 +1306,7 @@ class MainActivity : ComponentActivity() {
                                                 addressFlowOrderId = null
                                                 showShippingAddressList = true
                                             },
+                                            onInviteFriendsClick = { showInviteFriendsScreen = true },
                                             onOrdersClick = { showOrdersScreen = true },
                                             onHomeDeliveringJourneyClick = { showHomeDeliveringScreen = true },
                                             onOpenFollowConnections = { tab ->
@@ -1943,6 +1964,21 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
+                                        if (showInviteFriendsScreen) {
+                                            InviteFriendsScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                referrerUsername = profileForInvite?.username,
+                                                userRepository = fashApp.userRepository,
+                                                onBack = { showInviteFriendsScreen = false },
+                                                onUserMessage = { msg ->
+                                                    mainScope.launch {
+                                                        enqueueSnackbarSerial { showSnackbar(msg) }
+                                                    }
+                                                },
+                                            )
+                                        }
                                         if (chatShipFlowArgs != null) {
                                             ChatShipFulfillmentScreen(
                                                 modifier = Modifier
@@ -1980,6 +2016,7 @@ class MainActivity : ComponentActivity() {
                                             showFollowConnections,
                                             showHomeDeliveringScreen,
                                             showSellerPackagesScreen,
+                                            showInviteFriendsScreen,
                                             sellerPackageCheckout,
                                             showOrdersScreen,
                                             selectedCheckoutListingId,
@@ -1998,6 +2035,7 @@ class MainActivity : ComponentActivity() {
                                                 showFollowConnections ||
                                                 showHomeDeliveringScreen ||
                                                 showSellerPackagesScreen ||
+                                                showInviteFriendsScreen ||
                                                 sellerPackageCheckout != null ||
                                                 showOrdersScreen ||
                                                 selectedCheckoutListingId != null ||
@@ -2027,6 +2065,9 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 sellerPackageCheckout != null -> {
                                                     sellerPackageCheckout = null
+                                                }
+                                                showInviteFriendsScreen -> {
+                                                    showInviteFriendsScreen = false
                                                 }
                                                 showSellerPackagesScreen -> {
                                                     showSellerPackagesScreen = false

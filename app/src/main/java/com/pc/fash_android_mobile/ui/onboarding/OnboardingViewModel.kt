@@ -433,14 +433,17 @@ class OnboardingViewModel(
         val u = _username.value.trim()
         if (!isUsernameValid()) return
         val selectedTags = getSelectedTagNames()
+        val fashApp = getApplication<FashApplication>()
+        val refTok = fashApp.pendingReferralToken.value?.trim()?.takeIf { it.isNotEmpty() }
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
                 val onboardResult = withContext(Dispatchers.IO) {
-                    userRepository.onboard(u, selectedTags)
+                    userRepository.onboard(u, selectedTags, refTok)
                 }
                 onboardResult.fold(
                     onSuccess = {
+                        fashApp.pendingReferralToken.value = null
                         val status = withContext(Dispatchers.IO) {
                             userRepository.getUserAccessStatus().getOrNull()
                         }

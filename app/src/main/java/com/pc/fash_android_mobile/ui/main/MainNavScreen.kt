@@ -139,6 +139,7 @@ fun MainNavScreen(
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onEditProfile: () -> Unit = {},
     onShippingAddressesClick: () -> Unit = {},
+    onInviteFriendsClick: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
     /** Home journey “Đang giao” — dedicated hub (env-gated). Falls back to [onOrdersClick] when null. */
     onHomeDeliveringJourneyClick: (() -> Unit)? = null,
@@ -498,6 +499,7 @@ fun MainNavScreen(
                         isLoggingOut = isLoggingOut,
                         onEditProfile = onEditProfile,
                         onShippingAddressesClick = onShippingAddressesClick,
+                        onInviteFriendsClick = onInviteFriendsClick,
                         onOrdersClick = onOrdersClick,
                         onListingClick = onListingClick,
                         onOpenFollowConnections = onOpenFollowConnections,
