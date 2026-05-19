@@ -283,6 +283,13 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
+    /** Public editorial guides (common-service `GET /api/v1/public/editorial-guides`). */
+    val editorialGuideRepository: com.pc.fash_android_mobile.data.editorial.EditorialGuideRepository by lazy {
+        com.pc.fash_android_mobile.data.editorial.EditorialGuideRepository {
+            com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(this@FashApplication)
+        }
+    }
+
     /** common-service catalog GETs (addresses, brands, categories, aesthetic-tags, countries). */
     val commonServiceRepository: CommonServiceRepository by lazy {
         CommonServiceRepository(

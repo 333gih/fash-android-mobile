@@ -6,6 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.chat.ChatRepository
+import com.pc.fash_android_mobile.data.home.HomeDiscoveryBundle
+import com.pc.fash_android_mobile.data.home.HomeDiscoveryRepository
+import com.pc.fash_android_mobile.data.home.HttpHomeDiscoveryRepository
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
@@ -52,6 +56,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
+    private val homeDiscoveryRepository: HomeDiscoveryRepository =
+        HttpHomeDiscoveryRepository((application as FashApplication).editorialGuideRepository)
+
     private val _items = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val items: StateFlow<List<ListingFeedItem>> = _items.asStateFlow()
 
@@ -79,7 +86,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _buyerStats = MutableStateFlow(BuyerHomeStats())
     val buyerStats: StateFlow<BuyerHomeStats> = _buyerStats.asStateFlow()
 
+    private val _discoveryBundle = MutableStateFlow(HomeDiscoveryBundle())
+    val discoveryBundle: StateFlow<HomeDiscoveryBundle> = _discoveryBundle.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
+        }
+        viewModelScope.launch {
+            AppLocale.localeRevisionFlow.collect {
+                withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
+            }
+        }
         loadFeed()
         // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
         viewModelScope.launch {
@@ -95,6 +113,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    private suspend fun reloadDiscoveryBundle() {
+        homeDiscoveryRepository.loadDiscoveryBundle().fold(
+            onSuccess = { _discoveryBundle.value = it },
+            onFailure = { /* keep last good payload; stub should not fail */ },
+        )
     }
 
     private suspend fun loadBuyerHomeStats() {
@@ -115,6 +140,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _loadError.value = false
             val result = withContext(Dispatchers.IO) {
                 loadBuyerHomeStats()
+                reloadDiscoveryBundle()
                 fetchHomeFeedWithRetry()
             }
             _isLoading.value = false
@@ -165,6 +191,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _savedIds.value = emptySet()
         _followingIds.value = emptySet()
         _buyerStats.value = BuyerHomeStats()
+        _discoveryBundle.value = HomeDiscoveryBundle()
         _loadError.value = false
         _isLoading.value = false
         _isRefreshing.value = false
@@ -181,6 +208,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _loadError.value = false
             val result = withContext(Dispatchers.IO) {
                 loadBuyerHomeStats()
+                reloadDiscoveryBundle()
                 fetchHomeFeedWithRetry()
             }
             _isRefreshing.value = false

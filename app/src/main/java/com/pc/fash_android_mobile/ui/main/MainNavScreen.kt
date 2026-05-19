@@ -64,6 +64,8 @@ import com.pc.fash_android_mobile.ui.home.HomeFeedContent
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
+import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
@@ -160,6 +162,8 @@ fun MainNavScreen(
     onOpenListingFromNotification: (String, String?) -> Unit = { _, _ -> },
     /** Opens Chat tab with a conversation selected (FCM / inbox `conversation_id`). */
     onNavigateToChatConversation: (String) -> Unit = {},
+    /** Home cẩm nang card — open in-app reader (host may route Explore CTA from detail). */
+    onHomeEditorialPostClick: (HomeEditorialPostStub) -> Unit = {},
     /** Profile / seller shop: open Explore → Posts with filters + search + optional country. */
     onNavigateToExploreFromProfile: (
         categoryId: String?,
@@ -202,6 +206,21 @@ fun MainNavScreen(
         }
     }
     val tabs = MainTab.entries
+
+    val onHomeTrendingCategoryToExplore = remember(exploreViewModel, onTabChange) {
+        { category: Category ->
+            exploreViewModel.openExploreFromProfileFilter(
+                categoryId = category.id,
+                brandId = null,
+                aestheticTagId = null,
+                searchQuery = "",
+                countryId = null,
+                countryIso2 = null,
+            )
+            onTabChange(MainTab.Explore.ordinal)
+        }
+    }
+
     val homeRefreshing by homeViewModel.isRefreshing.collectAsState()
     val exploreRefreshing by exploreViewModel.isRefreshing.collectAsState()
     val chatRefreshing by chatViewModel.isRefreshing.collectAsState()
@@ -470,6 +489,10 @@ fun MainNavScreen(
                         onNavigateToPost = { onTabChange(MainTab.Post.ordinal) },
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
+                        onHomeEditorialPostClick = onHomeEditorialPostClick,
+                        onHomeTrendingCategoryClick = onHomeTrendingCategoryToExplore,
+                        onFeaturedSellerClick = onFeaturedSellerClick,
+                        onOpenFeaturedSellersAll = onOpenFeaturedSellersAll,
                     )
                     MainTab.Explore -> ExploreScreen(
                         viewModel = exploreViewModel,

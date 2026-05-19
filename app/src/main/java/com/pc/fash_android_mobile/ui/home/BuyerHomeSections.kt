@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -183,17 +184,25 @@ fun HomeBrandFooterStrip(
     } else {
         0.dp to 0.dp
     }
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(
                 start = horizontal.first,
                 end = horizontal.second,
-                top = 28.dp,
-                bottom = 24.dp,
+                top = 36.dp,
+                bottom = 40.dp,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        HorizontalDivider(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp),
+            thickness = 1.dp,
+            color = scheme.outlineVariant.copy(alpha = 0.35f),
+        )
         Text(
             text = stringResource(R.string.home_brand_footer_sub),
             style = FashBrandTypography.marketplaceSubtitle,

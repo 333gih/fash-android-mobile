@@ -66,6 +66,7 @@ import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.home.HomeDeliveringScreen
+import com.pc.fash_android_mobile.ui.home.HomeEditorialDetailScreen
 import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.invite.InviteFriendsScreen
@@ -944,6 +945,7 @@ class MainActivity : ComponentActivity() {
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
                                     var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
                                     var showHomeDeliveringScreen by rememberSaveable { mutableStateOf(false) }
+                                    var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
@@ -1309,6 +1311,10 @@ class MainActivity : ComponentActivity() {
                                             onInviteFriendsClick = { showInviteFriendsScreen = true },
                                             onOrdersClick = { showOrdersScreen = true },
                                             onHomeDeliveringJourneyClick = { showHomeDeliveringScreen = true },
+                                            onHomeEditorialPostClick = { post ->
+                                                val slug = post.slug.trim().ifBlank { post.id.trim() }
+                                                if (slug.isNotEmpty()) homeEditorialSlug = slug
+                                            },
                                             onOpenFollowConnections = { tab ->
                                                 followConnectionsInitialTab = tab
                                                 showFollowConnections = true
@@ -1869,6 +1875,16 @@ class MainActivity : ComponentActivity() {
                                                 onOrderClick = { order ->
                                                     selectedOrderId = order.orderId
                                                 },
+                                            )
+                                        }
+                                        val editorialSlug = homeEditorialSlug
+                                        if (editorialSlug != null && selectedOrderId == null) {
+                                            HomeEditorialDetailScreen(
+                                                slug = editorialSlug,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                onBack = { homeEditorialSlug = null },
                                             )
                                         }
                                         if (showHomeDeliveringScreen && selectedOrderId == null) {

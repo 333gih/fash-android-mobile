@@ -36,14 +36,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
+import com.pc.fash_android_mobile.data.listing.Category
+import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSlider
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
-import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
-import com.pc.fash_android_mobile.ui.feed.FeedSectionHeader
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -53,7 +54,7 @@ private const val HOME_PROMO_ITEM_INDEX = 1
 
 /**
  * Home tab: [GET /api/v1/listings/home] — listings from followed sellers only.
- * Promo sits inline (journey → promo → quick actions → feed). When that row scrolls off-screen,
+ * Promo sits inline (journey → promo → quick actions → personalized feed → …). When that row scrolls off-screen,
  * a duplicate promo docks at the bottom with animation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,8 +73,15 @@ fun HomeFeedContent(
     onNavigateToPost: () -> Unit = {},
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> onNavigateToExplore() },
     promoSlides: List<FashPromoSlideDef> = emptyList(),
+    /** Admin editorial posts (blog-style); host maps tap to Explore until in-app reader exists. */
+    onHomeEditorialPostClick: (HomeEditorialPostStub) -> Unit = {},
+    onHomeTrendingCategoryClick: (Category) -> Unit = {},
+    onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
+    onOpenFeaturedSellersAll: () -> Unit = {},
 ) {
     val items by viewModel.items.collectAsState()
+    val discovery by viewModel.discoveryBundle.collectAsState()
+    val followingIds by viewModel.followingIds.collectAsState()
     val buyerStats by viewModel.buyerStats.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -118,7 +126,7 @@ fun HomeFeedContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = FashTheme.spacing.spacing3),
+                contentPadding = PaddingValues(bottom = FashTheme.spacing.spacing8 + 72.dp),
             ) {
                 item {
                     BuyerHomeJourneyRow(
@@ -165,17 +173,15 @@ fun HomeFeedContent(
                     }
                     items.isEmpty() -> {
                         item {
-                            FeedEmptyColumn(
-                                title = stringResource(R.string.home_feed_empty_title),
-                                subtitle = stringResource(R.string.home_feed_empty_subtitle),
-                                primaryActionLabel = stringResource(R.string.home_empty_cta_explore),
-                                onPrimaryAction = onNavigateToExplore,
+                            HomePersonalizedFeedEmptyCard(
+                                onExploreClick = onNavigateToExplore,
+                                onFeaturedSellersClick = onOpenFeaturedSellersAll,
                             )
                         }
                     }
                     else -> {
                         item {
-                            FeedSectionHeader(
+                            HomeSectionHeader(
                                 title = stringResource(R.string.home_top_section_title),
                                 subtitle = stringResource(R.string.home_top_section_subtitle),
                             )
@@ -195,8 +201,8 @@ fun HomeFeedContent(
                                         end = FashTheme.spacing.editorialEnd,
                                     )
                                     .padding(
-                                        top = if (index == 0) 4.dp else 0.dp,
-                                        bottom = FashTheme.spacing.spacing3,
+                                        top = if (index == 0) 2.dp else 0.dp,
+                                        bottom = FashTheme.spacing.spacing2,
                                     ),
                                 horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                             ) {
@@ -211,6 +217,7 @@ fun HomeFeedContent(
                                         onSave = { viewModel.toggleSave(feedItem) },
                                         onClick = { onListingClick(feedItem.id, feedItem.sellerId) },
                                         modifier = Modifier.weight(1f),
+                                        imageAspectRatio = 4f / 5f,
                                     )
                                 }
                                 repeat(2 - row.size) {
@@ -219,6 +226,34 @@ fun HomeFeedContent(
                             }
                         }
                     }
+                }
+
+                item {
+                    HomeEditorialPostsSection(
+                        posts = discovery.editorialPosts,
+                        onPostClick = onHomeEditorialPostClick,
+                    )
+                }
+                item {
+                    HomeTrendingCategoriesSection(
+                        categories = discovery.trendingCategories,
+                        onCategoryClick = onHomeTrendingCategoryClick,
+                    )
+                }
+
+                item {
+                    HomeRecommendedSellersSection(
+                        sellers = discovery.recommendedSellers,
+                        followingIds = followingIds,
+                        onSellerClick = onFeaturedSellerClick,
+                        onSeeAllClick = onOpenFeaturedSellersAll,
+                    )
+                }
+                item {
+                    HomeRecentlyViewedSection(
+                        items = discovery.recentlyViewed,
+                        onListingClick = onListingClick,
+                    )
                 }
 
                 item {
