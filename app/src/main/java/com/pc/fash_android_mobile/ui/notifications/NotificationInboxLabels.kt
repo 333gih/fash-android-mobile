@@ -24,6 +24,7 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "marketplace.order.funds_released" -> R.string.notification_pt_marketplace_order_funds_released
         "marketplace.order.dispute_opened" -> R.string.notification_pt_marketplace_order_dispute_opened
         "marketplace.review.received" -> R.string.notification_pt_marketplace_review_received
+        "marketplace.referral.invite_rewarded" -> R.string.notification_pt_marketplace_referral_invite_rewarded
         "admin.mobile_push" -> R.string.notification_pt_admin_mobile_push
         "admin.mobile_push.announcement" -> R.string.notification_pt_admin_mobile_push_announcement
         "admin.mobile_push.promo" -> R.string.notification_pt_admin_mobile_push_promo

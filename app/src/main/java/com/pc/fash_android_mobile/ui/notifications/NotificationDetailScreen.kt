@@ -77,6 +77,7 @@ fun NotificationDetailScreen(
     onOpenChat: (String) -> Unit = {},
     onOpenFollowConnections: (Int) -> Unit = {},
     onOpenExplore: () -> Unit = {},
+    onOpenInviteFriends: () -> Unit = {},
     onPromoMainTab: (MainTab) -> Unit = {},
     onPromoOpenOrders: () -> Unit = {},
 ) {
@@ -280,6 +281,14 @@ fun NotificationDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.notification_action_open_explore))
+                    }
+                }
+                if (actions.openInviteFriends) {
+                    OutlinedButton(
+                        onClick = onOpenInviteFriends,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_invite_friends))
                     }
                 }
             }

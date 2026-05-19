@@ -358,6 +358,7 @@
     <string name="notification_pt_marketplace_order_funds_released">Đã thanh toán cho người bán</string>
     <string name="notification_pt_marketplace_order_dispute_opened">Khiếu nại đơn hàng</string>
     <string name="notification_pt_marketplace_review_received">Đánh giá mới</string>
+    <string name="notification_pt_marketplace_referral_invite_rewarded">Thưởng mời bạn</string>
     <string name="notification_pt_admin_mobile_push">Thông báo từ cổng quản trị</string>
     <string name="notification_pt_admin_mobile_push_announcement">Thông báo chung (cổng quản trị)</string>
     <string name="notification_pt_admin_mobile_push_promo">Khuyến mãi (cổng quản trị)</string>
@@ -396,6 +397,7 @@
     <string name="notification_action_open_listing">Xem tin đăng</string>
     <string name="notification_action_open_chat">Mở chat</string>
     <string name="notification_action_open_followers">Mở người theo dõi bạn</string>
+    <string name="notification_action_open_invite_friends">Mở mời bạn bè</string>
     <string name="notification_action_open_following">Mở đang theo dõi</string>
     <string name="notification_action_open_explore">Mở Khám phá</string>
     <string name="notification_detail_more_label">Thêm chi tiết</string>

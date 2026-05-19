@@ -342,6 +342,7 @@
     <string name="notification_pt_marketplace_order_funds_released">Payout released to seller</string>
     <string name="notification_pt_marketplace_order_dispute_opened">Order dispute opened</string>
     <string name="notification_pt_marketplace_review_received">New review</string>
+    <string name="notification_pt_marketplace_referral_invite_rewarded">Invite reward</string>
     <string name="notification_pt_admin_mobile_push">Admin message</string>
     <string name="notification_pt_admin_mobile_push_announcement">Announcement (admin)</string>
     <string name="notification_pt_admin_mobile_push_promo">Promotion (admin)</string>
@@ -380,6 +381,7 @@
     <string name="notification_action_open_listing">View listing</string>
     <string name="notification_action_open_chat">Open chat</string>
     <string name="notification_action_open_followers">Open followers</string>
+    <string name="notification_action_open_invite_friends">Open invite friends</string>
     <string name="notification_action_open_following">Open following</string>
     <string name="notification_action_open_explore">Open Explore</string>
     <string name="notification_detail_more_label">More detail</string>

@@ -2155,6 +2155,18 @@ class MainActivity : ComponentActivity() {
                                                     fashApp.dismissInAppNotification()
                                                     return@FashInAppNotificationBanner
                                                 }
+                                                val navEarly = data?.entries?.find { e ->
+                                                    e.key.equals("nav_target", ignoreCase = true) ||
+                                                        e.key.equals("navTarget", ignoreCase = true)
+                                                }?.value?.trim()?.lowercase()
+                                                val ptypeEarly = data?.get("type")?.trim()?.lowercase().orEmpty()
+                                                if (navEarly == "in_app_invite_friends" ||
+                                                    ptypeEarly.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
+                                                ) {
+                                                    showInviteFriendsScreen = true
+                                                    fashApp.dismissInAppNotification()
+                                                    return@FashInAppNotificationBanner
+                                                }
                                                 val conv = data?.entries?.find { e ->
                                                     e.key.equals("conversation_id", ignoreCase = true) ||
                                                         e.key.equals("conversationId", ignoreCase = true)

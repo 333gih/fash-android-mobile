@@ -556,6 +556,10 @@ fun MainNavScreen(
                 showNotificationScreen = false
                 onTabChange(MainTab.Explore.ordinal)
             },
+            onOpenInviteFriends = {
+                showNotificationScreen = false
+                onInviteFriendsClick()
+            },
             onPromoMainTab = { tab ->
                 showNotificationScreen = false
                 onTabChange(tab.ordinal)

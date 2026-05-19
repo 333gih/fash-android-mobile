@@ -92,6 +92,7 @@ fun NotificationScreen(
     onOpenChat: (String) -> Unit = {},
     onOpenFollowConnections: (Int) -> Unit = {},
     onOpenExplore: () -> Unit = {},
+    onOpenInviteFriends: () -> Unit = {},
     onPromoMainTab: (com.pc.fash_android_mobile.ui.main.MainTab) -> Unit = {},
     onPromoOpenOrders: () -> Unit = {},
 ) {
@@ -373,6 +374,7 @@ fun NotificationScreen(
                     onOpenChat = onOpenChat,
                     onOpenFollowConnections = onOpenFollowConnections,
                     onOpenExplore = onOpenExplore,
+                    onOpenInviteFriends = onOpenInviteFriends,
                     onPromoMainTab = onPromoMainTab,
                     onPromoOpenOrders = onPromoOpenOrders,
                 )

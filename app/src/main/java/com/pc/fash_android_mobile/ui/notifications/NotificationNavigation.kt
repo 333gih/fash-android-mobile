@@ -12,6 +12,7 @@ data class NotificationDetailActions(
     val openFollowersTab: Boolean,
     val openFollowingTab: Boolean,
     val openExploreTab: Boolean,
+    val openInviteFriends: Boolean,
     val richDetailBody: String?,
     val imageUrl: String?,
 )
@@ -28,6 +29,7 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
             openFollowersTab = false,
             openFollowingTab = false,
             openExploreTab = false,
+            openInviteFriends = false,
             richDetailBody = rich,
             imageUrl = image,
         )
@@ -49,6 +51,9 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
 
     val openExploreTab = nav == "explore_tab"
 
+    val openInviteFriends = nav == "in_app_invite_friends" ||
+        ptype.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
+
     val rich = firstStringFromDataCi(data, "detail_body", "detailBody", "rich_body", "richBody")
     val imageUrl = firstStringFromDataCi(
         data,
@@ -69,6 +74,7 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
         openFollowersTab = openFollowersTab,
         openFollowingTab = openFollowingTab,
         openExploreTab = openExploreTab,
+        openInviteFriends = openInviteFriends,
         richDetailBody = rich,
         imageUrl = imageUrl,
     )
