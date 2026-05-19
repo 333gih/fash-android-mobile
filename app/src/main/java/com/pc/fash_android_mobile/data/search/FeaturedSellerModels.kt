@@ -36,6 +36,32 @@ fun FeaturedSellerItem.toUserSearchResult(): UserSearchResult =
         coverUrl = "",
     )
 
+/**
+ * Wraps `GET /search/featured-sellers` so the see-all screen can drive pagination.
+ *
+ * Server now returns `{items, total}` (see-all needs `total`); legacy clients that look for an array still parse
+ * via [parseFeaturedSellersResponse] which falls back to the array form when present.
+ */
+data class FeaturedSellersPage(
+    val items: List<FeaturedSellerItem>,
+    val total: Int,
+)
+
+internal fun parseFeaturedSellersPage(json: String): FeaturedSellersPage {
+    val items = parseFeaturedSellersResponse(json)
+    val raw = json.trim()
+    val total = if (raw.startsWith("{")) {
+        try {
+            JSONObject(raw).optInt("total", items.size)
+        } catch (_: Exception) {
+            items.size
+        }
+    } else {
+        items.size
+    }
+    return FeaturedSellersPage(items = items, total = total)
+}
+
 internal fun parseFeaturedSellersResponse(json: String): List<FeaturedSellerItem> {
     val raw = json.trim()
     if (raw.isEmpty()) return emptyList()

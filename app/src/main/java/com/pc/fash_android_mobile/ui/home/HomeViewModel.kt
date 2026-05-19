@@ -56,8 +56,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
-    private val homeDiscoveryRepository: HomeDiscoveryRepository =
-        HttpHomeDiscoveryRepository((application as FashApplication).editorialGuideRepository)
+    private val homeDiscoveryRepository: HomeDiscoveryRepository = run {
+        val app = application as FashApplication
+        HttpHomeDiscoveryRepository(
+            editorialGuideRepository = app.editorialGuideRepository,
+            searchRepository = app.searchRepository,
+            listingRepository = app.listingRepository,
+        )
+    }
 
     private val _items = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val items: StateFlow<List<ListingFeedItem>> = _items.asStateFlow()

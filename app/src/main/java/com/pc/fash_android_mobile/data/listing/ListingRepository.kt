@@ -87,6 +87,18 @@ class ListingRepository(
     }
 
     /**
+     * `GET /listings/recently-viewed` — this user's recently viewed active listings (newest first).
+     * Server table `listing_views` is refreshed by [recordView] (POST /listings/{id}/view).
+     * Same JSON shape as wishlist/home feed (snake_case ListingResponse + total).
+     */
+    fun getRecentlyViewed(limit: Int = 12, offset: Int = 0): Result<List<ListingFeedItem>> = runCatching {
+        val cappedLimit = limit.coerceIn(1, 50)
+        val safeOffset = offset.coerceAtLeast(0)
+        val url = "${AppEnvironment.apiPath("api/v1/listings/recently-viewed")}?limit=$cappedLimit&offset=$safeOffset"
+        parseFeedResponse(executeGet(url))
+    }
+
+    /**
      * Saved-listings count for buyer stats. Uses response `total` when present, else `listings` length.
      */
     fun getWishlistSavedCount(limit: Int = 100, offset: Int = 0): Result<Int> = runCatching {

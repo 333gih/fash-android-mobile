@@ -234,12 +234,6 @@ fun HomeFeedContent(
                         onPostClick = onHomeEditorialPostClick,
                     )
                 }
-                item {
-                    HomeTrendingCategoriesSection(
-                        categories = discovery.trendingCategories,
-                        onCategoryClick = onHomeTrendingCategoryClick,
-                    )
-                }
 
                 item {
                     HomeRecommendedSellersSection(

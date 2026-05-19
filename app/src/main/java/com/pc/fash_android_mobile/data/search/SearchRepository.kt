@@ -112,12 +112,20 @@ class SearchRepository(
 
     /**
      * `GET /search/featured-sellers` — ranked seller profiles with preview listing UUIDs (max [limit] 50).
+     * Convenience wrapper that drops `total` — prefer [getFeaturedSellersPage] when paginating.
      */
-    fun getFeaturedSellers(limit: Int = 50): Result<List<FeaturedSellerItem>> = runCatching {
-        val capped = limit.coerceIn(1, 50)
-        val url = "${AppEnvironment.apiPath("api/v1/search/featured-sellers")}?limit=$capped"
+    fun getFeaturedSellers(limit: Int = 50, offset: Int = 0): Result<List<FeaturedSellerItem>> =
+        getFeaturedSellersPage(limit, offset).map { it.items }
+
+    /**
+     * `GET /search/featured-sellers?limit&offset` — returns `{items, total}` for see-all pagination.
+     */
+    fun getFeaturedSellersPage(limit: Int = 50, offset: Int = 0): Result<FeaturedSellersPage> = runCatching {
+        val cappedLimit = limit.coerceIn(1, 50)
+        val safeOffset = offset.coerceAtLeast(0)
+        val url = "${AppEnvironment.apiPath("api/v1/search/featured-sellers")}?limit=$cappedLimit&offset=$safeOffset"
         val body = executeGet(url)
-        parseFeaturedSellersResponse(body)
+        parseFeaturedSellersPage(body)
     }
 
     private fun executeGet(url: String): String {

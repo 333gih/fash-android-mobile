@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.data.editorial
 
+import android.util.Log
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
@@ -10,6 +11,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+private const val TAG = "EditorialGuideRepo"
 private const val USER_AGENT = "FashAndroid/1.0"
 
 /** Default cover when CMS row has no `cover_image_url` (matches common-service seed fallback). */
@@ -49,7 +51,10 @@ class EditorialGuideRepository(
             .build()
         return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throwHttp(response.code, body)
+            if (!response.isSuccessful) {
+                Log.w(TAG, "GET $url failed code=${response.code} body=${body.take(500)}")
+                throwHttp(response.code, body)
+            }
             body
         }
     }
@@ -64,7 +69,10 @@ class EditorialGuideRepository(
             ?.build()
             ?.toString()
             ?: error("invalid editorial guides url")
-        parseCarousel(executeGet(url))
+        Log.d(TAG, "listCarousel GET $url")
+        val items = parseCarousel(executeGet(url))
+        Log.d(TAG, "listCarousel locale=$locale items=${items.size}")
+        items
     }
 
     fun getBySlug(slug: String): Result<EditorialGuideDetail> = runCatching {
