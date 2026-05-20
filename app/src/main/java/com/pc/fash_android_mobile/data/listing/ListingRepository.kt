@@ -83,15 +83,19 @@ class ListingRepository(
         parseFeedResponse(executeGet(primary, publicBrowse = false))
     }
 
-    /** Guest storefront: `GET /api/v1/public/users/{id}/listings`. */
+    /** Guest storefront: `GET /api/v1/public/users/{id}/listings` (default status active). */
     fun getListingsBySellerPublic(
         sellerId: String,
+        status: String? = null,
         limit: Int = 50,
         offset: Int = 0,
     ): Result<List<ListingFeedItem>> = runCatching {
         val seg = encodeUserPathSegment(sellerId.trim())
-        val q = "limit=$limit&offset=$offset"
-        val url = "${PublicBrowseHttp.publicApiPath("users/$seg/listings")}?$q"
+        val q = mutableListOf("limit=$limit", "offset=$offset")
+        status?.takeIf { it.isNotBlank() }?.let {
+            q.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}")
+        }
+        val url = "${PublicBrowseHttp.publicApiPath("users/$seg/listings")}?${q.joinToString("&")}"
         parseFeedResponse(executeGet(url, publicBrowse = true))
     }
 

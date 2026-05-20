@@ -52,6 +52,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             )?.let { promo ->
                 (applicationContext as? FashApplication)?.requestShowAppPromo(promo)
             }
+            (applicationContext as? FashApplication)?.requestInboxUnreadRefreshDebounced()
             if (shouldSuppressTrayForPresence()) return
         }
         if (shouldSuppressTrayForPresence()) {

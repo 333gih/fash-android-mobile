@@ -37,6 +37,10 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     private val sessionStore =
         (application as FashApplication).authManager.sessionStore
 
+    private val fashApp = application as FashApplication
+
+    private fun isGuestBrowse(): Boolean = fashApp.isGuestBrowseActive
+
     private val _profile = MutableStateFlow<ProfileInfo?>(null)
     val profile: StateFlow<ProfileInfo?> = _profile.asStateFlow()
 
@@ -99,10 +103,15 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
             try {
                 _loadError.value = false
                 withContext(Dispatchers.IO) {
-                    userRepository.getProfile(key).fold(
+                    val profileResult = if (isGuestBrowse()) {
+                        userRepository.getProfilePublic(key)
+                    } else {
+                        userRepository.getProfile(key)
+                    }
+                    profileResult.fold(
                         onSuccess = { prof ->
                             _profile.value = prof
-                            _isFollowing.value = prof.isFollowing ?: false
+                            _isFollowing.value = if (isGuestBrowse()) false else prof.isFollowing ?: false
                         },
                         onFailure = { _loadError.value = true },
                     )
@@ -157,6 +166,7 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
 
     /** True when logged in and the opened profile is not the current user. */
     fun canFollowSeller(): Boolean {
+        if (isGuestBrowse()) return false
         val my = sessionStore.read()?.userId?.trim().orEmpty()
         if (my.isBlank()) return false
         val seller = _profile.value?.userId?.trim().orEmpty()
@@ -164,9 +174,17 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
         return !my.equals(seller, ignoreCase = true)
     }
 
+    /** Show follow CTA on seller shop (guest sees login prompt on tap). */
+    fun canShowFollowUi(): Boolean {
+        val seller = _profile.value?.userId?.trim().orEmpty()
+        if (seller.isBlank()) return false
+        if (isGuestBrowse()) return true
+        return canFollowSeller()
+    }
+
     fun toggleFollow() {
         val p = _profile.value ?: return
-        if (!canFollowSeller()) return
+        if (isGuestBrowse() || !canFollowSeller()) return
         val target = p.username.trim().ifBlank { p.userId.trim() }
         if (target.isBlank()) return
         viewModelScope.launch {
@@ -206,26 +224,38 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
 
     private suspend fun loadListings(sellerId: String) {
         withContext(Dispatchers.IO) {
-            listingRepository.getListingsBySeller(
-                sellerId = sellerId,
-                status = null,
-                limit = 50,
-            ).fold(
-                onSuccess = { _sellingListings.value = it },
-                onFailure = { _sellingListings.value = emptyList() },
-            )
-            listingRepository.getListingsBySeller(
-                sellerId = sellerId,
-                status = "sold",
-                limit = 50,
-            ).fold(
-                onSuccess = { _soldListings.value = it },
-                onFailure = { _soldListings.value = emptyList() },
-            )
+            if (isGuestBrowse()) {
+                listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = null, limit = 50).fold(
+                    onSuccess = { _sellingListings.value = it },
+                    onFailure = { _sellingListings.value = emptyList() },
+                )
+                listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = "sold", limit = 50).fold(
+                    onSuccess = { _soldListings.value = it },
+                    onFailure = { _soldListings.value = emptyList() },
+                )
+            } else {
+                listingRepository.getListingsBySeller(
+                    sellerId = sellerId,
+                    status = null,
+                    limit = 50,
+                ).fold(
+                    onSuccess = { _sellingListings.value = it },
+                    onFailure = { _sellingListings.value = emptyList() },
+                )
+                listingRepository.getListingsBySeller(
+                    sellerId = sellerId,
+                    status = "sold",
+                    limit = 50,
+                ).fold(
+                    onSuccess = { _soldListings.value = it },
+                    onFailure = { _soldListings.value = emptyList() },
+                )
+            }
         }
     }
 
     fun toggleLike(item: ListingFeedItem) {
+        if (isGuestBrowse()) return
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 listingRepository.toggleLike(item.id)
@@ -262,6 +292,7 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun toggleSave(item: ListingFeedItem) {
+        if (isGuestBrowse()) return
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 listingRepository.toggleSave(item.id, item.isSaved)

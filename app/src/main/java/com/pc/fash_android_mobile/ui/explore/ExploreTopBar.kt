@@ -43,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashInboxNotificationIconButton
+import com.pc.fash_android_mobile.ui.guest.GuestTopBarSignInAction
 import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -55,6 +56,8 @@ fun ExploreTopBar(
     inboxUnreadCount: Int,
     onOrdersClick: () -> Unit,
     onNotificationsClick: () -> Unit,
+    showGuestSignIn: Boolean = false,
+    onGuestSignInClick: () -> Unit = {},
 ) {
     val searchBarExpanded by viewModel.searchBarExpanded.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -179,16 +182,20 @@ fun ExploreTopBar(
             }
         },
         actions = {
-            FashInboxNotificationIconButton(
-                unreadCount = inboxUnreadCount,
-                onClick = onNotificationsClick,
-            )
-            IconButton(onClick = onOrdersClick) {
-                Icon(
-                    imageVector = Icons.Default.LocalMall,
-                    contentDescription = stringResource(R.string.orders_icon_cd),
-                    tint = FashColors.Primary,
+            if (showGuestSignIn) {
+                GuestTopBarSignInAction(onClick = onGuestSignInClick)
+            } else {
+                FashInboxNotificationIconButton(
+                    unreadCount = inboxUnreadCount,
+                    onClick = onNotificationsClick,
                 )
+                IconButton(onClick = onOrdersClick) {
+                    Icon(
+                        imageVector = Icons.Default.LocalMall,
+                        contentDescription = stringResource(R.string.orders_icon_cd),
+                        tint = FashColors.Primary,
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(

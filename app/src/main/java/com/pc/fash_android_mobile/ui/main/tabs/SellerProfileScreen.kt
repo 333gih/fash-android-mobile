@@ -68,6 +68,7 @@ import com.pc.fash_android_mobile.data.user.SellerListingFocus
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooterContentHeight
+import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.launch
@@ -99,6 +100,8 @@ fun SellerProfileScreen(
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     /** Bottom strip below the promo slider — same as Orders / Notifications. */
     onExploreClick: () -> Unit = {},
+    isGuestMode: Boolean = false,
+    onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
@@ -223,11 +226,17 @@ fun SellerProfileScreen(
                                         )
                                         ProfileTrustCard(profile = profile)
                                         ProfileStats(profile = profile)
-                                        if (profile != null && viewModel.canFollowSeller()) {
+                                        if (profile != null && viewModel.canShowFollowUi()) {
                                             SellerFollowRow(
-                                                isFollowing = isFollowing,
+                                                isFollowing = isFollowing && !isGuestMode,
                                                 inFlight = followInFlight,
-                                                onToggle = { viewModel.toggleFollow() },
+                                                onToggle = {
+                                                    if (isGuestMode) {
+                                                        onRequestLogin(GuestLoginReason.Follow)
+                                                    } else {
+                                                        viewModel.toggleFollow()
+                                                    }
+                                                },
                                             )
                                         }
                                         SellerListingFocusSection(
@@ -264,8 +273,12 @@ fun SellerProfileScreen(
                                     onListingClick(item.id, item.sellerId ?: profile?.userId)
                                 },
                                 showListingQuickActions = true,
-                                onListingLike = { viewModel.toggleLike(it) },
-                                onListingSave = { viewModel.toggleSave(it) },
+                                onListingLike = {
+                                    if (isGuestMode) onRequestLogin(GuestLoginReason.Saved) else viewModel.toggleLike(it)
+                                },
+                                onListingSave = {
+                                    if (isGuestMode) onRequestLogin(GuestLoginReason.Saved) else viewModel.toggleSave(it)
+                                },
                                 additionalBottomInset = if (showPromoFooter) pinnedBottomInset else 0.dp,
                                 modifier = Modifier.fillMaxSize(),
                             )

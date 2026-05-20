@@ -14,4 +14,7 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     ChatFromHome(R.string.guest_login_reason_chat),
     SellFromHome(R.string.guest_login_reason_post),
     BuyOrChat(R.string.guest_login_reason_buy),
+    Follow(R.string.guest_login_reason_follow),
+    /** Top-bar “Sign in” chip on Home / Explore while browsing without an account. */
+    TopBar(R.string.guest_login_reason_topbar),
 }

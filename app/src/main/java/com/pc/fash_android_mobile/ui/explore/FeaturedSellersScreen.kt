@@ -76,6 +76,11 @@ fun FeaturedSellersScreen(
     val pullState = rememberPullToRefreshState()
     val scheme = MaterialTheme.colorScheme
 
+    // Guest shell had no ReloadWhenVisible; logged-in MainActivity refreshes on open — load if still empty.
+    LaunchedEffect(Unit) {
+        viewModel.ensureLoaded()
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {

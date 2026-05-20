@@ -82,6 +82,12 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
         return Result.success(acc to total)
     }
 
+    /** First paint when cache is empty (e.g. guest "See all" before [refresh] runs). */
+    fun ensureLoaded() {
+        if (_isLoading.value || _isRefreshing.value || _items.value.isNotEmpty()) return
+        load()
+    }
+
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true

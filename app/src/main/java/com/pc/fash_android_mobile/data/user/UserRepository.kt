@@ -450,9 +450,24 @@ class UserRepository(
     }
 
     /**
+     * Guest storefront profile (`GET /api/v1/public/users/{id|username}`) with public-browse attestation.
+     */
+    fun getProfilePublic(userIdOrUsername: String): Result<ProfileInfo> = runCatching {
+        val raw = userIdOrUsername.trim().removePrefix("@")
+        if (raw.isBlank()) error("Profile id required")
+        val client = publicBrowseClient ?: error("Public browse HTTP client is not configured")
+        val seg = encodePathSegment(raw)
+        val url = PublicBrowseHttp.publicApiPath("users/$seg")
+        val body = fetchProfileBodyWithClient(url, client)
+        val obj = JSONObject(body.trim())
+        val profileJson = if (obj.has("data")) obj.getJSONObject("data").toString() else body
+        parseProfileInfo(profileJson)
+    }
+
+    /**
      * Public profile (`GET /api/v1/users/{id|username}`).
      * Tries [securedClient] first so an authenticated viewer receives viewer-specific fields (e.g. `is_following`);
-     * falls back to [publicClient] on 401/403 (guest / expired token).
+     * falls back to [getProfilePublic] on 401/403 when public browse is configured.
      */
     fun getProfile(userIdOrUsername: String): Result<ProfileInfo> = runCatching {
         val raw = userIdOrUsername.trim().removePrefix("@")
@@ -463,6 +478,28 @@ class UserRepository(
         val obj = JSONObject(body.trim())
         val profileJson = if (obj.has("data")) obj.getJSONObject("data").toString() else body
         parseProfileInfo(profileJson)
+    }
+
+    private fun fetchProfileBodyWithClient(url: String, client: OkHttpClient): String {
+        val req = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", "FashAndroid/1.0")
+            .build()
+        return client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (response.code == 404) error("Profile not found")
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(body).optString("error", body).ifBlank { body }
+                } catch (_: Exception) {
+                    body
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            body
+        }
     }
 
     private fun fetchProfileBody(url: String): String {
@@ -476,7 +513,7 @@ class UserRepository(
             val body = response.body?.string().orEmpty()
             when (response.code) {
                 200 -> return body
-                401, 403 -> { /* guest — try public */ }
+                401, 403 -> { /* try public browse below */ }
                 404 -> error("Profile not found")
                 else -> {
                     val msg = try {
@@ -486,6 +523,15 @@ class UserRepository(
                     }
                     error("HTTP ${response.code}: $msg")
                 }
+            }
+        }
+        if (PublicBrowseHttp.isConfigured() && publicBrowseClient != null) {
+            val seg = url.substringAfter("/users/").substringBefore("?").trim()
+            if (seg.isNotBlank()) {
+                return fetchProfileBodyWithClient(
+                    PublicBrowseHttp.publicApiPath("users/${encodePathSegment(seg)}"),
+                    publicBrowseClient!!,
+                )
             }
         }
         return publicClient.newCall(req).execute().use { response ->

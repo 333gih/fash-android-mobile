@@ -658,6 +658,7 @@ class MainActivity : ComponentActivity() {
                                     )?.let { promo ->
                                         presentAdminPromoIfEligible(promo)
                                     }
+                                    fashApp.requestInboxUnreadRefreshDebounced()
                                     return@collect
                                 }
                                 fashApp.showInAppNotificationFromRealtime(
@@ -672,6 +673,7 @@ class MainActivity : ComponentActivity() {
                                 val promo = parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()
                                     ?: return@collect
                                 presentAdminPromoIfEligible(promo)
+                                fashApp.requestInboxUnreadRefreshDebounced()
                             }
                             else -> Unit
                         }
@@ -939,6 +941,9 @@ class MainActivity : ComponentActivity() {
                                         changePasswordViewModel = changePasswordViewModel,
                                         notificationsViewModel = notificationsViewModel,
                                         productDetailViewModel = productDetailViewModel,
+                                        sellerProfileViewModel = sellerProfileViewModel,
+                                        featuredSellersViewModel = featuredSellersViewModel,
+                                        promoSlidesViewModel = promoSlidesViewModel,
                                         snackbarHostState = snackbarHostState,
                                         onExitGuestToLogin = {
                                             isGuestBrowse = false

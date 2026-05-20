@@ -1,7 +1,9 @@
 package com.pc.fash_android_mobile.ui.main
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -13,24 +15,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.SnackbarHostState
+import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import com.pc.fash_android_mobile.FashApplication
+import com.pc.fash_android_mobile.data.locale.AppLocale
+import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.toFashPromoSlideDef
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
+import com.pc.fash_android_mobile.data.search.toUserSearchResult
+import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
+import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
+import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.guest.GuestLoginSheet
+import com.pc.fash_android_mobile.ui.home.HomeEditorialDetailScreen
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel
+import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileScreen
+import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 
 /**
- * Authenticated-light main shell: Home + Explore + listing PDP for users without a session.
+ * Authenticated-light main shell: Home + Explore + listing PDP + editorial reader + seller shop for guests.
  */
 @Composable
 fun GuestMainShell(
@@ -45,17 +62,64 @@ fun GuestMainShell(
     changePasswordViewModel: ChangePasswordViewModel,
     notificationsViewModel: NotificationsViewModel,
     productDetailViewModel: ProductDetailViewModel,
+    sellerProfileViewModel: SellerProfileViewModel,
+    featuredSellersViewModel: FeaturedSellersViewModel,
+    promoSlidesViewModel: PromoSlidesViewModel,
     snackbarHostState: SnackbarHostState,
     onExitGuestToLogin: () -> Unit,
 ) {
+    val context = LocalContext.current
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
+    var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
+    var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
     var guestLoginReason by remember { mutableStateOf<GuestLoginReason?>(null) }
 
     LaunchedEffect(Unit) {
         fashApp.isGuestBrowseActive = true
         homeViewModel.loadFeed()
         exploreViewModel.refresh()
+        promoSlidesViewModel.refresh()
+    }
+    val localeRev by AppLocale.localeRevisionFlow.collectAsState()
+    LaunchedEffect(localeRev) {
+        promoSlidesViewModel.refresh()
+    }
+    val remotePromo by promoSlidesViewModel.remoteSlides.collectAsState()
+    val scheme = MaterialTheme.colorScheme
+    val mappedPromoSlides = remember(remotePromo, scheme) {
+        remotePromo.map { it.toFashPromoSlideDef(scheme) }
+    }
+    val requestLogin: (GuestLoginReason) -> Unit = { guestLoginReason = it }
+    val handlePromoClick: (FashPromoSlideDef, Int) -> Unit = { slide, _ ->
+        val nav = slide.navigation
+        val t = nav?.type?.trim()?.lowercase().orEmpty()
+        when (t) {
+            "", "none" -> Unit
+            "in_app_explore" -> selectedTab = MainTab.Explore.ordinal
+            "in_app_orders" -> requestLogin(GuestLoginReason.Orders)
+            "in_app_chat" -> requestLogin(GuestLoginReason.ChatFromHome)
+            "in_app_product_packages" -> requestLogin(GuestLoginReason.Post)
+            "in_app_invite_friends" -> requestLogin(GuestLoginReason.Profile)
+            "external_url" -> {
+                val url = nav?.payload?.trim().orEmpty()
+                if (url.isNotEmpty()) {
+                    runCatching {
+                        CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+                    }
+                }
+            }
+            "deeplink" -> {
+                val u = nav?.payload?.trim().orEmpty()
+                if (u.isNotEmpty()) {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                    }
+                }
+            }
+            else -> Unit
+        }
     }
     DisposableEffect(Unit) {
         onDispose { fashApp.isGuestBrowseActive = false }
@@ -68,7 +132,24 @@ fun GuestMainShell(
         fashApp.pendingDeepLinkListingId.value = null
     }
 
-    val requestLogin: (GuestLoginReason) -> Unit = { guestLoginReason = it }
+    LaunchedEffect(sellerShopUsername) {
+        sellerShopUsername?.let { sellerProfileViewModel.loadForSeller(it) }
+    }
+
+    val openSellerShop: (UserSearchResult) -> Unit = { seller ->
+        val u = seller.username.trim()
+        if (u.isNotEmpty()) {
+            homeEditorialSlug = null
+            showFeaturedSellersAll = false
+            sellerShopUsername = u
+        }
+    }
+
+    ReloadWhenVisible(showFeaturedSellersAll, sellerShopUsername, selectedListingId) {
+        if (showFeaturedSellersAll && sellerShopUsername == null && selectedListingId == null) {
+            featuredSellersViewModel.refresh()
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         MainNavScreen(
@@ -86,29 +167,82 @@ fun GuestMainShell(
             notificationsViewModel = notificationsViewModel,
             snackbarHostState = snackbarHostState,
             chatUnreadCount = 0,
-            onListingClick = { lid, _ -> selectedListingId = lid },
-            onFeaturedSellerClick = { seller ->
-                seller.username.takeIf { it.isNotBlank() }?.let { username ->
-                    exploreViewModel.openExploreFromProfileFilter(
-                        categoryId = null,
-                        brandId = null,
-                        aestheticTagId = null,
-                        searchQuery = username,
-                        countryId = null,
-                        countryIso2 = null,
-                    )
-                    selectedTab = MainTab.Explore.ordinal
-                }
+            onListingClick = { lid, _ ->
+                homeEditorialSlug = null
+                showFeaturedSellersAll = false
+                sellerShopUsername = null
+                selectedListingId = lid
             },
-            onHomeEditorialPostClick = { _: HomeEditorialPostStub ->
-                selectedTab = MainTab.Explore.ordinal
+            onFeaturedSellerClick = openSellerShop,
+            onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
+            onHomeEditorialPostClick = { post: HomeEditorialPostStub ->
+                val slug = post.slug.trim().ifBlank { post.id.trim() }
+                if (slug.isNotEmpty()) {
+                    sellerShopUsername = null
+                    showFeaturedSellersAll = false
+                    homeEditorialSlug = slug
+                }
             },
             selectedTab = selectedTab,
             onTabChange = { selectedTab = it },
             isGuestMode = true,
             onRequestLogin = requestLogin,
             featureTourActive = false,
+            promoSlides = mappedPromoSlides,
+            onPromoSlideClick = handlePromoClick,
         )
+
+        val editorialSlug = homeEditorialSlug
+        if (editorialSlug != null && selectedListingId == null) {
+            HomeEditorialDetailScreen(
+                modifier = Modifier.fillMaxSize(),
+                slug = editorialSlug,
+                onBack = { homeEditorialSlug = null },
+            )
+        }
+
+        if (showFeaturedSellersAll && sellerShopUsername == null && selectedListingId == null && editorialSlug == null) {
+            FeaturedSellersScreen(
+                modifier = Modifier.fillMaxSize(),
+                viewModel = featuredSellersViewModel,
+                onBack = { showFeaturedSellersAll = false },
+                onSellerClick = { seller -> openSellerShop(seller.toUserSearchResult()) },
+                onListingClick = { lid, _ ->
+                    showFeaturedSellersAll = false
+                    selectedListingId = lid
+                },
+            )
+        }
+
+        val shopUsername = sellerShopUsername
+        if (shopUsername != null && selectedListingId == null && editorialSlug == null) {
+            SellerProfileScreen(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface),
+                viewModel = sellerProfileViewModel,
+                sellerUsername = shopUsername,
+                onBack = { sellerShopUsername = null },
+                onListingClick = { lid, _ ->
+                    sellerShopUsername = null
+                    selectedListingId = lid
+                },
+                onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
+                    exploreViewModel.openExploreFromProfileFilter(
+                        categoryId = cat,
+                        brandId = brand,
+                        aestheticTagId = aes,
+                        searchQuery = q,
+                        countryId = countryId,
+                        countryIso2 = countryIso2,
+                    )
+                    sellerShopUsername = null
+                    selectedTab = MainTab.Explore.ordinal
+                },
+                isGuestMode = true,
+                onRequestLogin = requestLogin,
+            )
+        }
 
         val listingId = selectedListingId
         if (listingId != null) {
@@ -124,16 +258,11 @@ fun GuestMainShell(
                 onBuyNow = { requestLogin(GuestLoginReason.BuyOrChat) },
                 onListingClick = { lid, _ -> selectedListingId = lid },
                 onVisitSellerShop = { username ->
-                    exploreViewModel.openExploreFromProfileFilter(
-                        categoryId = null,
-                        brandId = null,
-                        aestheticTagId = null,
-                        searchQuery = username,
-                        countryId = null,
-                        countryIso2 = null,
-                    )
-                    selectedListingId = null
-                    selectedTab = MainTab.Explore.ordinal
+                    val u = username.trim()
+                    if (u.isNotEmpty()) {
+                        selectedListingId = null
+                        sellerShopUsername = u
+                    }
                 },
                 profileExploreNavigationEnabled = true,
                 onNavigateToExploreFromProfile = { categoryId, brandId, aestheticTagId, searchQuery, countryId, countryIso2 ->
@@ -146,6 +275,7 @@ fun GuestMainShell(
                         countryIso2 = countryIso2,
                     )
                     selectedListingId = null
+                    sellerShopUsername = null
                     selectedTab = MainTab.Explore.ordinal
                 },
             )

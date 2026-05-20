@@ -29,8 +29,10 @@ class PromoSlidesViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun refresh() {
+        val fashApp = getApplication<FashApplication>()
+        val publicBrowse = fashApp.isGuestBrowseActive
         viewModelScope.launch(Dispatchers.IO) {
-            repo.getSlides("promo_slider_main").fold(
+            repo.getSlides("promo_slider_main", publicBrowse = publicBrowse).fold(
                 onSuccess = { res ->
                     Log.i(TAG, "CMS slides: ${res.items.size} item(s)")
                     _remoteSlides.value = res.items

@@ -82,6 +82,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.guest.GuestTopBarSignInAction
 import com.pc.fash_android_mobile.ui.guest.GuestTabPlaceholder
 import com.pc.fash_android_mobile.ui.onboarding.AppFeatureTourOverlay
 import com.pc.fash_android_mobile.ui.onboarding.AppTourStep
@@ -328,6 +329,7 @@ fun MainNavScreen(
             onOrdersClick()
         }
     }
+    val openGuestSignIn: () -> Unit = { onRequestLogin(GuestLoginReason.TopBar) }
     val isPostListingFlow = tabs.getOrNull(selectedTab) == MainTab.Post
     val featureTourVisible = featureTourActive && !isGuestMode &&
         !showNotificationScreen &&
@@ -378,12 +380,16 @@ fun MainNavScreen(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onOrdersClick = openOrders,
                     onNotificationsClick = openNotifications,
+                    showGuestSignIn = isGuestMode,
+                    onGuestSignInClick = openGuestSignIn,
                 )
                 MainTab.Profile -> ProfileTopBar(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     onOrdersClick = openOrders,
+                    showGuestSignIn = isGuestMode,
+                    onGuestSignInClick = openGuestSignIn,
                     onLogout = onLogout,
                     onOpenSettings = {
                         showNotificationScreen = false
@@ -397,6 +403,8 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     onOrdersClick = openOrders,
+                    showGuestSignIn = isGuestMode,
+                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -405,6 +413,8 @@ fun MainNavScreen(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
+                    showGuestSignIn = isGuestMode,
+                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -414,6 +424,8 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     onOrdersClick = openOrders,
+                    showGuestSignIn = isGuestMode,
+                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -423,6 +435,8 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     onOrdersClick = openOrders,
+                    showGuestSignIn = isGuestMode,
+                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -757,6 +771,8 @@ private fun ProfileTopBar(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOrdersClick: () -> Unit,
+    showGuestSignIn: Boolean = false,
+    onGuestSignInClick: () -> Unit = {},
     onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
     isLoggingOut: Boolean,
@@ -772,18 +788,23 @@ private fun ProfileTopBar(
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            FashInboxNotificationIconButton(
-                unreadCount = inboxUnreadCount,
-                onClick = onNotificationsClick,
-            )
-            IconButton(onClick = onOrdersClick) {
-                Icon(
-                    imageVector = Icons.Default.LocalMall,
-                    contentDescription = stringResource(R.string.orders_icon_cd),
-                    tint = FashColors.Primary,
+            if (showGuestSignIn) {
+                GuestTopBarSignInAction(onClick = onGuestSignInClick)
+            } else {
+                FashInboxNotificationIconButton(
+                    unreadCount = inboxUnreadCount,
+                    onClick = onNotificationsClick,
                 )
+                IconButton(onClick = onOrdersClick) {
+                    Icon(
+                        imageVector = Icons.Default.LocalMall,
+                        contentDescription = stringResource(R.string.orders_icon_cd),
+                        tint = FashColors.Primary,
+                    )
+                }
             }
             // DropdownMenu must share a Box with the anchor IconButton; as a bare Row sibling it mispositions.
+            if (!showGuestSignIn) {
             Box(modifier = Modifier.wrapContentSize(align = Alignment.TopEnd)) {
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
@@ -809,6 +830,7 @@ private fun ProfileTopBar(
                     )
                 }
             }
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -825,6 +847,8 @@ private fun MainTopBar(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOrdersClick: (() -> Unit)? = null,
+    showGuestSignIn: Boolean = false,
+    onGuestSignInClick: () -> Unit = {},
     tourTopBarAnchorsEnabled: Boolean = false,
     onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
 ) {
@@ -851,17 +875,21 @@ private fun MainTopBar(
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    FashInboxNotificationIconButton(
-                        unreadCount = inboxUnreadCount,
-                        onClick = onNotificationsClick,
-                    )
-                    onOrdersClick?.let { openOrders ->
-                        IconButton(onClick = openOrders) {
-                            Icon(
-                                imageVector = Icons.Default.LocalMall,
-                                contentDescription = stringResource(R.string.orders_icon_cd),
-                                tint = FashColors.Primary,
-                            )
+                    if (showGuestSignIn) {
+                        GuestTopBarSignInAction(onClick = onGuestSignInClick)
+                    } else {
+                        FashInboxNotificationIconButton(
+                            unreadCount = inboxUnreadCount,
+                            onClick = onNotificationsClick,
+                        )
+                        onOrdersClick?.let { openOrders ->
+                            IconButton(onClick = openOrders) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalMall,
+                                    contentDescription = stringResource(R.string.orders_icon_cd),
+                                    tint = FashColors.Primary,
+                                )
+                            }
                         }
                     }
                 }

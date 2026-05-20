@@ -1557,6 +1557,10 @@
     <string name="guest_login_reason_notifications">Order, chat, and promo alerts need a signed-in account.</string>
     <string name="guest_login_reason_saved">Saving favorites syncs across devices after sign-in.</string>
     <string name="guest_login_reason_buy">Buying or chatting with a seller requires a secure sign-in.</string>
+    <string name="guest_login_reason_follow">Follow sellers to see their new listings on Home — sign in to continue.</string>
+    <string name="guest_topbar_sign_in">Sign in</string>
+    <string name="guest_topbar_sign_in_cd">Sign in or create account</string>
+    <string name="guest_login_reason_topbar">Orders, alerts, chat, and your profile unlock after you sign in.</string>
     <string name="guest_tab_profile_title">Your account</string>
     <string name="guest_tab_profile_body">Sign in to see your profile, listings, wishlist, and settings. Until then, keep browsing Home and Explore.</string>
     <string name="guest_tab_chat_title">Messages</string>

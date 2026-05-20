@@ -208,7 +208,8 @@ fun HomeFeedContent(
                                     R.string.home_follow_empty_hint
                                 },
                                 showSectionHeader = !isGuestBrowse,
-                                showFeaturedCta = !isGuestBrowse && recommendedSellers.isNotEmpty(),
+                                // Guest already has "Shops worth a look" below — orphan CTA looked like an empty section.
+                                showFeaturedCta = recommendedSellers.isNotEmpty() && !isGuestBrowse,
                             )
                         }
                     }

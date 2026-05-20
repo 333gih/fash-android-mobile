@@ -266,12 +266,13 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
-    /** Core-service promo / advertising CMS (`GET /app/advertising/slides`) — Bearer via [SecuredApiClient]. */
+    /** Core-service promo / advertising CMS — secured + public browse for guest shell. */
     val advertisingRepository: AdvertisingRepository by lazy {
         AdvertisingRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
+            publicBrowseClient = publicBrowseHttpClient,
             localeTagProvider = {
                 AppLocale.currentTag(this@FashApplication)
             },
