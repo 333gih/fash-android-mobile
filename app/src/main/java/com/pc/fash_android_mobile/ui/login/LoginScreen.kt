@@ -53,6 +53,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -127,6 +128,8 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit = {},
     onLoginWithPassword: (() -> Unit)? = null,
     isPasswordLoading: Boolean = false,
+    /** When set (and public browse is configured), offers guest Home/Explore without sign-in. */
+    onContinueWithoutAccount: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val formLockedForSocial = isSocialLoading
@@ -345,6 +348,17 @@ fun LoginScreen(
                             enabled = !isSocialLoading,
                             onClick = onFacebookClick,
                         )
+                    }
+
+                    if (onContinueWithoutAccount != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TextButton(
+                            onClick = onContinueWithoutAccount,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSocialLoading && !isOtpLoading,
+                        ) {
+                            Text(stringResource(R.string.login_continue_without_account))
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

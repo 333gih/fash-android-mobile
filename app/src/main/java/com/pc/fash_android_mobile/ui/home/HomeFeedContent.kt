@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
 import com.pc.fash_android_mobile.data.listing.Category
+import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
@@ -49,12 +51,9 @@ import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-/** Lazy item index of the inline promo row (journey = 0, promo = 1, quick actions = 2, …). */
-private const val HOME_PROMO_ITEM_INDEX = 1
-
 /**
- * Home tab: [GET /api/v1/listings/home] — listings from followed sellers only.
- * Promo sits inline (journey → promo → quick actions → personalized feed → …). When that row scrolls off-screen,
+ * Home tab: follow feed + marketplace preview (Explore heat) + discovery rails.
+ * Promo sits inline (journey → promo → quick actions → hunt today → follow feed → …). When that row scrolls off-screen,
  * a duplicate promo docks at the bottom with animation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,8 +77,12 @@ fun HomeFeedContent(
     onHomeTrendingCategoryClick: (Category) -> Unit = {},
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onOpenFeaturedSellersAll: () -> Unit = {},
+    /** When true, follow-feed empty copy explains guest browse instead of “follow shops”. */
+    isGuestBrowse: Boolean = false,
 ) {
     val items by viewModel.items.collectAsState()
+    val huntTodayItems by viewModel.huntTodayItems.collectAsState()
+    val huntTodayLoading by viewModel.huntTodayLoading.collectAsState()
     val discovery by viewModel.discoveryBundle.collectAsState()
     val followingIds by viewModel.followingIds.collectAsState()
     val buyerStats by viewModel.buyerStats.collectAsState()
@@ -89,18 +92,23 @@ fun HomeFeedContent(
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
 
+    val showJourneyRow = buyerStats.hasJourneyActivity()
+    val homePromoLazyIndex = if (showJourneyRow) 1 else 0
+    val recentlyViewed = discovery.recentlyViewed
+
     LaunchedEffect(Unit) {
         viewModel.scrollHomeToTop.collect {
             listState.animateScrollToItem(0)
         }
     }
 
-    val showStickyPromo by remember {
+    val showStickyPromo by remember(showJourneyRow) {
+        val promoIndex = homePromoLazyIndex
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             if (layoutInfo.visibleItemsInfo.isEmpty()) return@derivedStateOf false
             val inlinePromoVisible =
-                layoutInfo.visibleItemsInfo.any { it.index == HOME_PROMO_ITEM_INDEX }
+                layoutInfo.visibleItemsInfo.any { it.index == promoIndex }
             !inlinePromoVisible
         }
     }
@@ -128,13 +136,15 @@ fun HomeFeedContent(
                     .fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = FashTheme.spacing.spacing8 + 72.dp),
             ) {
-                item {
-                    BuyerHomeJourneyRow(
-                        stats = buyerStats,
-                        onDeliveringClick = onDeliveringJourneyClick,
-                        onSavedClick = onNavigateToSaved,
-                        onMessagesClick = onNavigateToChat,
-                    )
+                if (showJourneyRow) {
+                    item {
+                        BuyerHomeJourneyRow(
+                            stats = buyerStats,
+                            onDeliveringClick = onDeliveringJourneyClick,
+                            onSavedClick = onNavigateToSaved,
+                            onMessagesClick = onNavigateToChat,
+                        )
+                    }
                 }
                 item {
                     FashPromoSliderBlock(
@@ -150,16 +160,32 @@ fun HomeFeedContent(
                     )
                 }
 
+                item {
+                    HomeHuntTodaySection(
+                        items = huntTodayItems,
+                        isLoading = huntTodayLoading,
+                        onSeeAllClick = onNavigateToExplore,
+                        onListingClick = onListingClick,
+                        onLike = { viewModel.toggleLike(it) },
+                        onSave = { viewModel.toggleSave(it) },
+                        onRecordView = { viewModel.recordView(it) },
+                    )
+                }
+
                 when {
                     isLoading && items.isEmpty() -> {
                         item {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(48.dp),
+                                    .padding(vertical = 32.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                CircularProgressIndicator(color = FashColors.Primary)
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = FashColors.Primary,
+                                    strokeWidth = 2.dp,
+                                )
                             }
                         }
                     }
@@ -173,9 +199,13 @@ fun HomeFeedContent(
                     }
                     items.isEmpty() -> {
                         item {
-                            HomePersonalizedFeedEmptyCard(
-                                onExploreClick = onNavigateToExplore,
+                            HomeFollowFeedEmptyHint(
                                 onFeaturedSellersClick = onOpenFeaturedSellersAll,
+                                hintRes = if (isGuestBrowse) {
+                                    R.string.home_guest_follow_hint
+                                } else {
+                                    R.string.home_follow_empty_hint
+                                },
                             )
                         }
                     }
@@ -228,6 +258,15 @@ fun HomeFeedContent(
                     }
                 }
 
+                if (recentlyViewed.size >= 2) {
+                    item {
+                        HomeRecentlyViewedSection(
+                            items = recentlyViewed,
+                            onListingClick = onListingClick,
+                        )
+                    }
+                }
+
                 item {
                     HomeEditorialPostsSection(
                         posts = discovery.editorialPosts,
@@ -241,12 +280,6 @@ fun HomeFeedContent(
                         followingIds = followingIds,
                         onSellerClick = onFeaturedSellerClick,
                         onSeeAllClick = onOpenFeaturedSellersAll,
-                    )
-                }
-                item {
-                    HomeRecentlyViewedSection(
-                        items = discovery.recentlyViewed,
-                        onListingClick = onListingClick,
                     )
                 }
 

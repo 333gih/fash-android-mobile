@@ -29,6 +29,7 @@ class HttpHomeDiscoveryRepository(
     private val homeFeaturedSellersLimit: Int = 8,
     /** Home rail size for recently viewed. */
     private val homeRecentlyViewedLimit: Int = 12,
+    private val guestBrowseProvider: () -> Boolean = { false },
 ) : HomeDiscoveryRepository {
 
     override suspend fun loadDiscoveryBundle(): Result<HomeDiscoveryBundle> = coroutineScope {
@@ -38,16 +39,30 @@ class HttpHomeDiscoveryRepository(
                 emptyList()
             }
         }
+        val guest = guestBrowseProvider()
         val sellersAsync = async {
-            searchRepository.getFeaturedSellers(limit = homeFeaturedSellersLimit, offset = 0).getOrElse {
-                Log.w(TAG, "featured sellers failed: ${it.message}")
-                emptyList<FeaturedSellerItem>()
+            if (guest) {
+                searchRepository.browseFeaturedSellersPage(limit = homeFeaturedSellersLimit, offset = 0)
+                    .map { it.items }
+                    .getOrElse {
+                        Log.w(TAG, "public featured sellers failed: ${it.message}")
+                        emptyList()
+                    }
+            } else {
+                searchRepository.getFeaturedSellers(limit = homeFeaturedSellersLimit, offset = 0).getOrElse {
+                    Log.w(TAG, "featured sellers failed: ${it.message}")
+                    emptyList<FeaturedSellerItem>()
+                }
             }
         }
         val recentlyViewedAsync = async {
-            listingRepository.getRecentlyViewed(limit = homeRecentlyViewedLimit, offset = 0).getOrElse {
-                Log.w(TAG, "recently viewed failed: ${it.message}")
+            if (guest) {
                 emptyList()
+            } else {
+                listingRepository.getRecentlyViewed(limit = homeRecentlyViewedLimit, offset = 0).getOrElse {
+                    Log.w(TAG, "recently viewed failed: ${it.message}")
+                    emptyList()
+                }
             }
         }
         // Keep trendingCategories empty — section was removed from the home feed; data is still

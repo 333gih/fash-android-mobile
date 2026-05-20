@@ -215,10 +215,18 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
         envVal("SKIP_SIZING_REFERENCE_COMPLETED")?.equals("true", ignoreCase = true) == true
     buildConfigField("boolean", "SKIP_SIZING_REFERENCE_COMPLETED", skipSizingReferenceCompleted.toString())
 
-    /**
-     * Optional server internal auth (ANDROID_API_INTEGRATION.md). **Do not** put real secrets in retail APKs;
-     * keep empty in prod or use CI-injected env. [SecuredApiClient] sends `X-Internal-Secret` when non-empty.
-     */
+    // Guest browse attestation for GET /api/v1/public/* (core-service). Pair with PUBLIC_BROWSE_CLIENT_SECRETS env.
+    buildConfigField(
+        "String",
+        "PUBLIC_BROWSE_CLIENT_ID",
+        buildConfigStringLiteral(envVal("PUBLIC_BROWSE_CLIENT_ID") ?: "fash-android"),
+    )
+    buildConfigField(
+        "String",
+        "PUBLIC_BROWSE_CLIENT_TOKEN",
+        buildConfigStringLiteral(envOrEmpty("PUBLIC_BROWSE_CLIENT_TOKEN")),
+    )
+
     buildConfigField("String", "INTERNAL_SECRET", buildConfigStringLiteral(envOrEmpty("INTERNAL_SECRET")))
     /**
      * Optional long-lived Bearer for service calls when no user session; user JWT wins when logged in.

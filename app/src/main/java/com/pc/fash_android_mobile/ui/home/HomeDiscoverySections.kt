@@ -437,13 +437,146 @@ private fun HomeCompactSellerStory(
     }
 }
 
+/** Minimum viewed listings before showing the resume rail (reduces noise for first-time open). */
+private const val HomeRecentlyViewedMinItems = 2
+
+@Composable
+fun HomeHuntTodaySection(
+    items: List<ListingFeedItem>,
+    isLoading: Boolean,
+    onSeeAllClick: () -> Unit,
+    onListingClick: (listingId: String, sellerId: String?) -> Unit,
+    onLike: (ListingFeedItem) -> Unit,
+    onSave: (ListingFeedItem) -> Unit,
+    onRecordView: (ListingFeedItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!isLoading && items.isEmpty()) return
+    val spacing = FashTheme.spacing
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = spacing.editorialStart,
+                    end = spacing.editorialEnd,
+                    top = spacing.spacing2,
+                    bottom = spacing.spacing1,
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.home_hunt_today_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = FashColors.Primary,
+                )
+                Text(
+                    text = stringResource(R.string.home_hunt_today_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            if (!isLoading && items.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.home_hunt_today_see_all),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = FashColors.Primary,
+                    modifier = Modifier.clickable(onClick = onSeeAllClick),
+                )
+            }
+        }
+        if (isLoading && items.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    color = FashColors.Primary,
+                    strokeWidth = 2.dp,
+                )
+            }
+        } else {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(
+                    start = spacing.editorialStart,
+                    end = spacing.editorialEnd,
+                    bottom = spacing.spacing3,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(spacing.spacing2),
+            ) {
+                items(items, key = { it.id }) { item ->
+                    LaunchedEffect(item.id) { onRecordView(item) }
+                    ListingGridCard(
+                        item = item,
+                        showQuickActions = true,
+                        onLike = { onLike(item) },
+                        onSave = { onSave(item) },
+                        onClick = { onListingClick(item.id, item.sellerId) },
+                        modifier = Modifier.width(156.dp),
+                        imageAspectRatio = 4f / 5f,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Compact hint when the follow-based home feed has no listings (no large empty card). */
+@Composable
+fun HomeFollowFeedEmptyHint(
+    onFeaturedSellersClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    @androidx.annotation.StringRes hintRes: Int = R.string.home_follow_empty_hint,
+) {
+    val spacing = FashTheme.spacing
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = spacing.spacing2),
+    ) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_top_section_title),
+            subtitle = stringResource(R.string.home_top_section_subtitle),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = spacing.editorialStart,
+                    end = spacing.editorialEnd,
+                ),
+            verticalArrangement = Arrangement.spacedBy(spacing.spacing1),
+        ) {
+            Text(
+                text = stringResource(hintRes),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(R.string.home_follow_empty_cta_featured),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = FashColors.Primary,
+                modifier = Modifier.clickable(onClick = onFeaturedSellersClick),
+            )
+        }
+    }
+}
+
 @Composable
 fun HomeRecentlyViewedSection(
     items: List<ListingFeedItem>,
     onListingClick: (listingId: String, sellerId: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (items.isEmpty()) return
+    if (items.size < HomeRecentlyViewedMinItems) return
     val spacing = FashTheme.spacing
     Column(modifier = modifier.fillMaxWidth()) {
         HomeSectionHeader(

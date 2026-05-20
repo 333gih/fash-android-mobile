@@ -45,8 +45,9 @@ enum class ProductBottomBarMode {
 
 class ProductDetailViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val listingRepository: ListingRepository =
-        (application as FashApplication).listingRepository
+    private val fashApp: FashApplication = application as FashApplication
+    private val listingRepository: ListingRepository = fashApp.listingRepository
+    private fun isGuestBrowse(): Boolean = fashApp.isGuestBrowseActive
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
     private val orderRepository: OrderRepository =
@@ -142,16 +143,20 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _isOpeningChat.value = false
             _isLoading.value = true
             _loadError.value = null
+            val guestBrowse = isGuestBrowse()
             withContext(Dispatchers.IO) {
-                val detailResult = listingRepository.getListingDetail(listingId)
+                val guest = guestBrowse
+                val detailResult = listingRepository.getListingDetail(listingId, publicBrowse = guest)
                 detailResult.fold(
                     onSuccess = { d ->
                         _detail.value = d
                         d.sellerIsFollowing?.let { _isFollowing.value = it }
                         val sid = d.sellerId?.takeIf { it.isNotBlank() }
                             ?: d.sellerUsername?.takeIf { it.isNotBlank() }
-                        sid?.let { loadSellerAndMore(it, listingId) }
-                        listingRepository.recordView(listingId)
+                        sid?.let { loadSellerAndMore(it, listingId, guest) }
+                        if (!guest) {
+                            listingRepository.recordView(listingId)
+                        }
                     },
                     onFailure = {
                         _loadError.value = it.message?.takeIf { m -> m.isNotBlank() }
@@ -162,8 +167,10 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _isLoading.value = false
             _detail.value?.let { d ->
                 applyBottomModeFromDetail(d, listingId)
-                maybeShowPurchaseGuide(d)
-                startListingRealtime(listingId)
+                if (!guestBrowse) {
+                    maybeShowPurchaseGuide(d)
+                    startListingRealtime(listingId)
+                }
             }
         }
     }
@@ -270,20 +277,24 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     suspend fun findBuyerActiveOrderForListing(listingId: String): BuyerActiveOrder? =
         loadBuyerActiveOrder(listingId)
 
-    private suspend fun loadSellerAndMore(sellerKey: String, excludeListingId: String) {
+    private suspend fun loadSellerAndMore(sellerKey: String, excludeListingId: String, publicBrowse: Boolean = false) {
         val d = _detail.value
         val profileId = d?.sellerUsername?.takeIf { it.isNotBlank() } ?: sellerKey
         val profileResult = userRepository.getProfile(profileId)
         profileResult.fold(
             onSuccess = {
                 _sellerProfile.value = it
-                if (_detail.value?.sellerIsFollowing == null) {
+                if (!publicBrowse && _detail.value?.sellerIsFollowing == null) {
                     it.isFollowing?.let { following -> _isFollowing.value = following }
                 }
             },
             onFailure = { },
         )
-        val moreResult = listingRepository.getListingsBySeller(sellerKey, limit = 5)
+        val moreResult = if (publicBrowse) {
+            listingRepository.getListingsBySellerPublic(sellerKey, limit = 5)
+        } else {
+            listingRepository.getListingsBySeller(sellerKey, limit = 5)
+        }
         moreResult.fold(
             onSuccess = { list ->
                 _moreFromSeller.value = list.filter { it.id != excludeListingId }.take(5)

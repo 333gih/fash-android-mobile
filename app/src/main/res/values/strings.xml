@@ -280,8 +280,13 @@
     <string name="home_hero_title">Bộ sưu tập mới</string>
     <string name="home_hero_subtitle">Khám phá đồ second-hand &amp; phụ kiện từ người bạn theo dõi</string>
     <string name="home_hero_cta">Khám phá ngay</string>
-    <string name="home_top_section_title">Dành cho bạn</string>
-    <string name="home_top_section_subtitle">Tin mới từ shop người bạn theo dõi</string>
+    <string name="home_top_section_title">Từ shop bạn theo dõi</string>
+    <string name="home_top_section_subtitle">Tin mới từ người bán bạn đang follow</string>
+    <string name="home_hunt_today_title">Săn đồ hôm nay</string>
+    <string name="home_hunt_today_subtitle">Đang hot trên Fash — lướt nhanh trước khi hết</string>
+    <string name="home_hunt_today_see_all">Xem tất cả</string>
+    <string name="home_follow_empty_hint">Theo vài shop để thấy tin mới ở đây.</string>
+    <string name="home_follow_empty_cta_featured">Khám phá shop nổi bật</string>
     <string name="home_brand_marketplace">FASH MARKETPLACE</string>
     <string name="home_brand_footer_sub">ĐỊNH HÌNH PHONG CÁCH VIỆT</string>
     <string name="home_quick_actions_title">Mua &amp; bán nhanh</string>
@@ -292,6 +297,7 @@
     <string name="home_feed_subtitle">Tin mới từ shop người bạn theo dõi</string>
     <string name="home_feed_empty_title">Chưa có món nào ở đây</string>
     <string name="home_feed_empty_subtitle">Theo dõi người bán để thấy tin mới trên Trang chủ — hoặc sang Khám phá để lướt toàn sàn.</string>
+    <!-- Legacy strings kept for any stale references; UI uses home_follow_empty_* -->
     <string name="home_empty_cta_explore">Đi tới Khám phá</string>
     <string name="home_feed_empty_cta_featured">Xem shop nổi bật</string>
     <string name="home_section_editorial_title">Cẩm nang</string>
@@ -326,7 +332,8 @@
     <string name="profile_preview_slot_empty_cd">Ô xem trước — không có tin trong ô này</string>
     <string name="profile_preview_caption_all">Đang hiển thị cả %1$d tin trong phần xem trước.</string>
     <string name="profile_preview_caption_partial">Đang hiển thị %1$d / %2$d tin — mở shop để xem đầy đủ.</string>
-    <string name="explore_feed_subtitle">Lướt đồ hot, lọc theo phong cách (aesthetic)</string>
+    <string name="explore_feed_subtitle">Toàn sàn — ưu tiên đồ hot và mới đăng</string>
+    <string name="explore_style_chips_title">Phong cách</string>
     <string name="explore_promo_badge">Mẹo</string>
     <string name="explore_promo_pager_cd">Mẹo và gợi ý, trang %1$d / %2$d</string>
     <string name="explore_promo_slide1_title">Theo dõi người bán yêu thích</string>
@@ -1590,4 +1597,25 @@
     <string name="invite_fine_print">Link dùng trong tin nhắn là https://…/invite (tự thành link xanh). Đã cài app có thể mở thẳng màn mời bè; chưa cài thì mở trình duyệt — cần trang /invite trên web hoặc chuyển hướng tới Play Store. Trong app vẫn hỗ trợ fash://invite?ref=… nhưng hầu hết app chat không biến nó thành link bấm được.</string>
     <string name="profile_invite_friends_title">Mời bạn tham gia Fash</string>
     <string name="profile_invite_friends_subtitle">Chia sẻ link &amp; nhận lợi thế khi cộng đồng lớn hơn.</string>
+
+    <!-- Guest browse (Phase 2) -->
+    <string name="login_continue_without_account">Tiếp tục xem không đăng nhập</string>
+    <string name="guest_login_sheet_title">Đăng nhập khi bạn sẵn sàng</string>
+    <string name="guest_login_sheet_sign_in">Đăng nhập / tạo tài khoản</string>
+    <string name="guest_login_sheet_continue_browsing">Tiếp tục xem</string>
+    <string name="guest_login_sheet_privacy_note">Bạn có thể khám phá Home và Khám phá trước. Chúng tôi chỉ hỏi đăng nhập khi bạn muốn chat, đặt hàng, đăng bán hoặc lưu tin.</string>
+    <string name="guest_login_reason_profile">Hồ sơ, tin đã lưu và cài đặt có sau khi bạn đăng nhập.</string>
+    <string name="guest_login_reason_chat">Nhắn tin với người bán cần tài khoản để bảo vệ hai bên.</string>
+    <string name="guest_login_reason_post">Đăng bán và quản lý tin cần tài khoản xác thực.</string>
+    <string name="guest_login_reason_orders">Theo dõi đơn hàng và thanh toán cần đăng nhập.</string>
+    <string name="guest_login_reason_notifications">Thông báo đơn, chat và khuyến mãi gắn với tài khoản của bạn.</string>
+    <string name="guest_login_reason_saved">Lưu tin yêu thích cần đăng nhập để đồng bộ thiết bị.</string>
+    <string name="guest_login_reason_buy">Mua hoặc trò chuyện với người bán cần đăng nhập an toàn.</string>
+    <string name="guest_tab_profile_title">Tài khoản của bạn</string>
+    <string name="guest_tab_profile_body">Đăng nhập để xem hồ sơ, tin đã đăng, wishlist và cài đặt. Trước đó bạn vẫn xem được sản phẩm trên Home và Khám phá.</string>
+    <string name="guest_tab_chat_title">Tin nhắn</string>
+    <string name="guest_tab_chat_body">Chat trực tiếp với người bán sau khi đăng nhập — giúp giao dịch minh bạch và an toàn hơn.</string>
+    <string name="guest_tab_post_title">Đăng bán</string>
+    <string name="guest_tab_post_body">Tạo tài khoản để đăng đồ second-hand và quản lý tin của bạn.</string>
+    <string name="home_guest_follow_hint">Đăng nhập để xem tin từ shop bạn theo dõi. Trước mắt, khám phá “Săn đồ hôm nay” và tab Khám phá bên dưới.</string>
 </resources>

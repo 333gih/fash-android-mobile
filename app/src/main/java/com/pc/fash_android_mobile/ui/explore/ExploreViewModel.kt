@@ -47,10 +47,10 @@ enum class ExplorePrimarySection {
 
 class ExploreViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val listingRepository: ListingRepository =
-        (application as FashApplication).listingRepository
-    private val searchRepository: SearchRepository =
-        (application as FashApplication).searchRepository
+    private val fashApp: FashApplication = application as FashApplication
+    private val listingRepository: ListingRepository = fashApp.listingRepository
+    private val searchRepository: SearchRepository = fashApp.searchRepository
+    private fun isGuestBrowse(): Boolean = fashApp.isGuestBrowseActive
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
     private val commonServiceRepository: CommonServiceRepository =
@@ -684,10 +684,17 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFeaturedSellers() {
-        searchRepository.getFeaturedSellers(limit = 10).fold(
-            onSuccess = { _featuredSellers.value = it },
-            onFailure = { _featuredSellers.value = emptyList() },
-        )
+        if (isGuestBrowse()) {
+            searchRepository.browseFeaturedSellersPage(limit = 10, offset = 0).fold(
+                onSuccess = { _featuredSellers.value = it.items },
+                onFailure = { _featuredSellers.value = emptyList() },
+            )
+        } else {
+            searchRepository.getFeaturedSellers(limit = 10).fold(
+                onSuccess = { _featuredSellers.value = it },
+                onFailure = { _featuredSellers.value = emptyList() },
+            )
+        }
     }
 
     private suspend fun fetchListingsFirstPage() {
@@ -741,21 +748,38 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val sort = if (isSearch && q.isNotEmpty()) _sortOption.value else "popular"
         val (minP, maxP) = normalizedPriceBounds()
         val tagIds = _selectedAestheticTagIds.value.toList()
-        return searchRepository.searchListings(
-            q = q,
-            categoryId = categoryId,
-            aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
-            sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
-            brandId = _selectedBrandId.value,
-            countryId = _selectedCountryId.value,
-            countryIso2 = normalizeCountryIso2(_selectedCountryIso2.value),
-            minPrice = minP,
-            maxPrice = maxP,
-            condition = _selectedConditionFilter.value,
-            limit = ExploreFeedPageSize,
-            offset = offset,
-            sort = sort,
-        )
+        return if (isGuestBrowse()) {
+            searchRepository.browseListings(
+                q = q,
+                categoryId = categoryId,
+                aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
+                brandId = _selectedBrandId.value,
+                countryId = _selectedCountryId.value,
+                countryIso2 = normalizeCountryIso2(_selectedCountryIso2.value),
+                minPrice = minP,
+                maxPrice = maxP,
+                condition = _selectedConditionFilter.value,
+                limit = ExploreFeedPageSize,
+                offset = offset,
+                sort = sort,
+            )
+        } else {
+            searchRepository.searchListings(
+                q = q,
+                categoryId = categoryId,
+                aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
+                sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
+                brandId = _selectedBrandId.value,
+                countryId = _selectedCountryId.value,
+                countryIso2 = normalizeCountryIso2(_selectedCountryIso2.value),
+                minPrice = minP,
+                maxPrice = maxP,
+                condition = _selectedConditionFilter.value,
+                limit = ExploreFeedPageSize,
+                offset = offset,
+                sort = sort,
+            )
+        }
     }
 
     private fun normalizeCountryIso2(raw: String?): String? =

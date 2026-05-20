@@ -24,6 +24,7 @@ import com.pc.fash_android_mobile.data.payment.MockPaymentService
 import com.pc.fash_android_mobile.data.payment.PaymentService
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.search.SearchRepository
+import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.ui.UiDialogController
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -44,6 +45,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 /**
  * WebSocket base for [RealtimeManager]: prefer `REALTIME_BASE_URL` in env ([BuildConfig.REALTIME_BASE_URL]),
@@ -178,6 +180,17 @@ class FashApplication : Application(), ImageLoaderFactory {
     @Volatile
     private var inboxUnreadRefreshJob: Job? = null
 
+    /**
+     * True while the main shell runs without a user session (browse-only). Repositories use
+     * [publicBrowseSearchRepository] / public listing paths when this is set.
+     */
+    @Volatile
+    var isGuestBrowseActive: Boolean = false
+
+    val publicBrowseHttpClient: OkHttpClient? by lazy {
+        if (PublicBrowseHttp.isConfigured()) PublicBrowseHttp.createClient() else null
+    }
+
     fun requestShowAppPromo(campaign: AppPromoCampaign) {
         applicationScope.launch {
             _appPromoShowSignals.emit(campaign)
@@ -247,6 +260,7 @@ class FashApplication : Application(), ImageLoaderFactory {
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
+            publicBrowseClient = publicBrowseHttpClient,
         )
     }
 
@@ -304,6 +318,7 @@ class FashApplication : Application(), ImageLoaderFactory {
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
+            publicBrowseClient = publicBrowseHttpClient,
         )
     }
 

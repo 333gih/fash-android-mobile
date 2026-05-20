@@ -13,6 +13,7 @@ import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
+import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -33,7 +34,11 @@ data class BuyerHomeStats(
     val activeDeliveryOrders: Int = 0,
     val savedListingsCount: Int = 0,
     val unreadMessages: Int = 0,
-)
+) {
+    /** Show journey row only when at least one stat is non-zero. */
+    fun hasJourneyActivity(): Boolean =
+        activeDeliveryOrders > 0 || savedListingsCount > 0 || unreadMessages > 0
+}
 
 private val BuyerDeliveringStatuses = setOf(
     "payment_held",
@@ -43,10 +48,14 @@ private val BuyerDeliveringStatuses = setOf(
     "shipping",
 )
 
+private const val HomeHuntTodayPreviewLimit = 8
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val listingRepository: ListingRepository =
-        (application as FashApplication).listingRepository
+    private val fashApp: FashApplication = application as FashApplication
+    private val listingRepository: ListingRepository = fashApp.listingRepository
+    private val searchRepository: SearchRepository = fashApp.searchRepository
+    private fun isGuestBrowse(): Boolean = fashApp.isGuestBrowseActive
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
     private val orderRepository: OrderRepository =
@@ -56,17 +65,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
-    private val homeDiscoveryRepository: HomeDiscoveryRepository = run {
-        val app = application as FashApplication
-        HttpHomeDiscoveryRepository(
-            editorialGuideRepository = app.editorialGuideRepository,
-            searchRepository = app.searchRepository,
-            listingRepository = app.listingRepository,
-        )
-    }
+    private val homeDiscoveryRepository: HomeDiscoveryRepository = HttpHomeDiscoveryRepository(
+        editorialGuideRepository = fashApp.editorialGuideRepository,
+        searchRepository = fashApp.searchRepository,
+        listingRepository = fashApp.listingRepository,
+        guestBrowseProvider = { isGuestBrowse() },
+    )
 
     private val _items = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val items: StateFlow<List<ListingFeedItem>> = _items.asStateFlow()
+
+    /** Heat-ranked marketplace preview (`GET /search/listings`, browse mode) — same source as Explore. */
+    private val _huntTodayItems = MutableStateFlow<List<ListingFeedItem>>(emptyList())
+    val huntTodayItems: StateFlow<List<ListingFeedItem>> = _huntTodayItems.asStateFlow()
+
+    private val _huntTodayLoading = MutableStateFlow(false)
+    val huntTodayLoading: StateFlow<Boolean> = _huntTodayLoading.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -107,10 +121,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         loadFeed()
         // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
         viewModelScope.launch {
+            if (isGuestBrowse()) return@launch
             realtimeManager.events.collect { event ->
                 if (event is RealtimeEvent.FeedRefresh) {
                     withContext(Dispatchers.IO) {
                         loadBuyerHomeStats()
+                        fetchHuntTodayPreview()
                         fetchHomeFeedWithRetry()
                     }.getOrNull()?.let { feed ->
                         _items.value = feed
@@ -129,6 +145,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadBuyerHomeStats() {
+        if (isGuestBrowse()) {
+            _buyerStats.value = BuyerHomeStats()
+            return
+        }
         val orders = orderRepository.getBuyingOrders(limit = 50, offset = 0).getOrElse { emptyList() }
         val delivering = orders.count { it.status in BuyerDeliveringStatuses }
         val saved = listingRepository.getWishlistSavedCount(limit = 100, offset = 0).getOrElse { 0 }
@@ -147,6 +167,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val result = withContext(Dispatchers.IO) {
                 loadBuyerHomeStats()
                 reloadDiscoveryBundle()
+                fetchHuntTodayPreview()
                 fetchHomeFeedWithRetry()
             }
             _isLoading.value = false
@@ -154,6 +175,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess = {
                     _items.value = it
                     syncSellerFollowingFromListings(it)
+                    syncSellerFollowingFromListings(_huntTodayItems.value)
                     _loadError.value = false
                 },
                 onFailure = {
@@ -172,7 +194,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * Empty list is valid when the user follows nobody; use Explore for discovery.
      * One automatic retry on failure to smooth transient network errors.
      */
+    private suspend fun fetchHuntTodayPreview() {
+        _huntTodayLoading.value = true
+        val result = if (isGuestBrowse()) {
+            searchRepository.browseListings(
+                q = "",
+                sort = "popular",
+                limit = HomeHuntTodayPreviewLimit,
+                offset = 0,
+            )
+        } else {
+            searchRepository.searchListings(
+                q = "",
+                sort = "popular",
+                limit = HomeHuntTodayPreviewLimit,
+                offset = 0,
+            )
+        }
+        _huntTodayLoading.value = false
+        result.fold(
+            onSuccess = { _huntTodayItems.value = it },
+            onFailure = { /* keep last preview; home still usable */ },
+        )
+    }
+
     private suspend fun fetchHomeFeedWithRetry(): Result<List<ListingFeedItem>> {
+        if (isGuestBrowse()) {
+            return Result.success(emptyList())
+        }
         suspend fun once(): Result<List<ListingFeedItem>> =
             listingRepository.getHomeFeed(limit = 20, offset = 0)
         var result = once()
@@ -193,6 +242,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun clearCachesForSignedOutUser() {
         _items.value = emptyList()
+        _huntTodayItems.value = emptyList()
+        _huntTodayLoading.value = false
         _likedIds.value = emptySet()
         _savedIds.value = emptySet()
         _followingIds.value = emptySet()
@@ -215,6 +266,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val result = withContext(Dispatchers.IO) {
                 loadBuyerHomeStats()
                 reloadDiscoveryBundle()
+                fetchHuntTodayPreview()
                 fetchHomeFeedWithRetry()
             }
             _isRefreshing.value = false
@@ -222,6 +274,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess = {
                     _items.value = it
                     syncSellerFollowingFromListings(it)
+                    syncSellerFollowingFromListings(_huntTodayItems.value)
                 },
                 onFailure = { _loadError.value = true },
             )
@@ -251,15 +304,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = { liked ->
                     _likedIds.update { if (liked) it + item.id else it - item.id }
-                    _items.update { list ->
-                        list.map {
-                            if (it.id == item.id) {
-                                it.copy(
-                                    likeCount = if (liked) it.likeCount + 1 else (it.likeCount - 1).coerceAtLeast(0),
-                                    isLiked = liked,
-                                )
-                            } else it
-                        }
+                    updateListingInFeeds(item.id) {
+                        it.copy(
+                            likeCount = if (liked) it.likeCount + 1 else (it.likeCount - 1).coerceAtLeast(0),
+                            isLiked = liked,
+                        )
                     }
                     _events.tryEmit(
                         getApplication<Application>().getString(
@@ -285,20 +334,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = { saved ->
                     _savedIds.update { if (saved) it + item.id else it - item.id }
-                    _items.update { list ->
-                        list.map {
-                            if (it.id == item.id) {
-                                val delta = when {
-                                    saved && !it.isSaved -> 1
-                                    !saved && it.isSaved -> -1
-                                    else -> 0
-                                }
-                                it.copy(
-                                    saveCount = (it.saveCount + delta).coerceAtLeast(0),
-                                    isSaved = saved,
-                                )
-                            } else it
+                    updateListingInFeeds(item.id) {
+                        val delta = when {
+                            saved && !it.isSaved -> 1
+                            !saved && it.isSaved -> -1
+                            else -> 0
                         }
+                        it.copy(
+                            saveCount = (it.saveCount + delta).coerceAtLeast(0),
+                            isSaved = saved,
+                        )
                     }
                     viewModelScope.launch {
                         withContext(Dispatchers.IO) { loadBuyerHomeStats() }
@@ -356,5 +401,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (sellerId.isNullOrBlank()) return false
         val set = _followingIds.value
         return set.contains(sellerId)
+    }
+
+    private fun updateListingInFeeds(listingId: String, transform: (ListingFeedItem) -> ListingFeedItem) {
+        fun List<ListingFeedItem>.patch() = map { if (it.id == listingId) transform(it) else it }
+        _items.update { it.patch() }
+        _huntTodayItems.update { it.patch() }
+        _discoveryBundle.update { bundle ->
+            bundle.copy(recentlyViewed = bundle.recentlyViewed.patch())
+        }
     }
 }

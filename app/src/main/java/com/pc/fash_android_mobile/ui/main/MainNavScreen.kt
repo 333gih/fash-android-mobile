@@ -81,6 +81,8 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserSearchResult
+import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.guest.GuestTabPlaceholder
 import com.pc.fash_android_mobile.ui.onboarding.AppFeatureTourOverlay
 import com.pc.fash_android_mobile.ui.onboarding.AppTourStep
 import com.pc.fash_android_mobile.ui.onboarding.FeatureTourAnchor
@@ -118,6 +120,15 @@ enum class MainTab(
     Post(R.string.nav_post, Icons.Default.Add, R.string.brand_header_suffix_post),
     Chat(R.string.nav_chat, Icons.Default.ChatBubbleOutline, R.string.brand_header_suffix_chat),
     Profile(R.string.nav_profile, Icons.Default.Person, R.string.brand_header_suffix_profile),
+}
+
+private val guestLockedTabs = setOf(MainTab.Post, MainTab.Chat, MainTab.Profile)
+
+private fun MainTab.guestLoginReason(): GuestLoginReason? = when (this) {
+    MainTab.Profile -> GuestLoginReason.Profile
+    MainTab.Chat -> GuestLoginReason.Chat
+    MainTab.Post -> GuestLoginReason.Post
+    else -> null
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -181,6 +192,9 @@ fun MainNavScreen(
     /** First-launch spotlight tour; completion is stored in [AppFeatureTourStore]. */
     featureTourActive: Boolean = false,
     onFeatureTourFinished: () -> Unit = {},
+    /** Browse-only shell: Home + Explore + PDP; locked tabs/actions prompt [onRequestLogin]. */
+    isGuestMode: Boolean = false,
+    onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
     /** Tracks overlay visibility to refresh server unread count when user leaves the inbox. */
@@ -261,23 +275,26 @@ fun MainNavScreen(
     }
 
     LaunchedEffect(inboxOpenRequestGeneration) {
-        if (inboxOpenRequestGeneration <= 0L) return@LaunchedEffect
+        if (inboxOpenRequestGeneration <= 0L || isGuestMode) return@LaunchedEffect
         showNotificationScreen = true
     }
 
     LaunchedEffect(pendingInboxNotificationIdToOpen) {
+        if (isGuestMode) return@LaunchedEffect
         val id = pendingInboxNotificationIdToOpen?.trim()?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         showNotificationScreen = true
         notificationsViewModel.openInboxDetailFromPush(id)
         onConsumePendingInboxNotificationId()
     }
 
-    LaunchedEffect(Unit) {
-        chatViewModel.refreshUnreadCount()
-    }
-    LaunchedEffect(selectedTab) {
-        if (tabs.getOrNull(selectedTab) == MainTab.Home) {
+    if (!isGuestMode) {
+        LaunchedEffect(Unit) {
             chatViewModel.refreshUnreadCount()
+        }
+        LaunchedEffect(selectedTab) {
+            if (tabs.getOrNull(selectedTab) == MainTab.Home) {
+                chatViewModel.refreshUnreadCount()
+            }
         }
     }
     LaunchedEffect(showNotificationScreen) {
@@ -297,8 +314,22 @@ fun MainNavScreen(
         exploreViewModel.requestSearchBarExpanded()
         onTabChange(MainTab.Explore.ordinal)
     }
+    val openNotifications: () -> Unit = {
+        if (isGuestMode) {
+            onRequestLogin(GuestLoginReason.Notifications)
+        } else {
+            showNotificationScreen = true
+        }
+    }
+    val openOrders: () -> Unit = {
+        if (isGuestMode) {
+            onRequestLogin(GuestLoginReason.Orders)
+        } else {
+            onOrdersClick()
+        }
+    }
     val isPostListingFlow = tabs.getOrNull(selectedTab) == MainTab.Post
-    val featureTourVisible = featureTourActive &&
+    val featureTourVisible = featureTourActive && !isGuestMode &&
         !showNotificationScreen &&
         !showSettingsScreen &&
         !showChangePasswordScreen
@@ -344,15 +375,15 @@ fun MainNavScreen(
                 when (val tab = tabs.getOrNull(selectedTab)) {
                 MainTab.Explore -> ExploreTopBar(
                     viewModel = exploreViewModel,
-                    inboxUnreadCount = inboxUnreadTotal,
-                    onOrdersClick = onOrdersClick,
-                    onNotificationsClick = { showNotificationScreen = true },
+                    inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
+                    onOrdersClick = openOrders,
+                    onNotificationsClick = openNotifications,
                 )
                 MainTab.Profile -> ProfileTopBar(
-                    inboxUnreadCount = inboxUnreadTotal,
+                    inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
-                    onNotificationsClick = { showNotificationScreen = true },
-                    onOrdersClick = onOrdersClick,
+                    onNotificationsClick = openNotifications,
+                    onOrdersClick = openOrders,
                     onLogout = onLogout,
                     onOpenSettings = {
                         showNotificationScreen = false
@@ -362,36 +393,36 @@ fun MainNavScreen(
                 )
                 MainTab.Home -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
-                    inboxUnreadCount = inboxUnreadTotal,
+                    inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
-                    onNotificationsClick = { showNotificationScreen = true },
-                    onOrdersClick = onOrdersClick,
+                    onNotificationsClick = openNotifications,
+                    onOrdersClick = openOrders,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 MainTab.Post -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
-                    inboxUnreadCount = inboxUnreadTotal,
+                    inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
-                    onNotificationsClick = { showNotificationScreen = true },
+                    onNotificationsClick = openNotifications,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 MainTab.Chat -> MainTopBar(
                     suffixRes = tab.headerSuffixRes,
-                    inboxUnreadCount = inboxUnreadTotal,
+                    inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
-                    onNotificationsClick = { showNotificationScreen = true },
-                    onOrdersClick = onOrdersClick,
+                    onNotificationsClick = openNotifications,
+                    onOrdersClick = openOrders,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
                 else -> MainTopBar(
                     suffixRes = MainTab.Home.headerSuffixRes,
-                    inboxUnreadCount = inboxUnreadTotal,
+                    inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
-                    onNotificationsClick = { showNotificationScreen = true },
-                    onOrdersClick = onOrdersClick,
+                    onNotificationsClick = openNotifications,
+                    onOrdersClick = openOrders,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -405,7 +436,12 @@ fun MainNavScreen(
                     chatUnreadCount = chatUnreadCount,
                     onTabChange = { index ->
                         showNotificationScreen = false
-                        onTabChange(index)
+                        val tab = tabs.getOrNull(index)
+                        if (isGuestMode && tab != null && tab in guestLockedTabs) {
+                            tab.guestLoginReason()?.let(onRequestLogin)
+                        } else {
+                            onTabChange(index)
+                        }
                     },
                     onTabReselected = onMainTabReselected,
                     isTabNavLoading = isMainTabNavLoading,
@@ -479,14 +515,25 @@ fun MainNavScreen(
                         viewModel = homeViewModel,
                         onListingClick = onListingClick,
                         onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
-                        onOrdersClick = onOrdersClick,
-                        onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: onOrdersClick,
-                        onNavigateToChat = { onTabChange(MainTab.Chat.ordinal) },
-                        onNavigateToSaved = {
-                            profileViewModel.requestWishlistTabFromHome()
-                            onTabChange(MainTab.Profile.ordinal)
+                        onOrdersClick = openOrders,
+                        onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: openOrders,
+                        onNavigateToChat = {
+                            if (isGuestMode) onRequestLogin(GuestLoginReason.ChatFromHome)
+                            else onTabChange(MainTab.Chat.ordinal)
                         },
-                        onNavigateToPost = { onTabChange(MainTab.Post.ordinal) },
+                        onNavigateToSaved = {
+                            if (isGuestMode) {
+                                onRequestLogin(GuestLoginReason.Saved)
+                            } else {
+                                profileViewModel.requestWishlistTabFromHome()
+                                onTabChange(MainTab.Profile.ordinal)
+                            }
+                        },
+                        onNavigateToPost = {
+                            if (isGuestMode) onRequestLogin(GuestLoginReason.SellFromHome)
+                            else onTabChange(MainTab.Post.ordinal)
+                        },
+                        isGuestBrowse = isGuestMode,
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
                         onHomeEditorialPostClick = onHomeEditorialPostClick,
@@ -502,32 +549,56 @@ fun MainNavScreen(
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
                     )
-                    MainTab.Post -> CreateListingFlowScreen(
-                        viewModel = postViewModel,
-                        addressBookViewModel = addressBookViewModel,
-                        onClose = {
-                            postViewModel.cancel()
-                            onTabChange(MainTab.Home.ordinal)
-                        },
-                    )
-                    MainTab.Chat -> ChatScreen(
-                        viewModel = chatViewModel,
-                        onConversationClick = onConversationClick,
-                        onPromoSlideClick = onPromoSlideClick,
-                        promoSlides = promoSlides,
-                    )
-                    MainTab.Profile -> ProfileScreen(
-                        viewModel = profileViewModel,
-                        onLogout = onLogout,
-                        isLoggingOut = isLoggingOut,
-                        onEditProfile = onEditProfile,
-                        onShippingAddressesClick = onShippingAddressesClick,
-                        onInviteFriendsClick = onInviteFriendsClick,
-                        onOrdersClick = onOrdersClick,
-                        onListingClick = onListingClick,
-                        onOpenFollowConnections = onOpenFollowConnections,
-                        onNavigateToExploreFromProfile = onNavigateToExploreFromProfile,
-                    )
+                    MainTab.Post -> if (isGuestMode) {
+                        GuestTabPlaceholder(
+                            titleRes = R.string.guest_tab_post_title,
+                            bodyRes = R.string.guest_tab_post_body,
+                            onSignIn = { onRequestLogin(GuestLoginReason.Post) },
+                        )
+                    } else {
+                        CreateListingFlowScreen(
+                            viewModel = postViewModel,
+                            addressBookViewModel = addressBookViewModel,
+                            onClose = {
+                                postViewModel.cancel()
+                                onTabChange(MainTab.Home.ordinal)
+                            },
+                        )
+                    }
+                    MainTab.Chat -> if (isGuestMode) {
+                        GuestTabPlaceholder(
+                            titleRes = R.string.guest_tab_chat_title,
+                            bodyRes = R.string.guest_tab_chat_body,
+                            onSignIn = { onRequestLogin(GuestLoginReason.Chat) },
+                        )
+                    } else {
+                        ChatScreen(
+                            viewModel = chatViewModel,
+                            onConversationClick = onConversationClick,
+                            onPromoSlideClick = onPromoSlideClick,
+                            promoSlides = promoSlides,
+                        )
+                    }
+                    MainTab.Profile -> if (isGuestMode) {
+                        GuestTabPlaceholder(
+                            titleRes = R.string.guest_tab_profile_title,
+                            bodyRes = R.string.guest_tab_profile_body,
+                            onSignIn = { onRequestLogin(GuestLoginReason.Profile) },
+                        )
+                    } else {
+                        ProfileScreen(
+                            viewModel = profileViewModel,
+                            onLogout = onLogout,
+                            isLoggingOut = isLoggingOut,
+                            onEditProfile = onEditProfile,
+                            onShippingAddressesClick = onShippingAddressesClick,
+                            onInviteFriendsClick = onInviteFriendsClick,
+                            onOrdersClick = onOrdersClick,
+                            onListingClick = onListingClick,
+                            onOpenFollowConnections = onOpenFollowConnections,
+                            onNavigateToExploreFromProfile = onNavigateToExploreFromProfile,
+                        )
+                    }
                 }
             }
         }

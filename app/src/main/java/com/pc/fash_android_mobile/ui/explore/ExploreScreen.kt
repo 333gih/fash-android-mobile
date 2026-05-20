@@ -369,6 +369,12 @@ fun ExploreScreen(
                                             .fillMaxWidth()
                                             .padding(top = 4.dp, bottom = 8.dp),
                                     )
+                                    ExploreStyleQuickChipsRow(
+                                        catalog = aestheticTagsCatalog,
+                                        selectedIds = selectedAestheticTagIds,
+                                        onTagToggle = viewModel::toggleAestheticTagFilter,
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    )
                                 }
                             }
                             item(span = { GridItemSpan(maxLineSpan) }) {

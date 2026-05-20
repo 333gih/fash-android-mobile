@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.data.search
 
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingFeedJsonParser
 import okhttp3.OkHttpClient
@@ -20,25 +21,33 @@ data class TrendingQueryItem(
  */
 class SearchRepository(
     private val securedClient: OkHttpClient,
+    private val publicBrowseClient: OkHttpClient? = null,
 ) {
+
+    private fun client(publicBrowse: Boolean): OkHttpClient =
+        if (publicBrowse) {
+            publicBrowseClient ?: error("Public browse HTTP client is not configured")
+        } else {
+            securedClient
+        }
 
     fun getTrendingTags(): Result<List<String>> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/search/trending-tags")
-        val body = executeGet(url)
+        val body = executeGet(url, publicBrowse = false)
         parseStringArray(body)
     }
 
     /** `GET /search/recent-queries` — this user’s recent normalized queries (up to 20). */
     fun getRecentQueries(): Result<List<String>> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/search/recent-queries")
-        val body = executeGet(url)
+        val body = executeGet(url, publicBrowse = false)
         parseStringArray(body)
     }
 
     /** `GET /search/trending-queries` — global top queries in the last 7 days. */
     fun getTrendingQueries(): Result<List<TrendingQueryItem>> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/search/trending-queries")
-        val body = executeGet(url)
+        val body = executeGet(url, publicBrowse = false)
         parseTrendingQueriesArray(body)
     }
 
@@ -96,7 +105,48 @@ class SearchRepository(
         condition?.takeIf { it.isNotBlank() }?.let { query.add("condition=${enc(it)}") }
         query.add("sort=${enc(sort)}")
         val url = AppEnvironment.apiPath("api/v1/search/listings") + "?" + query.joinToString("&")
-        val body = executeGet(url)
+        val body = executeGet(url, publicBrowse = false)
+        ListingFeedJsonParser.parseFeedArray(body)
+    }
+
+    /** Guest browse: `GET /api/v1/public/browse/listings` (requires public client attestation headers). */
+    fun browseListings(
+        q: String = "",
+        categoryId: String? = null,
+        aestheticTagIds: List<String>? = null,
+        brandId: String? = null,
+        countryId: String? = null,
+        countryIso2: String? = null,
+        minPrice: Long? = null,
+        maxPrice: Long? = null,
+        condition: String? = null,
+        sort: String = "popular",
+        limit: Int = 20,
+        offset: Int = 0,
+    ): Result<List<ListingFeedItem>> = runCatching {
+        val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
+        val query = mutableListOf<String>()
+        query.add("limit=$limit")
+        query.add("offset=$offset")
+        query.add("q=${enc(q)}")
+        categoryId?.takeIf { it.isNotBlank() }?.let { query.add("category_id=${enc(it.trim())}") }
+        val idCsv = aestheticTagIds
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.takeIf { it.isNotEmpty() }
+            ?.joinToString(",")
+        idCsv?.let { query.add("aesthetic_tag_ids=${enc(it)}") }
+        brandId?.takeIf { it.isNotBlank() }?.let { query.add("brand_id=${enc(it.trim())}") }
+        countryId?.takeIf { it.isNotBlank() }?.let { query.add("country_id=${enc(it.trim())}") }
+        countryIso2?.trim()?.uppercase(java.util.Locale.US)?.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } }
+            ?.let { query.add("country_iso2=${enc(it)}") }
+        minPrice?.let { query.add("min_price=$it") }
+        maxPrice?.let { query.add("max_price=$it") }
+        condition?.takeIf { it.isNotBlank() }?.let { query.add("condition=${enc(it)}") }
+        query.add("sort=${enc(sort)}")
+        val url = "${PublicBrowseHttp.publicApiPath("browse/listings")}?" + query.joinToString("&")
+        val body = executeGet(url, publicBrowse = true)
         ListingFeedJsonParser.parseFeedArray(body)
     }
 
@@ -106,8 +156,16 @@ class SearchRepository(
     fun autocompleteListingTitles(prefix: String): Result<List<String>> = runCatching {
         if (prefix.isBlank()) return@runCatching emptyList()
         val url = "${AppEnvironment.apiPath("api/v1/search/autocomplete")}?q=${java.net.URLEncoder.encode(prefix, "UTF-8")}"
-        val body = executeGet(url)
+        val body = executeGet(url, publicBrowse = false)
         parseStringArray(body)
+    }
+
+    fun browseFeaturedSellersPage(limit: Int = 50, offset: Int = 0): Result<FeaturedSellersPage> = runCatching {
+        val cappedLimit = limit.coerceIn(1, 50)
+        val safeOffset = offset.coerceAtLeast(0)
+        val url = "${PublicBrowseHttp.publicApiPath("browse/featured-sellers")}?limit=$cappedLimit&offset=$safeOffset"
+        val body = executeGet(url, publicBrowse = true)
+        parseFeaturedSellersPage(body)
     }
 
     /**
@@ -124,18 +182,18 @@ class SearchRepository(
         val cappedLimit = limit.coerceIn(1, 50)
         val safeOffset = offset.coerceAtLeast(0)
         val url = "${AppEnvironment.apiPath("api/v1/search/featured-sellers")}?limit=$cappedLimit&offset=$safeOffset"
-        val body = executeGet(url)
+        val body = executeGet(url, publicBrowse = false)
         parseFeaturedSellersPage(body)
     }
 
-    private fun executeGet(url: String): String {
+    private fun executeGet(url: String, publicBrowse: Boolean): String {
         val request = Request.Builder()
             .url(url)
             .get()
             .header("Accept", "application/json")
             .header("User-Agent", "FashAndroid/1.0")
             .build()
-        return securedClient.newCall(request).execute().use { response ->
+        return client(publicBrowse).newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }

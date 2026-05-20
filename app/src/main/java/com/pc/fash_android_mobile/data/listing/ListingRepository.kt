@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.data.listing
 import android.net.Uri
 import android.util.Log
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,7 +23,15 @@ import java.util.Locale
  */
 class ListingRepository(
     private val securedClient: OkHttpClient,
+    private val publicBrowseClient: OkHttpClient? = null,
 ) {
+
+    private fun httpClient(publicBrowse: Boolean): OkHttpClient =
+        if (publicBrowse) {
+            publicBrowseClient ?: error("Public browse HTTP client is not configured")
+        } else {
+            securedClient
+        }
 
     private val userIdUuidRegex =
         Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -38,9 +47,13 @@ class ListingRepository(
         parseFeedResponse(executeGet(url))
     }
 
-    fun getListingDetail(listingId: String): Result<ListingDetail> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/listings/$listingId")
-        parseListingDetail(executeGet(url))
+    fun getListingDetail(listingId: String, publicBrowse: Boolean = false): Result<ListingDetail> = runCatching {
+        val url = if (publicBrowse) {
+            PublicBrowseHttp.publicApiPath("listings/$listingId")
+        } else {
+            AppEnvironment.apiPath("api/v1/listings/$listingId")
+        }
+        parseListingDetail(executeGet(url, publicBrowse))
     }
 
     /**
@@ -67,7 +80,19 @@ class ListingRepository(
         q.add("offset=$offset")
         status?.takeIf { it.isNotBlank() }?.let { q.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}") }
         val primary = AppEnvironment.apiPath("api/v1/users/$seg/listings") + "?" + q.joinToString("&")
-        parseFeedResponse(executeGet(primary))
+        parseFeedResponse(executeGet(primary, publicBrowse = false))
+    }
+
+    /** Guest storefront: `GET /api/v1/public/users/{id}/listings`. */
+    fun getListingsBySellerPublic(
+        sellerId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+    ): Result<List<ListingFeedItem>> = runCatching {
+        val seg = encodeUserPathSegment(sellerId.trim())
+        val q = "limit=$limit&offset=$offset"
+        val url = "${PublicBrowseHttp.publicApiPath("users/$seg/listings")}?$q"
+        parseFeedResponse(executeGet(url, publicBrowse = true))
     }
 
     /** `GET /listings/wishlist` → listing id list (legacy / alternate response shape). */
@@ -379,14 +404,14 @@ class ListingRepository(
         }
     }
 
-    private fun executeGet(url: String): String {
+    private fun executeGet(url: String, publicBrowse: Boolean = false): String {
         val request = Request.Builder()
             .url(url)
             .get()
             .header("Accept", "application/json")
             .header("User-Agent", "FashAndroid/1.0")
             .build()
-        return securedClient.newCall(request).execute().use { response ->
+        return httpClient(publicBrowse).newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 throwHttpError(response.code, body)

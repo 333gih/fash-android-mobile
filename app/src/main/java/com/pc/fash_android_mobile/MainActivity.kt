@@ -92,7 +92,9 @@ import com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen
 import com.pc.fash_android_mobile.ui.follow.FollowConnectionsViewModel
 import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavBottomBarOverlayInset
+import com.pc.fash_android_mobile.ui.main.GuestMainShell
 import com.pc.fash_android_mobile.ui.main.MainNavScreen
+import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.ui.main.MainTab
 import com.pc.fash_android_mobile.ui.navigation.SellerShopEntrySource
 import com.pc.fash_android_mobile.ui.navigation.SellerShopRestoreContext
@@ -396,6 +398,9 @@ class MainActivity : ComponentActivity() {
             FashTheme(darkTheme = useDarkTheme, lightAppearance = lightAppearance) {
                 var splashFinished by rememberSaveable { mutableStateOf(false) }
                 var splashStartMs by rememberSaveable { mutableStateOf(0L) }
+                var isGuestBrowse by rememberSaveable { mutableStateOf(false) }
+                /** One-shot: cold start without session may enter guest shell; logout does not. */
+                var initialGuestShellDecided by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (splashFinished) return@LaunchedEffect
                     val now = SystemClock.elapsedRealtime()
@@ -412,6 +417,14 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     splashFinished = true
+                }
+
+                LaunchedEffect(splashFinished, isAuthenticated) {
+                    if (!splashFinished || initialGuestShellDecided) return@LaunchedEffect
+                    initialGuestShellDecided = true
+                    if (!isAuthenticated && PublicBrowseHttp.isConfigured()) {
+                        isGuestBrowse = true
+                    }
                 }
 
                 // Connect / disconnect the realtime WebSocket on auth state changes
@@ -447,9 +460,11 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(isAuthenticated) {
                     if (isAuthenticated) {
+                        isGuestBrowse = false
+                        fashApp.isGuestBrowseActive = false
                         realtimeManager.connect()
                         pendingPaymentViewModel.startMonitoring()
-                    } else {
+                    } else if (!isGuestBrowse) {
                         realtimeManager.disconnect()
                         pendingPaymentViewModel.clearForLogout()
                         profileViewModel.clearCachedProfile()
@@ -911,6 +926,25 @@ class MainActivity : ComponentActivity() {
                                             FashWaitingScreen()
                                         }
                                     }
+                                }
+                                isGuestBrowse && !isAuthenticated -> {
+                                    GuestMainShell(
+                                        fashApp = fashApp,
+                                        homeViewModel = homeViewModel,
+                                        exploreViewModel = exploreViewModel,
+                                        postViewModel = postViewModel,
+                                        addressBookViewModel = addressBookViewModel,
+                                        profileViewModel = profileViewModel,
+                                        chatViewModel = chatViewModel,
+                                        changePasswordViewModel = changePasswordViewModel,
+                                        notificationsViewModel = notificationsViewModel,
+                                        productDetailViewModel = productDetailViewModel,
+                                        snackbarHostState = snackbarHostState,
+                                        onExitGuestToLogin = {
+                                            isGuestBrowse = false
+                                            fashApp.isGuestBrowseActive = false
+                                        },
+                                    )
                                 }
                                 isAuthenticated -> {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -2220,6 +2254,14 @@ class MainActivity : ComponentActivity() {
                                     isSocialLoading = isSocialLoading,
                                     snackbarHostState = snackbarHostState,
                                     showSnackbarHost = false,
+                                    onContinueWithoutAccount = if (PublicBrowseHttp.isConfigured()) {
+                                        {
+                                            isGuestBrowse = true
+                                            fashApp.isGuestBrowseActive = true
+                                        }
+                                    } else {
+                                        null
+                                    },
                                     onSendOtp = loginViewModel::requestEmailOtp,
                                     onGoogleClick = {
                                         if (!googleOk) {
@@ -2288,7 +2330,7 @@ class MainActivity : ComponentActivity() {
 
                 val welcomeBottomInset = when {
                     selectedConversationId != null -> ChatComposerBarOverlayInset
-                    isAuthenticated && needsOnboarding == false -> MainNavBottomBarOverlayInset
+                    (isAuthenticated && needsOnboarding == false) || isGuestBrowse -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
                 // Full-screen interstitial — only after profile setup (not during gate load / onboarding).

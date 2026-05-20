@@ -264,8 +264,13 @@
     <string name="home_hero_title">New picks</string>
     <string name="home_hero_subtitle">Discover pre-loved fashion and accessories from sellers you follow</string>
     <string name="home_hero_cta">Explore now</string>
-    <string name="home_top_section_title">For you</string>
-    <string name="home_top_section_subtitle">New listings from shops you follow</string>
+    <string name="home_top_section_title">From shops you follow</string>
+    <string name="home_top_section_subtitle">New listings from sellers you follow</string>
+    <string name="home_hunt_today_title">Hunt today</string>
+    <string name="home_hunt_today_subtitle">Trending on Fash — scroll before it\'s gone</string>
+    <string name="home_hunt_today_see_all">See all</string>
+    <string name="home_follow_empty_hint">Follow a few shops to see their new listings here.</string>
+    <string name="home_follow_empty_cta_featured">Browse featured shops</string>
     <string name="home_brand_marketplace">FASH MARKETPLACE</string>
     <string name="home_brand_footer_sub">SHAPING VIETNAMESE STYLE</string>
     <string name="home_quick_actions_title">Buy &amp; sell faster</string>
@@ -310,7 +315,8 @@
     <string name="profile_preview_slot_empty_cd">Preview slot — no listing in this tile</string>
     <string name="profile_preview_caption_all">Showing all %1$d listings in preview.</string>
     <string name="profile_preview_caption_partial">Showing %1$d of %2$d listings — open shop to see the rest.</string>
-    <string name="explore_feed_subtitle">Trending items and aesthetic filters</string>
+    <string name="explore_feed_subtitle">Full marketplace — hot and newly listed first</string>
+    <string name="explore_style_chips_title">Style</string>
     <string name="explore_promo_badge">Tip</string>
     <string name="explore_promo_pager_cd">Tips and highlights, page %1$d of %2$d</string>
     <string name="explore_promo_slide1_title">Follow sellers you love</string>
@@ -1537,4 +1543,25 @@
     <string name="invite_fine_print">Messages use https://…/invite so apps underline a tappable link. Installed users can open the invite screen directly; without the app, the link opens in a browser — host a small /invite page or redirect to Play Store. fash://invite?ref=… still works inside the app but usually stays plain text in chat.</string>
     <string name="profile_invite_friends_title">Invite friends to Fash</string>
     <string name="profile_invite_friends_subtitle">Share your link and grow priority perks as the community scales.</string>
+
+    <!-- Guest browse (Phase 2) -->
+    <string name="login_continue_without_account">Continue without signing in</string>
+    <string name="guest_login_sheet_title">Sign in when you are ready</string>
+    <string name="guest_login_sheet_sign_in">Sign in / create account</string>
+    <string name="guest_login_sheet_continue_browsing">Keep browsing</string>
+    <string name="guest_login_sheet_privacy_note">You can explore Home and Explore first. We only ask you to sign in when you want to chat, buy, sell, or save listings.</string>
+    <string name="guest_login_reason_profile">Profile, saved items, and settings unlock after you sign in.</string>
+    <string name="guest_login_reason_chat">Messaging sellers requires an account to protect both sides.</string>
+    <string name="guest_login_reason_post">Listing and seller tools require a verified account.</string>
+    <string name="guest_login_reason_orders">Orders and payments are tied to your account.</string>
+    <string name="guest_login_reason_notifications">Order, chat, and promo alerts need a signed-in account.</string>
+    <string name="guest_login_reason_saved">Saving favorites syncs across devices after sign-in.</string>
+    <string name="guest_login_reason_buy">Buying or chatting with a seller requires a secure sign-in.</string>
+    <string name="guest_tab_profile_title">Your account</string>
+    <string name="guest_tab_profile_body">Sign in to see your profile, listings, wishlist, and settings. Until then, keep browsing Home and Explore.</string>
+    <string name="guest_tab_chat_title">Messages</string>
+    <string name="guest_tab_chat_body">Chat with sellers after sign-in — clearer and safer for both sides.</string>
+    <string name="guest_tab_post_title">Sell</string>
+    <string name="guest_tab_post_body">Create an account to list pre-loved items and manage your shop.</string>
+    <string name="home_guest_follow_hint">Sign in to see listings from shops you follow. For now, try Today\'s picks and Explore below.</string>
 </resources>
