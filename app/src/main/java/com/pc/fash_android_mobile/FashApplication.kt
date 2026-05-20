@@ -13,6 +13,7 @@ import com.pc.fash_android_mobile.data.advertising.AdvertisingRepository
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoInterstitialRepository
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
+import com.pc.fash_android_mobile.data.common.PublicCommonCatalogRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.address.AddressLocalStore
 import com.pc.fash_android_mobile.data.onboarding.OnboardingLocalStore
@@ -306,11 +307,18 @@ class FashApplication : Application(), ImageLoaderFactory {
     }
 
     /** common-service catalog GETs (addresses, brands, categories, aesthetic-tags, countries). */
+    val publicCommonCatalogRepository: PublicCommonCatalogRepository by lazy {
+        PublicCommonCatalogRepository {
+            com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(this@FashApplication)
+        }
+    }
+
     val commonServiceRepository: CommonServiceRepository by lazy {
         CommonServiceRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
+            publicCatalogRepository = publicCommonCatalogRepository,
         )
     }
 

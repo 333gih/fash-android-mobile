@@ -40,7 +40,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.app.Activity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.rotate
@@ -57,6 +60,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -73,10 +77,17 @@ import kotlin.math.sin
 import kotlinx.coroutines.delay
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.theme.BeVietnamProFamily
+import com.pc.fash_android_mobile.ui.theme.FashColorTokens
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 private val SplashAccent = Color(0xFFF04D63)
+
+/** Fixed editorial dark canvas — full-bleed under status/nav bars (not theme surface + white window gaps). */
+private val WaitingScreenBackground = FashColorTokens.Dark.screen
+private val WaitingOnSurface = FashColorTokens.Dark.textPrimary
+private val WaitingOnSurfaceMuted = FashColorTokens.Dark.textSecondary
+private val WaitingOutlineVariant = FashColorTokens.Dark.outlineMuted
 
 private val ThumbCorner = RoundedCornerShape(28.dp)
 private val GrayscaleFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
@@ -94,11 +105,32 @@ fun FashWaitingScreen(
     /** Third dot active (final onboarding step), matching the reference. */
     activeDotIndex: Int = 2,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val onSurfaceMuted = scheme.onSurfaceVariant
-    val watermarkColor = scheme.onSurface.copy(alpha = 0.08f)
-    val dividerColor = scheme.outlineVariant.copy(alpha = 0.55f)
-    val dotInactive = scheme.outlineVariant.copy(alpha = 0.45f)
+    val onSurfaceMuted = WaitingOnSurfaceMuted
+    val watermarkColor = WaitingOnSurface.copy(alpha = 0.08f)
+    val dividerColor = WaitingOutlineVariant.copy(alpha = 0.55f)
+    val dotInactive = WaitingOutlineVariant.copy(alpha = 0.45f)
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        DisposableEffect(Unit) {
+            val window = (view.context as Activity).window
+            val controller = WindowCompat.getInsetsController(window, view)
+            val prevStatus = window.statusBarColor
+            val prevNav = window.navigationBarColor
+            val prevLightStatus = controller.isAppearanceLightStatusBars
+            val prevLightNav = controller.isAppearanceLightNavigationBars
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            controller.isAppearanceLightStatusBars = false
+            controller.isAppearanceLightNavigationBars = false
+            onDispose {
+                window.statusBarColor = prevStatus
+                window.navigationBarColor = prevNav
+                controller.isAppearanceLightStatusBars = prevLightStatus
+                controller.isAppearanceLightNavigationBars = prevLightNav
+            }
+        }
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "fash_waiting")
     val watermarkDrift by infiniteTransition.animateFloat(
@@ -164,14 +196,8 @@ fun FashWaitingScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding(),
+            .background(WaitingScreenBackground),
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(scheme.surface),
-        )
         WatermarkFash(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -186,6 +212,7 @@ fun FashWaitingScreen(
         SplashCornerImage(
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
                 .padding(start = 22.dp, top = 20.dp)
                 .offset(topCornerX.dp, topCornerY.dp)
                 .width(96.dp)
@@ -215,6 +242,7 @@ fun FashWaitingScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -251,7 +279,7 @@ fun FashWaitingScreen(
             }
             GenZFooterLine(
                 label = stringResource(R.string.splash_footer_gen_z),
-                background = scheme.surface,
+                background = WaitingScreenBackground,
                 dividerColor = dividerColor,
                 labelColor = onSurfaceMuted,
             )
@@ -270,8 +298,7 @@ fun FashWaitingScreen(
 private fun WaitingScreenCenterEditorial(
     modifier: Modifier = Modifier,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val onSurfaceMuted = scheme.onSurfaceVariant
+    val onSurfaceMuted = WaitingOnSurfaceMuted
 
     var showEyebrow by remember { mutableStateOf(false) }
     var showHeadline by remember { mutableStateOf(false) }
@@ -347,7 +374,7 @@ private fun WaitingScreenCenterEditorial(
                     textAlign = TextAlign.Center,
                     lineHeight = 28.sp,
                 ),
-                color = scheme.onSurface,
+                color = WaitingOnSurface,
             )
         }
         Spacer(modifier = Modifier.height(10.dp))

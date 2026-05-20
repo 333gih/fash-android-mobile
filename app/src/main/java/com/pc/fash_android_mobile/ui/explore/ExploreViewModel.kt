@@ -638,8 +638,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadCategories() {
-        val publicBrowse = isGuestBrowse()
-        commonServiceRepository.getCategoryTree(publicBrowse = publicBrowse).fold(
+        commonServiceRepository.getCategoryTree().fold(
             onSuccess = { tree ->
                 val leaves = flattenCategoryLeaves(tree)
                     .filter { it.id.isNotBlank() }
@@ -662,8 +661,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadTags() {
-        val publicBrowse = isGuestBrowse()
-        val trendingResult = if (publicBrowse) {
+        val trendingResult = if (isGuestBrowse()) {
             searchRepository.browseTrendingAestheticTags()
         } else {
             searchRepository.getTrendingTags()
@@ -672,7 +670,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             onSuccess = { _trendingTagNames.value = it },
             onFailure = { _trendingTagNames.value = emptyList() },
         )
-        commonServiceRepository.getAestheticTags(all = true, publicBrowse = publicBrowse).fold(
+        commonServiceRepository.getAestheticTags(all = true).fold(
             onSuccess = { catalog ->
                 _aestheticTagsCatalog.value = catalog
                 _styleQuickTags.value = resolveStyleQuickTagsFromTrending(
@@ -685,16 +683,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 _styleQuickTags.value = emptyList()
             },
         )
-        commonServiceRepository.getBrands(limit = 80, offset = 0, publicBrowse = publicBrowse).fold(
+        commonServiceRepository.getBrands(limit = 80, offset = 0).fold(
             onSuccess = { page -> _brands.value = page.items.sortedBy { it.name.lowercase() } },
             onFailure = { _brands.value = emptyList() },
         )
-        commonServiceRepository.getCountries(all = true, publicBrowse = publicBrowse).fold(
-            onSuccess = { list ->
-                _countriesCatalog.value = list
-                    .filter { it.id.isNotBlank() }
-                    .distinctBy { it.id }
-                    .sortedBy { it.name.lowercase(Locale.getDefault()) }
+        commonServiceRepository.getCountries(all = true).fold(
+            onSuccess = { countries ->
+                _countriesCatalog.value = countries
+                    .filter { c -> c.id.isNotBlank() }
+                    .distinctBy { c -> c.id }
+                    .sortedBy { c -> c.name.lowercase() }
             },
             onFailure = { _countriesCatalog.value = emptyList() },
         )
