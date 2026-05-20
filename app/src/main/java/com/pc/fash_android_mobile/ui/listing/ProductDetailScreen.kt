@@ -9,6 +9,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,6 +54,10 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -105,21 +111,24 @@ import java.util.Locale
 import java.util.TimeZone
 import org.json.JSONObject
 import com.pc.fash_android_mobile.R
-import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.data.listing.ListingShippingAddress
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.feed.formatListingPriceVnd
+import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-/** Brand accent on PDP; body/label text uses [ColorScheme.onSurface] / [ColorScheme.onSurfaceVariant]. */
-private val DetailPrimary = Color(0xFFE9334A)
+/** Brand accent on PDP; aligned with [FashColors.Primary]. */
+private val DetailPrimary = FashColors.Primary
+private val DetailCardShape = RoundedCornerShape(16.dp)
 private val DetailConditionGreenLight = Color(0xFF2E7D32)
 private val DetailConditionGreenDark = Color(0xFF81C784)
 private const val DEFAULT_EST_SHIPPING_VND = 30_000L
@@ -159,6 +168,8 @@ fun ProductDetailScreen(
         countryId: String?,
         countryIso2: String?,
     ) -> Unit = { _, _, _, _, _, _ -> },
+    isGuestMode: Boolean = false,
+    onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
     val onExploreFromProfile: (
         String?,
@@ -185,8 +196,11 @@ fun ProductDetailScreen(
         viewModel.loadDetail(listingId)
     }
 
+    val buyNowEnabled = BusinessFlowConfig.c2cBuyNowEnabled
+
     if (showPurchaseGuide) {
         ProductPurchaseGuideDialog(
+            buyNowEnabled = buyNowEnabled,
             onDismiss = { viewModel.dismissPurchaseGuide() },
         )
     }
@@ -270,56 +284,68 @@ fun ProductDetailScreen(
                             ) {
                                 DetailHeroImage(
                                     detail = d,
-                                    onLike = { viewModel.toggleLike() },
-                                    onSave = { viewModel.toggleSave() },
+                                    onLike = {
+                                        if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
+                                        else viewModel.toggleLike()
+                                    },
+                                    onSave = {
+                                        if (isGuestMode) onRequestLogin(GuestLoginReason.Saved)
+                                        else viewModel.toggleSave()
+                                    },
                                 )
                                 Box(
                                     Modifier.onGloballyPositioned { coords ->
                                         measuredSellerRowHeightPx = coords.size.height.toFloat()
                                     },
                                 ) {
-                                    DetailSellerRow(
+                                    DetailSellerCard(
                                         detail = d,
                                         profile = sellerProfile,
                                         onVisitShop = onVisitSellerShop,
                                     )
                                 }
-                                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.78f), thickness = 1.dp)
-                                DetailBreadcrumbPriceTitle(
+                                DetailPriceInfoCard(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
                                 )
-                                DetailSocialProofRow(detail = d)
                                 buyerActiveOrder?.let { order ->
                                     if (order.amountVnd >= 1000L) {
                                         DealAgreedPriceBanner(
                                             amountVnd = order.amountVnd,
                                             fromBuyNow = order.status.equals("payment_pending", ignoreCase = true),
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                            modifier = Modifier.padding(
+                                                horizontal = FashTheme.spacing.editorialStart,
+                                                vertical = 8.dp,
+                                            ),
                                         )
                                     }
                                 }
-                                DetailAttributeGrid(
+                                DetailAtGlanceCard(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
                                 )
                                 if (detailHasMeasurements(d)) {
-                                    DetailMeasurementsHeader()
-                                    DetailMeasurementsTable(detail = d)
+                                    DetailMeasurementsCard(detail = d)
                                 }
-                                DetailShippingCard(detail = d)
-                                DetailDescriptionBlock(
+                                DetailShippingSectionCard(detail = d)
+                                DetailAboutCard(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
                                 )
                                 if (moreFromSeller.isNotEmpty()) {
-                                    DetailMoreFromSeller(
+                                    DetailMoreFromSellerSection(
                                         username = d.sellerUsername,
                                         items = moreFromSeller,
                                         excludeId = d.id,
                                         onItemClick = onListingClick,
-                                        onLike = { viewModel.toggleLikeMoreFromSeller(it) },
-                                        onSave = { viewModel.toggleSaveMoreFromSeller(it) },
+                                        onLike = { item ->
+                                            if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
+                                            else viewModel.toggleLikeMoreFromSeller(item)
+                                        },
+                                        onSave = { item ->
+                                            if (isGuestMode) onRequestLogin(GuestLoginReason.Saved)
+                                            else viewModel.toggleSaveMoreFromSeller(item)
+                                        },
                                     )
                                 }
                                 Spacer(Modifier.height(96.dp))
@@ -328,6 +354,7 @@ fun ProductDetailScreen(
                         DetailBottomBar(
                             mode = bottomBarMode,
                             chatLoading = isOpeningChat,
+                            buyNowEnabled = buyNowEnabled,
                             buyerOrderAmountVnd = buyerActiveOrder?.amountVnd ?: 0L,
                             onChat = { onChat(d.id) },
                             onBuyNow = { onBuyNow(d.id) },
@@ -370,9 +397,9 @@ fun ProductDetailScreen(
                                     color = scheme.outlineVariant.copy(alpha = 0.45f),
                                 )
                                 Surface(
-                                    color = scheme.surfaceContainerHighest,
+                                    color = scheme.surface,
                                     tonalElevation = 0.dp,
-                                    shadowElevation = 3.dp,
+                                    shadowElevation = 4.dp,
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     DetailSellerRowMini(
@@ -449,6 +476,61 @@ private fun DetailTopBar(onBack: () -> Unit, onShare: () -> Unit) {
 }
 
 @Composable
+private fun Modifier.detailSectionOuter(): Modifier = this
+    .fillMaxWidth()
+    .padding(horizontal = FashTheme.spacing.editorialStart)
+    .padding(bottom = 10.dp)
+
+@Composable
+private fun DetailSectionCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = DetailCardShape,
+        color = scheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.22f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun DetailSectionTitle(
+    title: String,
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        icon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = DetailPrimary,
+            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onSurface,
+        )
+    }
+}
+
+@Composable
 private fun DetailSellerRowMini(
     detail: ListingDetail,
     profile: ProfileInfo?,
@@ -459,8 +541,7 @@ private fun DetailSellerRowMini(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shopUsername = detail.sellerUsername?.takeIf { it.isNotBlank() }
-    val avatarUrl = resolveImageUrl(profile?.avatarUrl ?: detail.sellerAvatarUrl.orEmpty())
-    val avatarForUi = avatarUrl.takeIf { it.isNotEmpty() }
+    val avatarForUi = resolveSellerAvatarUrl(profile, detail)
     val name = profile?.displayName?.ifBlank { null }
         ?: detail.sellerDisplayName?.ifBlank { null }
         ?: detail.sellerUsername.orEmpty()
@@ -599,6 +680,24 @@ private fun DetailHeroImage(
                         contentScale = ContentScale.Crop,
                     )
                 }
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 52.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    repeat(urls.size) { index ->
+                        val selected = index == pageIdx
+                        Box(
+                            modifier = Modifier
+                                .size(if (selected) 8.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (selected) Color.White else Color.White.copy(alpha = 0.45f),
+                                ),
+                        )
+                    }
+                }
             }
         }
         Surface(
@@ -606,8 +705,9 @@ private fun DetailHeroImage(
                 .align(Alignment.BottomStart)
                 .padding(12.dp),
             shape = RoundedCornerShape(24.dp),
-            color = scheme.surfaceContainerHighest.copy(alpha = 0.92f),
-            shadowElevation = 2.dp,
+            color = scheme.surface.copy(alpha = 0.94f),
+            shadowElevation = 3.dp,
+            border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.25f)),
         ) {
             Row(
                 Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -681,75 +781,82 @@ private fun StatMini(
 }
 
 @Composable
-private fun DetailSellerRow(
+private fun DetailSellerCard(
     detail: ListingDetail,
     profile: ProfileInfo?,
     onVisitShop: (sellerUsername: String) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shopUsername = detail.sellerUsername?.takeIf { it.isNotBlank() }
-    val avatarUrl = resolveImageUrl(profile?.avatarUrl ?: detail.sellerAvatarUrl.orEmpty())
-    val avatarForUi = avatarUrl.takeIf { it.isNotEmpty() }
+    val avatarForUi = resolveSellerAvatarUrl(profile, detail)
     val name = profile?.displayName?.ifBlank { null }
         ?: detail.sellerDisplayName?.ifBlank { null }
         ?: detail.sellerUsername.orEmpty()
     val username = detail.sellerUsername ?: "user"
     val count = detail.sellerListingCount ?: profile?.productCount
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(scheme.surfaceContainerHighest)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(scheme.surfaceVariant),
-        ) {
-            FashProfileAvatarImage(
-                imageUrl = avatarForUi,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                name.ifBlank { "@$username" },
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = scheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val sub = buildString {
-                count?.takeIf { it >= 0 }?.let {
-                    append(stringResource(R.string.product_seller_products_count, it))
-                    append(" • ")
+    Column(Modifier.detailSectionOuter().padding(top = 10.dp)) {
+        DetailSectionTitle(
+            title = stringResource(R.string.product_section_seller),
+            icon = Icons.Outlined.Storefront,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        DetailSectionCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(scheme.surfaceContainerHighest),
+                ) {
+                    FashProfileAvatarImage(
+                        imageUrl = avatarForUi,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
-                append("@$username")
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        name.ifBlank { "@$username" },
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val sub = buildString {
+                        count?.takeIf { it >= 0 }?.let {
+                            append(stringResource(R.string.product_seller_products_count, it))
+                            append(" • ")
+                        }
+                        append("@$username")
+                    }
+                    Text(
+                        sub,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                OutlinedButton(
+                    onClick = { shopUsername?.let(onVisitShop) },
+                    enabled = shopUsername != null,
+                    border = BorderStroke(1.dp, DetailPrimary.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.product_visit_shop),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            Text(
-                sub,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        OutlinedButton(
-            onClick = { shopUsername?.let(onVisitShop) },
-            enabled = shopUsername != null,
-            border = BorderStroke(1.dp, DetailPrimary.copy(alpha = 0.55f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(20.dp),
-        ) {
-            Text(
-                stringResource(R.string.product_visit_shop),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            )
         }
     }
 }
@@ -780,14 +887,9 @@ private fun DetailCategoryBreadcrumb(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (parent != null) {
-            Text(
-                text = parent.uppercase(Locale.getDefault()),
-                style = MaterialTheme.typography.labelSmall,
-                color = FashColors.Primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onNavigateToExplore(parentId, null, null, parent, null, null) }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            DetailCategoryChip(
+                label = parent,
+                onClick = { onNavigateToExplore(parentId, null, null, parent, null, null) },
             )
             if (child != null) {
                 Text(
@@ -798,21 +900,32 @@ private fun DetailCategoryBreadcrumb(
             }
         }
         if (child != null) {
-            Text(
-                text = child.uppercase(Locale.getDefault()),
-                style = MaterialTheme.typography.labelSmall,
-                color = FashColors.Primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onNavigateToExplore(childId, null, null, child, null, null) }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            DetailCategoryChip(
+                label = child,
+                onClick = { onNavigateToExplore(childId, null, null, child, null, null) },
             )
         }
     }
 }
 
 @Composable
-private fun DetailBreadcrumbPriceTitle(
+private fun DetailCategoryChip(label: String, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = DetailPrimary.copy(alpha = 0.1f),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label.uppercase(Locale.getDefault()),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = DetailPrimary,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun DetailPriceInfoCard(
     detail: ListingDetail,
     onNavigateToExplore: (
         categoryId: String?,
@@ -825,55 +938,58 @@ private fun DetailBreadcrumbPriceTitle(
 ) {
     val scheme = MaterialTheme.colorScheme
     val listPrice = detail.listPriceVnd?.takeIf { it > detail.priceVnd }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(scheme.surfaceContainerHighest)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        DetailCategoryBreadcrumb(
-            detail = detail,
-            onNavigateToExplore = onNavigateToExplore,
-        )
-        val hasBread = detail.parentCategoryName?.isNotBlank() == true ||
-            detail.category?.isNotBlank() == true
-        if (hasBread) {
-            Spacer(Modifier.height(8.dp))
-        }
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                formatPriceVnd(detail.priceVnd),
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = DetailPrimary,
-            )
-            listPrice?.let { orig ->
+    val hasBread = detail.parentCategoryName?.isNotBlank() == true ||
+        detail.category?.isNotBlank() == true
+    Column(Modifier.detailSectionOuter()) {
+        DetailSectionCard {
+            if (hasBread) {
+                DetailCategoryBreadcrumb(
+                    detail = detail,
+                    onNavigateToExplore = onNavigateToExplore,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
-                    formatPriceVnd(orig),
-                    style = MaterialTheme.typography.titleMedium,
+                    formatPriceVnd(detail.priceVnd),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = DetailPrimary,
+                )
+                listPrice?.let { orig ->
+                    Text(
+                        formatPriceVnd(orig),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = scheme.onSurfaceVariant,
+                        textDecoration = TextDecoration.LineThrough,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                detail.title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 26.sp,
+                ),
+                color = scheme.onSurface,
+            )
+            detail.createdAtIso?.takeIf { it.isNotBlank() }?.let { iso ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.product_listed_on, formatShortDate(iso)),
+                    style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
-                    textDecoration = TextDecoration.LineThrough,
                 )
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            detail.title,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
-        )
-        detail.createdAtIso?.takeIf { it.isNotBlank() }?.let { iso ->
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.product_listed_on, formatShortDate(iso)),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
         }
     }
 }
 
 @Composable
-private fun DetailAttributeGrid(
+private fun DetailAtGlanceCard(
     detail: ListingDetail,
     onNavigateToExplore: (
         categoryId: String?,
@@ -908,46 +1024,59 @@ private fun DetailAttributeGrid(
             { { onNavigateToExplore(null, null, null, originQuery, null, null) } }
         else -> null
     }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(scheme.surfaceContainerHighest)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AttrCell(
-                Modifier.weight(1f),
-                Icons.Default.Storefront,
-                stringResource(R.string.product_brand).uppercase(Locale.getDefault()),
-                brand,
-                valueColor = scheme.onSurface,
-                onValueClick = brandClick,
-            )
-            AttrCell(
-                Modifier.weight(1f),
-                Icons.Default.Public,
-                stringResource(R.string.product_spec_origin).uppercase(Locale.getDefault()),
-                origin,
-                valueColor = scheme.onSurface,
-                onValueClick = originClick,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AttrCell(
-                Modifier.weight(1f),
-                Icons.Default.Straighten,
-                stringResource(R.string.product_size_label_short).uppercase(Locale.getDefault()),
-                sizeLine,
-                valueColor = scheme.onSurface,
-            )
-            AttrCell(
-                Modifier.weight(1f),
-                Icons.Default.Straighten,
-                stringResource(R.string.product_condition_label).uppercase(Locale.getDefault()),
-                "● $cond",
-                valueColor = conditionColor,
-            )
+    Column(Modifier.detailSectionOuter()) {
+        DetailSectionTitle(
+            title = stringResource(R.string.product_section_at_a_glance),
+            icon = Icons.Outlined.GridView,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        DetailSectionCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AttrCell(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        Icons.Default.Storefront,
+                        stringResource(R.string.product_brand),
+                        brand,
+                        valueColor = scheme.onSurface,
+                        onValueClick = brandClick,
+                    )
+                    AttrCell(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        Icons.Default.Public,
+                        stringResource(R.string.product_spec_origin),
+                        origin,
+                        valueColor = scheme.onSurface,
+                        onValueClick = originClick,
+                    )
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AttrCell(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        Icons.Default.Straighten,
+                        stringResource(R.string.product_size_label_short),
+                        sizeLine,
+                        valueColor = scheme.onSurface,
+                    )
+                    AttrCell(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        Icons.Outlined.CheckCircle,
+                        stringResource(R.string.product_condition_label),
+                        cond,
+                        valueColor = conditionColor,
+                    )
+                }
+            }
         }
     }
 }
@@ -966,60 +1095,62 @@ private fun AttrCell(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerLow,
+        color = scheme.surfaceContainerHighest.copy(alpha = 0.65f),
     ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Icon(icon, null, Modifier.size(18.dp), tint = DetailPrimary)
                 Text(
                     label,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Spacer(Modifier.height(8.dp))
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = if (clickable) FashColors.Primary else valueColor,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (clickable) {
-                    Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onValueClick!!)
-                        .padding(vertical = 2.dp, horizontal = 2.dp)
-                } else {
-                    Modifier
-                },
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 40.dp, max = 44.dp),
+                contentAlignment = Alignment.TopStart,
+            ) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 18.sp,
+                    ),
+                    color = if (clickable) FashColors.Primary else valueColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (clickable) {
+                                Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(onClick = onValueClick!!)
+                                    .padding(vertical = 2.dp, horizontal = 2.dp)
+                            } else {
+                                Modifier
+                            },
+                        ),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DetailMeasurementsHeader() {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(scheme.surfaceContainerHighest)
-            .padding(horizontal = 16.dp)
-            .padding(top = 16.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("📖", style = MaterialTheme.typography.titleMedium)
-        Text(
-            stringResource(R.string.product_section_detailed_specs).uppercase(Locale.getDefault()),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
-        )
-    }
-}
-
-@Composable
-private fun DetailMeasurementsTable(detail: ListingDetail) {
+private fun DetailMeasurementsCard(detail: ListingDetail) {
     val scheme = MaterialTheme.colorScheme
     val empty = stringResource(R.string.product_meas_empty)
     val mu = detail.measurementUnit?.trim()?.takeIf { it.isNotEmpty() } ?: "cm"
@@ -1032,38 +1163,45 @@ private fun DetailMeasurementsTable(detail: ListingDetail) {
     val shoulder = fmt(detail.measurementShoulders)
     val sleeve = fmt(detail.measurementSleeveLength)
     val hem = fmt(detail.measurementHem)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 16.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(scheme.surfaceContainerLow),
-    ) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            MeasCell(stringResource(R.string.product_meas_chest), chest)
-            VerticalDivider(Modifier.fillMaxHeight(), color = scheme.outlineVariant)
-            MeasCell(stringResource(R.string.product_meas_length), len)
-        }
-        HorizontalDivider(color = scheme.outlineVariant, thickness = 1.dp)
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            MeasCell(stringResource(R.string.product_meas_shoulders), shoulder)
-            VerticalDivider(Modifier.fillMaxHeight(), color = scheme.outlineVariant)
-            MeasCell(stringResource(R.string.product_meas_sleeve), sleeve)
-        }
-        HorizontalDivider(color = scheme.outlineVariant, thickness = 1.dp)
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(
-                stringResource(R.string.product_meas_hem),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                hem,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-            )
+    Column(Modifier.detailSectionOuter()) {
+        DetailSectionTitle(
+            title = stringResource(R.string.product_section_measurements),
+            icon = Icons.Default.Straighten,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        DetailSectionCard {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(scheme.surfaceContainerHighest.copy(alpha = 0.5f)),
+            ) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    MeasCell(stringResource(R.string.product_meas_chest), chest)
+                    VerticalDivider(Modifier.fillMaxHeight(), color = scheme.outlineVariant.copy(alpha = 0.5f))
+                    MeasCell(stringResource(R.string.product_meas_length), len)
+                }
+                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f), thickness = 1.dp)
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    MeasCell(stringResource(R.string.product_meas_shoulders), shoulder)
+                    VerticalDivider(Modifier.fillMaxHeight(), color = scheme.outlineVariant.copy(alpha = 0.5f))
+                    MeasCell(stringResource(R.string.product_meas_sleeve), sleeve)
+                }
+                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f), thickness = 1.dp)
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Text(
+                        stringResource(R.string.product_meas_hem),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        hem,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                    )
+                }
+            }
         }
     }
 }
@@ -1083,7 +1221,7 @@ private fun RowScope.MeasCell(label: String, value: String) {
 }
 
 @Composable
-private fun DetailShippingCard(detail: ListingDetail) {
+private fun DetailShippingSectionCard(detail: ListingDetail) {
     val scheme = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
     var showShippingInfo by remember { mutableStateOf(false) }
@@ -1114,56 +1252,65 @@ private fun DetailShippingCard(detail: ListingDetail) {
             containerColor = scheme.surface,
         )
     }
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerHighest,
-    ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.LocalShipping,
-                null,
-                Modifier.size(28.dp),
-                tint = scheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.product_shipping_estimate, formatPriceVnd(feeVnd)),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.product_ship_from_upper, region),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
-                    showShippingInfo = true
-                },
+    Column(Modifier.detailSectionOuter()) {
+        DetailSectionTitle(
+            title = stringResource(R.string.product_section_shipping),
+            icon = Icons.Default.LocalShipping,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        DetailSectionCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    Icons.Default.Info,
-                    stringResource(R.string.product_shipping_info_cd),
-                    Modifier.size(22.dp),
-                    tint = scheme.onSurfaceVariant,
-                )
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DetailPrimary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.LocalShipping,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = DetailPrimary,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.product_shipping_estimate, formatPriceVnd(feeVnd)),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.product_ship_from_upper, region),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                        showShippingInfo = true
+                    },
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        stringResource(R.string.product_shipping_info_cd),
+                        Modifier.size(22.dp),
+                        tint = scheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun DetailDescriptionBlock(
+private fun DetailAboutCard(
     detail: ListingDetail,
     onNavigateToExplore: (
         categoryId: String?,
@@ -1176,46 +1323,52 @@ private fun DetailDescriptionBlock(
 ) {
     val scheme = MaterialTheme.colorScheme
     val aestheticLower = detail.aestheticTagRefs.map { it.label.lowercase(Locale.getDefault()) }.toSet()
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(scheme.surfaceContainerHighest)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Text(
-            stringResource(R.string.product_section_description).uppercase(Locale.getDefault()),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
+    val extraTags = detail.tags.mapNotNull { normalizeTag(it) }
+        .filter { it.lowercase(Locale.getDefault()) !in aestheticLower }
+    val hasTags = detail.aestheticTagRefs.isNotEmpty() || extraTags.isNotEmpty()
+    if (detail.description.isBlank() && !hasTags) return
+    Column(Modifier.detailSectionOuter()) {
+        DetailSectionTitle(
+            title = stringResource(R.string.product_section_about),
+            icon = Icons.Outlined.Description,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
-        Spacer(Modifier.height(8.dp))
-        if (detail.description.isNotBlank()) {
-            Text(
-                detail.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurface,
-            )
-        }
-        val extraTags = detail.tags.mapNotNull { normalizeTag(it) }
-            .filter { it.lowercase(Locale.getDefault()) !in aestheticLower }
-        if (detail.aestheticTagRefs.isNotEmpty() || extraTags.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                detail.aestheticTagRefs.forEach { ref ->
-                    DetailDescriptionTagChip(
-                        label = ref.label,
-                        onClick = {
-                            onNavigateToExplore(null, null, ref.id, ref.label, null, null)
-                        },
+        DetailSectionCard {
+            if (detail.description.isNotBlank()) {
+                Text(
+                    detail.description,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                    color = scheme.onSurface,
+                )
+            }
+            if (hasTags) {
+                if (detail.description.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.product_section_style),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(8.dp))
                 }
-                extraTags.forEach { t ->
-                    DetailDescriptionTagChip(
-                        label = t,
-                        onClick = { onNavigateToExplore(null, null, null, t, null, null) },
-                    )
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    detail.aestheticTagRefs.forEach { ref ->
+                        DetailDescriptionTagChip(
+                            label = ref.label,
+                            onClick = {
+                                onNavigateToExplore(null, null, ref.id, ref.label, null, null)
+                            },
+                        )
+                    }
+                    extraTags.forEach { t ->
+                        DetailDescriptionTagChip(
+                            label = t,
+                            onClick = { onNavigateToExplore(null, null, null, t, null, null) },
+                        )
+                    }
                 }
             }
         }
@@ -1240,7 +1393,7 @@ private fun DetailDescriptionTagChip(
 }
 
 @Composable
-private fun DetailMoreFromSeller(
+private fun DetailMoreFromSellerSection(
     username: String?,
     items: List<ListingFeedItem>,
     excludeId: String,
@@ -1248,19 +1401,18 @@ private fun DetailMoreFromSeller(
     onLike: (ListingFeedItem) -> Unit,
     onSave: (ListingFeedItem) -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
     val u = username ?: "user"
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 4.dp, bottom = 12.dp),
     ) {
-        Text(
-            stringResource(R.string.product_more_from_seller, "@$u"),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = scheme.onSurface,
+        DetailSectionTitle(
+            title = stringResource(R.string.product_more_from_seller, "@$u"),
+            icon = Icons.Outlined.Storefront,
+            modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
         )
-        Spacer(Modifier.height(12.dp))
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1270,7 +1422,7 @@ private fun DetailMoreFromSeller(
             items.filter { it.id != excludeId }.take(5).forEach { item ->
                 ListingGridCard(
                     item = item,
-                    modifier = Modifier.width(120.dp),
+                    modifier = Modifier.width(132.dp),
                     compactFooter = true,
                     showQuickActions = true,
                     onLike = { onLike(item) },
@@ -1283,69 +1435,10 @@ private fun DetailMoreFromSeller(
 }
 
 @Composable
-private fun DetailSocialProofRow(detail: ListingDetail) {
-    val scheme = MaterialTheme.colorScheme
-    val views = detail.viewCount.coerceAtLeast(0)
-    val likes = detail.likeCount.coerceAtLeast(0)
-    val saves = detail.saveCount.coerceAtLeast(0)
-    if (views == 0 && likes == 0 && saves == 0) return
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (views > 0) {
-            DetailSocialProofChip(
-                icon = Icons.Filled.Visibility,
-                label = stringResource(R.string.product_social_views, views),
-            )
-        }
-        if (likes > 0) {
-            DetailSocialProofChip(
-                icon = Icons.Filled.Favorite,
-                label = stringResource(R.string.product_social_likes, likes),
-            )
-        }
-        if (saves > 0) {
-            DetailSocialProofChip(
-                icon = Icons.Filled.Bookmark,
-                label = stringResource(R.string.product_social_saves, saves),
-            )
-        }
-    }
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        color = scheme.outlineVariant.copy(alpha = 0.5f),
-    )
-}
-
-@Composable
-private fun DetailSocialProofChip(
-    icon: ImageVector,
-    label: String,
+private fun ProductPurchaseGuideDialog(
+    buyNowEnabled: Boolean,
+    onDismiss: () -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = scheme.onSurfaceVariant,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = scheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun ProductPurchaseGuideDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
@@ -1358,7 +1451,13 @@ private fun ProductPurchaseGuideDialog(onDismiss: () -> Unit) {
         title = { Text(stringResource(R.string.product_purchase_guide_title)) },
         text = {
             Text(
-                text = stringResource(R.string.product_purchase_guide_body),
+                text = stringResource(
+                    if (buyNowEnabled) {
+                        R.string.product_purchase_guide_body
+                    } else {
+                        R.string.product_purchase_guide_body_no_buy_now
+                    },
+                ),
                 style = MaterialTheme.typography.bodyMedium,
             )
         },
@@ -1374,6 +1473,7 @@ private fun ProductPurchaseGuideDialog(onDismiss: () -> Unit) {
 private fun DetailBottomBar(
     mode: ProductBottomBarMode,
     chatLoading: Boolean,
+    buyNowEnabled: Boolean = true,
     buyerOrderAmountVnd: Long = 0L,
     onChat: () -> Unit,
     onBuyNow: () -> Unit,
@@ -1381,69 +1481,52 @@ private fun DetailBottomBar(
     val scheme = MaterialTheme.colorScheme
     when (mode) {
         ProductBottomBarMode.Normal -> {
+            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
             Row(
                 Modifier
                     .fillMaxWidth()
                     .background(scheme.surface)
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(
-                    onClick = onChat,
-                    enabled = !chatLoading,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = scheme.onSurface,
-                        containerColor = scheme.surfaceContainerLow,
-                        disabledContainerColor = scheme.surfaceContainerLow,
-                        disabledContentColor = scheme.onSurfaceVariant,
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    if (chatLoading) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = FashColors.Primary)
-                    } else {
-                        Icon(Icons.AutoMirrored.Filled.Message, null, Modifier.size(20.dp))
+                if (buyNowEnabled) {
+                    OutlinedButton(
+                        onClick = onChat,
+                        enabled = !chatLoading,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = scheme.onSurface,
+                            containerColor = scheme.surfaceContainerLow,
+                            disabledContainerColor = scheme.surfaceContainerLow,
+                            disabledContentColor = scheme.onSurfaceVariant,
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        DetailChatButtonContent(chatLoading = chatLoading)
+                    }
+                    DetailPrimaryGradientButton(
+                        onClick = onBuyNow,
+                        enabled = true,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Default.LocalMall, null, Modifier.size(20.dp), tint = Color.White)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            stringResource(R.string.product_chat),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            stringResource(R.string.product_buy_now),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
                         )
                     }
-                }
-                Button(
-                    onClick = onBuyNow,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    contentPadding = PaddingValues(0.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White,
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(DetailPrimary, DetailPrimary.copy(alpha = 0.88f)),
-                                ),
-                                RoundedCornerShape(12.dp),
-                            ),
-                        contentAlignment = Alignment.Center,
+                } else {
+                    DetailPrimaryGradientButton(
+                        onClick = onChat,
+                        enabled = !chatLoading,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocalMall, null, Modifier.size(20.dp), tint = Color.White)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.product_buy_now),
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                            )
-                        }
+                        DetailChatButtonContent(chatLoading = chatLoading, contentColor = Color.White)
                     }
                 }
             }
@@ -1471,16 +1554,18 @@ private fun DetailBottomBar(
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Button(
-                    onClick = onBuyNow,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.product_continue_checkout),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
+                if (buyNowEnabled) {
+                    Button(
+                        onClick = onBuyNow,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.product_continue_checkout),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        )
+                    }
                 }
             }
         }
@@ -1592,8 +1677,66 @@ private fun formatShortDate(iso: String): String = try {
     iso
 }
 
-private fun resolveImageUrl(path: String): String {
-    if (path.startsWith("http")) return path
-    val base = AppEnvironment.apiBaseUrl.trimEnd('/')
-    return if (path.startsWith("/")) "$base$path" else "$base/$path".takeIf { path.isNotBlank() } ?: ""
+private fun resolveImageUrl(path: String): String = resolveListingImageUrl(path)
+
+/** Listing detail seller block + sticky mini bar — profile fetch, then listing snapshot. */
+private fun resolveSellerAvatarUrl(profile: ProfileInfo?, detail: ListingDetail): String? {
+    val raw = profile?.avatarUrl?.trim()?.takeIf { it.isNotEmpty() }
+        ?: detail.sellerAvatarUrl?.trim()?.takeIf { it.isNotEmpty() }
+        ?: return null
+    return resolveListingImageUrl(raw).takeIf { it.isNotEmpty() }
+}
+
+@Composable
+private fun RowScope.DetailChatButtonContent(
+    chatLoading: Boolean,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    if (chatLoading) {
+        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = contentColor)
+    } else {
+        Icon(Icons.AutoMirrored.Filled.Message, null, Modifier.size(20.dp), tint = contentColor)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            stringResource(R.string.product_chat),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = contentColor,
+        )
+    }
+}
+
+@Composable
+private fun DetailPrimaryGradientButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(52.dp),
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = Color.White.copy(alpha = 0.65f),
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(DetailPrimary, DetailPrimary.copy(alpha = 0.88f)),
+                    ),
+                    RoundedCornerShape(12.dp),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, content = content)
+        }
+    }
 }

@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.ui.profile
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -88,8 +89,13 @@ import java.util.Locale
 
 private val AvatarSize = 88.dp
 private val CoverBannerHeight = 132.dp
-/** Vertical gap between major form blocks (display name, bio, style, sizing). */
-private val FormSectionSpacing = 12.dp
+/** Space below cover so overlapped avatar does not cover form fields. */
+private val HeroBottomClearance = AvatarSize / 2 + 20.dp
+private val EditCardShape = RoundedCornerShape(16.dp)
+/** Vertical gap between fields inside a section card. */
+private val FormSectionSpacing = 14.dp
+/** Gap between section cards. */
+private val SectionBlockSpacing = 16.dp
 private val LabelToFieldGap = 4.dp
 private val InputCorner = RoundedCornerShape(12.dp)
 private val ChipCorner = RoundedCornerShape(20.dp)
@@ -301,66 +307,92 @@ fun EditProfileScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(HeroBottomClearance))
+
+                    Text(
+                        text = stringResource(R.string.edit_profile_photos_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = FashTheme.spacing.editorialStart)
+                            .padding(bottom = 10.dp),
+                    )
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = FashTheme.spacing.editorialStart)
-                            .padding(top = 4.dp, bottom = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(FormSectionSpacing),
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(SectionBlockSpacing),
                     ) {
-                        DisplayNameInput(
-                            label = stringResource(R.string.edit_profile_display_name_label),
-                            value = displayName,
-                            onValueChange = viewModel::onDisplayNameChange,
-                            placeholder = stringResource(R.string.edit_profile_display_name_placeholder),
-                            maxLength = DISPLAY_NAME_MAX,
-                        )
+                        EditProfileSectionTitle(stringResource(R.string.edit_profile_section_basic))
+                        EditProfileSectionCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(FormSectionSpacing)) {
+                                DisplayNameInput(
+                                    label = stringResource(R.string.edit_profile_display_name_label),
+                                    value = displayName,
+                                    onValueChange = viewModel::onDisplayNameChange,
+                                    placeholder = stringResource(R.string.edit_profile_display_name_placeholder),
+                                    maxLength = DISPLAY_NAME_MAX,
+                                )
+                                val originalUsername = profile?.username?.trim().orEmpty()
+                                UsernameInput(
+                                    value = username,
+                                    onValueChange = viewModel::onUsernameChange,
+                                    isValid = viewModel.isUsernameValid() &&
+                                        (usernameAvailable == true || username == originalUsername),
+                                    isChecking = isCheckingUsername,
+                                    usernameAvailable = usernameAvailable,
+                                    isUnchangedFromOriginal = username == originalUsername,
+                                )
+                                BioInput(
+                                    value = bio,
+                                    onValueChange = viewModel::onBioChange,
+                                    maxLength = 150,
+                                    placeholder = stringResource(R.string.edit_profile_bio_placeholder),
+                                )
+                            }
+                        }
 
-                        UsernameInput(
-                            value = username,
-                            onValueChange = viewModel::onUsernameChange,
-                            isValid = viewModel.isUsernameValid() && (usernameAvailable == true || username == profile?.username?.trim()),
-                            isChecking = isCheckingUsername,
-                        )
+                        EditProfileSectionTitle(stringResource(R.string.edit_profile_section_style))
+                        EditProfileSectionCard {
+                            AestheticStylesSection(
+                                selectedIds = selectedTagIds,
+                                tagCount = tags.size,
+                                onOpenPicker = { showStyleSheet = true },
+                                onRemove = viewModel::removeTag,
+                                resolveLabel = viewModel::resolveTagLabel,
+                                showSectionHeader = false,
+                            )
+                        }
 
-                        BioInput(
-                            value = bio,
-                            onValueChange = viewModel::onBioChange,
-                            maxLength = 150,
-                            placeholder = stringResource(R.string.edit_profile_bio_placeholder),
-                        )
-
-                        AestheticStylesSection(
-                            selectedIds = selectedTagIds,
-                            tagCount = tags.size,
-                            onOpenPicker = { showStyleSheet = true },
-                            onRemove = viewModel::removeTag,
-                            resolveLabel = viewModel::resolveTagLabel,
-                        )
-
-                        ProfileSetupSizingSection(
-                            referenceSize = referenceSize,
-                            onReferenceSizeChange = viewModel::onReferenceSizeChange,
-                            measurementUnit = measurementUnit,
-                            onMeasurementUnitChange = viewModel::onMeasurementUnitChange,
-                            hem = measurementHem,
-                            onHemChange = viewModel::onMeasurementHemChange,
-                            chest = measurementChest,
-                            onChestChange = viewModel::onMeasurementChestChange,
-                            length = measurementLength,
-                            onLengthChange = viewModel::onMeasurementLengthChange,
-                            shoulders = measurementShoulders,
-                            onShouldersChange = viewModel::onMeasurementShouldersChange,
-                            sleeve = measurementSleeve,
-                            onSleeveChange = viewModel::onMeasurementSleeveChange,
-                            supportedMeasurementUnits = listOf("cm", "in", "st"),
-                            compactDensity = true,
-                        )
+                        EditProfileSectionTitle(stringResource(R.string.edit_profile_section_sizing))
+                        EditProfileSectionCard {
+                            ProfileSetupSizingSection(
+                                referenceSize = referenceSize,
+                                onReferenceSizeChange = viewModel::onReferenceSizeChange,
+                                measurementUnit = measurementUnit,
+                                onMeasurementUnitChange = viewModel::onMeasurementUnitChange,
+                                hem = measurementHem,
+                                onHemChange = viewModel::onMeasurementHemChange,
+                                chest = measurementChest,
+                                onChestChange = viewModel::onMeasurementChestChange,
+                                length = measurementLength,
+                                onLengthChange = viewModel::onMeasurementLengthChange,
+                                shoulders = measurementShoulders,
+                                onShouldersChange = viewModel::onMeasurementShouldersChange,
+                                sleeve = measurementSleeve,
+                                onSleeveChange = viewModel::onMeasurementSleeveChange,
+                                supportedMeasurementUnits = listOf("cm", "in", "st"),
+                                compactDensity = true,
+                                showTitle = false,
+                            )
+                        }
                     }
                 }
 
+                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
                 FashPrimaryButton(
                     onClick = {
                         if (viewModel.canSave() && !isSubmitting) {
@@ -370,6 +402,7 @@ fun EditProfileScreen(
                     enabled = viewModel.canSave() && !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
@@ -401,6 +434,37 @@ fun EditProfileScreen(
     }
 }
 
+@Composable
+private fun EditProfileSectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun EditProfileSectionCard(
+    content: @Composable () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = EditCardShape,
+        color = scheme.surface,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.22f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+        ) {
+            content()
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AestheticStylesSection(
@@ -409,15 +473,18 @@ private fun AestheticStylesSection(
     onOpenPicker: () -> Unit,
     onRemove: (String) -> Unit,
     resolveLabel: (String) -> String,
+    showSectionHeader: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column {
-        Text(
-            text = stringResource(R.string.edit_profile_style_label),
-            style = MaterialTheme.typography.labelSmall,
-            color = scheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(2.dp))
+        if (showSectionHeader) {
+            Text(
+                text = stringResource(R.string.edit_profile_style_label),
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+        }
         Text(
             text = stringResource(R.string.edit_profile_style_section_subtitle),
             style = MaterialTheme.typography.bodySmall,
@@ -671,9 +738,18 @@ private fun UsernameInput(
     onValueChange: (String) -> Unit,
     isValid: Boolean,
     isChecking: Boolean,
+    usernameAvailable: Boolean?,
+    isUnchangedFromOriginal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val showTaken = !isChecking && value.isNotBlank() && !isUnchangedFromOriginal && usernameAvailable == false
+    val showAvailable = !isChecking && value.isNotBlank() && !isUnchangedFromOriginal && usernameAvailable == true
+    val borderColor = when {
+        showTaken -> FashColors.Primary.copy(alpha = 0.65f)
+        isValid && value.isNotBlank() -> FashColors.Success.copy(alpha = 0.5f)
+        else -> scheme.outlineVariant.copy(alpha = 0.5f)
+    }
     Column(modifier = modifier) {
         Text(
             text = stringResource(R.string.edit_profile_username_label),
@@ -684,11 +760,7 @@ private fun UsernameInput(
         Surface(
             shape = InputCorner,
             color = scheme.surfaceContainerHighest,
-            border = androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = if (isValid && value.isNotBlank()) FashColors.Success.copy(alpha = 0.5f)
-                else scheme.outlineVariant.copy(alpha = 0.5f),
-            ),
+            border = BorderStroke(width = 1.dp, color = borderColor),
         ) {
             Row(
                 modifier = Modifier
@@ -728,7 +800,7 @@ private fun UsernameInput(
                         strokeWidth = 2.dp,
                         color = FashColors.Primary,
                     )
-                } else if (isValid && value.isNotBlank()) {
+                } else if (isValid && value.isNotBlank() && (showAvailable || isUnchangedFromOriginal)) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
@@ -737,6 +809,21 @@ private fun UsernameInput(
                     )
                 }
             }
+        }
+        if (showTaken) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.profile_setup_username_taken),
+                style = MaterialTheme.typography.labelSmall,
+                color = FashColors.Primary,
+            )
+        } else if (showAvailable) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.profile_setup_username_available),
+                style = MaterialTheme.typography.labelSmall,
+                color = FashColors.Success,
+            )
         }
     }
 }

@@ -94,6 +94,9 @@ class FashApplication : Application(), ImageLoaderFactory {
      */
     val pendingDeepLinkListingId = MutableStateFlow<String?>(null)
 
+    /** Seller @username from profile shop share / deep link. Opens seller shop overlay when consumed. */
+    val pendingDeepLinkSellerUsername = MutableStateFlow<String?>(null)
+
     /**
      * Ledger row id from FCM / `fash://inbox/{id}`. Consumed when main shell opens the inbox detail sheet.
      */

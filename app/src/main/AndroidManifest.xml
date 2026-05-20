@@ -88,6 +88,29 @@
                     android:host="${listingShareHost}"
                     android:pathPrefix="/p/l/" />
             </intent-filter>
+            <!-- Seller shop share: HTTPS /p/u/{username} -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="https"
+                    android:host="${listingShareHost}"
+                    android:pathPrefix="/p/u/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="http"
+                    android:host="${listingShareHost}"
+                    android:pathPrefix="/p/u/" />
+            </intent-filter>
             <!-- HTTPS invite (linkified in SMS/chat); same host as LISTING_SHARE_BASE_URL -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -120,6 +143,17 @@
                 <data
                     android:scheme="fash"
                     android:host="listing"
+                    android:pathPrefix="/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="fash"
+                    android:host="profile"
                     android:pathPrefix="/" />
             </intent-filter>
             <!-- In-app + FCM deep link: fash://inbox/{notification_ledger_id} -->

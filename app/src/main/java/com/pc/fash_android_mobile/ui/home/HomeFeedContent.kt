@@ -48,6 +48,7 @@ import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -79,7 +80,14 @@ fun HomeFeedContent(
     onOpenFeaturedSellersAll: () -> Unit = {},
     /** When true, follow-feed empty copy explains guest browse instead of “follow shops”. */
     isGuestBrowse: Boolean = false,
+    onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
+    val onLikeListing: (ListingFeedItem) -> Unit = { item ->
+        if (isGuestBrowse) onRequestLogin(GuestLoginReason.Like) else viewModel.toggleLike(item)
+    }
+    val onSaveListing: (ListingFeedItem) -> Unit = { item ->
+        if (isGuestBrowse) onRequestLogin(GuestLoginReason.Saved) else viewModel.toggleSave(item)
+    }
     val items by viewModel.items.collectAsState()
     val huntTodayItems by viewModel.huntTodayItems.collectAsState()
     val huntTodayLoading by viewModel.huntTodayLoading.collectAsState()
@@ -167,8 +175,8 @@ fun HomeFeedContent(
                         isLoading = huntTodayLoading,
                         onSeeAllClick = onNavigateToExplore,
                         onListingClick = onListingClick,
-                        onLike = { viewModel.toggleLike(it) },
-                        onSave = { viewModel.toggleSave(it) },
+                        onLike = onLikeListing,
+                        onSave = onSaveListing,
                         onRecordView = { viewModel.recordView(it) },
                     )
                 }
@@ -247,8 +255,8 @@ fun HomeFeedContent(
                                     ListingGridCard(
                                         item = feedItem,
                                         showQuickActions = true,
-                                        onLike = { viewModel.toggleLike(feedItem) },
-                                        onSave = { viewModel.toggleSave(feedItem) },
+                                        onLike = { onLikeListing(feedItem) },
+                                        onSave = { onSaveListing(feedItem) },
                                         onClick = { onListingClick(feedItem.id, feedItem.sellerId) },
                                         modifier = Modifier.weight(1f),
                                         imageAspectRatio = 4f / 5f,

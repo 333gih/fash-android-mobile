@@ -484,6 +484,8 @@
     <string name="explore_filters_bar_title">Bộ lọc</string>
     <string name="explore_filters_bar_subtitle_idle">Chạm để mở — chọn từng bước trong một màn hình</string>
     <string name="explore_filters_bar_subtitle_active">Đang lọc — chạm để chỉnh</string>
+    <string name="explore_filters_clear">Xóa bộ lọc</string>
+    <string name="explore_filters_clear_cd">Xóa các bộ lọc đang áp dụng</string>
     <string name="explore_filter_summary_default">Tất cả danh mục · Mọi phong cách</string>
     <string name="explore_filter_summary_price_range">₫%1$s – ₫%2$s</string>
     <string name="explore_filter_summary_price_min">Tối thiểu ₫%1$s</string>
@@ -565,6 +567,11 @@
     <string name="product_action_share">Chia sẻ</string>
     <string name="share_listing_subject">Xem tin này trên Fash</string>
     <string name="share_listing_text">%1$s\n\nMở trên web:\n%2$s\n\nMở trong ứng dụng:\n%3$s</string>
+    <string name="share_profile_subject">Xem shop %1$s trên Fash</string>
+    <string name="share_profile_text">Shop %1$s trên Fash — khám phá tủ đồ second-hand.\n\nMở trên web:\n%2$s\n\nMở trong ứng dụng:\n%3$s</string>
+    <string name="profile_action_share">Chia sẻ shop</string>
+    <string name="profile_share_shop_title">Chia sẻ shop của bạn</string>
+    <string name="profile_share_shop_subtitle">Gửi link shop qua Zalo, Messenger, Instagram và mạng xã hội khác</string>
     <string name="product_listed_on">Đăng %1$s</string>
     <string name="product_seller_listings">%1$d tin</string>
     <string name="product_seller_followers">%1$d follower</string>
@@ -787,11 +794,18 @@
     <string name="profile_rating_format">%1$.1f (%2$d đánh giá)</string>
     <string name="profile_rating_score_only">%1$.1f</string>
     <string name="profile_rating_none_seller">Gian hàng chưa có đánh giá</string>
+    <string name="profile_seller_rating_pending">Chưa có đánh giá từ người mua</string>
+    <string name="profile_seller_rating_pending_hint">Điểm trung bình sẽ hiện sau các giao dịch hoàn tất</string>
+    <string name="profile_seller_follow_cta_hint">Theo dõi để thấy tin mới trên Trang chủ</string>
     <string name="profile_seller_trust_reviews_count">%d đánh giá</string>
     <string name="profile_seller_trust_subtitle_score_only">Điểm trung bình từ người mua</string>
     <string name="profile_reputation_points">Uy tín · %1$d</string>
     <string name="profile_verified_cd">Tài khoản đã xác minh</string>
     <string name="profile_sizing_ref_title">Tham chiếu size</string>
+    <string name="profile_sizing_ref_subtitle">Giúp gợi ý đồ vừa cỡ khi bạn khám phá và mua</string>
+    <string name="profile_sizing_ref_empty_hint">Thêm cỡ thường mặc và số đo (tuỳ chọn) để bộ lọc khớp size hoạt động tốt hơn.</string>
+    <string name="profile_sizing_ref_edit">Cập nhật</string>
+    <string name="profile_quick_actions_title">Tài khoản</string>
     <string name="profile_sizing_ref_size">Cỡ %1$s</string>
     <string name="profile_sizing_ref_separator"> · </string>
     <string name="profile_sizing_ref_unit_default">cm</string>
@@ -830,6 +844,9 @@
     <string name="setup_gate_sign_out">Đăng xuất</string>
 
     <string name="edit_profile_title">Chỉnh sửa hồ sơ</string>
+    <string name="edit_profile_section_basic">Thông tin cơ bản</string>
+    <string name="edit_profile_section_style">Phong cách</string>
+    <string name="edit_profile_photos_hint">Chạm biểu tượng máy ảnh để đổi ảnh bìa hoặc avatar</string>
     <string name="edit_profile_close_cd">Đóng</string>
     <string name="edit_profile_cover_placeholder">Ảnh bìa</string>
     <string name="edit_profile_change_photo_cd">Đổi ảnh</string>
@@ -851,7 +868,7 @@
     <string name="edit_profile_style_clear_all">Xóa hết</string>
     <string name="edit_profile_style_empty_hint">Chưa chọn phong cách — nhấn Chỉnh sửa phong cách để thêm.</string>
     <string name="edit_profile_display_name_counter">%1$d/%2$d</string>
-    <string name="edit_profile_section_sizing">KÍCH THƯỚC THAM CHIẾU</string>
+    <string name="edit_profile_section_sizing">Tham chiếu size</string>
     <string name="edit_profile_unit_st">st</string>
     <string name="edit_profile_save_error">Lưu thay đổi thất bại. Thử lại.</string>
     <string name="edit_profile_upload_error">Tải ảnh lên thất bại.</string>
@@ -961,9 +978,11 @@
     <string name="chat_fulfillment_option_meetup_subtitle">Thanh toán tiền mặt khi gặp. Bạn có thể đặt lịch sau trong chat.</string>
     <string name="chat_fulfillment_option_ship_title">Giao hàng (ship)</string>
     <string name="chat_fulfillment_option_ship_subtitle">Người mua thêm địa chỉ, thanh toán online; người bán gửi hàng theo đơn.</string>
-    <string name="chat_fulfillment_option_ship_coming_soon">Đang phát triển — bật C2C_SHIP_FULFILLMENT_ENABLED trong env để kích hoạt.</string>
-    <string name="chat_fulfillment_ship_disabled_title">Giao hàng từ chat</string>
-    <string name="chat_fulfillment_ship_disabled_body">Tính năng giao hàng qua chat đang được bật dần theo môi trường. Vui lòng dùng gặp trực tiếp hoặc thử lại sau.</string>
+    <string name="common_coming_soon">Sắp ra mắt</string>
+    <string name="chat_fulfillment_option_ship_coming_soon">Giao hàng và thanh toán online trên ứng dụng — sắp ra mắt. Bạn có thể chọn gặp trực tiếp bên trên.</string>
+    <string name="chat_fulfillment_sheet_subtitle_ship_disabled">Sau khi đã chốt giá, hiện có thể chọn gặp trực tiếp. Giao hàng có thanh toán online sẽ mở trong bản cập nhật sắp tới.</string>
+    <string name="chat_fulfillment_ship_disabled_title">Giao hàng &amp; thanh toán</string>
+    <string name="chat_fulfillment_ship_disabled_body">Tính năng này sắp ra mắt. Vui lòng chọn gặp trực tiếp hoặc quay lại sau.</string>
     <string name="chat_ship_flow_title">Giao hàng từ chat</string>
     <string name="chat_ship_flow_title_buy_now">Giao hàng &amp; thanh toán</string>
     <string name="chat_fulfillment_cancel_order_title">Hủy đơn hàng</string>
@@ -972,6 +991,7 @@
     <string name="deal_agreed_price_buy_now">Mua ngay với giá %1$s — thêm địa chỉ và thanh toán.</string>
     <string name="product_purchase_guide_title">Mua thông minh hơn</string>
     <string name="product_purchase_guide_body">Nhắn tin riêng với người bán để đề xuất giá thấp hơn (trong giới hạn số lần/ cuộc trò chuyện). Mua ngay giữ nguyên giá niêm yết và đi thẳng tới bước giao hàng &amp; thanh toán. Cả hai bên đều được bảo vệ qua đơn hàng trên ứng dụng.</string>
+    <string name="product_purchase_guide_body_no_buy_now">Nhắn tin riêng với người bán để đề xuất giá thấp hơn (trong giới hạn số lần/ cuộc trò chuyện). Sau khi thỏa thuận, bạn có thể chọn gặp trực tiếp trong chat. Giao hàng và thanh toán online sẽ sớm có trên ứng dụng.</string>
     <string name="product_purchase_guide_got_it">Đã hiểu</string>
     <string name="product_social_views">%1$d lượt xem</string>
     <string name="product_social_likes">%1$d lượt thích</string>
@@ -1610,6 +1630,7 @@
     <string name="guest_login_reason_orders">Theo dõi đơn hàng và thanh toán cần đăng nhập.</string>
     <string name="guest_login_reason_notifications">Thông báo đơn, chat và khuyến mãi gắn với tài khoản của bạn.</string>
     <string name="guest_login_reason_saved">Lưu tin yêu thích cần đăng nhập để đồng bộ thiết bị.</string>
+    <string name="guest_login_reason_like">Thích sản phẩm cần đăng nhập để đồng bộ trên mọi thiết bị.</string>
     <string name="guest_login_reason_buy">Mua hoặc trò chuyện với người bán cần đăng nhập an toàn.</string>
     <string name="guest_login_reason_follow">Theo dõi người bán để thấy tin mới trên Trang chủ — cần đăng nhập.</string>
     <string name="guest_topbar_sign_in">Đăng nhập</string>

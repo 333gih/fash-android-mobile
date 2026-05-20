@@ -58,17 +58,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
 
-    /** Trending tag names for search overlay / discovery (from `GET /search/trending-tags`). */
-    private val _trendingTagNames = MutableStateFlow<List<String>>(emptyList())
-    val trendingTagNames: StateFlow<List<String>> = _trendingTagNames.asStateFlow()
-
-    /** Full aesthetic tag catalog from common-service (filter chips use id + display name). */
+    /** Full aesthetic tag catalog from common-service (filter sheet). */
     private val _aestheticTagsCatalog = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
     val aestheticTagsCatalog: StateFlow<List<CommonAestheticTagDto>> = _aestheticTagsCatalog.asStateFlow()
-
-    /** Trending aesthetic tags resolved to catalog rows for Explore quick chips (limited). */
-    private val _styleQuickTags = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
-    val styleQuickTags: StateFlow<List<CommonAestheticTagDto>> = _styleQuickTags.asStateFlow()
 
     /** OR filter — listing must match any selected tag. */
     private val _selectedAestheticTagIds = MutableStateFlow<Set<String>>(emptySet())
@@ -661,27 +653,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadTags() {
-        val trendingResult = if (isGuestBrowse()) {
-            searchRepository.browseTrendingAestheticTags()
-        } else {
-            searchRepository.getTrendingTags()
-        }
-        trendingResult.fold(
-            onSuccess = { _trendingTagNames.value = it },
-            onFailure = { _trendingTagNames.value = emptyList() },
-        )
         commonServiceRepository.getAestheticTags(all = true).fold(
-            onSuccess = { catalog ->
-                _aestheticTagsCatalog.value = catalog
-                _styleQuickTags.value = resolveStyleQuickTagsFromTrending(
-                    trendingNames = _trendingTagNames.value,
-                    catalog = catalog,
-                )
-            },
-            onFailure = {
-                _aestheticTagsCatalog.value = emptyList()
-                _styleQuickTags.value = emptyList()
-            },
+            onSuccess = { catalog -> _aestheticTagsCatalog.value = catalog },
+            onFailure = { _aestheticTagsCatalog.value = emptyList() },
         )
         commonServiceRepository.getBrands(limit = 80, offset = 0).fold(
             onSuccess = { page -> _brands.value = page.items.sortedBy { it.name.lowercase() } },
@@ -851,6 +825,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun reloadAfterFilterChange() {
+        priceFilterDebounceJob?.cancel()
+        priceFilterDebounceJob = null
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = false
@@ -1014,6 +990,36 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _isLoading.value = false
         }
     }
+
+    /** Clears marketplace filters only; keeps active listing search if any. */
+    fun clearMarketplaceFilters() {
+        if (!hasActiveMarketplaceFilters()) return
+        priceFilterDebounceJob?.cancel()
+        priceFilterDebounceJob = null
+        _minPriceText.value = ""
+        _maxPriceText.value = ""
+        _selectedCategoryId.value = null
+        _selectedBrandId.value = null
+        _selectedAestheticTagIds.value = emptySet()
+        _selectedCountryId.value = null
+        _selectedCountryIso2.value = null
+        _selectedConditionFilter.value = null
+        _sizingMode.value = "all"
+        _hasMore.value = true
+        reloadAfterFilterChange()
+        viewModelScope.launch { requestScrollExploreToTop() }
+    }
+
+    private fun hasActiveMarketplaceFilters(): Boolean =
+        _selectedCategoryId.value != null ||
+            _selectedAestheticTagIds.value.isNotEmpty() ||
+            _minPriceText.value.isNotEmpty() ||
+            _maxPriceText.value.isNotEmpty() ||
+            _selectedConditionFilter.value != null ||
+            _selectedBrandId.value != null ||
+            _selectedCountryId.value != null ||
+            !_selectedCountryIso2.value.isNullOrBlank() ||
+            _sizingMode.value != "all"
 
     /**
      * Resets marketplace filters, search text, and reloads the listings browse feed.

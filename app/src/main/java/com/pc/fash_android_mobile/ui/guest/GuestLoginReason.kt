@@ -11,6 +11,7 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     Orders(R.string.guest_login_reason_orders),
     Notifications(R.string.guest_login_reason_notifications),
     Saved(R.string.guest_login_reason_saved),
+    Like(R.string.guest_login_reason_like),
     ChatFromHome(R.string.guest_login_reason_chat),
     SellFromHome(R.string.guest_login_reason_post),
     BuyOrChat(R.string.guest_login_reason_buy),

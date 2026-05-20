@@ -160,6 +160,7 @@ import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.InviteDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
+import com.pc.fash_android_mobile.deeplink.ProfileDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -259,6 +260,7 @@ class MainActivity : ComponentActivity() {
         }
         InviteDeepLinks.parseReferralTokenFromIntent(intent)?.let { fashApp.pendingReferralToken.value = it }
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
+        ProfileDeepLinks.parseUsernameFromIntent(intent)?.let { fashApp.pendingDeepLinkSellerUsername.value = it }
         InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
         AccountSwitchDeepLinks.parseFromIntent(intent)?.let { fashApp.requestAccountSwitchPrompt(it) }
     }
@@ -960,6 +962,12 @@ class MainActivity : ComponentActivity() {
                                         fashApp.pendingDeepLinkListingId.value = null
                                     }
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
+                                    val pendingSellerDeepLink by fashApp.pendingDeepLinkSellerUsername.collectAsState()
+                                    LaunchedEffect(pendingSellerDeepLink) {
+                                        val handle = pendingSellerDeepLink ?: return@LaunchedEffect
+                                        sellerShopUsername = handle
+                                        fashApp.pendingDeepLinkSellerUsername.value = null
+                                    }
                                     var sellerShopEntrySource by remember { mutableStateOf(SellerShopEntrySource.None) }
                                     /** Snapshot for restoring the screen under seller shop on back. */
                                     var sellerShopRestoreContext by remember {
@@ -1472,6 +1480,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 },
                                                 onBuyNow = { listingId ->
+                                                    if (!BusinessFlowConfig.c2cBuyNowEnabled) return@ProductDetailScreen
                                                     scope.launch {
                                                         val price =
                                                             productDetailViewModel.detail.value?.priceVnd ?: 0L

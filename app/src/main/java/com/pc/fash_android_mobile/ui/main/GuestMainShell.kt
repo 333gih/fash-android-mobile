@@ -131,6 +131,12 @@ fun GuestMainShell(
         selectedListingId = id
         fashApp.pendingDeepLinkListingId.value = null
     }
+    val pendingSellerDeepLink by fashApp.pendingDeepLinkSellerUsername.collectAsState()
+    LaunchedEffect(pendingSellerDeepLink) {
+        val handle = pendingSellerDeepLink ?: return@LaunchedEffect
+        sellerShopUsername = handle
+        fashApp.pendingDeepLinkSellerUsername.value = null
+    }
 
     LaunchedEffect(sellerShopUsername) {
         sellerShopUsername?.let { sellerProfileViewModel.loadForSeller(it) }
@@ -278,6 +284,8 @@ fun GuestMainShell(
                     sellerShopUsername = null
                     selectedTab = MainTab.Explore.ordinal
                 },
+                isGuestMode = true,
+                onRequestLogin = requestLogin,
             )
         }
 

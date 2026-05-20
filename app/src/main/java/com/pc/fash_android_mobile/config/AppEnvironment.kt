@@ -193,6 +193,22 @@ object AppEnvironment {
     }
 
     /**
+     * Share / universal link for a seller shop ([BuildConfig.LISTING_SHARE_BASE_URL] with `/p/l` → `/p/u` + username).
+     * Pair with [com.pc.fash_android_mobile.deeplink.ProfileDeepLinks.fashProfileUri] in share text.
+     */
+    fun profileShareUrl(username: String): String {
+        val handle = username.trim().removePrefix("@")
+        if (handle.isEmpty()) return ""
+        val base = BuildConfig.LISTING_SHARE_BASE_URL.trimEnd('/')
+        val profileBase = if (base.endsWith("/p/l", ignoreCase = true)) {
+            base.dropLast(1) + "u"
+        } else {
+            "$base/u"
+        }
+        return "$profileBase/$handle"
+    }
+
+    /**
      * Marketing / legal pages on the admin portal (see `fash-admin-portal-fe` publish routes).
      * [languageTag] should be [AppLocale.TAG_VI] or [AppLocale.TAG_EN] (e.g. from [AppLocale.currentTag]).
      */

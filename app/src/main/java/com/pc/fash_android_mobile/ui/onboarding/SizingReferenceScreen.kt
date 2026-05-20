@@ -252,6 +252,8 @@ internal fun ProfileSetupSizingSection(
     supportedMeasurementUnits: List<String> = listOf("cm", "in"),
     /** Tighter gaps between title, copy, and fields (e.g. Edit Profile). */
     compactDensity: Boolean = false,
+    /** When false, omit the block title (parent screen provides a section heading). */
+    showTitle: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     val gapTitleToSubtitle = if (compactDensity) 4.dp else 6.dp
@@ -261,16 +263,18 @@ internal fun ProfileSetupSizingSection(
     val gapBeforeMeasurements = if (compactDensity) 10.dp else 16.dp
     val gapMeasurementsLabelToFields = if (compactDensity) 6.dp else 8.dp
     val fieldBottom = if (compactDensity) 4.dp else 8.dp
-    Text(
-        text = stringResource(R.string.profile_setup_sizing_title),
-        style = if (compactDensity) {
-            MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-        } else {
-            MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-        },
-        color = scheme.onSurface,
-    )
-    Spacer(modifier = Modifier.height(gapTitleToSubtitle))
+    if (showTitle) {
+        Text(
+            text = stringResource(R.string.profile_setup_sizing_title),
+            style = if (compactDensity) {
+                MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+            } else {
+                MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            },
+            color = scheme.onSurface,
+        )
+        Spacer(modifier = Modifier.height(gapTitleToSubtitle))
+    }
     Text(
         text = stringResource(R.string.profile_setup_sizing_subtitle),
         style = MaterialTheme.typography.bodySmall,

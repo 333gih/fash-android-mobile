@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -40,15 +41,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -96,6 +102,7 @@ import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAssets
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.profile.ProfileShare
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -270,21 +277,6 @@ private fun ProfileIdentityBlock(
                 color = scheme.onSurfaceVariant,
             )
         }
-        if (onEditClick != null) {
-            TextButton(
-                onClick = onEditClick,
-                modifier = Modifier.padding(top = 2.dp),
-                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                    contentColor = scheme.primary,
-                ),
-            ) {
-                Text(
-                    text = stringResource(R.string.profile_edit),
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-        }
         profile?.bio?.takeIf { it.isNotBlank() }?.let { bio ->
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -296,100 +288,21 @@ private fun ProfileIdentityBlock(
             )
         }
         ProfileAestheticChipsRow(profile = profile, onAestheticTagClick = onAestheticTagClick)
-        ProfileSizingReferenceStrip(profile = profile)
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ProfileSizingReferenceStrip(profile: ProfileInfo?) {
-    val p = profile ?: return
-    val unit = p.referenceMeasurementUnit?.trim()?.takeIf { it.isNotEmpty() }
-        ?: stringResource(R.string.profile_sizing_ref_unit_default)
-    val measurementLabels = buildList {
-        p.referenceMeasurementChest?.takeIf { it.isFinite() && it > 0 }?.let {
-            add(stringResource(R.string.profile_sizing_ref_chest, it, unit))
-        }
-        p.referenceMeasurementHem?.takeIf { it.isFinite() && it > 0 }?.let {
-            add(stringResource(R.string.profile_sizing_ref_hem, it, unit))
-        }
-        p.referenceMeasurementLength?.takeIf { it.isFinite() && it > 0 }?.let {
-            add(stringResource(R.string.profile_sizing_ref_length, it, unit))
-        }
-        p.referenceMeasurementShoulders?.takeIf { it.isFinite() && it > 0 }?.let {
-            add(stringResource(R.string.profile_sizing_ref_shoulders, it, unit))
-        }
-        p.referenceMeasurementSleeveLength?.takeIf { it.isFinite() && it > 0 }?.let {
-            add(stringResource(R.string.profile_sizing_ref_sleeve, it, unit))
-        }
-    }
-    val refSizeLine = p.referenceSize?.trim()?.takeIf { it.isNotEmpty() }?.let {
-        stringResource(R.string.profile_sizing_ref_size, it)
-    }
-    val fallbackOnly = measurementLabels.isEmpty() && refSizeLine == null && p.sizingReferenceCompleted
-    if (measurementLabels.isEmpty() && refSizeLine == null && !fallbackOnly) return
-    Spacer(modifier = Modifier.height(12.dp))
-    val scheme = MaterialTheme.colorScheme
-    val chipShape = RoundedCornerShape(10.dp)
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerLow,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(
-                text = stringResource(R.string.profile_sizing_ref_title),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            if (fallbackOnly) {
+        if (onEditClick != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onEditClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.45f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+            ) {
                 Text(
-                    text = stringResource(R.string.profile_sizing_ref_completed_only),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurface,
-                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(R.string.profile_edit),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 )
-            } else {
-                refSizeLine?.let { line ->
-                    Surface(
-                        shape = chipShape,
-                        color = scheme.primaryContainer.copy(alpha = 0.45f),
-                    ) {
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            color = scheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
-                    }
-                    if (measurementLabels.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                }
-                if (measurementLabels.isNotEmpty()) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        measurementLabels.forEach { label ->
-                            Surface(
-                                shape = chipShape,
-                                color = scheme.surfaceContainerHighest,
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = scheme.onSurface,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
     }
@@ -534,11 +447,14 @@ fun ProfileScreen(
                                         onNavigateToExploreFromProfile(null, null, id, name, null, null)
                                     },
                                 )
-                                ProfileTrustCard(profile = profile)
-                                ProfileStats(
+                                ProfileOwnMetricsCard(
                                     profile = profile,
                                     onFollowersClick = { onOpenFollowConnections(1) },
                                     onFollowingClick = { onOpenFollowConnections(0) },
+                                )
+                                ProfileSizingReferenceCard(
+                                    profile = profile,
+                                    onEdit = onEditProfile,
                                 )
                                 if (meetingReverifyRequired) {
                                     ProfileMeetingIdentityReverifyBanner(
@@ -559,8 +475,11 @@ fun ProfileScreen(
                                         onAckCompleted = { viewModel.ackMeetingIdentityReverify() },
                                     )
                                 }
-                                ProfileShippingAddressesRow(onClick = onShippingAddressesClick)
-                                ProfileInviteFriendsRow(onClick = onInviteFriendsClick)
+                                ProfileQuickActionsCard(
+                                    profile = profile,
+                                    onShippingAddressesClick = onShippingAddressesClick,
+                                    onInviteFriendsClick = onInviteFriendsClick,
+                                )
                             }
                         },
                         compactHeader = {
@@ -800,6 +719,453 @@ internal fun SellerProfileHeader(
         onEditClick = null,
         onAestheticTagClick = onAestheticTagClick,
     )
+}
+
+/** Own profile: stats + shop trust in one card (tappable followers / following). */
+@Composable
+private fun ProfileOwnMetricsCard(
+    profile: ProfileInfo?,
+    onFollowersClick: () -> Unit,
+    onFollowingClick: () -> Unit,
+) {
+    val p = profile ?: return
+    val scheme = MaterialTheme.colorScheme
+    val ratingVal = p.rating
+    val reviewCount = p.reviewCount
+    val hasRatingScore = ratingVal != null && ratingVal > 0f
+    val productCount = p.productCount ?: 0
+    val soldCount = p.soldCount ?: 0
+    val rep = p.reputationPoints?.takeIf { it > 0 }
+    val fast = p.hasFastDelivery
+    val showTrustFooter = hasRatingScore || productCount > 0 || rep != null || fast
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 4.dp, bottom = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = scheme.surfaceContainerLow,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ProfileStatItem(
+                    modifier = Modifier.weight(1f),
+                    value = formatCount(p.followerCount),
+                    label = stringResource(R.string.profile_followers),
+                    onClick = onFollowersClick,
+                    contentDescription = stringResource(R.string.profile_followers_open_cd),
+                    showIdleHint = true,
+                    idlePhaseOffsetMs = 0,
+                )
+                ProfileOwnStatDivider()
+                ProfileStatItem(
+                    modifier = Modifier.weight(1f),
+                    value = p.followingCount.toString(),
+                    label = stringResource(R.string.profile_following),
+                    onClick = onFollowingClick,
+                    contentDescription = stringResource(R.string.profile_following_open_cd),
+                    showIdleHint = true,
+                    idlePhaseOffsetMs = 120,
+                )
+                ProfileOwnStatDivider()
+                ProfileStatItem(
+                    modifier = Modifier.weight(1f),
+                    value = productCount.toString(),
+                    label = stringResource(R.string.profile_products),
+                )
+                ProfileOwnStatDivider()
+                ProfileStatItem(
+                    modifier = Modifier.weight(1f),
+                    value = soldCount.toString(),
+                    label = stringResource(R.string.profile_sold),
+                )
+            }
+            if (showTrustFooter) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    color = scheme.outlineVariant.copy(alpha = 0.35f),
+                )
+                ProfileOwnTrustFooter(
+                    hasRatingScore = hasRatingScore,
+                    ratingVal = ratingVal,
+                    reviewCount = reviewCount,
+                    hasShop = productCount > 0,
+                    reputationPoints = rep,
+                    hasFastDelivery = fast,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileOwnStatDivider() {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .height(40.dp)
+            .width(1.dp)
+            .background(scheme.outlineVariant.copy(alpha = 0.4f)),
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProfileOwnTrustFooter(
+    hasRatingScore: Boolean,
+    ratingVal: Float?,
+    reviewCount: Int?,
+    hasShop: Boolean,
+    reputationPoints: Int?,
+    hasFastDelivery: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (hasRatingScore) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = if (hasRatingScore) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                when {
+                    hasRatingScore && ratingVal != null -> {
+                        Text(
+                            text = String.format(Locale.getDefault(), "%.1f", ratingVal),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = scheme.onSurface,
+                        )
+                        val sub = when {
+                            reviewCount != null && reviewCount >= 0 ->
+                                stringResource(R.string.profile_seller_trust_reviews_count, reviewCount)
+                            else -> stringResource(R.string.profile_seller_trust_subtitle_score_only)
+                        }
+                        Text(text = sub, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    }
+                    hasShop -> {
+                        Text(
+                            text = stringResource(R.string.profile_seller_rating_pending),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.profile_seller_rating_pending_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            lineHeight = 18.sp,
+                        )
+                    }
+                }
+            }
+        }
+        if (reputationPoints != null || hasFastDelivery) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                reputationPoints?.let { pts ->
+                    ProfileTrustBadge(
+                        text = stringResource(R.string.profile_reputation_points, pts),
+                        contentColor = scheme.primary,
+                        containerColor = scheme.primaryContainer.copy(alpha = 0.45f),
+                    )
+                }
+                if (hasFastDelivery) {
+                    ProfileTrustBadge(
+                        text = stringResource(R.string.profile_fast_delivery),
+                        contentColor = FashColors.Success,
+                        containerColor = FashColors.Success.copy(alpha = 0.12f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Size reference — own profile only; always visible with empty state + edit entry. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProfileSizingReferenceCard(
+    profile: ProfileInfo?,
+    onEdit: () -> Unit,
+) {
+    val p = profile ?: return
+    val scheme = MaterialTheme.colorScheme
+    val unit = p.referenceMeasurementUnit?.trim()?.takeIf { it.isNotEmpty() }
+        ?: stringResource(R.string.profile_sizing_ref_unit_default)
+    val measurementLabels = buildList {
+        p.referenceMeasurementChest?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_chest, it, unit))
+        }
+        p.referenceMeasurementHem?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_hem, it, unit))
+        }
+        p.referenceMeasurementLength?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_length, it, unit))
+        }
+        p.referenceMeasurementShoulders?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_shoulders, it, unit))
+        }
+        p.referenceMeasurementSleeveLength?.takeIf { it.isFinite() && it > 0 }?.let {
+            add(stringResource(R.string.profile_sizing_ref_sleeve, it, unit))
+        }
+    }
+    val refSize = p.referenceSize?.trim()?.takeIf { it.isNotEmpty() }
+    val hasSizeData = refSize != null || measurementLabels.isNotEmpty()
+    val fallbackOnly = !hasSizeData && p.sizingReferenceCompleted
+    val chipShape = RoundedCornerShape(10.dp)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = scheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.28f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Straighten,
+                    contentDescription = null,
+                    tint = FashColors.Primary,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.profile_sizing_ref_title),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.profile_sizing_ref_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        lineHeight = 18.sp,
+                    )
+                }
+                TextButton(onClick = onEdit) {
+                    Text(
+                        text = stringResource(R.string.profile_sizing_ref_edit),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = FashColors.Primary,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            when {
+                fallbackOnly -> {
+                    Text(
+                        text = stringResource(R.string.profile_sizing_ref_completed_only),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurface,
+                    )
+                }
+                !hasSizeData -> {
+                    Text(
+                        text = stringResource(R.string.profile_sizing_ref_empty_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        lineHeight = 18.sp,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = onEdit,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.4f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+                    ) {
+                        Text(stringResource(R.string.profile_sizing_ref_edit))
+                    }
+                }
+                else -> {
+                    refSize?.let { size ->
+                        Surface(
+                            shape = chipShape,
+                            color = FashColors.Primary.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.25f)),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.profile_sizing_ref_size, size),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = FashColors.Primary,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            )
+                        }
+                        if (measurementLabels.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+                    if (measurementLabels.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            measurementLabels.forEach { label ->
+                                Surface(
+                                    shape = chipShape,
+                                    color = scheme.surfaceContainerHighest,
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                        color = scheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Share shop + shipping + invite grouped under one account section. */
+@Composable
+private fun ProfileQuickActionsCard(
+    profile: ProfileInfo?,
+    onShippingAddressesClick: () -> Unit,
+    onInviteFriendsClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shareContext = LocalContext.current
+    val username = profile?.username?.trim()?.removePrefix("@").orEmpty()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.profile_quick_actions_title),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = scheme.surfaceContainerLow,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (username.isNotBlank()) {
+                    ProfileQuickActionRow(
+                        icon = Icons.Outlined.Share,
+                        title = stringResource(R.string.profile_share_shop_title),
+                        subtitle = stringResource(R.string.profile_share_shop_subtitle),
+                        onClick = {
+                            ProfileShare.launch(
+                                context = shareContext,
+                                username = username,
+                                displayName = profile?.displayName,
+                            )
+                        },
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        color = scheme.outlineVariant.copy(alpha = 0.35f),
+                    )
+                }
+                ProfileQuickActionRow(
+                    icon = Icons.Outlined.LocationOn,
+                    title = stringResource(R.string.profile_shipping_addresses),
+                    subtitle = stringResource(R.string.address_list_subtitle_manage),
+                    onClick = onShippingAddressesClick,
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    color = scheme.outlineVariant.copy(alpha = 0.35f),
+                )
+                ProfileQuickActionRow(
+                    icon = Icons.Outlined.PersonAdd,
+                    title = stringResource(R.string.profile_invite_friends_title),
+                    subtitle = stringResource(R.string.profile_invite_friends_subtitle),
+                    onClick = onInviteFriendsClick,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileQuickActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(FashColors.Primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 18.sp,
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.size(22.dp),
+        )
+    }
 }
 
 /** Same trust/rating card on own profile and seller storefront — matches [ProfileStats] chrome. */

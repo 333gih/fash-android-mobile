@@ -280,7 +280,11 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private suspend fun loadSellerAndMore(sellerKey: String, excludeListingId: String, publicBrowse: Boolean = false) {
         val d = _detail.value
         val profileId = d?.sellerUsername?.takeIf { it.isNotBlank() } ?: sellerKey
-        val profileResult = userRepository.getProfile(profileId)
+        val profileResult = if (publicBrowse) {
+            userRepository.getProfilePublic(profileId)
+        } else {
+            userRepository.getProfile(profileId)
+        }
         profileResult.fold(
             onSuccess = {
                 _sellerProfile.value = it

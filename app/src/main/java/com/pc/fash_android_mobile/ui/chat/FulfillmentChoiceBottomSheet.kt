@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.LocalShipping
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -25,13 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -54,29 +48,6 @@ fun FulfillmentChoiceBottomSheet(
     onCancelOrder: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showShipDisabledDialog by remember { mutableStateOf(false) }
-    if (showShipDisabledDialog) {
-        AlertDialog(
-            onDismissRequest = { showShipDisabledDialog = false },
-            title = {
-                Text(
-                    text = stringResource(R.string.chat_fulfillment_ship_disabled_title),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            },
-            text = {
-                Text(
-                    text = stringResource(R.string.chat_fulfillment_ship_disabled_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showShipDisabledDialog = false }) {
-                    Text(stringResource(R.string.dialog_ok))
-                }
-            },
-        )
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -97,7 +68,11 @@ fun FulfillmentChoiceBottomSheet(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = stringResource(R.string.chat_fulfillment_sheet_subtitle),
+                text = if (shipFulfillmentEnabled) {
+                    stringResource(R.string.chat_fulfillment_sheet_subtitle)
+                } else {
+                    stringResource(R.string.chat_fulfillment_sheet_subtitle_ship_disabled)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -123,13 +98,11 @@ fun FulfillmentChoiceBottomSheet(
                 } else {
                     stringResource(R.string.chat_fulfillment_option_ship_coming_soon)
                 },
-                enabled = true,
+                badge = if (!shipFulfillmentEnabled) stringResource(R.string.common_coming_soon) else null,
+                enabled = shipFulfillmentEnabled,
                 dimmed = !shipFulfillmentEnabled,
                 onClick = {
-                    if (!shipFulfillmentEnabled) {
-                        showShipDisabledDialog = true
-                        return@FulfillmentOptionRow
-                    }
+                    if (!shipFulfillmentEnabled) return@FulfillmentOptionRow
                     onDismiss()
                     onChooseShip()
                 },
@@ -145,7 +118,7 @@ fun FulfillmentChoiceBottomSheet(
                     subtitle = stringResource(R.string.chat_fulfillment_cancel_order_subtitle),
                     onClick = {
                         onDismiss()
-                        onCancelOrder?.invoke()
+                        onCancelOrder.invoke()
                     },
                     accentDestructive = true,
                 )
@@ -162,6 +135,7 @@ private fun FulfillmentOptionRow(
     onClick: () -> Unit,
     enabled: Boolean = true,
     dimmed: Boolean = false,
+    badge: String? = null,
     accentDestructive: Boolean = false,
 ) {
     val alpha = if (dimmed) 0.55f else 1f
@@ -195,11 +169,30 @@ private fun FulfillmentOptionRow(
                 modifier = Modifier.size(28.dp),
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = titleColor,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = titleColor,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    badge?.let { label ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = alpha),
+                            shape = RoundedCornerShape(6.dp),
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = alpha),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = subtitle,

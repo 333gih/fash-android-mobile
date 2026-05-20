@@ -30,4 +30,15 @@ object BusinessFlowConfig {
      */
     val c2cShipOnlinePaymentEnabled: Boolean
         get() = BuildConfig.C2C_SHIP_ONLINE_PAYMENT_ENABLED
+
+    /**
+     * Ship + online payment path (listing Buy now, chat fulfillment “Giao hàng”, checkout).
+     * Requires both [c2cShipFulfillmentEnabled] and [c2cShipOnlinePaymentEnabled].
+     */
+    val c2cShipAndPaymentEnabled: Boolean
+        get() = c2cShipFulfillmentEnabled && c2cShipOnlinePaymentEnabled
+
+    /** Listing PDP “Mua ngay” and direct create-order → ship/checkout flow. */
+    val c2cBuyNowEnabled: Boolean
+        get() = c2cShipAndPaymentEnabled
 }

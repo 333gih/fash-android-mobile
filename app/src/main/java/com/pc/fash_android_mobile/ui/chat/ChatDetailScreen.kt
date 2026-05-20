@@ -1010,7 +1010,7 @@ fun ChatDetailScreen(
                                     }
                                 }
                             },
-                            shipFulfillmentEnabled = BusinessFlowConfig.c2cShipFulfillmentEnabled,
+                            shipFulfillmentEnabled = BusinessFlowConfig.c2cShipAndPaymentEnabled,
                             orderCancellable = d.isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(orderStatusNorm),
                             onCancelOrder = if (d.isBuyer && OrderBuyerCancelPolicy.buyerCanCancel(orderStatusNorm)) {
                                 {

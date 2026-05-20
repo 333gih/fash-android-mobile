@@ -548,6 +548,7 @@ fun MainNavScreen(
                             else onTabChange(MainTab.Post.ordinal)
                         },
                         isGuestBrowse = isGuestMode,
+                        onRequestLogin = onRequestLogin,
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
                         onHomeEditorialPostClick = onHomeEditorialPostClick,
@@ -562,6 +563,8 @@ fun MainNavScreen(
                         onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
+                        isGuestMode = isGuestMode,
+                        onRequestLogin = onRequestLogin,
                     )
                     MainTab.Post -> if (isGuestMode) {
                         GuestTabPlaceholder(

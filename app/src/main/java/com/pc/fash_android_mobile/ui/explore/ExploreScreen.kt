@@ -45,6 +45,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,6 +57,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -118,6 +120,7 @@ import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.home.HomeBrandFooterStrip
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -147,9 +150,10 @@ fun ExploreScreen(
     /** Same promo deck as Orders / Notifications ([FashPromoSlider]); from core-service CMS only. */
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     promoSlides: List<FashPromoSlideDef> = emptyList(),
+    isGuestMode: Boolean = false,
+    onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
-    val styleQuickTags by viewModel.styleQuickTags.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
     val brands by viewModel.brands.collectAsState()
     val selectedBrandId by viewModel.selectedBrandId.collectAsState()
@@ -290,6 +294,11 @@ fun ExploreScreen(
                     filterSummaryParts = filterSummaryParts,
                     filterSummaryLine = filterSummaryLine,
                     onOpenFilters = { showFilterSheet = true },
+                    onClearFilters = if (hasActiveFilters) {
+                        { viewModel.clearMarketplaceFilters() }
+                    } else {
+                        null
+                    },
                     activeSearchQuery = when (primarySection) {
                         ExplorePrimarySection.Listings ->
                             if (isSearchMode) committedListingSearchQuery.trim() else ""
@@ -370,12 +379,6 @@ fun ExploreScreen(
                                             .fillMaxWidth()
                                             .padding(top = 4.dp, bottom = 8.dp),
                                     )
-                                    ExploreStyleQuickChipsRow(
-                                        quickTags = styleQuickTags,
-                                        selectedIds = selectedAestheticTagIds,
-                                        onTagToggle = viewModel::toggleAestheticTagFilter,
-                                        modifier = Modifier.padding(bottom = 8.dp),
-                                    )
                                 }
                             }
                             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -392,6 +395,11 @@ fun ExploreScreen(
                                     filterSummaryLine = filterSummaryLine,
                                     includeEdgeHorizontalPadding = false,
                                     onOpenFilters = { showFilterSheet = true },
+                                    onClearFilters = if (hasActiveFilters) {
+                                        { viewModel.clearMarketplaceFilters() }
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                             when {
@@ -446,8 +454,14 @@ fun ExploreScreen(
                                             onClick = { onListingClick(item.id, item.sellerId) },
                                             imageAspectRatio = ExploreListingTileAspectRatio,
                                             showQuickActions = true,
-                                            onLike = { viewModel.toggleLike(item) },
-                                            onSave = { viewModel.toggleSave(item) },
+                                            onLike = {
+                                                if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
+                                                else viewModel.toggleLike(item)
+                                            },
+                                            onSave = {
+                                                if (isGuestMode) onRequestLogin(GuestLoginReason.Saved)
+                                                else viewModel.toggleSave(item)
+                                            },
                                         )
                                     }
                                     if (isLoadingMore) {
@@ -1012,6 +1026,39 @@ private fun exploreFilterSummaryLineFromParts(parts: List<String>): String {
     return parts.joinToString(separator = " · ")
 }
 
+/**
+ * Trailing affordance on the filter bar: clear (active filters) or chevron (open sheet).
+ * Mutually exclusive — never both at once.
+ */
+@Composable
+private fun ExploreFiltersBarTrailingAction(
+    hasActiveFilters: Boolean,
+    onClearFilters: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val clearCd = stringResource(R.string.explore_filters_clear_cd)
+    if (hasActiveFilters && onClearFilters != null) {
+        IconButton(
+            onClick = onClearFilters,
+            modifier = modifier.size(40.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = clearCd,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    } else {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = FashColors.Primary.copy(alpha = 0.9f),
+            modifier = modifier.size(22.dp),
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreFiltersBar(
@@ -1021,6 +1068,7 @@ private fun ExploreFiltersBar(
     /** When false, horizontal padding is omitted (parent already applies grid `contentPadding`). */
     includeEdgeHorizontalPadding: Boolean = true,
     onOpenFilters: () -> Unit,
+    onClearFilters: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val spacing = FashTheme.spacing
@@ -1041,12 +1089,7 @@ private fun ExploreFiltersBar(
                 top = 4.dp,
                 bottom = 8.dp,
             )
-            .clip(cardShape)
-            .semantics(mergeDescendants = true) {
-                contentDescription = cd
-                role = Role.Button
-            }
-            .clickable(onClick = onOpenFilters),
+            .clip(cardShape),
         shape = cardShape,
         color = scheme.surfaceContainerLow,
         tonalElevation = 0.dp,
@@ -1056,9 +1099,20 @@ private fun ExploreFiltersBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = cd
+                        role = Role.Button
+                    }
+                    .clickable(onClick = onOpenFilters),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             BadgedBox(
                 badge = {
                     if (hasActiveFilters && filterSummaryParts.isNotEmpty()) {
@@ -1127,13 +1181,10 @@ private fun ExploreFiltersBar(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = FashColors.Primary.copy(alpha = 0.9f),
-                modifier = Modifier
-                    .size(22.dp)
-                    .padding(top = 2.dp),
+            }
+            ExploreFiltersBarTrailingAction(
+                hasActiveFilters = hasActiveFilters,
+                onClearFilters = onClearFilters,
             )
         }
     }
@@ -1151,6 +1202,7 @@ private fun ExploreStickyExploreChrome(
     filterSummaryParts: List<String>,
     filterSummaryLine: String,
     onOpenFilters: () -> Unit,
+    onClearFilters: (() -> Unit)? = null,
     activeSearchQuery: String? = null,
     onClearActiveSearch: (() -> Unit)? = null,
 ) {
@@ -1190,6 +1242,7 @@ private fun ExploreStickyExploreChrome(
                     filterSummaryParts = filterSummaryParts,
                     filterSummaryLine = filterSummaryLine,
                     onOpenFilters = onOpenFilters,
+                    onClearFilters = onClearFilters,
                 )
             }
             if (!activeSearchQuery.isNullOrBlank() && onClearActiveSearch != null) {
@@ -1307,6 +1360,7 @@ private fun ExploreStickyFilterRow(
     filterSummaryParts: List<String>,
     filterSummaryLine: String,
     onOpenFilters: () -> Unit,
+    onClearFilters: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val spacing = FashTheme.spacing
@@ -1324,11 +1378,6 @@ private fun ExploreStickyFilterRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(scheme.surfaceContainerLow)
-            .semantics(mergeDescendants = true) {
-                contentDescription = cd
-                role = Role.Button
-            }
-            .clickable(onClick = onOpenFilters)
             .padding(
                 start = spacing.editorialStart,
                 end = spacing.editorialEnd,
@@ -1338,62 +1387,72 @@ private fun ExploreStickyFilterRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spacing.spacing3),
     ) {
-        BadgedBox(
-            badge = {
-                if (hasActiveFilters && filterSummaryParts.isNotEmpty()) {
-                    Badge(
-                        containerColor = FashColors.Primary,
-                        contentColor = scheme.onPrimary,
-                    ) {
-                        Text(
-                            text = filterSummaryParts.size.coerceAtMost(99).toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = cd
+                    role = Role.Button
                 }
-            },
+                .clickable(onClick = onOpenFilters),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spacing.spacing3),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(FashColors.Primary.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
+            BadgedBox(
+                badge = {
+                    if (hasActiveFilters && filterSummaryParts.isNotEmpty()) {
+                        Badge(
+                            containerColor = FashColors.Primary,
+                            contentColor = scheme.onPrimary,
+                        ) {
+                            Text(
+                                text = filterSummaryParts.size.coerceAtMost(99).toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                },
             ) {
-                Icon(
-                    imageVector = Icons.Default.FilterList,
-                    contentDescription = null,
-                    tint = FashColors.Primary,
-                    modifier = Modifier.size(22.dp),
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(FashColors.Primary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = null,
+                        tint = FashColors.Primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.explore_filters_bar_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                )
+                Text(
+                    text = summaryCompact,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (hasActiveFilters) FontWeight.Medium else FontWeight.Normal,
+                    ),
+                    color = if (hasActiveFilters) {
+                        scheme.onSurface
+                    } else {
+                        scheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.explore_filters_bar_title),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-            )
-            Text(
-                text = summaryCompact,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (hasActiveFilters) FontWeight.Medium else FontWeight.Normal,
-                ),
-                color = if (hasActiveFilters) {
-                    scheme.onSurface
-                } else {
-                    scheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-            contentDescription = null,
-            tint = FashColors.Primary.copy(alpha = 0.88f),
-            modifier = Modifier.size(22.dp),
+        ExploreFiltersBarTrailingAction(
+            hasActiveFilters = hasActiveFilters,
+            onClearFilters = onClearFilters,
         )
     }
 }

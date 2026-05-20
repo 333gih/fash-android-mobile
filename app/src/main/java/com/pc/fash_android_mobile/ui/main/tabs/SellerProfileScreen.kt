@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -30,6 +33,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -57,9 +64,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.SellerFocusBrand
 import com.pc.fash_android_mobile.data.user.SellerFocusCategory
@@ -69,8 +82,10 @@ import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooterContentHeight
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.profile.ProfileShare
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,6 +133,7 @@ fun SellerProfileScreen(
     val titleHandle = remember(sellerUsername) {
         sellerUsername.trim().removePrefix("@")
     }
+    val shareContext = LocalContext.current
 
     LaunchedEffect(sellerUsername) {
         viewModel.loadForSeller(sellerUsername)
@@ -156,6 +172,26 @@ fun SellerProfileScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.cd_back),
                         )
+                    }
+                },
+                actions = {
+                    if (titleHandle.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                val displayName = profile?.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                                ProfileShare.launch(
+                                    context = shareContext,
+                                    username = titleHandle,
+                                    displayName = displayName,
+                                )
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = stringResource(R.string.profile_action_share),
+                                tint = FashColors.Primary,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -224,10 +260,8 @@ fun SellerProfileScreen(
                                                 onNavigateToExploreFromProfile(null, null, id, name, null, null)
                                             },
                                         )
-                                        ProfileTrustCard(profile = profile)
-                                        ProfileStats(profile = profile)
                                         if (profile != null && viewModel.canShowFollowUi()) {
-                                            SellerFollowRow(
+                                            SellerProfileFollowBlock(
                                                 isFollowing = isFollowing && !isGuestMode,
                                                 inFlight = followInFlight,
                                                 onToggle = {
@@ -239,6 +273,7 @@ fun SellerProfileScreen(
                                                 },
                                             )
                                         }
+                                        SellerProfileMetricsCard(profile = profile)
                                         SellerListingFocusSection(
                                             focus = sellerFocus,
                                             forbidden = sellerFocusForbidden,
@@ -274,7 +309,7 @@ fun SellerProfileScreen(
                                 },
                                 showListingQuickActions = true,
                                 onListingLike = {
-                                    if (isGuestMode) onRequestLogin(GuestLoginReason.Saved) else viewModel.toggleLike(it)
+                                    if (isGuestMode) onRequestLogin(GuestLoginReason.Like) else viewModel.toggleLike(it)
                                 },
                                 onListingSave = {
                                     if (isGuestMode) onRequestLogin(GuestLoginReason.Saved) else viewModel.toggleSave(it)
@@ -495,24 +530,26 @@ private fun SellerFocusAestheticRow(
     }
 }
 
+/** Follow CTA or “đang theo dõi” status — placed above shop metrics on seller storefront. */
 @Composable
-private fun SellerFollowRow(
+private fun SellerProfileFollowBlock(
     isFollowing: Boolean,
     inFlight: Boolean,
     onToggle: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = 8.dp, bottom = 8.dp),
+            .padding(top = 4.dp, bottom = 4.dp),
     ) {
         if (isFollowing) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = scheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.22f)),
             ) {
                 Row(
                     modifier = Modifier
@@ -524,7 +561,7 @@ private fun SellerFollowRow(
                         imageVector = Icons.Filled.CheckCircle,
                         contentDescription = null,
                         tint = FashColors.Primary,
-                        modifier = Modifier.size(26.dp),
+                        modifier = Modifier.size(24.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -533,14 +570,14 @@ private fun SellerFollowRow(
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = scheme.onSurface,
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = stringResource(R.string.seller_following_status_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
+                            lineHeight = 18.sp,
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
                     TextButton(
                         onClick = onToggle,
                         enabled = !inFlight,
@@ -555,6 +592,7 @@ private fun SellerFollowRow(
                             Text(
                                 text = stringResource(R.string.unfollow_action),
                                 style = MaterialTheme.typography.labelLarge,
+                                color = FashColors.Primary,
                             )
                         }
                     }
@@ -566,25 +604,237 @@ private fun SellerFollowRow(
                 enabled = !inFlight,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(FashTheme.spacing.buttonHeight),
+                    .height(48.dp),
+                contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = scheme.primary,
-                    contentColor = scheme.onPrimary,
+                    containerColor = Color.Transparent,
+                    contentColor = Color.White,
+                    disabledContainerColor = Color.Transparent,
+                    disabledContentColor = Color.White.copy(alpha = 0.7f),
                 ),
+                shape = RoundedCornerShape(14.dp),
             ) {
-                if (inFlight) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                        color = scheme.onPrimary,
-                    )
-                } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(FashColors.Primary, FashColors.Primary.copy(alpha = 0.88f)),
+                            ),
+                            RoundedCornerShape(14.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (inFlight) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White,
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.follow_button),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                        )
+                    }
+                }
+            }
+            Text(
+                text = stringResource(R.string.profile_seller_follow_cta_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+/** Stats + trust line in one card — storefront only (no tappable follower pulses). */
+@Composable
+private fun SellerProfileMetricsCard(profile: ProfileInfo?) {
+    val p = profile ?: return
+    val scheme = MaterialTheme.colorScheme
+    val ratingVal = p.rating
+    val reviewCount = p.reviewCount
+    val hasRatingScore = ratingVal != null && ratingVal > 0f
+    val productCount = p.productCount ?: 0
+    val soldCount = p.soldCount ?: 0
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(top = 4.dp, bottom = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SellerProfileStatCell(
+                    modifier = Modifier.weight(1f),
+                    value = sellerFormatCount(p.followerCount),
+                    label = stringResource(R.string.profile_followers),
+                    emphasize = false,
+                )
+                SellerProfileStatDivider()
+                SellerProfileStatCell(
+                    modifier = Modifier.weight(1f),
+                    value = p.followingCount.toString(),
+                    label = stringResource(R.string.profile_following),
+                    emphasize = false,
+                )
+                SellerProfileStatDivider()
+                SellerProfileStatCell(
+                    modifier = Modifier.weight(1f),
+                    value = productCount.toString(),
+                    label = stringResource(R.string.profile_products),
+                    emphasize = productCount > 0,
+                )
+                SellerProfileStatDivider()
+                SellerProfileStatCell(
+                    modifier = Modifier.weight(1f),
+                    value = soldCount.toString(),
+                    label = stringResource(R.string.profile_sold),
+                    emphasize = soldCount > 0,
+                )
+            }
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 14.dp),
+                color = scheme.outlineVariant.copy(alpha = 0.35f),
+            )
+            SellerProfileTrustLine(
+                hasRatingScore = hasRatingScore,
+                ratingVal = ratingVal,
+                reviewCount = reviewCount,
+                hasShop = productCount > 0,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SellerProfileStatDivider() {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .height(36.dp)
+            .width(1.dp)
+            .background(scheme.outlineVariant.copy(alpha = 0.4f)),
+    )
+}
+
+@Composable
+private fun SellerProfileStatCell(
+    value: String,
+    label: String,
+    emphasize: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = modifier.padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = if (emphasize) FashColors.Primary else scheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            lineHeight = 14.sp,
+            modifier = Modifier.heightIn(min = 28.dp),
+        )
+    }
+}
+
+@Composable
+private fun SellerProfileTrustLine(
+    hasRatingScore: Boolean,
+    ratingVal: Float?,
+    reviewCount: Int?,
+    hasShop: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (hasRatingScore) Icons.Filled.Star else Icons.Outlined.StarOutline,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = if (hasRatingScore) FashColors.Primary else scheme.onSurfaceVariant.copy(alpha = 0.55f),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            when {
+                hasRatingScore && ratingVal != null -> {
                     Text(
-                        text = stringResource(R.string.follow_button),
-                        style = MaterialTheme.typography.labelMedium,
+                        text = String.format(Locale.getDefault(), "%.1f", ratingVal),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onSurface,
+                    )
+                    val sub = when {
+                        reviewCount != null && reviewCount >= 0 ->
+                            stringResource(R.string.profile_seller_trust_reviews_count, reviewCount)
+                        else -> stringResource(R.string.profile_seller_trust_subtitle_score_only)
+                    }
+                    Text(
+                        text = sub,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+                hasShop -> {
+                    Text(
+                        text = stringResource(R.string.profile_seller_rating_pending),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = scheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.profile_seller_rating_pending_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        lineHeight = 18.sp,
+                    )
+                }
+                else -> {
+                    Text(
+                        text = stringResource(R.string.profile_seller_rating_pending),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
         }
     }
 }
+
+private fun sellerFormatCount(count: Int): String =
+    when {
+        count >= 1_000_000 -> "${count / 1_000_000}.${(count % 1_000_000) / 100_000}M"
+        count >= 1_000 -> "${count / 1_000}.${(count % 1_000) / 100}k"
+        else -> count.toString()
+    }

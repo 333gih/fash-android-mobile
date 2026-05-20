@@ -721,7 +721,9 @@ class ListingRepository(
                 ?: seller?.optString("Username", "")?.ifBlank { null }
                 ?: o.optString("seller_username", "").ifBlank { null },
             sellerAvatarUrl = seller?.optString("avatar_url", "")?.ifBlank { null }
-                ?: seller?.optString("AvatarURL", "")?.ifBlank { null },
+                ?: seller?.optString("AvatarURL", "")?.ifBlank { null }
+                ?: seller?.optString("profile_image_url", "")?.ifBlank { null }
+                ?: seller?.optString("ProfileImageURL", "")?.ifBlank { null },
             sellerDisplayName = seller?.optString("display_name", "")?.ifBlank { null }
                 ?: seller?.optString("DisplayName", "")?.ifBlank { null },
             sellerVerified = seller?.let { s ->
