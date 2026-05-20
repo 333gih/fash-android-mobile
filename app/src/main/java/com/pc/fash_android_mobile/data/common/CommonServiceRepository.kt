@@ -30,6 +30,21 @@ class CommonServiceRepository(
     private val securedClient: OkHttpClient,
 ) {
 
+    /** Guest Explore filters — no Bearer (common-service GET /api/v1/public/...). */
+    private val publicCatalogClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("Accept", "application/json")
+                    .header("User-Agent", COMMON_SERVICE_USER_AGENT)
+                    .build(),
+            )
+        }
+        .build()
+
     /** Same timeouts as SecuredApiClient; no auth interceptors. */
     private val healthClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -41,12 +56,13 @@ class CommonServiceRepository(
         throw CoreServiceHttpException(httpCode, CoreServiceErrors.parseErrorMessage(httpCode, body))
 
     /** Secured GET: interceptors add Accept, User-Agent, and Bearer when a session exists. */
-    private fun executeGet(url: String): String {
+    private fun executeGet(url: String, publicBrowse: Boolean = false): String {
+        val client = if (publicBrowse) publicCatalogClient else securedClient
         val request = Request.Builder()
             .url(url)
             .get()
             .build()
-        return securedClient.newCall(request).execute().use { response ->
+        return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) throwHttp(response.code, body)
             body
@@ -68,12 +84,22 @@ class CommonServiceRepository(
         }
     }
 
-    private fun apiV1(path: String): String =
-        AppEnvironment.commonServicePath("api/v1/${path.trimStart('/')}")
+    private fun apiV1(path: String, publicBrowse: Boolean = false): String {
+        val rel = path.trimStart('/')
+        return if (publicBrowse) {
+            AppEnvironment.commonServicePath("api/v1/public/$rel")
+        } else {
+            AppEnvironment.commonServicePath("api/v1/$rel")
+        }
+    }
 
     /** Encodes query the same way as the admin portal BFF / browser (RFC 3986 via OkHttp). */
-    private fun apiV1UrlWithQuery(pathAfterApiV1: String, queryParams: List<Pair<String, String>>): String {
-        val base = apiV1(pathAfterApiV1)
+    private fun apiV1UrlWithQuery(
+        pathAfterApiV1: String,
+        queryParams: List<Pair<String, String>>,
+        publicBrowse: Boolean = false,
+    ): String {
+        val base = apiV1(pathAfterApiV1, publicBrowse)
         val resolved = base.toHttpUrlOrNull() ?: error("Invalid common-service catalog URL: $base")
         val b = resolved.newBuilder()
         queryParams.forEach { (k, v) -> b.addQueryParameter(k, v) }
@@ -238,17 +264,18 @@ class CommonServiceRepository(
         q: String? = null,
         offset: Int = 0,
         limit: Int = 20,
+        publicBrowse: Boolean = false,
     ): Result<BrandsPage> = runCatching {
         val params = mutableListOf("offset=$offset", "limit=$limit")
         q?.takeIf { it.isNotBlank() }?.let { params.add("q=${enc(it)}") }
-        val url = "${apiV1("brands")}?${params.joinToString("&")}"
-        parseBrandsPage(JSONObject(executeGet(url).trim()))
+        val url = "${apiV1("brands", publicBrowse)}?${params.joinToString("&")}"
+        parseBrandsPage(JSONObject(executeGet(url, publicBrowse).trim()))
     }
 
     // --- Categories ---
 
-    fun getCategoryTree(): Result<List<CategoryTreeNode>> = runCatching {
-        val body = executeGet(apiV1("categories/tree"))
+    fun getCategoryTree(publicBrowse: Boolean = false): Result<List<CategoryTreeNode>> = runCatching {
+        val body = executeGet(apiV1("categories/tree", publicBrowse), publicBrowse)
         val root = JSONObject(body.trim())
         val arr = root.optJSONArray("categories") ?: JSONArray()
         (0 until arr.length()).mapNotNull { i ->
@@ -292,6 +319,7 @@ class CommonServiceRepository(
         status: String? = null,
         offset: Int = 0,
         limit: Int = 20,
+        publicBrowse: Boolean = false,
     ): Result<List<CommonAestheticTagDto>> = runCatching {
         val params = mutableListOf<String>()
         if (all) {
@@ -302,8 +330,8 @@ class CommonServiceRepository(
             q?.takeIf { it.isNotBlank() }?.let { params.add("q=${enc(it)}") }
             status?.takeIf { it.isNotBlank() }?.let { params.add("status=${enc(it)}") }
         }
-        val url = "${apiV1("aesthetic-tags")}?${params.joinToString("&")}"
-        val body = executeGet(url).trim()
+        val url = "${apiV1("aesthetic-tags", publicBrowse)}?${params.joinToString("&")}"
+        val body = executeGet(url, publicBrowse).trim()
         val obj = JSONObject(body)
         if (all) {
             val arr = obj.optJSONArray("tags") ?: JSONArray()
@@ -343,6 +371,7 @@ class CommonServiceRepository(
         status: String? = null,
         offset: Int = 0,
         limit: Int = 20,
+        publicBrowse: Boolean = false,
     ): Result<List<CommonCountryDto>> = runCatching {
         val params = buildList<Pair<String, String>> {
             if (all) {
@@ -354,8 +383,8 @@ class CommonServiceRepository(
                 status?.trim()?.takeIf { it.isNotEmpty() }?.let { add("status" to it) }
             }
         }
-        val url = apiV1UrlWithQuery("countries", params)
-        val body = executeGet(url).trim()
+        val url = apiV1UrlWithQuery("countries", params, publicBrowse)
+        val body = executeGet(url, publicBrowse).trim()
         val obj = JSONObject(body)
         if (all) {
             val arr = obj.optJSONArray("countries") ?: JSONArray()

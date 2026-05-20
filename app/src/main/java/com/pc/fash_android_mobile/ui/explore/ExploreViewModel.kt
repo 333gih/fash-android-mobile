@@ -66,6 +66,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _aestheticTagsCatalog = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
     val aestheticTagsCatalog: StateFlow<List<CommonAestheticTagDto>> = _aestheticTagsCatalog.asStateFlow()
 
+    /** Trending aesthetic tags resolved to catalog rows for Explore quick chips (limited). */
+    private val _styleQuickTags = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
+    val styleQuickTags: StateFlow<List<CommonAestheticTagDto>> = _styleQuickTags.asStateFlow()
+
     /** OR filter — listing must match any selected tag. */
     private val _selectedAestheticTagIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedAestheticTagIds: StateFlow<Set<String>> = _selectedAestheticTagIds.asStateFlow()
@@ -312,8 +316,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _sellersLoading.value = true
         _sellersLoadError.value = false
         _sellerPreviewPosts.value = emptyMap()
+        val guest = isGuestBrowse()
         val result = withContext(Dispatchers.IO) {
-            userRepository.searchUsers("a", limit = 40)
+            userRepository.searchUsers("a", limit = 40, publicBrowse = guest)
         }
         result.fold(
             onSuccess = { users ->
@@ -347,12 +352,20 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     val key = seller.userId.trim().ifBlank { seller.username.trim() }
                     if (key.isBlank()) return@forEach
                     launch(Dispatchers.IO) {
-                        val listings = listingRepository.getListingsBySeller(
-                            sellerId = key,
-                            status = null,
-                            limit = 3,
-                            offset = 0,
-                        ).getOrElse { emptyList() }.take(3)
+                        val listings = if (isGuestBrowse()) {
+                            listingRepository.getListingsBySellerPublic(
+                                sellerId = key,
+                                limit = 3,
+                                offset = 0,
+                            )
+                        } else {
+                            listingRepository.getListingsBySeller(
+                                sellerId = key,
+                                status = null,
+                                limit = 3,
+                                offset = 0,
+                            )
+                        }.getOrElse { emptyList() }.take(3)
                         if (expectedGen != sellersBrowseGeneration.get()) return@launch
                         _sellerPreviewPosts.update { cur -> cur + (key to listings) }
                         syncSellerFollowingFromListings(listings)
@@ -433,7 +446,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         ExplorePrimarySection.Listings ->
                             searchRepository.autocompleteListingTitles(snapshot).getOrElse { emptyList() }
                         ExplorePrimarySection.Sellers ->
-                            userRepository.searchUsers(snapshot, limit = 8).fold(
+                            userRepository.searchUsers(snapshot, limit = 8, publicBrowse = isGuestBrowse()).fold(
                                 onSuccess = { list ->
                                     list.mapNotNull { u ->
                                         val uu = u.username.trim()
@@ -538,7 +551,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     _sellersLoadError.value = false
                     _sellerPreviewPosts.value = emptyMap()
                     val result = withContext(Dispatchers.IO) {
-                        userRepository.searchUsers(q, limit = 50)
+                        userRepository.searchUsers(q, limit = 50, publicBrowse = isGuestBrowse())
                     }
                     result.fold(
                         onSuccess = { users ->
@@ -625,7 +638,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadCategories() {
-        commonServiceRepository.getCategoryTree().fold(
+        val publicBrowse = isGuestBrowse()
+        commonServiceRepository.getCategoryTree(publicBrowse = publicBrowse).fold(
             onSuccess = { tree ->
                 val leaves = flattenCategoryLeaves(tree)
                     .filter { it.id.isNotBlank() }
@@ -648,19 +662,34 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadTags() {
-        searchRepository.getTrendingTags().fold(
+        val publicBrowse = isGuestBrowse()
+        val trendingResult = if (publicBrowse) {
+            searchRepository.browseTrendingAestheticTags()
+        } else {
+            searchRepository.getTrendingTags()
+        }
+        trendingResult.fold(
             onSuccess = { _trendingTagNames.value = it },
             onFailure = { _trendingTagNames.value = emptyList() },
         )
-        commonServiceRepository.getAestheticTags(all = true).fold(
-            onSuccess = { _aestheticTagsCatalog.value = it },
-            onFailure = { },
+        commonServiceRepository.getAestheticTags(all = true, publicBrowse = publicBrowse).fold(
+            onSuccess = { catalog ->
+                _aestheticTagsCatalog.value = catalog
+                _styleQuickTags.value = resolveStyleQuickTagsFromTrending(
+                    trendingNames = _trendingTagNames.value,
+                    catalog = catalog,
+                )
+            },
+            onFailure = {
+                _aestheticTagsCatalog.value = emptyList()
+                _styleQuickTags.value = emptyList()
+            },
         )
-        commonServiceRepository.getBrands(limit = 80, offset = 0).fold(
+        commonServiceRepository.getBrands(limit = 80, offset = 0, publicBrowse = publicBrowse).fold(
             onSuccess = { page -> _brands.value = page.items.sortedBy { it.name.lowercase() } },
             onFailure = { _brands.value = emptyList() },
         )
-        commonServiceRepository.getCountries(all = true).fold(
+        commonServiceRepository.getCountries(all = true, publicBrowse = publicBrowse).fold(
             onSuccess = { list ->
                 _countriesCatalog.value = list
                     .filter { it.id.isNotBlank() }

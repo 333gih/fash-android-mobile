@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.data.user
 
 import android.net.Uri
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit
 class UserRepository(
     private val publicClient: OkHttpClient,
     private val securedClient: OkHttpClient,
+    private val publicBrowseClient: OkHttpClient? = null,
 ) {
 
     companion object {
@@ -321,10 +323,25 @@ class UserRepository(
         targetId
     }
 
-    fun searchUsers(query: String, limit: Int = 20): Result<List<UserSearchResult>> = runCatching {
+    fun searchUsers(
+        query: String,
+        limit: Int = 20,
+        publicBrowse: Boolean = false,
+    ): Result<List<UserSearchResult>> = runCatching {
         if (query.isBlank()) return@runCatching emptyList<UserSearchResult>()
-        val url = "${AppEnvironment.apiPath("api/v1/users/search")}?q=${java.net.URLEncoder.encode(query, "UTF-8")}&limit=$limit"
-        val body = securedClient.newCall(
+        val enc = java.net.URLEncoder.encode(query, "UTF-8")
+        val capped = limit.coerceIn(1, 50)
+        val url = if (publicBrowse) {
+            "${PublicBrowseHttp.publicApiPath("browse/sellers")}?q=$enc&limit=$capped"
+        } else {
+            "${AppEnvironment.apiPath("api/v1/users/search")}?q=$enc&limit=$capped"
+        }
+        val client = if (publicBrowse) {
+            publicBrowseClient ?: error("Public browse HTTP client is not configured")
+        } else {
+            securedClient
+        }
+        val body = client.newCall(
             Request.Builder()
                 .url(url)
                 .get()

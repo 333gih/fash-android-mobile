@@ -12,39 +12,29 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.search.EXPLORE_STYLE_QUICK_CHIP_LIMIT
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.text.Normalizer
 import java.util.Locale
 
-private val StyleQuickPickKeywords = listOf(
-    "streetwear",
-    "vintage",
-    "y2k",
-    "minimal",
-    "local brand",
-    "korean",
-    "thrift",
-)
-
 /**
- * One-tap aesthetic filters at the top of Explore listings (catalog-driven; no account required).
+ * One-tap aesthetic filters at the top of Explore listings.
+ * Chips come from core trending tag names resolved against the common-service catalog (limited count).
  */
 @Composable
 fun ExploreStyleQuickChipsRow(
-    catalog: List<CommonAestheticTagDto>,
+    quickTags: List<CommonAestheticTagDto>,
     selectedIds: Set<String>,
     onTagToggle: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val quickTags = remember(catalog) { pickStyleQuickTags(catalog) }
     if (quickTags.isEmpty()) return
     val spacing = FashTheme.spacing
     Column(modifier = modifier.fillMaxWidth()) {
@@ -52,20 +42,11 @@ fun ExploreStyleQuickChipsRow(
             text = stringResource(R.string.explore_style_chips_title),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(
-                    start = spacing.editorialStart,
-                    end = spacing.editorialEnd,
-                    bottom = 6.dp,
-                ),
+            modifier = Modifier.padding(bottom = 6.dp),
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(
-                start = spacing.editorialStart,
-                end = spacing.editorialEnd,
-                bottom = 4.dp,
-            ),
+            contentPadding = PaddingValues(bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(spacing.spacing2),
         ) {
             items(quickTags, key = { it.id }) { tag ->
@@ -96,27 +77,32 @@ fun ExploreStyleQuickChipsRow(
 private fun CommonAestheticTagDto.labelForChip(): String =
     displayName.takeIf { it.isNotBlank() } ?: name.takeIf { it.isNotBlank() } ?: id
 
-internal fun pickStyleQuickTags(catalog: List<CommonAestheticTagDto>): List<CommonAestheticTagDto> {
-    if (catalog.isEmpty()) return emptyList()
-    val normalizedCatalog = catalog.map { tag ->
-        tag to normalizeTagLabel(tag.labelForChip())
-    }
+/**
+ * Maps core trending tag names to catalog rows (id required for filter sheet parity).
+ * Order follows trending rank; skips unknown names.
+ */
+internal fun resolveStyleQuickTagsFromTrending(
+    trendingNames: List<String>,
+    catalog: List<CommonAestheticTagDto>,
+    limit: Int = EXPLORE_STYLE_QUICK_CHIP_LIMIT,
+): List<CommonAestheticTagDto> {
+    if (trendingNames.isEmpty() || catalog.isEmpty()) return emptyList()
+    val cap = limit.coerceIn(1, EXPLORE_STYLE_QUICK_CHIP_LIMIT)
+    val byNormalizedName = catalog.associateBy { normalizeTagLabel(it.labelForChip()) }
     val picked = mutableListOf<CommonAestheticTagDto>()
     val usedIds = mutableSetOf<String>()
-    for (keyword in StyleQuickPickKeywords) {
-        val match = normalizedCatalog.firstOrNull { (_, label) ->
-            label.contains(keyword)
-        }?.first
+    for (raw in trendingNames) {
+        val key = normalizeTagLabel(raw)
+        if (key.isEmpty()) continue
+        val match = catalog.firstOrNull { tag ->
+            normalizeTagLabel(tag.labelForChip()) == key ||
+                normalizeTagLabel(tag.name) == key ||
+                normalizeTagLabel(tag.displayName) == key
+        } ?: byNormalizedName[key]
         if (match != null && usedIds.add(match.id)) {
             picked.add(match)
         }
-        if (picked.size >= 6) return picked
-    }
-    for ((tag, _) in normalizedCatalog) {
-        if (usedIds.add(tag.id)) {
-            picked.add(tag)
-        }
-        if (picked.size >= 6) break
+        if (picked.size >= cap) break
     }
     return picked
 }

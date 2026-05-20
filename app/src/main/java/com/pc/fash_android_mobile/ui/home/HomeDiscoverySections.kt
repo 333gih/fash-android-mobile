@@ -534,18 +534,27 @@ fun HomeFollowFeedEmptyHint(
     onFeaturedSellersClick: () -> Unit,
     modifier: Modifier = Modifier,
     @androidx.annotation.StringRes hintRes: Int = R.string.home_follow_empty_hint,
+    /** Guest browse: skip the follow section chrome; copy points to hunt today / Explore. */
+    showSectionHeader: Boolean = true,
+    /** Only when featured sellers rail will appear (avoids orphan CTA). */
+    showFeaturedCta: Boolean = false,
 ) {
     val spacing = FashTheme.spacing
     val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = spacing.spacing2),
+            .padding(
+                top = if (showSectionHeader) 0.dp else spacing.spacing1,
+                bottom = spacing.spacing3,
+            ),
     ) {
-        HomeSectionHeader(
-            title = stringResource(R.string.home_top_section_title),
-            subtitle = stringResource(R.string.home_top_section_subtitle),
-        )
+        if (showSectionHeader) {
+            HomeSectionHeader(
+                title = stringResource(R.string.home_top_section_title),
+                subtitle = stringResource(R.string.home_top_section_subtitle),
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -560,12 +569,14 @@ fun HomeFollowFeedEmptyHint(
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )
-            Text(
-                text = stringResource(R.string.home_follow_empty_cta_featured),
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = FashColors.Primary,
-                modifier = Modifier.clickable(onClick = onFeaturedSellersClick),
-            )
+            if (showFeaturedCta) {
+                Text(
+                    text = stringResource(R.string.home_follow_empty_cta_featured),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                    modifier = Modifier.clickable(onClick = onFeaturedSellersClick),
+                )
+            }
         }
     }
 }

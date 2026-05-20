@@ -18,10 +18,11 @@ import kotlinx.coroutines.withContext
 
 class FeaturedSellersViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val searchRepository: SearchRepository =
-        (application as FashApplication).searchRepository
-    private val listingRepository: ListingRepository =
-        (application as FashApplication).listingRepository
+    private val fashApp = application as FashApplication
+    private val searchRepository: SearchRepository = fashApp.searchRepository
+    private val listingRepository: ListingRepository = fashApp.listingRepository
+
+    private fun isGuestBrowse(): Boolean = fashApp.isGuestBrowseActive
 
     private val _items = MutableStateFlow<List<FeaturedSellerItem>>(emptyList())
     val items: StateFlow<List<FeaturedSellerItem>> = _items.asStateFlow()
@@ -60,7 +61,11 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
         var offset = 0
         var total = 0
         while (true) {
-            val result = searchRepository.getFeaturedSellersPage(limit = pageSize, offset = offset)
+            val result = if (isGuestBrowse()) {
+                searchRepository.browseFeaturedSellersPage(limit = pageSize, offset = offset)
+            } else {
+                searchRepository.getFeaturedSellersPage(limit = pageSize, offset = offset)
+            }
             val page = result.getOrElse { return Result.failure(it) }
             total = page.total
             for (s in page.items) {

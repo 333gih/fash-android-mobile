@@ -95,6 +95,7 @@ fun HomeFeedContent(
     val showJourneyRow = buyerStats.hasJourneyActivity()
     val homePromoLazyIndex = if (showJourneyRow) 1 else 0
     val recentlyViewed = discovery.recentlyViewed
+    val recommendedSellers = discovery.recommendedSellers
 
     LaunchedEffect(Unit) {
         viewModel.scrollHomeToTop.collect {
@@ -206,6 +207,8 @@ fun HomeFeedContent(
                                 } else {
                                     R.string.home_follow_empty_hint
                                 },
+                                showSectionHeader = !isGuestBrowse,
+                                showFeaturedCta = !isGuestBrowse && recommendedSellers.isNotEmpty(),
                             )
                         }
                     }
@@ -268,18 +271,18 @@ fun HomeFeedContent(
                 }
 
                 item {
-                    HomeEditorialPostsSection(
-                        posts = discovery.editorialPosts,
-                        onPostClick = onHomeEditorialPostClick,
+                    HomeRecommendedSellersSection(
+                        sellers = recommendedSellers,
+                        followingIds = followingIds,
+                        onSellerClick = onFeaturedSellerClick,
+                        onSeeAllClick = onOpenFeaturedSellersAll,
                     )
                 }
 
                 item {
-                    HomeRecommendedSellersSection(
-                        sellers = discovery.recommendedSellers,
-                        followingIds = followingIds,
-                        onSellerClick = onFeaturedSellerClick,
-                        onSeeAllClick = onOpenFeaturedSellersAll,
+                    HomeEditorialPostsSection(
+                        posts = discovery.editorialPosts,
+                        onPostClick = onHomeEditorialPostClick,
                     )
                 }
 

@@ -19,6 +19,9 @@ data class TrendingQueryItem(
 /**
  * Search API (`/search/listings`, `/search/autocomplete`, `/search/trending-tags`, recent/trending queries).
  */
+/** Max style quick chips on Explore (core trending + catalog resolve). */
+const val EXPLORE_STYLE_QUICK_CHIP_LIMIT = 8
+
 class SearchRepository(
     private val securedClient: OkHttpClient,
     private val publicBrowseClient: OkHttpClient? = null,
@@ -31,10 +34,19 @@ class SearchRepository(
             securedClient
         }
 
-    fun getTrendingTags(): Result<List<String>> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/search/trending-tags")
+    fun getTrendingTags(limit: Int = EXPLORE_STYLE_QUICK_CHIP_LIMIT): Result<List<String>> = runCatching {
+        val capped = limit.coerceIn(1, 20)
+        val url = "${AppEnvironment.apiPath("api/v1/search/trending-tags")}?limit=$capped"
         val body = executeGet(url, publicBrowse = false)
-        parseStringArray(body)
+        parseStringArray(body).take(capped)
+    }
+
+    /** Guest browse: ranked aesthetic tag names from core listing activity (7-day window). */
+    fun browseTrendingAestheticTags(limit: Int = EXPLORE_STYLE_QUICK_CHIP_LIMIT): Result<List<String>> = runCatching {
+        val capped = limit.coerceIn(1, 20)
+        val url = "${PublicBrowseHttp.publicApiPath("browse/trending-aesthetic-tags")}?limit=$capped"
+        val body = executeGet(url, publicBrowse = true)
+        parseStringArray(body).take(capped)
     }
 
     /** `GET /search/recent-queries` — this user’s recent normalized queries (up to 20). */

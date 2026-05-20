@@ -149,6 +149,7 @@ fun ExploreScreen(
     promoSlides: List<FashPromoSlideDef> = emptyList(),
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
+    val styleQuickTags by viewModel.styleQuickTags.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
     val brands by viewModel.brands.collectAsState()
     val selectedBrandId by viewModel.selectedBrandId.collectAsState()
@@ -370,7 +371,7 @@ fun ExploreScreen(
                                             .padding(top = 4.dp, bottom = 8.dp),
                                     )
                                     ExploreStyleQuickChipsRow(
-                                        catalog = aestheticTagsCatalog,
+                                        quickTags = styleQuickTags,
                                         selectedIds = selectedAestheticTagIds,
                                         onTagToggle = viewModel::toggleAestheticTagFilter,
                                         modifier = Modifier.padding(bottom = 8.dp),

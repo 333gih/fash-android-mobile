@@ -252,6 +252,7 @@ class FashApplication : Application(), ImageLoaderFactory {
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
+            publicBrowseClient = publicBrowseHttpClient,
         )
     }
 
