@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalFoundationApi::class)
+﻿@file:OptIn(ExperimentalFoundationApi::class)
 
 package com.pc.fash_android_mobile.ui.feed
 
@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,11 +50,17 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import java.time.Instant
 import java.util.Locale
+
+private const val JustListedThresholdMs = 2 * 60 * 60 * 1000L
+private const val SavedCountThreshold = 3
+private const val DwellMinMs = 800
 
 /**
  * Discovery grid cell: image, price, engagement, title, condition (pill) + category/brand/size/tag, seller — optional like/save.
  * [compactFooter] hides extra lines for narrow horizontal carousels (e.g. product detail “more from seller”).
+ * [onDwell] fires when the card leaves composition with dwell time in ms (≥ DwellMinMs).
  */
 @Composable
 fun ListingGridCard(
@@ -69,7 +76,19 @@ fun ListingGridCard(
     compactFooter: Boolean = false,
     /** Short marketplace status (e.g. own profile); drawn top-start with the photo-stack badge. */
     statusOverlayLabel: String? = null,
+    /** Called when the card leaves composition; provides dwell time in ms (≥ DwellMinMs). */
+    onDwell: ((dwellMs: Int) -> Unit)? = null,
 ) {
+    if (onDwell != null) {
+        DisposableEffect(item.id) {
+            val startMs = System.currentTimeMillis()
+            onDispose {
+                val dwell = (System.currentTimeMillis() - startMs).toInt()
+                if (dwell >= DwellMinMs) onDwell(dwell)
+            }
+        }
+    }
+    val scarcityBadge = listingScarcityBadge(item, compactFooter)
     val imageUrl = resolveListingImageUrl(item.coverImageUrl)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     val metaUi = listingCardMetaUi(item, compactFooter)
@@ -112,6 +131,28 @@ fun ListingGridCard(
                 }
             }
 
+            // Scarcity badge: top-end (opposite side from photo-stack / status badges)
+            if (scarcityBadge != null) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = FashColors.Primary.copy(alpha = 0.88f),
+                ) {
+                    Text(
+                        text = scarcityBadge,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.2.sp,
+                        ),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             val statusTrimmed = statusOverlayLabel?.trim()?.takeIf { it.isNotEmpty() }
             if (item.imageUrls.size > 1 || statusTrimmed != null) {
                 Column(
@@ -461,3 +502,21 @@ private fun Modifier.listingCardMarquee(): Modifier = basicMarquee(
     repeatDelayMillis = 1_200,
     velocity = 35.dp,
 )
+
+@Composable
+private fun listingScarcityBadge(item: ListingFeedItem, compactFooter: Boolean): String? {
+    if (compactFooter) return null
+    val createdAt = item.createdAt?.takeIf { it.isNotBlank() }
+    if (createdAt != null) {
+        val ageMs = runCatching {
+            System.currentTimeMillis() - Instant.parse(createdAt).toEpochMilli()
+        }.getOrElse { Long.MAX_VALUE }
+        if (ageMs in 0L until JustListedThresholdMs) {
+            return stringResource(R.string.listing_badge_just_listed)
+        }
+    }
+    if (item.saveCount >= SavedCountThreshold) {
+        return stringResource(R.string.listing_badge_saved_count, item.saveCount)
+    }
+    return null
+}

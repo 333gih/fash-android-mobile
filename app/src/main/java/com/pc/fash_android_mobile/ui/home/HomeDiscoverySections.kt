@@ -437,6 +437,78 @@ private fun HomeCompactSellerStory(
     }
 }
 
+/** Show similar-to-saved section only when at least this many items are available. */
+private const val HomeSimilarToSavedMinItems = 2
+
+@Composable
+fun HomeSimilarToSavedSection(
+    items: List<ListingFeedItem>,
+    onListingClick: (listingId: String, sellerId: String?) -> Unit,
+    onLike: (ListingFeedItem) -> Unit,
+    onSave: (ListingFeedItem) -> Unit,
+    onRecordView: (ListingFeedItem, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (items.size < HomeSimilarToSavedMinItems) return
+    HomeHuntTodaySection(
+        items = items,
+        isLoading = false,
+        onSeeAllClick = { onListingClick(items.first().id, items.first().sellerId) },
+        onListingClick = onListingClick,
+        onLike = onLike,
+        onSave = onSave,
+        onRecordView = { item -> onRecordView(item, items.indexOf(item).coerceAtLeast(0)) },
+        modifier = modifier,
+        titleRes = R.string.home_section_similar_to_saved_title,
+        subtitleRes = R.string.home_section_similar_to_saved_subtitle,
+        seeAllRes = R.string.home_hunt_today_see_all,
+    )
+}
+
+@Composable
+fun HomeTrendingStylesSection(
+    tags: List<String>,
+    onTagClick: (tagName: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (tags.isEmpty()) return
+    val spacing = FashTheme.spacing
+    Column(modifier = modifier.fillMaxWidth()) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_section_trending_styles_title),
+            subtitle = stringResource(R.string.home_section_trending_styles_subtitle),
+        )
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(
+                start = spacing.editorialStart,
+                end = spacing.editorialEnd,
+                bottom = spacing.spacing4,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing.spacing2),
+        ) {
+            items(tags, key = { it }) { tag ->
+                FilterChip(
+                    selected = false,
+                    onClick = { onTagClick(tag) },
+                    label = {
+                        Text(
+                            text = "#$tag",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    shape = FashTheme.spacing.chipShape(),
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+            }
+        }
+    }
+}
+
 /** Minimum viewed listings before showing the resume rail (reduces noise for first-time open). */
 private const val HomeRecentlyViewedMinItems = 2
 

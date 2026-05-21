@@ -91,6 +91,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -691,16 +693,34 @@ fun ChatDetailScreen(
                                         color = scheme.onSurface,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
-                                    Column(
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    val quickReplies = listOf(
+                                        stringResource(R.string.chat_quick_reply_available),
+                                        stringResource(R.string.chat_quick_reply_photos),
+                                        stringResource(R.string.chat_quick_reply_meetup),
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxWidth(),
                                     ) {
-                                        FashEmptyBulletTipLine(
-                                            text = stringResource(R.string.chat_empty_messages_tip_1),
-                                        )
-                                        FashEmptyBulletTipLine(
-                                            text = stringResource(R.string.chat_empty_messages_tip_2),
-                                        )
+                                        quickReplies.forEach { reply ->
+                                            SuggestionChip(
+                                                onClick = {
+                                                    viewModel.onInputChange(reply)
+                                                    viewModel.sendMessage()
+                                                },
+                                                label = {
+                                                    Text(
+                                                        text = reply,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        maxLines = 1,
+                                                    )
+                                                },
+                                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                ),
+                                            )
+                                        }
                                     }
                                 },
                             )

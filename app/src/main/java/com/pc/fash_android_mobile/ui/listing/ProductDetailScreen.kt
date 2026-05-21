@@ -190,7 +190,9 @@ fun ProductDetailScreen(
     val bottomBarMode by viewModel.bottomBarMode.collectAsState()
     val buyerActiveOrder by viewModel.buyerActiveOrder.collectAsState()
     val showPurchaseGuide by viewModel.showPurchaseGuide.collectAsState()
+    val isFollowing by viewModel.isFollowing.collectAsState()
     val scheme = MaterialTheme.colorScheme
+    var showSaveNudge by remember { mutableStateOf(false) }
 
     LaunchedEffect(listingId) {
         viewModel.loadDetail(listingId)
@@ -289,8 +291,13 @@ fun ProductDetailScreen(
                                         else viewModel.toggleLike()
                                     },
                                     onSave = {
-                                        if (isGuestMode) onRequestLogin(GuestLoginReason.Saved)
-                                        else viewModel.toggleSave()
+                                        if (isGuestMode) {
+                                            onRequestLogin(GuestLoginReason.Saved)
+                                        } else {
+                                            val aboutToSave = detail?.isSaved == false
+                                            viewModel.toggleSave()
+                                            if (aboutToSave) showSaveNudge = true
+                                        }
                                     },
                                 )
                                 Box(
@@ -301,7 +308,13 @@ fun ProductDetailScreen(
                                     DetailSellerCard(
                                         detail = d,
                                         profile = sellerProfile,
+                                        isFollowing = isFollowing,
                                         onVisitShop = onVisitSellerShop,
+                                        onFollow = {
+                                            if (isGuestMode) onRequestLogin(GuestLoginReason.Follow)
+                                            else viewModel.follow(d.sellerId)
+                                        },
+                                        onUnfollow = { viewModel.unfollow(d.sellerId) },
                                     )
                                 }
                                 DetailPriceInfoCard(
@@ -349,6 +362,63 @@ fun ProductDetailScreen(
                                     )
                                 }
                                 Spacer(Modifier.height(96.dp))
+                            }
+                        }
+                        // Auto-dismiss save nudge after 4 s
+                        if (showSaveNudge) {
+                            LaunchedEffect(showSaveNudge) {
+                                delay(4_000)
+                                showSaveNudge = false
+                            }
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = FashColors.Primary.copy(alpha = 0.12f),
+                                tonalElevation = 0.dp,
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.product_save_nudge),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = DetailPrimary,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TextButton(
+                                            onClick = { showSaveNudge = false },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.product_save_nudge_dismiss),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        Button(
+                                            onClick = {
+                                                showSaveNudge = false
+                                                onChat(d.id)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = DetailPrimary),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                            shape = RoundedCornerShape(20.dp),
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.product_save_nudge_cta),
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = Color.White,
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         DetailBottomBar(
@@ -784,7 +854,10 @@ private fun StatMini(
 private fun DetailSellerCard(
     detail: ListingDetail,
     profile: ProfileInfo?,
+    isFollowing: Boolean,
     onVisitShop: (sellerUsername: String) -> Unit,
+    onFollow: () -> Unit,
+    onUnfollow: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shopUsername = detail.sellerUsername?.takeIf { it.isNotBlank() }
@@ -841,20 +914,53 @@ private fun DetailSellerCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                OutlinedButton(
-                    onClick = { shopUsername?.let(onVisitShop) },
-                    enabled = shopUsername != null,
-                    border = BorderStroke(1.dp, DetailPrimary.copy(alpha = 0.5f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.product_visit_shop),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (shopUsername != null) {
+                        if (isFollowing) {
+                            OutlinedButton(
+                                onClick = onUnfollow,
+                                border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.4f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurfaceVariant),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(20.dp),
+                            ) {
+                                Text(
+                                    stringResource(R.string.product_action_following_seller),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = onFollow,
+                                colors = ButtonDefaults.buttonColors(containerColor = DetailPrimary),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(20.dp),
+                            ) {
+                                Text(
+                                    stringResource(R.string.product_action_follow_seller),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { shopUsername?.let(onVisitShop) },
+                        enabled = shopUsername != null,
+                        border = BorderStroke(1.dp, DetailPrimary.copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = DetailPrimary),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.product_visit_shop),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }

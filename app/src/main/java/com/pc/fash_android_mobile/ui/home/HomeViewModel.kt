@@ -367,8 +367,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun recordView(item: ListingFeedItem) {
-        feedEventReporter.impression(item.id, surface = "home", position = 0)
+    fun recordView(item: ListingFeedItem, position: Int = 0, surface: String = "home") {
+        feedEventReporter.impression(item.id, surface = surface, position = position)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 listingRepository.recordView(item.id)
@@ -376,8 +376,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun reportListingClick(item: ListingFeedItem, surface: String) {
-        feedEventReporter.click(item.id, surface = surface)
+    fun recordDwell(item: ListingFeedItem, surface: String, position: Int, dwellMs: Int) {
+        if (dwellMs < 800) return
+        feedEventReporter.impression(item.id, surface = surface, position = position, dwellMs = dwellMs)
+    }
+
+    fun reportListingClick(item: ListingFeedItem, surface: String, position: Int = 0) {
+        feedEventReporter.click(item.id, surface = surface, position = position)
     }
 
     fun follow(sellerId: String?) {
@@ -416,7 +421,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _items.update { it.patch() }
         _huntTodayItems.update { it.patch() }
         _discoveryBundle.update { bundle ->
-            bundle.copy(recentlyViewed = bundle.recentlyViewed.patch())
+            bundle.copy(
+                recentlyViewed = bundle.recentlyViewed.patch(),
+                stylePicks = bundle.stylePicks.patch(),
+                similarToSaved = bundle.similarToSaved.patch(),
+                forYou = bundle.forYou.patch(),
+            )
         }
     }
 }

@@ -174,11 +174,28 @@ fun HomeFeedContent(
                         items = huntTodayItems,
                         isLoading = huntTodayLoading,
                         onSeeAllClick = onNavigateToExplore,
-                        onListingClick = onListingClick,
+                        onListingClick = { id, sid ->
+                            huntTodayItems.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                viewModel.reportListingClick(huntTodayItems[pos], "hunt_today", pos)
+                            }
+                            onListingClick(id, sid)
+                        },
                         onLike = onLikeListing,
                         onSave = onSaveListing,
-                        onRecordView = { viewModel.recordView(it) },
+                        onRecordView = { item ->
+                            val pos = huntTodayItems.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+                            viewModel.recordView(item, position = pos, surface = "hunt_today")
+                        },
                     )
+                }
+
+                if (discovery.trendingStyleTags.isNotEmpty()) {
+                    item {
+                        HomeTrendingStylesSection(
+                            tags = discovery.trendingStyleTags,
+                            onTagClick = { onNavigateToExplore() },
+                        )
+                    }
                 }
 
                 when {
@@ -248,16 +265,23 @@ fun HomeFeedContent(
                                     ),
                                 horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                             ) {
-                                row.forEach { feedItem ->
+                                row.forEachIndexed { col, feedItem ->
+                                    val gridPosition = index * 2 + col
                                     LaunchedEffect(feedItem.id) {
-                                        viewModel.recordView(feedItem)
+                                        viewModel.recordView(feedItem, position = gridPosition, surface = "home")
                                     }
                                     ListingGridCard(
                                         item = feedItem,
                                         showQuickActions = true,
                                         onLike = { onLikeListing(feedItem) },
                                         onSave = { onSaveListing(feedItem) },
-                                        onClick = { onListingClick(feedItem.id, feedItem.sellerId) },
+                                        onClick = {
+                                            viewModel.reportListingClick(feedItem, "home", gridPosition)
+                                            onListingClick(feedItem.id, feedItem.sellerId)
+                                        },
+                                        onDwell = { dwellMs ->
+                                            viewModel.recordDwell(feedItem, "home", gridPosition, dwellMs)
+                                        },
                                         modifier = Modifier.weight(1f),
                                         imageAspectRatio = 4f / 5f,
                                     )
@@ -276,12 +300,37 @@ fun HomeFeedContent(
                             items = discovery.stylePicks,
                             isLoading = false,
                             onSeeAllClick = onNavigateToExplore,
-                            onListingClick = onListingClick,
+                            onListingClick = { id, sid ->
+                                discovery.stylePicks.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                    viewModel.reportListingClick(discovery.stylePicks[pos], "style_picks", pos)
+                                }
+                                onListingClick(id, sid)
+                            },
                             onLike = onLikeListing,
                             onSave = onSaveListing,
-                            onRecordView = { viewModel.recordView(it) },
+                            onRecordView = { item ->
+                                val pos = discovery.stylePicks.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+                                viewModel.recordView(item, position = pos, surface = "style_picks")
+                            },
                             titleRes = R.string.home_style_picks_title,
                             subtitleRes = R.string.home_style_picks_subtitle,
+                        )
+                    }
+                }
+
+                if (discovery.similarToSaved.size >= 2) {
+                    item {
+                        HomeSimilarToSavedSection(
+                            items = discovery.similarToSaved,
+                            onListingClick = { id, sid ->
+                                discovery.similarToSaved.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                    viewModel.reportListingClick(discovery.similarToSaved[pos], "similar_to_saved", pos)
+                                }
+                                onListingClick(id, sid)
+                            },
+                            onLike = onLikeListing,
+                            onSave = onSaveListing,
+                            onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "similar_to_saved") },
                         )
                     }
                 }

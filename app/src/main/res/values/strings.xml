@@ -1,4 +1,4 @@
-<resources>
+﻿<resources>
     <string name="app_name">FASH.</string>
     <string name="notification_channel_chat_name">Tin nhắn</string>
     <string name="notification_channel_chat_desc">Thông báo chat</string>
@@ -1650,4 +1650,30 @@
     <string name="guest_tab_post_title">Đăng bán</string>
     <string name="guest_tab_post_body">Tạo tài khoản để đăng đồ second-hand và quản lý tin của bạn.</string>
     <string name="home_guest_follow_hint">Đăng nhập để xem tin từ shop bạn theo dõi. Trước mắt, khám phá “Săn đồ hôm nay” và tab Khám phá bên dưới.</string>
+
+    <!-- Phase 1: Scarcity badges on listing cards -->
+    <string name="listing_badge_just_listed">Vừa đăng</string>
+    <string name="listing_badge_saved_count">%1$d lượt lưu</string>
+
+    <!-- Phase 1: New home sections -->
+    <string name="home_section_similar_to_saved_title">Tương tự món đã lưu</string>
+    <string name="home_section_similar_to_saved_subtitle">Vì bạn đã lưu đồ phong cách này</string>
+    <string name="home_section_trending_styles_title">Style đang hot</string>
+    <string name="home_section_trending_styles_subtitle">Chọn để lọc trên Khám phá ngay</string>
+
+    <!-- Phase 1: PDP follow chip + save nudge -->
+    <string name="product_action_follow_seller">Theo dõi</string>
+    <string name="product_action_following_seller">Đang theo dõi</string>
+    <string name="product_save_nudge">Đã lưu — Nhắn người bán?</string>
+    <string name="product_save_nudge_cta">Nhắn ngay</string>
+    <string name="product_save_nudge_dismiss">Bỏ qua</string>
+
+    <!-- Phase 1: Chat quick-reply chips -->
+    <string name="chat_quick_replies_label">Gửi nhanh</string>
+    <string name="chat_quick_reply_available">Còn hàng không ạ?</string>
+    <string name="chat_quick_reply_photos">Bạn có thêm ảnh không?</string>
+    <string name="chat_quick_reply_meetup">Mình có thể gặp ở đâu?</string>
+
+    <!-- Phase 1: Explore interest chips -->
+    <string name="explore_interest_chips_label">Lọc nhanh theo style</string>
 </resources>

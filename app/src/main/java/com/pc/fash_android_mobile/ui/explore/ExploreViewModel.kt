@@ -183,6 +183,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _searchOverlayTrendingTags = MutableStateFlow<List<String>>(emptyList())
     val searchOverlayTrendingTags: StateFlow<List<String>> = _searchOverlayTrendingTags.asStateFlow()
 
+    /** Trending tag names shown as quick-filter chips above the Explore grid (loaded eagerly on init). */
+    private val _quickInterestChips = MutableStateFlow<List<String>>(emptyList())
+    val quickInterestChips: StateFlow<List<String>> = _quickInterestChips.asStateFlow()
+
     private val _searchOverlayLoading = MutableStateFlow(false)
     val searchOverlayLoading: StateFlow<Boolean> = _searchOverlayLoading.asStateFlow()
 
@@ -651,11 +655,36 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 loadTags()
                 loadFeaturedSellers()
                 loadCategories()
+                loadQuickInterestChips()
             }
             fetchListingsFirstPage()
             _isLoading.value = false
         }
     }
+
+    private suspend fun loadQuickInterestChips() {
+        val tags = searchRepository.getTrendingTags(limit = 8).getOrElse { emptyList() }
+        if (tags.isNotEmpty()) _quickInterestChips.value = tags
+    }
+
+    /**
+     * Tapping a quick-interest chip by tag name: finds the matching aesthetic tag id in the loaded
+     * catalog and toggles it as a filter. Falls back to a text search when not found in catalog.
+     */
+    fun toggleInterestChip(tagName: String) {
+        val cleaned = tagName.trim()
+        if (cleaned.isBlank()) return
+        val matchedId = _aestheticTagsCatalog.value.firstOrNull {
+            it.name.equals(cleaned, ignoreCase = true) || it.displayName.equals(cleaned, ignoreCase = true)
+        }?.id
+        if (matchedId != null) {
+            toggleAestheticTagFilter(matchedId)
+        } else {
+            _searchQuery.value = cleaned
+            submitSearch()
+        }
+    }
+
 
     private suspend fun loadCategories() {
         commonServiceRepository.getCategoryTree().fold(
@@ -1182,8 +1211,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun isFollowing(userId: String): Boolean = _followingIds.value.contains(userId)
 
-    fun recordView(item: ListingFeedItem) {
-        feedEventReporter.impression(item.id, surface = "explore", position = 0)
+    fun recordView(item: ListingFeedItem, position: Int = 0) {
+        feedEventReporter.impression(item.id, surface = "explore", position = position)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 listingRepository.recordView(item.id)
@@ -1191,8 +1220,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun reportListingClick(item: ListingFeedItem) {
-        feedEventReporter.click(item.id, surface = "explore")
+    fun reportListingClick(item: ListingFeedItem, position: Int = 0) {
+        feedEventReporter.click(item.id, surface = "explore", position = position)
+    }
+
+    fun recordListingDwell(item: ListingFeedItem, surface: String, position: Int, dwellMs: Int) {
+        if (dwellMs < 800) return
+        feedEventReporter.impression(item.id, surface = surface, position = position, dwellMs = dwellMs)
     }
 
     /** Applies `seller.is_following` from listing payloads to [followingIds] (viewer batched flags). */

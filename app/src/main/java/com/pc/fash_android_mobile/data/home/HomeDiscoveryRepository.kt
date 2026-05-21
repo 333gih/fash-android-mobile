@@ -18,6 +18,10 @@ data class HomeDiscoveryBundle(
     /** Personalized rails from GET /recommendations/home-sections (auth or public). */
     val stylePicks: List<ListingFeedItem> = emptyList(),
     val similarToSaved: List<ListingFeedItem> = emptyList(),
+    /** Personalized for-you from home-sections (shown only when signals ≥ 3). */
+    val forYou: List<ListingFeedItem> = emptyList(),
+    /** Trending aesthetic tag names from /search/trending-tags for the style chips row. */
+    val trendingStyleTags: List<String> = emptyList(),
 )
 
 /**

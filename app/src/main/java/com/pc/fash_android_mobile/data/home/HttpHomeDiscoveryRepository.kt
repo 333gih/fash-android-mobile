@@ -77,8 +77,12 @@ class HttpHomeDiscoveryRepository(
                 null
             }
         }
-        // Keep trendingCategories empty — section was removed from the home feed; data is still
-        // exposed for any future surface (e.g. Explore re-use).
+        val trendingTagsAsync = async {
+            searchRepository.getTrendingTags(limit = 10).getOrElse {
+                Log.w(TAG, "trending tags failed: ${it.message}")
+                emptyList()
+            }
+        }
         val rec = recSectionsAsync.await()
         Result.success(
             HomeDiscoveryBundle(
@@ -89,6 +93,8 @@ class HttpHomeDiscoveryRepository(
                     ?: recentlyViewedAsync.await(),
                 stylePicks = rec?.stylePicks.orEmpty(),
                 similarToSaved = rec?.similarToSaved.orEmpty(),
+                forYou = rec?.forYou.orEmpty(),
+                trendingStyleTags = trendingTagsAsync.await(),
             ),
         )
     }

@@ -212,6 +212,7 @@ fun ExploreScreen(
     val filterSummaryLine = exploreFilterSummaryLineFromParts(filterSummaryParts)
     val hasMore by viewModel.hasMore.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val quickInterestChips by viewModel.quickInterestChips.collectAsState()
     val searchBarExpanded by viewModel.searchBarExpanded.collectAsState()
     val isSearchMode by viewModel.isSearchMode.collectAsState()
     val committedListingSearchQuery by viewModel.committedListingSearchQuery.collectAsState()
@@ -402,6 +403,14 @@ fun ExploreScreen(
                                     },
                                 )
                             }
+                            if (quickInterestChips.isNotEmpty() && !hasActiveFilters && !isSearchMode) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    ExploreInterestChipsRow(
+                                        chips = quickInterestChips,
+                                        onChipClick = { viewModel.toggleInterestChip(it) },
+                                    )
+                                }
+                            }
                             when {
                                 isLoading && listings.isEmpty() -> {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -445,13 +454,19 @@ fun ExploreScreen(
                                     itemsIndexed(
                                         listings,
                                         key = { _, item -> item.id },
-                                    ) { _, item ->
+                                    ) { index, item ->
                                         LaunchedEffect(item.id) {
-                                            viewModel.recordView(item)
+                                            viewModel.recordView(item, position = index)
                                         }
                                         ListingGridCard(
                                             item = item,
-                                            onClick = { onListingClick(item.id, item.sellerId) },
+                                            onClick = {
+                                                viewModel.reportListingClick(item, position = index)
+                                                onListingClick(item.id, item.sellerId)
+                                            },
+                                            onDwell = { dwellMs ->
+                                                viewModel.recordListingDwell(item, "explore", index, dwellMs)
+                                            },
                                             imageAspectRatio = ExploreListingTileAspectRatio,
                                             showQuickActions = true,
                                             onLike = {
@@ -1024,6 +1039,46 @@ private fun exploreFilterSummaryParts(
 private fun exploreFilterSummaryLineFromParts(parts: List<String>): String {
     if (parts.isEmpty()) return stringResource(R.string.explore_filter_summary_default)
     return parts.joinToString(separator = " · ")
+}
+
+/**
+ * Horizontal scrolling row of trending interest chips shown above the Explore grid when no
+ * filters are active. Tapping a chip toggles the matching aesthetic-tag filter.
+ */
+@Composable
+private fun ExploreInterestChipsRow(
+    chips: List<String>,
+    onChipClick: (tagName: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (chips.isEmpty()) return
+    LazyRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        contentPadding = PaddingValues(horizontal = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(chips, key = { it }) { tag ->
+            androidx.compose.material3.FilterChip(
+                selected = false,
+                onClick = { onChipClick(tag) },
+                label = {
+                    Text(
+                        text = "#$tag",
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                shape = RoundedCornerShape(20.dp),
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        }
+    }
 }
 
 /**
