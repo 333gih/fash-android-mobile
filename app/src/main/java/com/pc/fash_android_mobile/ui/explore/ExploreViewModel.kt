@@ -16,6 +16,7 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
+import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -57,6 +58,17 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         (application as FashApplication).commonServiceRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
+
+    private val feedEventReporter = FeedEventReporter(
+        repository = fashApp.recommendationRepository,
+        sessionIdProvider = {
+            val uid = fashApp.authManager.sessionStore.read()?.userId
+            if (!uid.isNullOrBlank()) fashApp.browseSessionStore.sessionIdForUser(uid)
+            else fashApp.browseSessionStore.sessionId()
+        },
+        publicBrowse = { isGuestBrowse() },
+        scope = viewModelScope,
+    )
 
     /** Full aesthetic tag catalog from common-service (filter sheet). */
     private val _aestheticTagsCatalog = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
@@ -1155,11 +1167,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     fun isFollowing(userId: String): Boolean = _followingIds.value.contains(userId)
 
     fun recordView(item: ListingFeedItem) {
+        feedEventReporter.impression(item.id, surface = "explore", position = 0)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 listingRepository.recordView(item.id)
             }
         }
+    }
+
+    fun reportListingClick(item: ListingFeedItem) {
+        feedEventReporter.click(item.id, surface = "explore")
     }
 
     /** Applies `seller.is_following` from listing payloads to [followingIds] (viewer batched flags). */

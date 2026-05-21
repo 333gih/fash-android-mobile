@@ -13,6 +13,7 @@ import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
+import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -64,6 +65,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         (application as FashApplication).chatRepository
     private val realtimeManager: RealtimeManager =
         (application as FashApplication).realtimeManager
+
+    private val feedEventReporter = FeedEventReporter(
+        repository = fashApp.recommendationRepository,
+        sessionIdProvider = {
+            val uid = fashApp.authManager.sessionStore.read()?.userId
+            if (!uid.isNullOrBlank()) fashApp.browseSessionStore.sessionIdForUser(uid)
+            else fashApp.browseSessionStore.sessionId()
+        },
+        publicBrowse = { isGuestBrowse() },
+        scope = viewModelScope,
+    )
 
     private val homeDiscoveryRepository: HomeDiscoveryRepository = HttpHomeDiscoveryRepository(
         editorialGuideRepository = fashApp.editorialGuideRepository,
@@ -356,11 +368,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun recordView(item: ListingFeedItem) {
+        feedEventReporter.impression(item.id, surface = "home", position = 0)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 listingRepository.recordView(item.id)
             }
         }
+    }
+
+    fun reportListingClick(item: ListingFeedItem, surface: String) {
+        feedEventReporter.click(item.id, surface = surface)
     }
 
     fun follow(sellerId: String?) {
