@@ -47,11 +47,10 @@ fun OnboardingShoppingScreen(
                 modifier = Modifier.weight(1f),
             )
             FashPrimaryButton(
-                text = stringResource(com.pc.fash_android_mobile.R.string.onboarding_continue),
                 onClick = onContinue,
-                enabled = !isSubmitting && (buySelected || sellSelected),
-                loading = isSubmitting,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                label = stringResource(com.pc.fash_android_mobile.R.string.onboarding_continue),
+                enabled = !isSubmitting && (buySelected || sellSelected),
             )
         }
     }

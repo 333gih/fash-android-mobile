@@ -24,6 +24,8 @@ import com.pc.fash_android_mobile.data.payment.CorePaymentRepository
 import com.pc.fash_android_mobile.data.payment.MockPaymentService
 import com.pc.fash_android_mobile.data.payment.PaymentService
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.data.recommendation.BrowseSessionStore
+import com.pc.fash_android_mobile.data.recommendation.RecommendationRepository
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.ui.UiDialogController
@@ -335,8 +337,8 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
-    val recommendationRepository: com.pc.fash_android_mobile.data.recommendation.RecommendationRepository by lazy {
-        com.pc.fash_android_mobile.data.recommendation.RecommendationRepository(
+    val recommendationRepository: RecommendationRepository by lazy {
+        RecommendationRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
@@ -344,8 +346,8 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
-    val browseSessionStore: com.pc.fash_android_mobile.data.recommendation.BrowseSessionStore by lazy {
-        com.pc.fash_android_mobile.data.recommendation.BrowseSessionStore(applicationContext)
+    val browseSessionStore: BrowseSessionStore by lazy {
+        BrowseSessionStore(applicationContext)
     }
 
     val chatRepository: ChatRepository by lazy {

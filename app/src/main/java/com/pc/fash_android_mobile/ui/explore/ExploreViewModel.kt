@@ -244,8 +244,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * From profile / seller shop: switch to **Posts** (listings), apply at most one of category / brand / aesthetic tag,
-     * optionally commit text search [searchQuery] as `q`, then load results. Shows the same loading state as Explore.
+     * From profile / seller shop / PDP: switch to **Posts** (listings), apply category / brand / aesthetic tag / country
+     * by id, optionally run text search when [searchQuery] is non-empty and no structured filter id is set.
+     * Display labels must not be passed as [searchQuery] — only user-typed search text.
      * If only [searchQuery] is set (no ids), tries to match an aesthetic tag in the catalog by name.
      */
     fun openExploreFromProfileFilter(
@@ -301,14 +302,27 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             }
             _selectedCountryId.value = countryId?.takeIf { !it.isNullOrBlank() }
             _selectedCountryIso2.value = normalizeCountryIso2(countryIso2)
-            _committedListingSearchQuery.value = q
-            _isSearchMode.value = q.isNotBlank()
-            _searchQuery.value = ""
-            if (_isSearchMode.value && _committedListingSearchQuery.value.isNotBlank()) {
-                runSearchWithCurrentFilters()
-            } else {
-                fetchListingsFirstPage()
+            val hasStructuredFilter = cat != null || brand != null || tag != null ||
+                !countryId.isNullOrBlank() || !normalizeCountryIso2(countryIso2).isNullOrBlank()
+            when {
+                hasStructuredFilter -> {
+                    // Category / brand / tag / country — filter ids only; label must not appear in search UI.
+                    _committedListingSearchQuery.value = ""
+                    _isSearchMode.value = false
+                    fetchListingsFirstPage()
+                }
+                q.isNotBlank() -> {
+                    _committedListingSearchQuery.value = q
+                    _isSearchMode.value = true
+                    runSearchWithCurrentFilters()
+                }
+                else -> {
+                    _committedListingSearchQuery.value = ""
+                    _isSearchMode.value = false
+                    fetchListingsFirstPage()
+                }
             }
+            _searchQuery.value = ""
             _isLoading.value = false
             requestScrollExploreToTop()
         }
@@ -515,6 +529,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
         if (match != null) {
             _selectedAestheticTagIds.value = setOf(match.id)
+            _isSearchMode.value = false
+            _committedListingSearchQuery.value = ""
             setSearchBarExpanded(false)
             viewModelScope.launch {
                 _isLoading.value = true

@@ -256,8 +256,8 @@ fun SellerProfileScreen(
                                     Column(modifier = Modifier.fillMaxWidth()) {
                                         SellerProfileHeader(
                                             profile = profile,
-                                            onAestheticTagClick = { name, id ->
-                                                onNavigateToExploreFromProfile(null, null, id, name, null, null)
+                                            onAestheticTagClick = { _, id ->
+                                                onNavigateToExploreFromProfile(null, null, id, "", null, null)
                                             },
                                         )
                                         if (profile != null && viewModel.canShowFollowUi()) {
@@ -278,14 +278,14 @@ fun SellerProfileScreen(
                                             focus = sellerFocus,
                                             forbidden = sellerFocusForbidden,
                                             loading = sellerFocusLoading,
-                                            onCategoryClick = { categoryId, label ->
-                                                onNavigateToExploreFromProfile(categoryId, null, null, label, null, null)
+                                            onCategoryClick = { categoryId, _ ->
+                                                onNavigateToExploreFromProfile(categoryId, null, null, "", null, null)
                                             },
-                                            onBrandClick = { brandId, name ->
-                                                onNavigateToExploreFromProfile(null, brandId, null, name, null, null)
+                                            onBrandClick = { brandId, _ ->
+                                                onNavigateToExploreFromProfile(null, brandId, null, "", null, null)
                                             },
-                                            onAestheticTagClick = { tagId, name ->
-                                                onNavigateToExploreFromProfile(null, null, tagId, name, null, null)
+                                            onAestheticTagClick = { tagId, _ ->
+                                                onNavigateToExploreFromProfile(null, null, tagId, "", null, null)
                                             },
                                         )
                                     }

@@ -889,7 +889,7 @@ private fun DetailCategoryBreadcrumb(
         if (parent != null) {
             DetailCategoryChip(
                 label = parent,
-                onClick = { onNavigateToExplore(parentId, null, null, parent, null, null) },
+                onClick = { onNavigateToExplore(parentId, null, null, "", null, null) },
             )
             if (child != null) {
                 Text(
@@ -902,7 +902,7 @@ private fun DetailCategoryBreadcrumb(
         if (child != null) {
             DetailCategoryChip(
                 label = child,
-                onClick = { onNavigateToExplore(childId, null, null, child, null, null) },
+                onClick = { onNavigateToExplore(childId, null, null, "", null, null) },
             )
         }
     }
@@ -1008,7 +1008,7 @@ private fun DetailAtGlanceCard(
     val cond = formatConditionUi(detail.condition)
     val brandClick =
         if (detail.brandId != null && brand != "—") {
-            { onNavigateToExplore(null, detail.brandId, null, detail.brand?.trim().orEmpty(), null, null) }
+            { onNavigateToExplore(null, detail.brandId, null, "", null, null) }
         } else {
             null
         }
@@ -1359,7 +1359,7 @@ private fun DetailAboutCard(
                         DetailDescriptionTagChip(
                             label = ref.label,
                             onClick = {
-                                onNavigateToExplore(null, null, ref.id, ref.label, null, null)
+                                onNavigateToExplore(null, null, ref.id, "", null, null)
                             },
                         )
                     }

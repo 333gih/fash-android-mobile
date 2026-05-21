@@ -443,8 +443,8 @@ fun ProfileScreen(
                                 ProfileHeader(
                                     profile = profile,
                                     onEditClick = onEditProfile,
-                                    onAestheticTagClick = { name, id ->
-                                        onNavigateToExploreFromProfile(null, null, id, name, null, null)
+                                    onAestheticTagClick = { _, id ->
+                                        onNavigateToExploreFromProfile(null, null, id, "", null, null)
                                     },
                                 )
                                 ProfileOwnMetricsCard(

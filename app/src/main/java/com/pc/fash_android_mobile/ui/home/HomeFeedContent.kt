@@ -272,12 +272,6 @@ fun HomeFeedContent(
 
                 if (discovery.stylePicks.size >= 2) {
                     item {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_style_picks_title),
-                            subtitle = stringResource(R.string.home_style_picks_subtitle),
-                        )
-                    }
-                    item {
                         HomeHuntTodaySection(
                             items = discovery.stylePicks,
                             isLoading = false,
@@ -286,6 +280,8 @@ fun HomeFeedContent(
                             onLike = onLikeListing,
                             onSave = onSaveListing,
                             onRecordView = { viewModel.recordView(it) },
+                            titleRes = R.string.home_style_picks_title,
+                            subtitleRes = R.string.home_style_picks_subtitle,
                         )
                     }
                 }

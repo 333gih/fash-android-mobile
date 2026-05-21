@@ -450,6 +450,9 @@ fun HomeHuntTodaySection(
     onSave: (ListingFeedItem) -> Unit,
     onRecordView: (ListingFeedItem) -> Unit,
     modifier: Modifier = Modifier,
+    titleRes: Int = R.string.home_hunt_today_title,
+    subtitleRes: Int = R.string.home_hunt_today_subtitle,
+    seeAllRes: Int = R.string.home_hunt_today_see_all,
 ) {
     if (!isLoading && items.isEmpty()) return
     val spacing = FashTheme.spacing
@@ -468,12 +471,12 @@ fun HomeHuntTodaySection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.home_hunt_today_title),
+                    text = stringResource(titleRes),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = FashColors.Primary,
                 )
                 Text(
-                    text = stringResource(R.string.home_hunt_today_subtitle),
+                    text = stringResource(subtitleRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
@@ -481,7 +484,7 @@ fun HomeHuntTodaySection(
             }
             if (!isLoading && items.isNotEmpty()) {
                 Text(
-                    text = stringResource(R.string.home_hunt_today_see_all),
+                    text = stringResource(seeAllRes),
                     style = MaterialTheme.typography.labelMedium,
                     color = FashColors.Primary,
                     modifier = Modifier.clickable(onClick = onSeeAllClick),

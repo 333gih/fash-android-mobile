@@ -10,7 +10,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
 
 /** Home sections from GET /recommendations/home-sections (or public browse variant). */
 data class HomeRecommendationSections(
@@ -20,9 +19,7 @@ data class HomeRecommendationSections(
     val similarToSaved: List<ListingFeedItem> = emptyList(),
 )
 
-/**
- * Personalized discovery (`/recommendations/*` and `/public/browse/recommendations/*`).
- */
+// Personalized discovery: /recommendations/... and /public/browse/recommendations/...
 class RecommendationRepository(
     private val securedClient: OkHttpClient,
     private val publicBrowseClient: OkHttpClient? = null,

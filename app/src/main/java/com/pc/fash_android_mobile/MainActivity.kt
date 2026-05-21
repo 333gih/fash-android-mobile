@@ -107,6 +107,7 @@ import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
+import com.pc.fash_android_mobile.ui.onboarding.OnboardingShoppingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingViewModel
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingStep
