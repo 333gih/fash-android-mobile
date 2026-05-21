@@ -69,6 +69,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         editorialGuideRepository = fashApp.editorialGuideRepository,
         searchRepository = fashApp.searchRepository,
         listingRepository = fashApp.listingRepository,
+        recommendationRepository = fashApp.recommendationRepository,
         guestBrowseProvider = { isGuestBrowse() },
     )
 
@@ -196,21 +197,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     private suspend fun fetchHuntTodayPreview() {
         _huntTodayLoading.value = true
-        val result = if (isGuestBrowse()) {
-            searchRepository.browseListings(
-                q = "",
-                sort = "popular",
-                limit = HomeHuntTodayPreviewLimit,
-                offset = 0,
-            )
-        } else {
-            searchRepository.searchListings(
-                q = "",
-                sort = "popular",
-                limit = HomeHuntTodayPreviewLimit,
-                offset = 0,
-            )
-        }
+        val result = fashApp.recommendationRepository.exploreListings(
+            publicBrowse = isGuestBrowse(),
+            limit = HomeHuntTodayPreviewLimit,
+            offset = 0,
+        )
         _huntTodayLoading.value = false
         result.fold(
             onSuccess = { _huntTodayItems.value = it },

@@ -15,6 +15,9 @@ data class HomeDiscoveryBundle(
     val trendingCategories: List<Category> = emptyList(),
     val recommendedSellers: List<FeaturedSellerItem> = emptyList(),
     val recentlyViewed: List<ListingFeedItem> = emptyList(),
+    /** Personalized rails from GET /recommendations/home-sections (auth or public). */
+    val stylePicks: List<ListingFeedItem> = emptyList(),
+    val similarToSaved: List<ListingFeedItem> = emptyList(),
 )
 
 /**

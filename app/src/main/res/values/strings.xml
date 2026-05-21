@@ -223,6 +223,13 @@
     <string name="profile_setup_measurement_sleeve">Dài tay</string>
     <string name="onboarding_sizing_error">Không lưu được kích thước. Thử lại.</string>
     <string name="onboarding_aesthetic_error">Không lưu được phong cách. Thử lại.</string>
+    <string name="onboarding_shopping_title">Bạn muốn làm gì trên Fash?</string>
+    <string name="onboarding_shopping_subtitle">Giúp chúng tôi gợi ý đồ và người bán phù hợp. Có thể chọn cả hai.</string>
+    <string name="onboarding_shopping_intent_buy">Mua đồ</string>
+    <string name="onboarding_shopping_intent_sell">Bán đồ</string>
+    <string name="onboarding_shopping_error">Không lưu được tùy chọn. Thử lại.</string>
+    <string name="home_style_picks_title">Đúng gu của bạn</string>
+    <string name="home_style_picks_subtitle">Theo phong cách bạn đã chọn</string>
     <string name="onboarding_sizing_screen_title">Kích thước</string>
     <string name="onboarding_sizing_optional_hint">Tùy chọn — điền để gợi ý size phù hợp hơn.</string>
     <string name="onboarding_username_screen_title">Tên người dùng</string>

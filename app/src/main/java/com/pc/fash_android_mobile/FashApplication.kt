@@ -335,6 +335,19 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
+    val recommendationRepository: com.pc.fash_android_mobile.data.recommendation.RecommendationRepository by lazy {
+        com.pc.fash_android_mobile.data.recommendation.RecommendationRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+            publicBrowseClient = publicBrowseHttpClient,
+        )
+    }
+
+    val browseSessionStore: com.pc.fash_android_mobile.data.recommendation.BrowseSessionStore by lazy {
+        com.pc.fash_android_mobile.data.recommendation.BrowseSessionStore(applicationContext)
+    }
+
     val chatRepository: ChatRepository by lazy {
         ChatRepository(
             securedClient = authManager

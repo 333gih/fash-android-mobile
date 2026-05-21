@@ -664,6 +664,43 @@ class UserRepository(
      * `PUT /users/me/sizing-reference` — saves reference size, unit, optional body measurements;
      * marks sizing reference complete (required before home feed).
      */
+    /** `PUT /users/me/shopping-preferences` — buy/sell intents, optional budget and condition prefs. */
+    fun saveShoppingPreferences(
+        shoppingIntents: List<String>,
+        preferredPriceMin: Long? = null,
+        preferredPriceMax: Long? = null,
+        preferredConditions: List<String> = emptyList(),
+    ): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/shopping-preferences")
+        val json = JSONObject().apply {
+            put("shopping_intents", JSONArray(shoppingIntents))
+            preferredPriceMin?.let { put("preferred_price_min", it) }
+            preferredPriceMax?.let { put("preferred_price_max", it) }
+            if (preferredConditions.isNotEmpty()) {
+                put("preferred_conditions", JSONArray(preferredConditions))
+            }
+        }.toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .put(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
     fun saveSizingReference(request: SizingReferenceRequest): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/users/me/sizing-reference")
         val json = JSONObject().apply {
@@ -1350,6 +1387,10 @@ class UserRepository(
                 "sizing_reference_completed",
                 root.optBoolean("sizingReferenceCompleted", false),
             ),
+            shoppingPreferencesConfigured = root.optBoolean(
+                "shopping_preferences_configured",
+                root.optBoolean("shoppingPreferencesConfigured", false),
+            ),
             serverCanAccessHome = serverGate,
             nextStep = root.optString("next_step", root.optString("nextStep", "")).trim().takeIf { it.isNotEmpty() },
             passwordSet = passwordSet,
@@ -1393,6 +1434,7 @@ data class UserAccessStatus(
     val aestheticTagsConfigured: Boolean,
     val onboardingDone: Boolean,
     val sizingReferenceCompleted: Boolean,
+    val shoppingPreferencesConfigured: Boolean = false,
     /** If present in JSON (`can_access_home`), overrides the four-flag AND for home access. */
     val serverCanAccessHome: Boolean? = null,
     /** e.g. `password`, `onboard`, `sizing_reference`, `none` — from setup-status. */
@@ -1428,11 +1470,12 @@ data class UserAccessStatus(
             if (needsPasswordSetup()) return false
             serverCanAccessHome?.let { return it }
             if (nextStep?.equals("none", ignoreCase = true) == true &&
-                hasProfile && onboardingDone && sizingReferenceCompleted
+                hasProfile && onboardingDone && sizingReferenceCompleted && shoppingPreferencesConfigured
             ) {
                 return true
             }
-            return hasProfile && aestheticTagsConfigured && onboardingDone && sizingReferenceCompleted
+            return hasProfile && aestheticTagsConfigured && onboardingDone &&
+                sizingReferenceCompleted && shoppingPreferencesConfigured
         }
 }
 

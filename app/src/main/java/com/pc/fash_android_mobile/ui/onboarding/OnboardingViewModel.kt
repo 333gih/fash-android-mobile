@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 
 enum class OnboardingStep {
     AestheticTags,
+    ShoppingPreferences,
     SizingReference,
     UsernameOnboard,
     SetupPassword,
@@ -85,6 +86,11 @@ class OnboardingViewModel(
     private val _measurementSleeve = MutableStateFlow("")
     val measurementSleeve: StateFlow<String> = _measurementSleeve.asStateFlow()
 
+    private val _shoppingBuy = MutableStateFlow(true)
+    val shoppingBuy: StateFlow<Boolean> = _shoppingBuy.asStateFlow()
+    private val _shoppingSell = MutableStateFlow(false)
+    val shoppingSell: StateFlow<Boolean> = _shoppingSell.asStateFlow()
+
     private var lastAccessStatus: UserAccessStatus? = null
     private val backStack = mutableListOf<OnboardingStep>()
 
@@ -128,8 +134,11 @@ class OnboardingViewModel(
                 OnboardingStep.SetupPassword
             !status.aestheticTagsConfigured && !onboardingLocalStore.skippedAestheticTags(uid) ->
                 OnboardingStep.AestheticTags
+            !status.shoppingPreferencesConfigured ->
+                OnboardingStep.ShoppingPreferences
             !status.sizingReferenceCompleted && !skipSizingEnv && !onboardingLocalStore.skippedSizing(uid) ->
                 OnboardingStep.SizingReference
+            ns == "shopping_preferences" -> OnboardingStep.ShoppingPreferences
             !status.onboardingDone ->
                 OnboardingStep.UsernameOnboard
             status.canAccessHome ->
@@ -339,6 +348,60 @@ class OnboardingViewModel(
                         val msg = it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.onboarding_aesthetic_error)
                         _events.tryEmit(msg)
+                    },
+                )
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    fun toggleShoppingBuy() {
+        _shoppingBuy.value = !_shoppingBuy.value
+    }
+
+    fun toggleShoppingSell() {
+        _shoppingSell.value = !_shoppingSell.value
+    }
+
+    fun submitShoppingPreferences(onSuccess: () -> Unit) {
+        val intents = buildList {
+            if (_shoppingBuy.value) add("buy")
+            if (_shoppingSell.value) add("sell")
+        }
+        if (intents.isEmpty()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.onboarding_shopping_error))
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    userRepository.saveShoppingPreferences(shoppingIntents = intents)
+                }
+                result.fold(
+                    onSuccess = {
+                        val status = withContext(Dispatchers.IO) {
+                            userRepository.getUserAccessStatus().getOrNull()
+                        }
+                        val base = status ?: lastAccessStatus
+                            ?: UserAccessStatus(
+                                hasProfile = false,
+                                aestheticTagsConfigured = true,
+                                onboardingDone = false,
+                                sizingReferenceCompleted = false,
+                                shoppingPreferencesConfigured = true,
+                            )
+                        advanceAfterStatus(
+                            base.copy(shoppingPreferencesConfigured = true),
+                            OnboardingStep.ShoppingPreferences,
+                        )
+                        onSuccess()
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            getApplication<Application>().getString(R.string.onboarding_shopping_error),
+                        )
                     },
                 )
             } finally {

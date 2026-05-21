@@ -6,6 +6,11 @@ import org.json.JSONObject
 /** Shared parser for listing arrays (home, explore, search, seller listings). */
 internal object ListingFeedJsonParser {
 
+    fun parseItemsArray(arr: JSONArray?): List<ListingFeedItem> {
+        if (arr == null || arr.length() == 0) return emptyList()
+        return parseFeedArray(JSONObject().put("data", arr).toString())
+    }
+
     fun parseFeedArray(json: String): List<ListingFeedItem> {
         val raw = json.trim()
         if (raw.isEmpty() || raw == "null") return emptyList()

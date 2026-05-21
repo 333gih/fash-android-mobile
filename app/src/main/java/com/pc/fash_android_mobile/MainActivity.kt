@@ -362,6 +362,8 @@ class MainActivity : ComponentActivity() {
             val onboardingStep by onboardingViewModel.onboardingStep.collectAsState()
             val onboardingTags by onboardingViewModel.tags.collectAsState()
             val onboardingSelected by onboardingViewModel.selectedIds.collectAsState()
+            val onboardingShoppingBuy by onboardingViewModel.shoppingBuy.collectAsState()
+            val onboardingShoppingSell by onboardingViewModel.shoppingSell.collectAsState()
             val onboardingUsername by onboardingViewModel.username.collectAsState()
             val onboardingReferenceSize by onboardingViewModel.referenceSize.collectAsState()
             val onboardingMeasurementUnit by onboardingViewModel.measurementUnit.collectAsState()
@@ -805,6 +807,27 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             onBack = clearLocalSessionAndSocial,
+                                        )
+                                        OnboardingStep.ShoppingPreferences -> OnboardingShoppingScreen(
+                                            buySelected = onboardingShoppingBuy,
+                                            sellSelected = onboardingShoppingSell,
+                                            isSubmitting = onboardingSubmitting,
+                                            progressStep = onboardingProgressStep,
+                                            progressTotal = onboardingProgressTotal,
+                                            onToggleBuy = onboardingViewModel::toggleShoppingBuy,
+                                            onToggleSell = onboardingViewModel::toggleShoppingSell,
+                                            onContinue = {
+                                                onboardingViewModel.submitShoppingPreferences {
+                                                    mainScope.launch {
+                                                        needsOnboarding = withContext(Dispatchers.IO) {
+                                                            resolveShellNeedsOnboardingAfterStep(
+                                                                userRepoOnboarding,
+                                                                onboardingViewModel,
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            },
                                         )
                                         OnboardingStep.SizingReference -> {
                                             val canSizing = remember(

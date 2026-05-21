@@ -212,6 +212,13 @@
     <string name="profile_setup_measurement_shoulders">Shoulders</string>
     <string name="profile_setup_measurement_sleeve">Sleeve</string>
     <string name="onboarding_sizing_error">Could not save sizing. Try again.</string>
+    <string name="onboarding_shopping_title">What do you want to do on Fash?</string>
+    <string name="onboarding_shopping_subtitle">We use this to personalize listings and sellers. You can pick both.</string>
+    <string name="onboarding_shopping_intent_buy">Buy</string>
+    <string name="onboarding_shopping_intent_sell">Sell</string>
+    <string name="onboarding_shopping_error">Could not save preferences. Try again.</string>
+    <string name="home_style_picks_title">Your style</string>
+    <string name="home_style_picks_subtitle">Based on tags you chose</string>
     <string name="nav_home">Home</string>
     <string name="nav_explore">Explore</string>
     <string name="nav_post">Post</string>

@@ -4,6 +4,7 @@ import android.util.Log
 import com.pc.fash_android_mobile.data.editorial.EditorialGuideRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
+import com.pc.fash_android_mobile.data.recommendation.RecommendationRepository
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
@@ -25,6 +26,7 @@ class HttpHomeDiscoveryRepository(
     private val editorialGuideRepository: EditorialGuideRepository,
     private val searchRepository: SearchRepository,
     private val listingRepository: ListingRepository,
+    private val recommendationRepository: RecommendationRepository,
     /** Home rail size for sellers; see-all screen handles bigger pages independently. */
     private val homeFeaturedSellersLimit: Int = 8,
     /** Home rail size for recently viewed. */
@@ -65,14 +67,28 @@ class HttpHomeDiscoveryRepository(
                 }
             }
         }
+        val recSectionsAsync = async {
+            recommendationRepository.homeSections(
+                publicBrowse = guest,
+                forYouLimit = homeRecentlyViewedLimit,
+                sectionLimit = 8,
+            ).getOrElse {
+                Log.w(TAG, "home-sections failed: ${it.message}")
+                null
+            }
+        }
         // Keep trendingCategories empty — section was removed from the home feed; data is still
         // exposed for any future surface (e.g. Explore re-use).
+        val rec = recSectionsAsync.await()
         Result.success(
             HomeDiscoveryBundle(
                 editorialPosts = editorialAsync.await(),
                 trendingCategories = emptyList(),
                 recommendedSellers = sellersAsync.await(),
-                recentlyViewed = recentlyViewedAsync.await(),
+                recentlyViewed = rec?.continueBrowsing?.takeIf { it.isNotEmpty() }
+                    ?: recentlyViewedAsync.await(),
+                stylePicks = rec?.stylePicks.orEmpty(),
+                similarToSaved = rec?.similarToSaved.orEmpty(),
             ),
         )
     }

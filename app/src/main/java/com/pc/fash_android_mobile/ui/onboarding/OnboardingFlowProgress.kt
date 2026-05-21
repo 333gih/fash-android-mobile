@@ -2,19 +2,20 @@ package com.pc.fash_android_mobile.ui.onboarding
 
 /**
  * Onboarding chain after login (server [com.pc.fash_android_mobile.data.user.UserAccessStatus]):
- * 1. Password → 2. Aesthetic tags → 3. Sizing reference → 4. Username.
+ * 1. Password → 2. Aesthetic tags → 3. Shopping prefs → 4. Sizing → 5. Username.
  *
  * Progress bar uses 1-based [progressStep] / [TOTAL_STEPS] (OTP is not part of this bar).
  */
 object OnboardingFlowProgress {
-    const val TOTAL_STEPS: Int = 4
+    const val TOTAL_STEPS: Int = 5
 
     fun progressStep(step: OnboardingStep): Int =
         when (step) {
             OnboardingStep.SetupPassword -> 1
             OnboardingStep.AestheticTags -> 2
-            OnboardingStep.SizingReference -> 3
-            OnboardingStep.UsernameOnboard -> 4
+            OnboardingStep.ShoppingPreferences -> 3
+            OnboardingStep.SizingReference -> 4
+            OnboardingStep.UsernameOnboard -> 5
             OnboardingStep.Completed -> TOTAL_STEPS
         }
 

@@ -270,6 +270,26 @@ fun HomeFeedContent(
                     }
                 }
 
+                if (discovery.stylePicks.size >= 2) {
+                    item {
+                        HomeSectionHeader(
+                            title = stringResource(R.string.home_style_picks_title),
+                            subtitle = stringResource(R.string.home_style_picks_subtitle),
+                        )
+                    }
+                    item {
+                        HomeHuntTodaySection(
+                            items = discovery.stylePicks,
+                            isLoading = false,
+                            onSeeAllClick = onNavigateToExplore,
+                            onListingClick = onListingClick,
+                            onLike = onLikeListing,
+                            onSave = onSaveListing,
+                            onRecordView = { viewModel.recordView(it) },
+                        )
+                    }
+                }
+
                 if (recentlyViewed.size >= 2) {
                     item {
                         HomeRecentlyViewedSection(

@@ -749,7 +749,21 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val sort = if (isSearch && q.isNotEmpty()) _sortOption.value else "popular"
         val (minP, maxP) = normalizedPriceBounds()
         val tagIds = _selectedAestheticTagIds.value.toList()
-        return if (isGuestBrowse()) {
+        val guest = isGuestBrowse()
+        val usePersonalizedBrowse = q.isEmpty()
+        return if (usePersonalizedBrowse) {
+            fashApp.recommendationRepository.exploreListings(
+                publicBrowse = guest,
+                categoryId = categoryId,
+                aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
+                brandId = _selectedBrandId.value,
+                minPrice = minP,
+                maxPrice = maxP,
+                condition = _selectedConditionFilter.value,
+                limit = ExploreFeedPageSize,
+                offset = offset,
+            )
+        } else if (guest) {
             searchRepository.browseListings(
                 q = q,
                 categoryId = categoryId,
