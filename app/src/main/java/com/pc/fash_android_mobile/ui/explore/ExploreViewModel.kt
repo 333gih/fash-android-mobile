@@ -685,6 +685,20 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Tapping a trending chip that carries its own UUID (from `/search/trending-tags?include_ids=true`).
+     * Uses the ID directly — no catalog lookup required (Bug C fix).
+     * Falls back to name-based [toggleInterestChip] when [tagId] is blank.
+     */
+    fun toggleInterestChipWithId(tagId: String, tagName: String) {
+        val id = tagId.trim()
+        if (id.isNotBlank()) {
+            toggleAestheticTagFilter(id)
+        } else {
+            toggleInterestChip(tagName)
+        }
+    }
+
 
     private suspend fun loadCategories() {
         commonServiceRepository.getCategoryTree().fold(
@@ -1226,7 +1240,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun recordListingDwell(item: ListingFeedItem, surface: String, position: Int, dwellMs: Int) {
         if (dwellMs < 800) return
-        feedEventReporter.impression(item.id, surface = surface, position = position, dwellMs = dwellMs)
+        feedEventReporter.dwell(item.id, surface = surface, position = position, dwellMs = dwellMs)
     }
 
     /** Applies `seller.is_following` from listing payloads to [followingIds] (viewer batched flags). */

@@ -16,9 +16,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -82,6 +85,10 @@ class EditProfileViewModel(
     private val _measurementSleeve = MutableStateFlow("")
     val measurementSleeve: StateFlow<String> = _measurementSleeve.asStateFlow()
 
+    /** Clothing gender preference: "women"|"men"|"non_binary"|"prefer_not_to_say"|"". */
+    private val _gender = MutableStateFlow("")
+    val gender: StateFlow<String> = _gender.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -97,7 +104,24 @@ class EditProfileViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    /** Bumped on every editable field change so [canSave] recomputes reactively. */
+    private val _formEpoch = MutableStateFlow(0)
+
+    /** Reactive save eligibility — UI must collect this instead of calling [canSave] directly. */
+    val canSave: StateFlow<Boolean> = combine(
+        _formEpoch,
+        _profile,
+        _usernameAvailable,
+        _isSubmitting,
+    ) { _, _, usernameAvailable, isSubmitting ->
+        evaluateCanSave(usernameAvailable, isSubmitting)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     private var usernameCheckJob: Job? = null
+
+    private fun touchForm() {
+        _formEpoch.value++
+    }
 
     fun loadProfile() {
         viewModelScope.launch {
@@ -122,8 +146,10 @@ class EditProfileViewModel(
                     _measurementLength.value = formatMeasurement(p.referenceMeasurementLength)
                     _measurementShoulders.value = formatMeasurement(p.referenceMeasurementShoulders)
                     _measurementSleeve.value = formatMeasurement(p.referenceMeasurementSleeveLength)
+                    _gender.value = normalizeGender(p.gender)
                     loadTags()
                     if (_tags.value.isNotEmpty()) applyInitialTagSelection()
+                    touchForm()
                 },
                 onFailure = {
                     _events.tryEmit(
@@ -133,6 +159,9 @@ class EditProfileViewModel(
             )
         }
     }
+
+    private fun normalizeGender(raw: String): String =
+        raw.trim().lowercase(Locale.ROOT)
 
     private fun normalizeUnitFromProfile(raw: String?): String {
         val t = raw?.trim()?.lowercase(Locale.ROOT).orEmpty()
@@ -197,6 +226,7 @@ class EditProfileViewModel(
 
     fun onDisplayNameChange(value: String) {
         _displayName.value = value.take(DISPLAY_NAME_MAX_LENGTH)
+        touchForm()
     }
 
     fun onUsernameChange(value: String) {
@@ -206,6 +236,7 @@ class EditProfileViewModel(
             .take(30)
         _username.value = normalized
         _usernameAvailable.value = null
+        touchForm()
 
         usernameCheckJob?.cancel()
         usernameCheckJob = viewModelScope.launch {
@@ -213,11 +244,13 @@ class EditProfileViewModel(
             val u = normalized.trim()
             if (u.length !in 3..30) {
                 _usernameAvailable.value = false
+                touchForm()
                 return@launch
             }
             val original = _profile.value?.username?.lowercase()?.trim()
             if (u == original) {
                 _usernameAvailable.value = true
+                touchForm()
                 return@launch
             }
             _isCheckingUsername.value = true
@@ -226,39 +259,53 @@ class EditProfileViewModel(
             }
             _isCheckingUsername.value = false
             _usernameAvailable.value = r.getOrElse { false }
+            touchForm()
         }
     }
 
     fun onBioChange(value: String) {
         _bio.value = value.take(BIO_MAX_LENGTH)
+        touchForm()
     }
 
     fun onReferenceSizeChange(value: String) {
         _referenceSize.value = value
+        touchForm()
     }
 
     fun onMeasurementUnitChange(value: String) {
         _measurementUnit.value = value
+        touchForm()
     }
 
     fun onMeasurementHemChange(value: String) {
         _measurementHem.value = filterMeasurementInput(value)
+        touchForm()
     }
 
     fun onMeasurementChestChange(value: String) {
         _measurementChest.value = filterMeasurementInput(value)
+        touchForm()
     }
 
     fun onMeasurementLengthChange(value: String) {
         _measurementLength.value = filterMeasurementInput(value)
+        touchForm()
     }
 
     fun onMeasurementShouldersChange(value: String) {
         _measurementShoulders.value = filterMeasurementInput(value)
+        touchForm()
     }
 
     fun onMeasurementSleeveChange(value: String) {
         _measurementSleeve.value = filterMeasurementInput(value)
+        touchForm()
+    }
+
+    fun onGenderChange(value: String) {
+        _gender.value = normalizeGender(value)
+        touchForm()
     }
 
     private fun filterMeasurementInput(raw: String): String {
@@ -289,14 +336,17 @@ class EditProfileViewModel(
         } else {
             _selectedTagIds.value + id
         }
+        touchForm()
     }
 
     fun removeTag(id: String) {
         _selectedTagIds.value = _selectedTagIds.value - id
+        touchForm()
     }
 
     fun clearAllStyles() {
         _selectedTagIds.value = emptySet()
+        touchForm()
     }
 
     fun setAvatarFromBytes(bytes: ByteArray, mimeType: String = "image/jpeg") {
@@ -306,7 +356,10 @@ class EditProfileViewModel(
                 userRepository.uploadProfileImage(bytes, "avatar.$ext", "avatar", mimeType)
             }
             result.fold(
-                onSuccess = { _avatarUrl.value = it },
+                onSuccess = {
+                    _avatarUrl.value = it
+                    touchForm()
+                },
                 onFailure = {
                     _events.tryEmit(
                         getApplication<Application>().getString(R.string.edit_profile_upload_error),
@@ -323,7 +376,10 @@ class EditProfileViewModel(
                 userRepository.uploadProfileImage(bytes, "cover.$ext", "cover", mimeType)
             }
             result.fold(
-                onSuccess = { _coverImageUrl.value = it },
+                onSuccess = {
+                    _coverImageUrl.value = it
+                    touchForm()
+                },
                 onFailure = {
                     _events.tryEmit(
                         getApplication<Application>().getString(R.string.edit_profile_upload_error),
@@ -415,11 +471,14 @@ class EditProfileViewModel(
         if (_avatarUrl.value != (p.avatarUrl.takeIf { it.isNotBlank() })) return true
         if (_coverImageUrl.value != (p.coverImageUrl.takeIf { it.isNotBlank() })) return true
         if (sizingChanged()) return true
+        if (normalizeGender(_gender.value) != normalizeGender(p.gender)) return true
         return false
     }
 
     private fun buildPatch(): ProfilePatch {
         val p = _profile.value ?: return ProfilePatch()
+        val genderNorm = normalizeGender(_gender.value)
+        val profileGenderNorm = normalizeGender(p.gender)
         return ProfilePatch(
             displayName = if (_displayName.value.trim() != p.displayName) _displayName.value.trim() else null,
             username = if (_username.value.trim() != p.username) _username.value.trim() else null,
@@ -427,6 +486,7 @@ class EditProfileViewModel(
             avatarUrl = if (_avatarUrl.value != p.avatarUrl.takeIf { it.isNotBlank() }) _avatarUrl.value else null,
             coverImageUrl = if (_coverImageUrl.value != p.coverImageUrl.takeIf { it.isNotBlank() }) _coverImageUrl.value else null,
             aestheticTags = if (tagsChanged()) buildPutItems() else null,
+            gender = if (genderNorm != profileGenderNorm) genderNorm else null,
             referenceSize = if (sizingChanged()) _referenceSize.value.trim() else null,
             referenceMeasurementUnit = if (sizingChanged()) normalizeUnit(_measurementUnit.value) else null,
             referenceMeasurementChest = if (sizingChanged()) parseMeasurementToDouble(_measurementChest.value) else null,
@@ -437,16 +497,17 @@ class EditProfileViewModel(
         )
     }
 
-    fun canSave(): Boolean {
+    private fun evaluateCanSave(usernameAvailable: Boolean?, isSubmitting: Boolean): Boolean {
+        if (isSubmitting) return false
         if (!hasChanges()) return false
         if (!isUsernameValid()) return false
         val u = _username.value.trim()
         val original = _profile.value?.username?.lowercase()?.trim()
-        return if (u == original) true else (_usernameAvailable.value == true)
+        return if (u == original) true else (usernameAvailable == true)
     }
 
     fun save(onSuccess: () -> Unit) {
-        if (!canSave() || _isSubmitting.value) return
+        if (!evaluateCanSave(_usernameAvailable.value, _isSubmitting.value) || _isSubmitting.value) return
         val patch = buildPatch()
         if (patch.isEmpty()) return
         viewModelScope.launch {
@@ -471,6 +532,7 @@ class EditProfileViewModel(
                         coverImageUrl = _coverImageUrl.value ?: "",
                         aestheticTags = put.map { it.name },
                         aestheticTagSnapshots = put,
+                        gender = normalizeGender(_gender.value),
                         referenceSize = _referenceSize.value.takeIf { it.isNotBlank() },
                         referenceMeasurementUnit = normalizeUnit(_measurementUnit.value),
                         referenceMeasurementChest = chest.takeIf { it > 0 },
@@ -479,6 +541,7 @@ class EditProfileViewModel(
                         referenceMeasurementShoulders = sh.takeIf { it > 0 },
                         referenceMeasurementSleeveLength = sl.takeIf { it > 0 },
                     )
+                    touchForm()
                     onSuccess()
                 },
                 onFailure = {

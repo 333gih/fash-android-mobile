@@ -121,4 +121,8 @@ data class ListingDetail(
     val sellerIsFollowing: Boolean? = null,
     /** Marketplace status wire (`active`, `in_review`, `rejected`, `inactive`, `sold`, `reserved`, `deleted`, …). */
     val status: String = "active",
+    /** Primary colour keyword for the item (e.g. "black", "white", …). */
+    val color: String? = null,
+    /** Intended wearer: women | men | unisex | kids | baby. */
+    val genderTarget: String? = null,
 )

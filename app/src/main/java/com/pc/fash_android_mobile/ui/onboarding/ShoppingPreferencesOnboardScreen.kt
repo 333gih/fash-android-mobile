@@ -20,6 +20,9 @@ fun ShoppingPreferencesOnboardScreen(
     sellSelected: Boolean,
     onToggleBuy: () -> Unit,
     onToggleSell: () -> Unit,
+    /** Currently selected gender preference ("women"|"men"|"non_binary"|"prefer_not_to_say"|""). */
+    selectedGender: String = "",
+    onGenderSelect: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -43,6 +46,31 @@ fun ShoppingPreferencesOnboardScreen(
                 onClick = onToggleSell,
                 label = { Text(stringResource(R.string.onboarding_shopping_intent_sell)) },
             )
+        }
+
+        // Gender preference — helps power personalised recommendations
+        Text(
+            text = "Bạn thường mua đồ cho ai?",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "Giúp chúng tôi gợi ý sản phẩm phù hợp hơn.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                "women" to "Nữ",
+                "men" to "Nam",
+                "non_binary" to "Cả hai",
+            ).forEach { (value, label) ->
+                FilterChip(
+                    selected = selectedGender == value,
+                    onClick = { onGenderSelect(if (selectedGender == value) "" else value) },
+                    label = { Text(label) },
+                )
+            }
         }
     }
 }

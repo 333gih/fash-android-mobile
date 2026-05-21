@@ -17,6 +17,16 @@ data class TrendingQueryItem(
 )
 
 /**
+ * Aesthetic tag with both ID and display name, returned by
+ * `GET /search/trending-tags?include_ids=true`.
+ * Using the ID directly avoids the fragile name→UUID catalog lookup (Bug C fix).
+ */
+data class TrendingTagChip(
+    val id: String,
+    val name: String,
+)
+
+/**
  * Search API (`/search/listings`, `/search/autocomplete`, `/search/trending-tags`, recent/trending queries).
  */
 /** Max style quick chips on Explore (core trending + catalog resolve). */
@@ -39,6 +49,20 @@ class SearchRepository(
         val url = "${AppEnvironment.apiPath("api/v1/search/trending-tags")}?limit=$capped"
         val body = executeGet(url, publicBrowse = false)
         parseStringArray(body).take(capped)
+    }
+
+    /**
+     * `GET /search/trending-tags?include_ids=true` — returns [{id, name}] objects.
+     * Falls back to names-only (id = "") when the server does not support the param.
+     */
+    fun getTrendingTagsWithIds(limit: Int = EXPLORE_STYLE_QUICK_CHIP_LIMIT): Result<List<TrendingTagChip>> = runCatching {
+        val capped = limit.coerceIn(1, 20)
+        val url = "${AppEnvironment.apiPath("api/v1/search/trending-tags")}?limit=$capped&include_ids=true"
+        val body = executeGet(url, publicBrowse = false)
+        parseTrendingTagChips(body).ifEmpty {
+            // Server returned a plain string array — wrap with empty id for graceful degradation.
+            parseStringArray(body).take(capped).map { TrendingTagChip(id = "", name = it) }
+        }.take(capped)
     }
 
     /** Guest browse: ranked aesthetic tag names from core listing activity (7-day window). */
@@ -225,6 +249,23 @@ class SearchRepository(
             if (q.isBlank()) return@mapNotNull null
             val c = el.optInt("count", el.optInt("Count", 0))
             TrendingQueryItem(query = q, count = c.coerceAtLeast(0))
+        }
+    }
+
+    private fun parseTrendingTagChips(json: String): List<TrendingTagChip> {
+        val raw = json.trim()
+        // Expect a JSON array of {id, name} objects.
+        if (!raw.startsWith("[")) return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                val el = arr.optJSONObject(i) ?: return@mapNotNull null
+                val id = el.optString("id", "").trim()
+                val name = el.optString("name", "").trim()
+                if (name.isBlank()) null else TrendingTagChip(id = id, name = name)
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

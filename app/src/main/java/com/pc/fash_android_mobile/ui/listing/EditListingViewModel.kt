@@ -18,9 +18,12 @@ import com.pc.fash_android_mobile.ui.post.ListingConditionOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,6 +54,12 @@ private fun formatMeasurementField(d: Double?): String {
         String.format(java.util.Locale.US, "%.1f", v)
     }
 }
+
+private fun normalizeChoice(raw: String?): String =
+    raw?.trim()?.lowercase(java.util.Locale.ROOT).orEmpty()
+
+private fun originalPriceText(d: ListingDetail): String =
+    if (d.priceVnd > 0) d.priceVnd.toString() else ""
 
 private fun parsedPriceDropPercent(input: String): Int? {
     val d = input.filter { it.isDigit() }.take(2)
@@ -121,6 +130,16 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
 
+    /** Reactive save eligibility — UI must collect this instead of calling [canSave] directly. */
+    val canSave: StateFlow<Boolean> = combine(
+        _detail,
+        _form,
+        _baselineTagIds,
+        _isSaving,
+    ) { detail, form, baselineTags, saving ->
+        computeCanSave(detail, form, baselineTags, saving)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     private var activeListingId: String = ""
 
     fun load(listingId: String) {
@@ -173,6 +192,8 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
                             autoPriceDropEnabled = d.autoPriceDropEnabled,
                             floorPriceText = d.floorPriceVnd?.takeIf { it > 0 }?.toString() ?: "",
                             priceDropPercentInput = pct,
+                            color = normalizeChoice(d.color),
+                            genderTarget = normalizeChoice(d.genderTarget),
                         )
                     },
                     onFailure = {
@@ -284,6 +305,8 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
         f: EditListingFormState,
         baselineTags: Set<String>,
     ): UpdateListingRequest? {
+        if (!hasFormChanges(d, f, baselineTags)) return null
+
         val title = f.title.trim()
         val desc = f.description.take(DESC_MAX)
         val price = f.priceText.trim().toLongOrNull() ?: return null
@@ -348,15 +371,9 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
             null
         }
 
-        if (titleP == null && descP == null && priceP == null && condP == null &&
-            sizeP == null && brandIdP == null && brandNameP == null && tagsP == null &&
-            countryOfOriginP == null && countryIdP == null && countryNameP == null &&
-            measurementUnitP == null &&
-            hemP == null && chestP == null && lenP == null && shP == null && slP == null &&
-            acceptP == null && autoP == null && floorP == null && percentP == null
-        ) {
-            return null
-        }
+        val colorP = normalizeChoice(f.color).takeIf { it != normalizeChoice(d.color) }
+        val genderTargetP = normalizeChoice(f.genderTarget).takeIf { it != normalizeChoice(d.genderTarget) }
+
         return UpdateListingRequest(
             title = titleP,
             condition = condP,
@@ -379,7 +396,57 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
             measurementLength = lenP,
             measurementShoulders = shP,
             measurementSleeveLength = slP,
+            color = colorP,
+            genderTarget = genderTargetP,
         )
+    }
+
+    /** Detects any editable delta without requiring a parseable price (used for save-button state). */
+    private fun hasFormChanges(
+        d: ListingDetail,
+        f: EditListingFormState,
+        baselineTags: Set<String>,
+    ): Boolean {
+        val title = f.title.trim()
+        val desc = f.description.take(DESC_MAX)
+        val size = f.size.trim().take(SIZE_MAX)
+        val bn = f.brandName.trim().take(BRAND_MAX)
+        val dDesc = d.description.take(DESC_MAX)
+        val dSize = (d.size ?: "").trim().take(SIZE_MAX)
+        val dBrand = (d.brand ?: "").trim().take(BRAND_MAX)
+        if (title != d.title) return true
+        if (desc != dDesc) return true
+        if (f.priceText.trim() != originalPriceText(d)) return true
+        if (ListingConditionOptions.canonicalApi(f.condition) != ListingConditionOptions.canonicalApi(d.condition)) {
+            return true
+        }
+        if (size != dSize) return true
+        if (bn != dBrand || f.brandId != d.brandId) return true
+        if (f.selectedTagIds != baselineTags) return true
+        val coIso = f.countryIso2.trim().uppercase()
+        val dCo = d.countryIso2?.trim()?.uppercase().orEmpty()
+        if (coIso != dCo) return true
+        if (f.countryId != d.countryId) return true
+        if (f.countryName.trim() != (d.countryName ?: "").trim()) return true
+        val unitForm = f.measurementUnit.trim().lowercase()
+        val unitD = d.measurementUnit?.trim()?.lowercase().orEmpty().ifEmpty { "cm" }
+        if (unitForm != unitD) return true
+        if (!measurementEq(parseDoubleField(f.measurementHem), d.measurementHem)) return true
+        if (!measurementEq(parseDoubleField(f.measurementChest), d.measurementChest)) return true
+        if (!measurementEq(parseDoubleField(f.measurementLength), d.measurementLength)) return true
+        if (!measurementEq(parseDoubleField(f.measurementShoulders), d.measurementShoulders)) return true
+        if (!measurementEq(parseDoubleField(f.measurementSleeveLength), d.measurementSleeveLength)) return true
+        if (f.acceptOffers != d.acceptOffers) return true
+        if (f.autoPriceDropEnabled != d.autoPriceDropEnabled) return true
+        if (f.autoPriceDropEnabled) {
+            val floorParsed = parsePositiveLong(f.floorPriceText)
+            if (floorParsed != d.floorPriceVnd) return true
+            val p = parsedPriceDropPercent(f.priceDropPercentInput)
+            if (p != null && p != d.priceDropPercent) return true
+        }
+        if (normalizeChoice(f.color) != normalizeChoice(d.color)) return true
+        if (normalizeChoice(f.genderTarget) != normalizeChoice(d.genderTarget)) return true
+        return false
     }
 
     private fun measurementEq(a: Double?, b: Double?): Boolean {
@@ -388,9 +455,30 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
         return abs(a - b) < 1e-6
     }
 
-    private fun hasChanges(): Boolean {
-        val d = _detail.value ?: return false
-        return buildDeltaUpdate(d, _form.value, _baselineTagIds.value) != null
+    private fun hasChanges(d: ListingDetail, f: EditListingFormState, baselineTags: Set<String>): Boolean =
+        hasFormChanges(d, f, baselineTags)
+
+    private fun computeCanSave(
+        detail: ListingDetail?,
+        form: EditListingFormState,
+        baselineTags: Set<String>,
+        saving: Boolean,
+    ): Boolean {
+        val d = detail ?: return false
+        if (!isListingStatusSellerPutAllowed(d.status)) return false
+        val title = form.title.trim()
+        val price = form.priceText.trim().toLongOrNull()
+        if (title.length !in TITLE_MIN..TITLE_MAX) return false
+        if (price == null || price !in PRICE_MIN..PRICE_MAX) return false
+        if (form.condition.isBlank()) return false
+        if (form.autoPriceDropEnabled) {
+            val floor = effectiveFloorPriceForAutoDrop(form, d)
+            if (floor == null || floor !in PRICE_MIN..PRICE_MAX) return false
+            if (floor >= price) return false
+            if (effectivePriceDropPercentForAutoDrop(form, d) == null) return false
+        }
+        if (!hasChanges(d, form, baselineTags)) return false
+        return !saving
     }
 
     /** After a successful save, align local detail + baseline so the next save is a delta. */
@@ -429,6 +517,8 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
             autoPriceDropEnabled = f.autoPriceDropEnabled,
             floorPriceVnd = floorSnap,
             priceDropPercent = pctSnap,
+            color = normalizeChoice(f.color).ifBlank { null },
+            genderTarget = normalizeChoice(f.genderTarget).ifBlank { null },
         )
         _baselineTagIds.value = f.selectedTagIds.toSet()
     }
@@ -483,10 +573,16 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
                 return
             }
         }
+        if (!hasFormChanges(d, f, _baselineTagIds.value)) {
+            viewModelScope.launch {
+                _events.emit(getApplication<Application>().getString(R.string.edit_listing_no_changes))
+            }
+            return
+        }
         val update = buildDeltaUpdate(d, f, _baselineTagIds.value)
         if (update == null) {
             viewModelScope.launch {
-                _events.emit(getApplication<Application>().getString(R.string.edit_listing_no_changes))
+                _events.emit(getApplication<Application>().getString(R.string.edit_listing_save_error))
             }
             return
         }
@@ -541,24 +637,5 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
                 },
             )
         }
-    }
-
-    fun canSave(): Boolean {
-        val d = _detail.value ?: return false
-        if (!isListingStatusSellerPutAllowed(d.status)) return false
-        val f = _form.value
-        val title = f.title.trim()
-        val price = f.priceText.trim().toLongOrNull()
-        if (title.length !in TITLE_MIN..TITLE_MAX) return false
-        if (price == null || price !in PRICE_MIN..PRICE_MAX) return false
-        if (f.condition.isBlank()) return false
-        if (f.autoPriceDropEnabled) {
-            val floor = effectiveFloorPriceForAutoDrop(f, d)
-            if (floor == null || floor !in PRICE_MIN..PRICE_MAX) return false
-            if (floor >= price) return false
-            if (effectivePriceDropPercentForAutoDrop(f, d) == null) return false
-        }
-        if (!hasChanges()) return false
-        return !_isSaving.value
     }
 }

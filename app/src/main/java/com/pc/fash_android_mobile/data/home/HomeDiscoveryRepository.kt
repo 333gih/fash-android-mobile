@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.data.home
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
+import com.pc.fash_android_mobile.data.search.TrendingTagChip
 import kotlinx.coroutines.delay
 
 /**
@@ -20,8 +21,14 @@ data class HomeDiscoveryBundle(
     val similarToSaved: List<ListingFeedItem> = emptyList(),
     /** Personalized for-you from home-sections (shown only when signals ≥ 3). */
     val forYou: List<ListingFeedItem> = emptyList(),
-    /** Trending aesthetic tag names from /search/trending-tags for the style chips row. */
+    /** Trending aesthetic tag names from /search/trending-tags for the style chips row (display only). */
     val trendingStyleTags: List<String> = emptyList(),
+    /**
+     * Same tags with IDs from /search/trending-tags?include_ids=true.
+     * Used for direct ID-based filter navigation (Bug C fix).
+     * Falls back to name-only chips (id = "") when the server returns a plain string array.
+     */
+    val trendingStyleTagChips: List<TrendingTagChip> = emptyList(),
 )
 
 /**

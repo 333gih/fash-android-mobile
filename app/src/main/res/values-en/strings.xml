@@ -851,6 +851,33 @@
     <string name="edit_profile_style_clear_all">Clear all</string>
     <string name="edit_profile_style_empty_hint">No styles yet — tap Edit styles to add.</string>
     <string name="edit_profile_display_name_counter">%1$d/%2$d</string>
+    <!-- Gender target (listing) -->
+    <string name="post_step_gender_target">Gender target</string>
+    <string name="gender_target_women">Women</string>
+    <string name="gender_target_men">Men</string>
+    <string name="gender_target_unisex">Unisex</string>
+    <string name="gender_target_kids">Kids</string>
+    <!-- Colour chips -->
+    <string name="post_step_color">Primary color</string>
+    <string name="color_black">Black</string>
+    <string name="color_white">White</string>
+    <string name="color_gray">Gray</string>
+    <string name="color_beige">Beige</string>
+    <string name="color_brown">Brown</string>
+    <string name="color_red">Red</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_purple">Purple</string>
+    <!-- Edit profile gender section -->
+    <string name="edit_profile_section_gender">Gender</string>
+    <string name="edit_profile_gender_label">Clothing gender preference</string>
+    <string name="gender_women">Women</string>
+    <string name="gender_men">Men</string>
+    <string name="gender_non_binary">Non-binary</string>
+    <string name="gender_prefer_not_to_say">Prefer not to say</string>
     <string name="edit_profile_section_sizing">Size reference</string>
     <string name="edit_profile_unit_st">st</string>
     <string name="edit_profile_save_error">Failed to save. Try again.</string>

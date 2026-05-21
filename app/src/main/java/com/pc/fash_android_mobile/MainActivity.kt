@@ -205,16 +205,26 @@ private suspend fun resolveShellNeedsOnboardingAfterStep(
     return apiStillNeeds || step != OnboardingStep.Completed
 }
 
-private suspend fun resolveNeedsOnboardingAfterProfileSubmit(repo: UserRepository): Boolean {
+/**
+ * Used after username submit (the final mandatory step). Same as [resolveShellNeedsOnboardingAfterStep]
+ * but the VM will have already moved to [OnboardingStep.Completed] before the callback fires, so we
+ * can rely solely on the access-status API poll here. Kept separate so the behaviour is explicit.
+ */
+private suspend fun resolveNeedsOnboardingAfterProfileSubmit(
+    repo: UserRepository,
+    onboardingVm: OnboardingViewModel,
+): Boolean {
+    // Primary gate: trust the VM step — if it says there are more steps, stay in onboarding.
+    if (onboardingVm.onboardingStep.value != OnboardingStep.Completed) return true
+    // Secondary gate: confirm with the server (up to N attempts).
     repeat(ACCESS_STATUS_POLL_ATTEMPTS) { attempt ->
         repo.getUserAccessStatus().fold(
-            onSuccess = { status ->
-                if (status.canAccessHome) return false
-            },
+            onSuccess = { status -> if (status.canAccessHome) return false },
             onFailure = { },
         )
         if (attempt < ACCESS_STATUS_POLL_ATTEMPTS - 1) delay(ACCESS_STATUS_POLL_MS)
     }
+    // If server still says not ready but VM is Completed, go home anyway (server may lag).
     return false
 }
 
@@ -365,6 +375,7 @@ class MainActivity : ComponentActivity() {
             val onboardingSelected by onboardingViewModel.selectedIds.collectAsState()
             val onboardingShoppingBuy by onboardingViewModel.shoppingBuy.collectAsState()
             val onboardingShoppingSell by onboardingViewModel.shoppingSell.collectAsState()
+            val onboardingGenderPreference by onboardingViewModel.genderPreference.collectAsState()
             val onboardingUsername by onboardingViewModel.username.collectAsState()
             val onboardingReferenceSize by onboardingViewModel.referenceSize.collectAsState()
             val onboardingMeasurementUnit by onboardingViewModel.measurementUnit.collectAsState()
@@ -373,6 +384,8 @@ class MainActivity : ComponentActivity() {
             val onboardingMeasLength by onboardingViewModel.measurementLength.collectAsState()
             val onboardingMeasShoulders by onboardingViewModel.measurementShoulders.collectAsState()
             val onboardingMeasSleeve by onboardingViewModel.measurementSleeve.collectAsState()
+            val onboardingHeightCm by onboardingViewModel.heightCm.collectAsState()
+            val onboardingWeightKg by onboardingViewModel.weightKg.collectAsState()
             val onboardingSetupPw by onboardingViewModel.setupPassword.collectAsState()
             val onboardingSetupPwConfirm by onboardingViewModel.setupPasswordConfirm.collectAsState()
             val onboardingLoading by onboardingViewModel.isLoading.collectAsState()
@@ -766,11 +779,8 @@ class MainActivity : ComponentActivity() {
                                             onboardingViewModel.loadTags()
                                         }
                                     }
-                                    LaunchedEffect(onboardingStep, email) {
-                                        if (onboardingStep == OnboardingStep.UsernameOnboard) {
-                                            onboardingViewModel.seedUsernameFromEmailIfEmpty(email)
-                                        }
-                                    }
+                                    // Username field intentionally starts blank — user must type their own handle.
+                                    // (seedUsernameFromEmailIfEmpty removed to avoid pre-filling a name that may conflict.)
                                     val userRepoOnboarding = remember {
                                         (application as FashApplication).userRepository
                                     }
@@ -817,6 +827,8 @@ class MainActivity : ComponentActivity() {
                                             progressTotal = onboardingProgressTotal,
                                             onToggleBuy = onboardingViewModel::toggleShoppingBuy,
                                             onToggleSell = onboardingViewModel::toggleShoppingSell,
+                                            selectedGender = onboardingGenderPreference,
+                                            onGenderSelect = onboardingViewModel::setGenderPreference,
                                             onContinue = {
                                                 onboardingViewModel.submitShoppingPreferences {
                                                     mainScope.launch {
@@ -851,6 +863,10 @@ class MainActivity : ComponentActivity() {
                                                 onMeasurementShouldersChange = onboardingViewModel::onMeasurementShouldersChange,
                                                 measurementSleeve = onboardingMeasSleeve,
                                                 onMeasurementSleeveChange = onboardingViewModel::onMeasurementSleeveChange,
+                                                heightCm = onboardingHeightCm,
+                                                onHeightCmChange = onboardingViewModel::onHeightCmChange,
+                                                weightKg = onboardingWeightKg,
+                                                onWeightKgChange = onboardingViewModel::onWeightKgChange,
                                                 canSubmit = canSizing,
                                                 isSubmitting = onboardingSubmitting,
                                                 progressStep = onboardingProgressStep,
@@ -909,7 +925,7 @@ class MainActivity : ComponentActivity() {
                                                             val repo =
                                                                 (this@MainActivity.application as FashApplication).userRepository
                                                             needsOnboarding = withContext(Dispatchers.IO) {
-                                                                resolveNeedsOnboardingAfterProfileSubmit(repo)
+                                                                resolveNeedsOnboardingAfterProfileSubmit(repo, onboardingViewModel)
                                                             }
                                                         }
                                                     }
@@ -938,7 +954,10 @@ class MainActivity : ComponentActivity() {
                                                     onboardingViewModel.submitSetupPassword {
                                                         mainScope.launch {
                                                             needsOnboarding = withContext(Dispatchers.IO) {
-                                                                resolveNeedsOnboardingAfterProfileSubmit(userRepoOnboarding)
+                                                                resolveShellNeedsOnboardingAfterStep(
+                                                                    userRepoOnboarding,
+                                                                    onboardingViewModel,
+                                                                )
                                                             }
                                                         }
                                                     }

@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
+import com.pc.fash_android_mobile.data.search.TrendingTagChip
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
@@ -64,6 +65,8 @@ fun HomeFeedContent(
     viewModel: HomeViewModel,
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onNavigateToExplore: () -> Unit = {},
+    /** Called when the user taps a trending style chip; navigates to Explore pre-filtered by [tagName]. */
+    onNavigateToExploreWithTag: (tagName: String) -> Unit = { onNavigateToExplore() },
     onOrdersClick: () -> Unit = {},
     /** Home journey “Đang giao” — opens dedicated in-transit hub (not the full orders list). */
     onDeliveringJourneyClick: () -> Unit = onOrdersClick,
@@ -189,11 +192,35 @@ fun HomeFeedContent(
                     )
                 }
 
-                if (discovery.trendingStyleTags.isNotEmpty()) {
+                // Prefer id-aware chips when available; fall back to name-only wrapping.
+                val styleChips = if (discovery.trendingStyleTagChips.isNotEmpty()) {
+                    discovery.trendingStyleTagChips
+                } else {
+                    discovery.trendingStyleTags.map { TrendingTagChip(id = "", name = it) }
+                }
+                if (styleChips.isNotEmpty()) {
                     item {
                         HomeTrendingStylesSection(
-                            tags = discovery.trendingStyleTags,
-                            onTagClick = { onNavigateToExplore() },
+                            tags = styleChips,
+                            onTagClick = { chip -> onNavigateToExploreWithTag(chip.name) },
+                        )
+                    }
+                }
+
+                if (discovery.forYou.size >= 2) {
+                    item {
+                        HomeForYouSection(
+                            items = discovery.forYou,
+                            onListingClick = { id, sid ->
+                                discovery.forYou.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                    viewModel.reportListingClick(discovery.forYou[pos], "recommendation_for_you", pos)
+                                }
+                                onListingClick(id, sid)
+                            },
+                            onLike = onLikeListing,
+                            onSave = onSaveListing,
+                            onSeeAllClick = onNavigateToExplore,
+                            onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "recommendation_for_you") },
                         )
                     }
                 }

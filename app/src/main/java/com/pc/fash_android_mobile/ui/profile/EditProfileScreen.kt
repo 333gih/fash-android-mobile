@@ -128,8 +128,10 @@ fun EditProfileScreen(
     val measurementLength by viewModel.measurementLength.collectAsState()
     val measurementShoulders by viewModel.measurementShoulders.collectAsState()
     val measurementSleeve by viewModel.measurementSleeve.collectAsState()
+    val gender by viewModel.gender.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
+    val canSave by viewModel.canSave.collectAsState()
     val usernameAvailable by viewModel.usernameAvailable.collectAsState()
     val isCheckingUsername by viewModel.isCheckingUsername.collectAsState()
     val scheme = MaterialTheme.colorScheme
@@ -367,6 +369,69 @@ fun EditProfileScreen(
                             )
                         }
 
+                        EditProfileSectionTitle(stringResource(R.string.edit_profile_section_gender))
+                        EditProfileSectionCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = stringResource(R.string.edit_profile_gender_label),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    listOf(
+                                        "women" to stringResource(R.string.gender_women),
+                                        "men" to stringResource(R.string.gender_men),
+                                        "non_binary" to stringResource(R.string.gender_non_binary),
+                                    ).forEach { (value, label) ->
+                                        val selected = gender == value
+                                        Surface(
+                                            onClick = {
+                                                viewModel.onGenderChange(if (gender == value) "" else value)
+                                            },
+                                            shape = ChipCorner,
+                                            color = if (selected) scheme.primary else scheme.surfaceVariant,
+                                            contentColor = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+                                            border = if (selected) null else BorderStroke(1.dp, scheme.outline),
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    listOf(
+                                        "prefer_not_to_say" to stringResource(R.string.gender_prefer_not_to_say),
+                                    ).forEach { (value, label) ->
+                                        val selected = gender == value
+                                        Surface(
+                                            onClick = {
+                                                viewModel.onGenderChange(if (gender == value) "" else value)
+                                            },
+                                            shape = ChipCorner,
+                                            color = if (selected) scheme.primary else scheme.surfaceVariant,
+                                            contentColor = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+                                            border = if (selected) null else BorderStroke(1.dp, scheme.outline),
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         EditProfileSectionTitle(stringResource(R.string.edit_profile_section_sizing))
                         EditProfileSectionCard {
                             ProfileSetupSizingSection(
@@ -395,11 +460,11 @@ fun EditProfileScreen(
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
                 FashPrimaryButton(
                     onClick = {
-                        if (viewModel.canSave() && !isSubmitting) {
+                        if (canSave && !isSubmitting) {
                             viewModel.save(onSaved)
                         }
                     },
-                    enabled = viewModel.canSave() && !isSubmitting,
+                    enabled = canSave && !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()

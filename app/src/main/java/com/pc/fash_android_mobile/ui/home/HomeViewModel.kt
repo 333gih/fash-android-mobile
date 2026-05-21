@@ -378,7 +378,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun recordDwell(item: ListingFeedItem, surface: String, position: Int, dwellMs: Int) {
         if (dwellMs < 800) return
-        feedEventReporter.impression(item.id, surface = surface, position = position, dwellMs = dwellMs)
+        feedEventReporter.dwell(item.id, surface = surface, position = position, dwellMs = dwellMs)
     }
 
     fun reportListingClick(item: ListingFeedItem, surface: String, position: Int = 0) {
@@ -414,6 +414,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (sellerId.isNullOrBlank()) return false
         val set = _followingIds.value
         return set.contains(sellerId)
+    }
+
+    /**
+     * Returns the aesthetic tag ID for the given [tagName] by searching the cached
+     * [trendingStyleTagChips] in the discovery bundle.
+     * Returns an empty string when no matching chip is found (caller falls back to name-based lookup).
+     */
+    fun trendingStyleTagChipIdForName(tagName: String): String {
+        return discoveryBundle.value.trendingStyleTagChips
+            .firstOrNull { it.name.equals(tagName.trim(), ignoreCase = true) }
+            ?.id
+            .orEmpty()
     }
 
     private fun updateListingInFeeds(listingId: String, transform: (ListingFeedItem) -> ListingFeedItem) {

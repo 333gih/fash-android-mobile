@@ -28,4 +28,8 @@ data class EditListingFormState(
     val floorPriceText: String = "",
     /** Digits only, max 2 — same semantics as create listing draft. */
     val priceDropPercentInput: String = "10",
+    /** Primary colour keyword (e.g. "black"). Empty = not set. */
+    val color: String = "",
+    /** Intended wearer: women | men | unisex | kids | baby | "" (not set). */
+    val genderTarget: String = "",
 )

@@ -90,6 +90,7 @@ fun EditListingScreen(
     val loadError by viewModel.loadError.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
     val isDeleting by viewModel.isDeleting.collectAsState()
+    val canSave by viewModel.canSave.collectAsState()
     val baselineTagIds by viewModel.baselineTagIds.collectAsState()
     val brandsFeatured by viewModel.brandsFeatured.collectAsState()
     val brandsSearch by viewModel.brandsSearch.collectAsState()
@@ -130,6 +131,7 @@ fun EditListingScreen(
         },
         bottomBar = {
             val d = detail
+            val saveEnabled = canSave && !isDeleting
             if (d != null && isListingStatusSellerPutAllowed(d.status)) {
                 Surface(
                     tonalElevation = 1.dp,
@@ -146,7 +148,7 @@ fun EditListingScreen(
                     ) {
                         Button(
                             onClick = { viewModel.save() },
-                            enabled = viewModel.canSave() && !isDeleting,
+                            enabled = saveEnabled,
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
                         ) {
@@ -419,6 +421,84 @@ fun EditListingScreen(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     enabled = editable && !isSaving,
                                 )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = stringResource(R.string.post_step_gender_target),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            EditListingSectionCard {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    listOf(
+                                        "women" to stringResource(R.string.gender_target_women),
+                                        "men" to stringResource(R.string.gender_target_men),
+                                        "unisex" to stringResource(R.string.gender_target_unisex),
+                                        "kids" to stringResource(R.string.gender_target_kids),
+                                    ).forEach { (value, label) ->
+                                        PostSelectablePill(
+                                            text = label,
+                                            selected = form.genderTarget == value,
+                                            onClick = {
+                                                if (editable && !isSaving) {
+                                                    viewModel.updateForm {
+                                                        copy(genderTarget = if (genderTarget == value) "" else value)
+                                                    }
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = stringResource(R.string.post_step_color),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            EditListingSectionCard {
+                                val standardColors = listOf(
+                                    "black" to stringResource(R.string.color_black),
+                                    "white" to stringResource(R.string.color_white),
+                                    "gray" to stringResource(R.string.color_gray),
+                                    "beige" to stringResource(R.string.color_beige),
+                                    "brown" to stringResource(R.string.color_brown),
+                                    "red" to stringResource(R.string.color_red),
+                                    "pink" to stringResource(R.string.color_pink),
+                                    "orange" to stringResource(R.string.color_orange),
+                                    "yellow" to stringResource(R.string.color_yellow),
+                                    "green" to stringResource(R.string.color_green),
+                                    "blue" to stringResource(R.string.color_blue),
+                                    "purple" to stringResource(R.string.color_purple),
+                                )
+                                standardColors.chunked(4).forEach { rowItems ->
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        rowItems.forEach { (value, label) ->
+                                            PostSelectablePill(
+                                                text = label,
+                                                selected = form.color == value,
+                                                onClick = {
+                                                    if (editable && !isSaving) {
+                                                        viewModel.updateForm {
+                                                            copy(color = if (color == value) "" else value)
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))

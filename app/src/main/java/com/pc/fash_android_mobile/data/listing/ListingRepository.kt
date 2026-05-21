@@ -171,6 +171,8 @@ class ListingRepository(
         update.measurementShoulders?.let { json.put("measurement_shoulders", it) }
         update.measurementSleeveLength?.let { json.put("measurement_sleeve_length", it) }
         update.shippingAddressId?.let { json.put("shipping_address_id", it) }
+        update.color?.let { json.put("color", it) }
+        update.genderTarget?.let { json.put("gender_target", it) }
         if (json.length() == 0) return@runCatching
         executePutJson(url, json.toString())
     }
@@ -304,6 +306,8 @@ class ListingRepository(
         request.parentCategory?.let { json.put("parent_category", namedRefToJson(it, maxNameLen = 100)) }
         if (request.description.isNotBlank()) json.put("description", request.description)
         if (request.size.isNotBlank()) json.put("size", request.size)
+        request.color?.takeIf { it.isNotBlank() }?.let { json.put("color", it.trim().lowercase()) }
+        request.genderTarget?.takeIf { it.isNotBlank() }?.let { json.put("gender_target", it.trim().lowercase()) }
         request.brand?.let { json.put("brand", namedRefToJson(it, maxNameLen = 255)) }
         if (request.aestheticTags.isNotEmpty()) {
             val tagsArr = JSONArray()
@@ -777,6 +781,8 @@ class ListingRepository(
                 else -> false
             },
             status = o.optString("status", o.optString("Status", "active")).lowercase().ifBlank { "active" },
+            color = o.optString("color", o.optString("Color", "")).trim().lowercase().ifBlank { null },
+            genderTarget = o.optString("gender_target", o.optString("GenderTarget", "")).trim().lowercase().ifBlank { null },
         )
     }
 
@@ -834,6 +840,10 @@ data class CreateListingRequest(
     val category: NamedRefPayload,
     val description: String = "",
     val size: String = "",
+    /** Primary product colour in lowercase English (e.g. "black", "navy blue"). */
+    val color: String? = null,
+    /** Target gender: "women" | "men" | "unisex" | "kids" | "baby". */
+    val genderTarget: String? = null,
     /** Optional parent category in hierarchy. */
     val parentCategory: NamedRefPayload? = null,
     /** Optional; same `{id,name}` shape as category (brand `name` max 255 on wire). */
@@ -882,6 +892,10 @@ data class UpdateListingRequest(
     val measurementShoulders: Double? = null,
     val measurementSleeveLength: Double? = null,
     val shippingAddressId: String? = null,
+    /** Primary colour keyword; "" = clear. Null = no change. */
+    val color: String? = null,
+    /** Intended wearer: women | men | unisex | kids | baby | "" to clear. Null = no change. */
+    val genderTarget: String? = null,
 )
 
 data class CreateListingResponse(val id: String)

@@ -529,6 +529,13 @@ fun MainNavScreen(
                         viewModel = homeViewModel,
                         onListingClick = onListingClick,
                         onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
+                        onNavigateToExploreWithTag = { tagName ->
+                            // tagName is the display name. We look up the ID from the HomeViewModel's
+                            // cached discovery bundle so we can use toggleInterestChipWithId directly.
+                            val chipId = homeViewModel.trendingStyleTagChipIdForName(tagName)
+                            exploreViewModel.toggleInterestChipWithId(chipId, tagName)
+                            onTabChange(MainTab.Explore.ordinal)
+                        },
                         onOrdersClick = openOrders,
                         onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: openOrders,
                         onNavigateToChat = {

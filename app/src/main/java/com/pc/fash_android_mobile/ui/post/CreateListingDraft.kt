@@ -40,6 +40,10 @@ data class CreateListingDraft(
     val selectedAestheticTagIds: Set<String> = emptySet(),
     val condition: String = "",
     val size: String = "",
+    /** Primary product colour in lowercase English (e.g. "black"). Optional. */
+    val color: String = "",
+    /** Target gender: "women" | "men" | "unisex" | "kids" | "baby". Recommended. */
+    val genderTarget: String = "",
     val brandId: String? = null,
     val brandName: String = "",
     val title: String = "",
@@ -133,6 +137,8 @@ fun CreateListingDraft.toCreateListingRequest(
         category = NamedRefPayload(id = leafId, name = leafName),
         description = description.trim(),
         size = size.trim(),
+        color = color.trim().lowercase().ifBlank { null },
+        genderTarget = genderTarget.trim().lowercase().ifBlank { null },
         parentCategory = parentRef,
         brand = brandRef,
         aestheticTags = aestheticTagRefs,

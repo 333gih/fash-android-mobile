@@ -465,10 +465,40 @@ fun HomeSimilarToSavedSection(
     )
 }
 
+/**
+ * Personalized "For You" carousel from `GET /recommendations/home-sections.for_you`.
+ * Reuses the Hunt Today layout to keep the home rail visual language consistent.
+ */
+@Composable
+fun HomeForYouSection(
+    items: List<ListingFeedItem>,
+    onListingClick: (listingId: String, sellerId: String?) -> Unit,
+    onLike: (ListingFeedItem) -> Unit,
+    onSave: (ListingFeedItem) -> Unit,
+    onSeeAllClick: () -> Unit,
+    onRecordView: (ListingFeedItem, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (items.size < 2) return
+    HomeHuntTodaySection(
+        items = items,
+        isLoading = false,
+        onSeeAllClick = onSeeAllClick,
+        onListingClick = onListingClick,
+        onLike = onLike,
+        onSave = onSave,
+        onRecordView = { item -> onRecordView(item, items.indexOf(item).coerceAtLeast(0)) },
+        modifier = modifier,
+        titleRes = R.string.home_section_for_you_title,
+        subtitleRes = R.string.home_section_for_you_subtitle,
+        seeAllRes = R.string.home_hunt_today_see_all,
+    )
+}
+
 @Composable
 fun HomeTrendingStylesSection(
-    tags: List<String>,
-    onTagClick: (tagName: String) -> Unit,
+    tags: List<com.pc.fash_android_mobile.data.search.TrendingTagChip>,
+    onTagClick: (chip: com.pc.fash_android_mobile.data.search.TrendingTagChip) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (tags.isEmpty()) return
@@ -487,13 +517,13 @@ fun HomeTrendingStylesSection(
             ),
             horizontalArrangement = Arrangement.spacedBy(spacing.spacing2),
         ) {
-            items(tags, key = { it }) { tag ->
+            items(tags, key = { it.id.ifBlank { it.name } }) { tag ->
                 FilterChip(
                     selected = false,
                     onClick = { onTagClick(tag) },
                     label = {
                         Text(
-                            text = "#$tag",
+                            text = "#${tag.name}",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

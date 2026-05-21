@@ -173,6 +173,81 @@ fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(12.dp))
+            // ── Gender Target ──────────────────────────────────────────────────
+            PostMeasureSectionCard {
+                PostMeasureSectionLabel("Đối tượng (Khuyến khích)")
+                Text(
+                    text = "Sản phẩm dành cho ai?",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    listOf(
+                        "women" to "Nữ",
+                        "men" to "Nam",
+                        "unisex" to "Unisex",
+                        "kids" to "Trẻ em",
+                    ).forEach { (value, label) ->
+                        PostSelectablePill(
+                            text = label,
+                            selected = draft.genderTarget == value,
+                            onClick = {
+                                viewModel.updateDraft {
+                                    copy(genderTarget = if (genderTarget == value) "" else value)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            // ── Primary Color ──────────────────────────────────────────────────
+            PostMeasureSectionCard {
+                PostMeasureSectionLabel("Màu sắc chính (Tùy chọn)")
+                Text(
+                    text = "Giúp người mua lọc theo màu và cải thiện đề xuất.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                @Suppress("SpellCheckingInspection")
+                val standardColors = listOf(
+                    "black" to "Đen",
+                    "white" to "Trắng",
+                    "grey" to "Xám",
+                    "navy" to "Navy",
+                    "beige" to "Be",
+                    "brown" to "Nâu",
+                    "blue" to "Xanh dương",
+                    "red" to "Đỏ",
+                    "green" to "Xanh lá",
+                    "pink" to "Hồng",
+                    "yellow" to "Vàng",
+                    "olive" to "Olive",
+                    "cream" to "Kem",
+                    "orange" to "Cam",
+                    "purple" to "Tím",
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    standardColors.chunked(4).forEach { rowItems ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowItems.forEach { (value, label) ->
+                                PostSelectablePill(
+                                    text = label,
+                                    selected = draft.color == value,
+                                    onClick = {
+                                        viewModel.updateDraft {
+                                            copy(color = if (color == value) "" else value)
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(24.dp))
         }
     }

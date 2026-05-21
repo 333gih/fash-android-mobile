@@ -77,6 +77,11 @@ fun SizingReferenceScreen(
     onComplete: () -> Unit,
     onSkip: () -> Unit,
     onBack: () -> Unit,
+    /** Optional body measurements — help estimate size when referenceSize is not filled in. */
+    heightCm: String = "",
+    onHeightCmChange: (String) -> Unit = {},
+    weightKg: String = "",
+    onWeightKgChange: (String) -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val topAnim = remember { Animatable(0f) }
@@ -178,6 +183,51 @@ fun SizingReferenceScreen(
                     sleeve = measurementSleeve,
                     onSleeveChange = onMeasurementSleeveChange,
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Chiều cao & Cân nặng (Tùy chọn)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "Giúp gợi ý size tốt hơn khi bạn chưa nhập đo lường.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = heightCm,
+                        onValueChange = onHeightCmChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Chiều cao (cm)") },
+                        placeholder = { Text("160") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = scheme.surfaceContainerHighest,
+                            unfocusedContainerColor = scheme.surfaceContainerHighest,
+                        ),
+                    )
+                    OutlinedTextField(
+                        value = weightKg,
+                        onValueChange = onWeightKgChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Cân nặng (kg)") },
+                        placeholder = { Text("55.0") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = scheme.surfaceContainerHighest,
+                            unfocusedContainerColor = scheme.surfaceContainerHighest,
+                        ),
+                    )
+                }
                 Spacer(modifier = Modifier.height(24.dp))
             }
 

@@ -670,6 +670,8 @@ class UserRepository(
         preferredPriceMin: Long? = null,
         preferredPriceMax: Long? = null,
         preferredConditions: List<String> = emptyList(),
+        /** Gender preference: "women" | "men" | "non_binary" | "prefer_not_to_say" | null (unchanged). */
+        gender: String? = null,
     ): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/users/me/shopping-preferences")
         val json = JSONObject().apply {
@@ -679,6 +681,7 @@ class UserRepository(
             if (preferredConditions.isNotEmpty()) {
                 put("preferred_conditions", JSONArray(preferredConditions))
             }
+            gender?.takeIf { it.isNotBlank() }?.let { put("gender", it.trim().lowercase()) }
         }.toString()
         securedClient.newCall(
             Request.Builder()
@@ -711,6 +714,8 @@ class UserRepository(
             put("reference_measurement_length", request.referenceMeasurementLength)
             put("reference_measurement_shoulders", request.referenceMeasurementShoulders)
             put("reference_measurement_sleeve_length", request.referenceMeasurementSleeveLength)
+            request.heightCm?.let { put("height_cm", it) }
+            request.weightKg?.let { put("weight_kg", it) }
         }.toString()
         securedClient.newCall(
             Request.Builder()
@@ -759,6 +764,7 @@ class UserRepository(
             }
             json.put("aesthetic_tags", arr)
         }
+        patch.gender?.let { json.put("gender", it) }
         patch.referenceSize?.let { json.put("reference_size", it) }
         patch.referenceMeasurementUnit?.let { u ->
             json.put("reference_measurement_unit", u.trim().lowercase(Locale.ROOT))
@@ -1120,6 +1126,7 @@ class UserRepository(
                 "sizing_reference_completed",
                 o.optBoolean("SizingReferenceCompleted", false),
             ),
+            gender = o.optString("gender", o.optString("Gender", "")).trim().lowercase(Locale.ROOT),
             accountEmail = "",
             accountPhone = "",
         )
@@ -1495,6 +1502,8 @@ data class ProfilePatch(
     val avatarUrl: String? = null,
     val coverImageUrl: String? = null,
     val aestheticTags: List<AestheticTagPutItem>? = null,
+    /** Clothing gender preference: "women"|"men"|"non_binary"|"prefer_not_to_say"|"" (clear). Null = no change. */
+    val gender: String? = null,
     val referenceSize: String? = null,
     val referenceMeasurementUnit: String? = null,
     val referenceMeasurementChest: Double? = null,
@@ -1505,7 +1514,7 @@ data class ProfilePatch(
 ) {
     fun isEmpty(): Boolean =
         displayName == null && username == null && bio == null && avatarUrl == null && coverImageUrl == null &&
-            aestheticTags == null &&
+            aestheticTags == null && gender == null &&
             referenceSize == null && referenceMeasurementUnit == null &&
             referenceMeasurementChest == null && referenceMeasurementHem == null &&
             referenceMeasurementLength == null && referenceMeasurementShoulders == null &&
@@ -1520,6 +1529,9 @@ data class SizingReferenceRequest(
     val referenceMeasurementLength: Double = 0.0,
     val referenceMeasurementShoulders: Double = 0.0,
     val referenceMeasurementSleeveLength: Double = 0.0,
+    /** Optional anthropometric hints (100–250 cm / 20–300 kg). Null = do not send. */
+    val heightCm: Int? = null,
+    val weightKg: Double? = null,
 )
 
 data class AestheticTag(
@@ -1584,6 +1596,8 @@ data class ProfileInfo(
     val verified: Boolean = false,
     /** Onboarding / profile sizing step completed (`sizing_reference_completed`). */
     val sizingReferenceCompleted: Boolean = false,
+    /** Clothing gender preference set during onboarding or in Edit Profile. */
+    val gender: String = "",
     /** From auth-service `GET /auth/me` — account email (core profile may omit). */
     val accountEmail: String = "",
     /** From auth-service `GET /auth/me` — account phone. */

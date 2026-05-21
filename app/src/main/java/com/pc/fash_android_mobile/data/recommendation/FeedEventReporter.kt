@@ -40,6 +40,23 @@ class FeedEventReporter(
         flush()
     }
 
+    /**
+     * Records a true dwell signal (item visible for [dwellMs]). Distinct from `impression` so backend
+     * taste aggregation can score watch-time correctly (see AggregateFeedEventWeights).
+     */
+    fun dwell(listingId: String, surface: String, position: Int = 0, dwellMs: Int) {
+        if (dwellMs <= 0) return
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "dwell",
+                position = position,
+                dwellMs = dwellMs,
+            ),
+        )
+    }
+
     private fun enqueue(event: FeedEventPayload) {
         synchronized(lock) {
             pending.add(event)

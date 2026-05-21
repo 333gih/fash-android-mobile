@@ -78,7 +78,7 @@ class HttpHomeDiscoveryRepository(
             }
         }
         val trendingTagsAsync = async {
-            searchRepository.getTrendingTags(limit = 10).getOrElse {
+            searchRepository.getTrendingTagsWithIds(limit = 10).getOrElse {
                 Log.w(TAG, "trending tags failed: ${it.message}")
                 emptyList()
             }
@@ -94,7 +94,8 @@ class HttpHomeDiscoveryRepository(
                 stylePicks = rec?.stylePicks.orEmpty(),
                 similarToSaved = rec?.similarToSaved.orEmpty(),
                 forYou = rec?.forYou.orEmpty(),
-                trendingStyleTags = trendingTagsAsync.await(),
+                trendingStyleTagChips = trendingTagsAsync.await(),
+                trendingStyleTags = trendingTagsAsync.await().map { it.name },
             ),
         )
     }

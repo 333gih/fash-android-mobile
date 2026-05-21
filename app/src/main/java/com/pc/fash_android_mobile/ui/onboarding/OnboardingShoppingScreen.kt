@@ -28,6 +28,8 @@ fun OnboardingShoppingScreen(
     onToggleSell: () -> Unit,
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
+    selectedGender: String = "",
+    onGenderSelect: (String) -> Unit = {},
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -44,6 +46,8 @@ fun OnboardingShoppingScreen(
                 sellSelected = sellSelected,
                 onToggleBuy = onToggleBuy,
                 onToggleSell = onToggleSell,
+                selectedGender = selectedGender,
+                onGenderSelect = onGenderSelect,
                 modifier = Modifier.weight(1f),
             )
             FashPrimaryButton(

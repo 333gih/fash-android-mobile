@@ -91,6 +91,22 @@ class OnboardingViewModel(
     private val _shoppingSell = MutableStateFlow(false)
     val shoppingSell: StateFlow<Boolean> = _shoppingSell.asStateFlow()
 
+    /**
+     * Gender preference collected on the ShoppingPreferences step.
+     * Maps to profile.gender on the server; empty = user didn't choose (prefer_not_to_say assumed).
+     * Allowed values: "women" | "men" | "non_binary" | "prefer_not_to_say" | "" (not set).
+     */
+    private val _genderPreference = MutableStateFlow("")
+    val genderPreference: StateFlow<String> = _genderPreference.asStateFlow()
+
+    /** Optional height in cm (100–250). Empty string = not provided. */
+    private val _heightCm = MutableStateFlow("")
+    val heightCm: StateFlow<String> = _heightCm.asStateFlow()
+
+    /** Optional weight in kg (20–300). Empty string = not provided. */
+    private val _weightKg = MutableStateFlow("")
+    val weightKg: StateFlow<String> = _weightKg.asStateFlow()
+
     private var lastAccessStatus: UserAccessStatus? = null
     private val backStack = mutableListOf<OnboardingStep>()
 
@@ -305,8 +321,10 @@ class OnboardingViewModel(
             .filter { _selectedIds.value.contains(it.id) }
             .map { AestheticTagPutItem(id = it.id, name = it.name.ifBlank { it.displayName }) }
 
-    private fun buildSizingRequest(): SizingReferenceRequest =
-        SizingReferenceRequest(
+    private fun buildSizingRequest(): SizingReferenceRequest {
+        val heightVal = _heightCm.value.trim().toIntOrNull()?.takeIf { it in 100..250 }
+        val weightVal = _weightKg.value.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 20.0..300.0 }
+        return SizingReferenceRequest(
             referenceSize = _referenceSize.value.trim(),
             referenceMeasurementUnit = _measurementUnit.value,
             referenceMeasurementChest = parseMeasurementToDouble(_measurementChest.value),
@@ -314,7 +332,10 @@ class OnboardingViewModel(
             referenceMeasurementLength = parseMeasurementToDouble(_measurementLength.value),
             referenceMeasurementShoulders = parseMeasurementToDouble(_measurementShoulders.value),
             referenceMeasurementSleeveLength = parseMeasurementToDouble(_measurementSleeve.value),
+            heightCm = heightVal,
+            weightKg = weightVal,
         )
+    }
 
     fun submitAestheticTagsPut(onSuccess: () -> Unit) {
         viewModelScope.launch {
@@ -364,6 +385,13 @@ class OnboardingViewModel(
         _shoppingSell.value = !_shoppingSell.value
     }
 
+    fun setGenderPreference(gender: String) {
+        _genderPreference.value = gender
+    }
+
+    fun onHeightCmChange(value: String) { _heightCm.value = value }
+    fun onWeightKgChange(value: String) { _weightKg.value = value }
+
     fun submitShoppingPreferences(onSuccess: () -> Unit) {
         val intents = buildList {
             if (_shoppingBuy.value) add("buy")
@@ -376,8 +404,9 @@ class OnboardingViewModel(
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
+                val gender = _genderPreference.value.trim().lowercase().ifBlank { null }
                 val result = withContext(Dispatchers.IO) {
-                    userRepository.saveShoppingPreferences(shoppingIntents = intents)
+                    userRepository.saveShoppingPreferences(shoppingIntents = intents, gender = gender)
                 }
                 result.fold(
                     onSuccess = {
