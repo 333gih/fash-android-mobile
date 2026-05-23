@@ -20,4 +20,6 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     Invite(R.string.guest_login_reason_invite),
     /** Top-bar “Sign in” chip on Home / Explore while browsing without an account. */
     TopBar(R.string.guest_login_reason_topbar),
+    /** Explore “Match my size” filter — needs a profile with saved sizing reference. */
+    SizingMatch(R.string.guest_login_reason_sizing_match),
 }

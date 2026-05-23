@@ -66,6 +66,7 @@ import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
 import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewSheet
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -123,6 +124,7 @@ fun HomeFeedContent(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val hasMoreItems by viewModel.hasMoreItems.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val listingPreview by viewModel.listingPreview.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
 
@@ -275,11 +277,11 @@ fun HomeFeedContent(
                             items = huntTodayItems,
                             isLoading = huntTodayLoading,
                             onSeeAllClick = onNavigateToExplore,
-                            onListingClick = { id, sid ->
-                                huntTodayItems.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                    viewModel.reportListingClick(huntTodayItems[pos], "hunt_today", pos)
+                            onListingClick = { id, _ ->
+                                huntTodayItems.find { it.id == id }?.let { item ->
+                                    val pos = huntTodayItems.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                                    viewModel.openListingPreview(item, "hunt_today", pos)
                                 }
-                                onListingClick(id, sid)
                             },
                             onLike = onLikeListing,
                             onSave = onSaveListing,
@@ -308,11 +310,11 @@ fun HomeFeedContent(
                         HomeSectionReveal(sectionKey = "for-you") {
                             HomeForYouSection(
                                 items = discovery.forYou,
-                                onListingClick = { id, sid ->
-                                    discovery.forYou.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                        viewModel.reportListingClick(discovery.forYou[pos], "recommendation_for_you", pos)
+                                onListingClick = { id, _ ->
+                                    discovery.forYou.find { it.id == id }?.let { item ->
+                                        val pos = discovery.forYou.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                                        viewModel.openListingPreview(item, "recommendation_for_you", pos)
                                     }
-                                    onListingClick(id, sid)
                                 },
                                 onLike = onLikeListing,
                                 onSave = onSaveListing,
@@ -406,8 +408,7 @@ fun HomeFeedContent(
                                         onLike = { onLikeListing(feedItem) },
                                         onSave = { onSaveListing(feedItem) },
                                         onClick = {
-                                            viewModel.reportListingClick(feedItem, "home", gridPosition)
-                                            onListingClick(feedItem.id, feedItem.sellerId)
+                                            viewModel.openListingPreview(feedItem, "home", gridPosition)
                                         },
                                         onDwell = { dwellMs ->
                                             viewModel.recordDwell(feedItem, "home", gridPosition, dwellMs)
@@ -430,11 +431,11 @@ fun HomeFeedContent(
                                 items = discovery.stylePicks,
                                 isLoading = false,
                                 onSeeAllClick = onNavigateToExplore,
-                                onListingClick = { id, sid ->
-                                    discovery.stylePicks.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                        viewModel.reportListingClick(discovery.stylePicks[pos], "style_picks", pos)
+                                onListingClick = { id, _ ->
+                                    discovery.stylePicks.find { it.id == id }?.let { item ->
+                                        val pos = discovery.stylePicks.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                                        viewModel.openListingPreview(item, "style_picks", pos)
                                     }
-                                    onListingClick(id, sid)
                                 },
                                 onLike = onLikeListing,
                                 onSave = onSaveListing,
@@ -452,11 +453,11 @@ fun HomeFeedContent(
                     item {
                         HomeSimilarToSavedSection(
                                 items = discovery.similarToSaved,
-                                onListingClick = { id, sid ->
-                                    discovery.similarToSaved.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                        viewModel.reportListingClick(discovery.similarToSaved[pos], "similar_to_saved", pos)
+                                onListingClick = { id, _ ->
+                                    discovery.similarToSaved.find { it.id == id }?.let { item ->
+                                        val pos = discovery.similarToSaved.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                                        viewModel.openListingPreview(item, "similar_to_saved", pos)
                                     }
-                                    onListingClick(id, sid)
                                 },
                                 onLike = onLikeListing,
                                 onSave = onSaveListing,
@@ -469,7 +470,12 @@ fun HomeFeedContent(
                     item {
                         HomeRecentlyViewedSection(
                                 items = recentlyViewed,
-                                onListingClick = onListingClick,
+                                onListingClick = { id, _ ->
+                                    recentlyViewed.find { it.id == id }?.let { item ->
+                                        val pos = recentlyViewed.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                                        viewModel.openListingPreview(item, "recently_viewed", pos)
+                                    }
+                                },
                             )
                     }
                 }
@@ -517,6 +523,25 @@ fun HomeFeedContent(
                     )
                 }
             }
+        }
+
+        listingPreview?.let { preview ->
+            ExploreListingPreviewSheet(
+                feedItem = preview.feedItem,
+                detail = preview.detail,
+                isDetailLoading = preview.isDetailLoading,
+                onDismiss = { viewModel.closeListingPreview() },
+                onViewDetail = {
+                    val id = preview.feedItem.id
+                    val sellerId = preview.feedItem.sellerId
+                    viewModel.closeListingPreview()
+                    onListingClick(id, sellerId)
+                },
+                onLike = { viewModel.toggleLike(preview.feedItem) },
+                onSave = { viewModel.toggleSave(preview.feedItem) },
+                isGuestMode = isGuestBrowse,
+                onRequestLogin = onRequestLogin,
+            )
         }
     }
 }

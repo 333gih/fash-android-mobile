@@ -18,7 +18,9 @@ import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,6 +135,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _discoveryBundle = MutableStateFlow(HomeDiscoveryBundle())
     val discoveryBundle: StateFlow<HomeDiscoveryBundle> = _discoveryBundle.asStateFlow()
+
+    private val _listingPreview = MutableStateFlow<ExploreListingPreviewState?>(null)
+    val listingPreview: StateFlow<ExploreListingPreviewState?> = _listingPreview.asStateFlow()
+    private var listingPreviewDetailJob: Job? = null
 
     /**
      * True when (a) the viewer is signed in, (b) their profile has no reference_size or measurements,
@@ -509,6 +515,43 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         feedEventReporter.click(item.id, surface = surface, position = position)
     }
 
+    /** Opens the half-sheet quick look (same UX as Explore) instead of navigating straight to PDP. */
+    fun openListingPreview(item: ListingFeedItem, surface: String, position: Int = 0) {
+        reportListingClick(item, surface, position)
+        recordView(item, position, surface)
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = ExploreListingPreviewState(
+            feedItem = item,
+            gridPosition = position,
+            detail = null,
+            isDetailLoading = true,
+        )
+        listingPreviewDetailJob = viewModelScope.launch {
+            val guest = isGuestBrowse()
+            withContext(Dispatchers.IO) {
+                listingRepository.getListingDetail(item.id, publicBrowse = guest)
+            }.fold(
+                onSuccess = { detail ->
+                    _listingPreview.update { cur ->
+                        if (cur?.feedItem?.id != item.id) return@update cur
+                        cur.copy(detail = detail, isDetailLoading = false)
+                    }
+                },
+                onFailure = {
+                    _listingPreview.update { cur ->
+                        if (cur?.feedItem?.id != item.id) return@update cur
+                        cur.copy(isDetailLoading = false)
+                    }
+                },
+            )
+        }
+    }
+
+    fun closeListingPreview() {
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = null
+    }
+
     fun follow(sellerId: String?) {
         if (sellerId.isNullOrBlank()) return
         viewModelScope.launch {
@@ -563,6 +606,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 similarToSaved = bundle.similarToSaved.patch(),
                 forYou = bundle.forYou.patch(),
             )
+        }
+        _listingPreview.update { preview ->
+            preview?.takeIf { it.feedItem.id == listingId }?.copy(feedItem = transform(preview.feedItem))
         }
     }
 }

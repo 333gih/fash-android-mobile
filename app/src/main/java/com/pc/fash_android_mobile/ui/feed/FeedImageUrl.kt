@@ -10,3 +10,7 @@ fun resolveListingImageUrl(path: String): String {
 
 /** Profile avatars/covers — same resolution rules as listing media URLs. */
 fun resolveProfileImageUrl(path: String): String = resolveListingImageUrl(path)
+
+/** Returns null when [path] is blank — avoids resolving to a broken `$base/` URL. */
+fun resolveProfileImageUrlOrNull(path: String?): String? =
+    path?.trim()?.takeIf { it.isNotEmpty() }?.let { resolveListingImageUrl(it) }

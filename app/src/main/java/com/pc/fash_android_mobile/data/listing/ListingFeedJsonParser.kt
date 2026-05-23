@@ -94,7 +94,9 @@ internal object ListingFeedJsonParser {
                         ?: seller?.optString("Username", "")?.takeIf { it.isNotBlank() }
                         ?: "user",
                     sellerAvatarUrl = seller?.optString("avatar_url", "")?.ifBlank { null }
-                        ?: seller?.optString("AvatarURL", "")?.ifBlank { null },
+                        ?: seller?.optString("AvatarURL", "")?.ifBlank { null }
+                        ?: seller?.optString("profile_image_url", "")?.ifBlank { null }
+                        ?: seller?.optString("ProfileImageURL", "")?.ifBlank { null },
                     sellerStyleTag = firstTag?.let {
                         it.optString("name", "")
                             .ifBlank { it.optString("display_name", "") }

@@ -233,6 +233,7 @@ fun ExploreScreen(
     val committedListingSearchQuery by viewModel.committedListingSearchQuery.collectAsState()
     val committedSellerSearchQuery by viewModel.committedSellerSearchQuery.collectAsState()
     val primarySection by viewModel.primarySection.collectAsState()
+    val listingPreview by viewModel.listingPreview.collectAsState()
     val sellerBrowseResults by viewModel.sellerBrowseResults.collectAsState()
     val sellerPreviewPosts by viewModel.sellerPreviewPosts.collectAsState()
     val sellersLoading by viewModel.sellersLoading.collectAsState()
@@ -418,15 +419,19 @@ fun ExploreScreen(
                                     },
                                 )
                             }
-                            // Quick toggle so buyers can switch "Match my size" without opening
-                            // the full filter sheet — surfaces Fash's size-first identity directly
-                            // in the discovery flow.
+                            // Quick toggle — match_profile only works when signed in; guests see the
+                            // control but tapping it opens the standard login sheet.
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 ExploreSizingQuickToggle(
-                                    enabled = sizingMode.equals("match_profile", ignoreCase = true),
+                                    enabled = !isGuestMode &&
+                                        sizingMode.equals("match_profile", ignoreCase = true),
                                     profileSizingState = profileSizingState,
                                     onToggle = { on ->
-                                        viewModel.setSizingModeFilter(if (on) "match_profile" else "all")
+                                        if (isGuestMode) {
+                                            if (on) onRequestLogin(GuestLoginReason.SizingMatch)
+                                        } else {
+                                            viewModel.setSizingModeFilter(if (on) "match_profile" else "all")
+                                        }
                                     },
                                 )
                             }
@@ -488,8 +493,7 @@ fun ExploreScreen(
                                         ListingGridCard(
                                             item = item,
                                             onClick = {
-                                                viewModel.reportListingClick(item, position = index)
-                                                onListingClick(item.id, item.sellerId)
+                                                viewModel.openListingPreview(item, position = index)
                                             },
                                             onDwell = { dwellMs ->
                                                 viewModel.recordListingDwell(item, "explore", index, dwellMs)
@@ -571,8 +575,7 @@ fun ExploreScreen(
                             onClearSellerSearch = viewModel::clearSellerSearch,
                             onSellerClick = onFeaturedSellerClick,
                             onListingPreviewClick = { item ->
-                                viewModel.recordView(item)
-                                onListingClick(item.id, item.sellerId)
+                                viewModel.openListingPreview(item, position = 0)
                             },
                             onRetrySellers = viewModel::retrySellerBrowse,
                         )
@@ -593,6 +596,8 @@ fun ExploreScreen(
                     selectedCountryId = selectedCountryId,
                     selectedCountryIso2 = selectedCountryIso2,
                     sizingMode = sizingMode,
+                    isGuestMode = isGuestMode,
+                    onRequestLogin = onRequestLogin,
                     onDismiss = { showFilterSheet = false },
                 )
             }
@@ -605,6 +610,25 @@ fun ExploreScreen(
                     },
                     onSkip = { showSizingSetupSheet = false },
                     onDismiss = { showSizingSetupSheet = false },
+                )
+            }
+
+            listingPreview?.let { preview ->
+                ExploreListingPreviewSheet(
+                    feedItem = preview.feedItem,
+                    detail = preview.detail,
+                    isDetailLoading = preview.isDetailLoading,
+                    onDismiss = { viewModel.closeListingPreview() },
+                    onViewDetail = {
+                        val id = preview.feedItem.id
+                        val sellerId = preview.feedItem.sellerId
+                        viewModel.closeListingPreview()
+                        onListingClick(id, sellerId)
+                    },
+                    onLike = { viewModel.toggleLike(preview.feedItem) },
+                    onSave = { viewModel.toggleSave(preview.feedItem) },
+                    isGuestMode = isGuestMode,
+                    onRequestLogin = onRequestLogin,
                 )
             }
         }
@@ -1718,6 +1742,8 @@ private fun ExploreFilterBottomSheet(
     selectedCountryId: String?,
     selectedCountryIso2: String?,
     sizingMode: String,
+    isGuestMode: Boolean,
+    onRequestLogin: (GuestLoginReason) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var showCategoryPicker by rememberSaveable { mutableStateOf(false) }
@@ -1793,7 +1819,9 @@ private fun ExploreFilterBottomSheet(
             )
             ExploreSizingFilterSection(
                 sizingMode = sizingMode,
+                isGuestMode = isGuestMode,
                 onSelect = viewModel::setSizingModeFilter,
+                onRequestLogin = onRequestLogin,
             )
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
@@ -1838,11 +1866,13 @@ private fun ExploreFilterBottomSheet(
 @Composable
 private fun ExploreSizingFilterSection(
     sizingMode: String,
+    isGuestMode: Boolean,
     onSelect: (String) -> Unit,
+    onRequestLogin: (GuestLoginReason) -> Unit,
 ) {
     val edge = FashTheme.spacing.editorialStart
     val isAll = sizingMode.equals("all", ignoreCase = true)
-    val isMatch = sizingMode.equals("match_profile", ignoreCase = true)
+    val isMatch = !isGuestMode && sizingMode.equals("match_profile", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1864,7 +1894,13 @@ private fun ExploreSizingFilterSection(
             ExploreFilterChip(
                 label = stringResource(R.string.explore_filter_sizing_match_profile),
                 selected = isMatch,
-                onClick = { onSelect("match_profile") },
+                onClick = {
+                    if (isGuestMode) {
+                        onRequestLogin(GuestLoginReason.SizingMatch)
+                    } else {
+                        onSelect("match_profile")
+                    }
+                },
             )
         }
     }

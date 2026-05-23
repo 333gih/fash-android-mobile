@@ -10,6 +10,7 @@ import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.listing.Category
+import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
@@ -46,6 +47,14 @@ enum class ExplorePrimarySection {
     Listings,
     Sellers,
 }
+
+/** Half-screen quick look on Explore — feed row plus optional enriched detail from GET /listings/:id. */
+data class ExploreListingPreviewState(
+    val feedItem: ListingFeedItem,
+    val gridPosition: Int = 0,
+    val detail: ListingDetail? = null,
+    val isDetailLoading: Boolean = false,
+)
 
 class ExploreViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -134,6 +143,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     private val _listings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val listings: StateFlow<List<ListingFeedItem>> = _listings.asStateFlow()
+
+    private val _listingPreview = MutableStateFlow<ExploreListingPreviewState?>(null)
+    val listingPreview: StateFlow<ExploreListingPreviewState?> = _listingPreview.asStateFlow()
+    private var listingPreviewDetailJob: Job? = null
 
     /** More pages available (`GET /search/listings` returned a full page). */
     private val _hasMore = MutableStateFlow(true)
@@ -694,8 +707,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     /**
      * Reads the viewer's profile to classify how rich their sizing data is. Cheap (one HTTP),
-     * non-fatal — guests and offline users degrade silently to `Unknown` and the toggle still
-     * works, but the Explore UI won't push the setup nudge.
+     * non-fatal — guests degrade to `Unknown`, reset match_profile to `all`, and the UI routes
+     * sign-in when they try to enable the filter.
      */
     /** Call after the viewer saves profile sizing so the Explore toggle badge updates immediately. */
     fun refreshProfileSizingStateAfterSave() {
@@ -705,6 +718,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun refreshProfileSizingState() {
         if (isGuestBrowse()) {
             _profileSizingState.value = ProfileSizingState.Unknown
+            // Guests must not keep match_profile active — sizing filter requires a signed-in profile.
+            if (_sizingMode.value.equals("match_profile", ignoreCase = true)) {
+                _sizingMode.value = "all"
+            }
             return
         }
         val uid = fashApp.authManager.sessionStore.read()?.userId
@@ -1129,6 +1146,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun setSizingModeFilter(mode: String) {
         val m = if (mode.equals("match_profile", ignoreCase = true)) "match_profile" else "all"
+        if (isGuestBrowse() && m == "match_profile") return
         if (m == _sizingMode.value) return
         _sizingMode.value = m
         ExploreSizingPreference.write(getApplication(), m)
@@ -1360,6 +1378,46 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 items.map { if (it.id == listingId) transform(it) else it }
             }
         }
+        _listingPreview.update { preview ->
+            preview?.takeIf { it.feedItem.id == listingId }?.copy(feedItem = transform(preview.feedItem))
+        }
+    }
+
+    /** Opens the Explore half-sheet preview instead of navigating straight to PDP. */
+    fun openListingPreview(item: ListingFeedItem, position: Int = 0) {
+        reportListingClick(item, position)
+        recordView(item, position)
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = ExploreListingPreviewState(
+            feedItem = item,
+            gridPosition = position,
+            detail = null,
+            isDetailLoading = true,
+        )
+        listingPreviewDetailJob = viewModelScope.launch {
+            val guest = isGuestBrowse()
+            withContext(Dispatchers.IO) {
+                listingRepository.getListingDetail(item.id, publicBrowse = guest)
+            }.fold(
+                onSuccess = { detail ->
+                    _listingPreview.update { cur ->
+                        if (cur?.feedItem?.id != item.id) return@update cur
+                        cur.copy(detail = detail, isDetailLoading = false)
+                    }
+                },
+                onFailure = {
+                    _listingPreview.update { cur ->
+                        if (cur?.feedItem?.id != item.id) return@update cur
+                        cur.copy(isDetailLoading = false)
+                    }
+                },
+            )
+        }
+    }
+
+    fun closeListingPreview() {
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = null
     }
 
     fun toggleLike(item: ListingFeedItem) {
