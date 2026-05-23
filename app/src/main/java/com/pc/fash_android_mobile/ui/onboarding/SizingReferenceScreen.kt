@@ -185,12 +185,12 @@ fun SizingReferenceScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Chiều cao & Cân nặng (Tùy chọn)",
+                    text = stringResource(R.string.onboarding_sizing_optional_body_title),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "Giúp gợi ý size tốt hơn khi bạn chưa nhập đo lường.",
+                    text = stringResource(R.string.onboarding_sizing_optional_body_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
@@ -203,8 +203,8 @@ fun SizingReferenceScreen(
                         value = heightCm,
                         onValueChange = onHeightCmChange,
                         modifier = Modifier.weight(1f),
-                        label = { Text("Chiều cao (cm)") },
-                        placeholder = { Text("160") },
+                        label = { Text(stringResource(R.string.onboarding_sizing_optional_height_label)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_sizing_optional_height_placeholder)) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -217,8 +217,8 @@ fun SizingReferenceScreen(
                         value = weightKg,
                         onValueChange = onWeightKgChange,
                         modifier = Modifier.weight(1f),
-                        label = { Text("Cân nặng (kg)") },
-                        placeholder = { Text("55.0") },
+                        label = { Text(stringResource(R.string.onboarding_sizing_optional_weight_label)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_sizing_optional_weight_placeholder)) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

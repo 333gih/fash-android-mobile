@@ -51,6 +51,9 @@ private val BuyerDeliveringStatuses = setOf(
 
 private const val HomeHuntTodayPreviewLimit = 8
 
+/** Size of one follow-feed page (`GET /api/v1/listings/home`). */
+internal const val HomeFollowFeedPageSize = 20
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val fashApp: FashApplication = application as FashApplication
@@ -83,6 +86,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         listingRepository = fashApp.listingRepository,
         recommendationRepository = fashApp.recommendationRepository,
         guestBrowseProvider = { isGuestBrowse() },
+        // Home rails honor the same "Match my size" toggle as Explore.
+        sizingModeProvider = { com.pc.fash_android_mobile.data.explore.ExploreSizingPreference.read(application) },
     )
 
     private val _items = MutableStateFlow<List<ListingFeedItem>>(emptyList())
@@ -100,6 +105,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    /** Follow-feed pagination — true while next page is in flight. */
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+
+    /** Follow-feed pagination — false when last fetch returned < HomeFollowFeedPageSize. */
+    private val _hasMoreItems = MutableStateFlow(true)
+    val hasMoreItems: StateFlow<Boolean> = _hasMoreItems.asStateFlow()
 
     private val _scrollHomeToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollHomeToTop: SharedFlow<Unit> = _scrollHomeToTop.asSharedFlow()
@@ -122,6 +135,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _discoveryBundle = MutableStateFlow(HomeDiscoveryBundle())
     val discoveryBundle: StateFlow<HomeDiscoveryBundle> = _discoveryBundle.asStateFlow()
 
+    /**
+     * True when (a) the viewer is signed in, (b) their profile has no reference_size or measurements,
+     * and (c) they haven't dismissed the banner. Drives the small "Add my size" prompt at the top of
+     * the home feed — mirrors the Explore quick toggle nudge so users hit the same CTA wherever they
+     * are in the app.
+     */
+    private val _showSizingBanner = MutableStateFlow(false)
+    val showSizingBanner: StateFlow<Boolean> = _showSizingBanner.asStateFlow()
+
     init {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
@@ -131,6 +153,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
             }
         }
+        viewModelScope.launch(Dispatchers.IO) { refreshSizingBannerState() }
         loadFeed()
         // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
         viewModelScope.launch {
@@ -155,6 +178,49 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = { _discoveryBundle.value = it },
             onFailure = { /* keep last good payload; stub should not fail */ },
         )
+    }
+
+    /**
+     * Re-evaluates whether the Home "Add your size" banner should be shown. Reads the viewer's
+     * profile from network — same call the Explore VM makes — but is best-effort and silently fails
+     * (banner stays hidden on failure).
+     */
+    private suspend fun refreshSizingBannerState() {
+        if (isGuestBrowse()) {
+            _showSizingBanner.value = false
+            return
+        }
+        val ctx = getApplication<Application>().applicationContext
+        if (com.pc.fash_android_mobile.data.home.HomeSizingBannerPreference.isDismissed(ctx)) {
+            _showSizingBanner.value = false
+            return
+        }
+        val uid = fashApp.authManager.sessionStore.read()?.userId
+        if (uid.isNullOrBlank()) {
+            _showSizingBanner.value = false
+            return
+        }
+        userRepository.getMeProfile().fold(
+            onSuccess = { info ->
+                val hasSize = !info.referenceSize.isNullOrBlank()
+                val hasMeasurement = listOf(
+                    info.referenceMeasurementChest,
+                    info.referenceMeasurementHem,
+                    info.referenceMeasurementLength,
+                    info.referenceMeasurementShoulders,
+                    info.referenceMeasurementSleeveLength,
+                ).any { it != null && it > 0.0 }
+                _showSizingBanner.value = !hasSize && !hasMeasurement
+            },
+            onFailure = { _showSizingBanner.value = false },
+        )
+    }
+
+    /** Permanently hides the Home sizing banner until SharedPreferences are cleared (sign-out wipes them). */
+    fun dismissSizingBanner() {
+        val ctx = getApplication<Application>().applicationContext
+        com.pc.fash_android_mobile.data.home.HomeSizingBannerPreference.markDismissed(ctx)
+        _showSizingBanner.value = false
     }
 
     private suspend fun loadBuyerHomeStats() {
@@ -226,13 +292,58 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return Result.success(emptyList())
         }
         suspend fun once(): Result<List<ListingFeedItem>> =
-            listingRepository.getHomeFeed(limit = 20, offset = 0)
+            listingRepository.getHomeFeed(limit = HomeFollowFeedPageSize, offset = 0)
         var result = once()
         if (result.isFailure) {
             delay(400)
             result = once()
         }
+        // Initial page resets "has more": only continue paginating if we got a full page.
+        result.onSuccess { page -> _hasMoreItems.value = page.size >= HomeFollowFeedPageSize }
         return result
+    }
+
+    /**
+     * Fetch the next page of follow-feed listings (offset = current size). Idempotent: the call is
+     * a no-op when a previous load is still in flight, when there are no more items, when we are in
+     * guest browse mode, or when nothing has loaded yet. Triggered from the UI by the
+     * lazy-list "near the bottom" snapshotFlow in HomeFeedContent.
+     */
+    fun loadMoreFollowFeed() {
+        if (isGuestBrowse()) return
+        if (_isLoadingMore.value || !_hasMoreItems.value) return
+        if (_isLoading.value || _isRefreshing.value) return
+        val offset = _items.value.size
+        if (offset == 0) return
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            val result = withContext(Dispatchers.IO) {
+                listingRepository.getHomeFeed(limit = HomeFollowFeedPageSize, offset = offset)
+            }
+            _isLoadingMore.value = false
+            result.fold(
+                onSuccess = { page ->
+                    if (page.isEmpty()) {
+                        _hasMoreItems.value = false
+                    } else {
+                        _items.update { current ->
+                            // De-dupe by id in case of overlap between pages (server hint changes).
+                            val existingIds = current.mapTo(HashSet(current.size)) { it.id }
+                            current + page.filter { existingIds.add(it.id) }
+                        }
+                        syncSellerFollowingFromListings(page)
+                        _hasMoreItems.value = page.size >= HomeFollowFeedPageSize
+                    }
+                },
+                onFailure = {
+                    // Soft fail: surface a snackbar, don't disable further attempts.
+                    _events.tryEmit(
+                        it.message?.takeIf { m -> m.isNotBlank() }
+                            ?: getApplication<Application>().getString(R.string.feed_load_error),
+                    )
+                },
+            )
+        }
     }
 
     fun retryLoad() {
@@ -255,6 +366,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _loadError.value = false
         _isLoading.value = false
         _isRefreshing.value = false
+        _isLoadingMore.value = false
+        _hasMoreItems.value = true
     }
 
     /** Bottom nav re-tap on Home — scroll feed to top (pairs with [refresh]). */
@@ -313,6 +426,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             isLiked = liked,
                         )
                     }
+                    if (liked) feedEventReporter.like(item.id, surface = "home")
                     _events.tryEmit(
                         getApplication<Application>().getString(
                             if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
@@ -351,6 +465,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     viewModelScope.launch {
                         withContext(Dispatchers.IO) { loadBuyerHomeStats() }
                     }
+                    if (saved) feedEventReporter.save(item.id, surface = "home")
                     _events.tryEmit(
                         getApplication<Application>().getString(
                             if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,

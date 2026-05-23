@@ -106,6 +106,9 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("boolean", "AUTH_API_USE_LANGUAGE_PREFIX", authApiUseLanguagePrefix.toString())
     val fbAppId = envOrEmpty("FACEBOOK_APP_ID")
     val fbClientToken = envOrEmpty("FACEBOOK_CLIENT_TOKEN")
+    val facebookLoginEnabled =
+        envVal("FACEBOOK_LOGIN_ENABLED")?.equals("true", ignoreCase = true) ?: true
+    buildConfigField("boolean", "FACEBOOK_LOGIN_ENABLED", facebookLoginEnabled.toString())
     buildConfigField("String", "FACEBOOK_APP_ID", buildConfigStringLiteral(fbAppId))
     buildConfigField("String", "FACEBOOK_CLIENT_TOKEN", buildConfigStringLiteral(fbClientToken))
     resValue("string", "facebook_app_id", fbAppId.ifEmpty { "0" })

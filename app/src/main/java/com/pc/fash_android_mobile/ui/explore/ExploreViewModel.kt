@@ -15,6 +15,7 @@ import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
+import com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.search.SearchRepository
@@ -93,8 +94,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedCountryIso2 = MutableStateFlow<String?>(null)
     val selectedCountryIso2: StateFlow<String?> = _selectedCountryIso2.asStateFlow()
 
-    /** `all` (default) or `match_profile` — passed as `sizing_mode` when not `all`. */
-    private val _sizingMode = MutableStateFlow("all")
+    /**
+     * `all` (default) or `match_profile` — passed as `sizing_mode` when not `all`.
+     *
+     * Seeded from [ExploreSizingPreference] so the user's choice survives process death
+     * (the toggle is sticky across sessions, not just within a single app lifecycle).
+     */
+    private val _sizingMode = MutableStateFlow(ExploreSizingPreference.read(application))
     val sizingMode: StateFlow<String> = _sizingMode.asStateFlow()
 
     private val _featuredSellers = MutableStateFlow<List<FeaturedSellerItem>>(emptyList())
@@ -214,6 +220,29 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /** `null` = any condition. API values: `new`, `like_new`, `good`, `fair`. */
     private val _selectedConditionFilter = MutableStateFlow<String?>(null)
     val selectedConditionFilter: StateFlow<String?> = _selectedConditionFilter.asStateFlow()
+
+    /**
+     * Coarse classification of the viewer's stored sizing reference; drives the "Match my size"
+     * quick toggle copy + nudge sheet.
+     *
+     * - `Unknown` — viewer profile not loaded yet (guests stay Unknown).
+     * - `Missing` — no reference_size and no height/weight: turning the toggle on is a no-op on the
+     *   server; we surface a setup sheet on Explore + banner on Home.
+     * - `EstimateOnly` — height/weight provided but no reference_size: backend can apply a best-effort
+     *   estimate; we badge the toggle as "Estimated".
+     * - `Full` — reference_size present (with or without measurements): toggle reads normally.
+     */
+    enum class ProfileSizingState { Unknown, Missing, EstimateOnly, Full }
+
+    private val _profileSizingState = MutableStateFlow(ProfileSizingState.Unknown)
+    val profileSizingState: StateFlow<ProfileSizingState> = _profileSizingState.asStateFlow()
+
+    /**
+     * One-shot event raised when the user toggles match_profile ON while `profileSizingState`
+     * is `Missing` — the UI listens to this to show the setup nudge sheet on Explore.
+     */
+    private val _showSizingSetupNudge = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val showSizingSetupNudge: SharedFlow<Unit> = _showSizingSetupNudge.asSharedFlow()
 
     /** `recent`, `popular`, `price_asc`, `price_desc` — applied only when text search has non-empty `q`. */
     private val _sortOption = MutableStateFlow("recent")
@@ -656,10 +685,46 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 loadFeaturedSellers()
                 loadCategories()
                 loadQuickInterestChips()
+                refreshProfileSizingState()
             }
             fetchListingsFirstPage()
             _isLoading.value = false
         }
+    }
+
+    /**
+     * Reads the viewer's profile to classify how rich their sizing data is. Cheap (one HTTP),
+     * non-fatal — guests and offline users degrade silently to `Unknown` and the toggle still
+     * works, but the Explore UI won't push the setup nudge.
+     */
+    private suspend fun refreshProfileSizingState() {
+        if (isGuestBrowse()) {
+            _profileSizingState.value = ProfileSizingState.Unknown
+            return
+        }
+        val uid = fashApp.authManager.sessionStore.read()?.userId
+        if (uid.isNullOrBlank()) {
+            _profileSizingState.value = ProfileSizingState.Unknown
+            return
+        }
+        userRepository.getMeProfile().fold(
+            onSuccess = { info ->
+                val hasSize = !info.referenceSize.isNullOrBlank()
+                val hasMeasurement = listOf(
+                    info.referenceMeasurementChest,
+                    info.referenceMeasurementHem,
+                    info.referenceMeasurementLength,
+                    info.referenceMeasurementShoulders,
+                    info.referenceMeasurementSleeveLength,
+                ).any { it != null && it > 0.0 }
+                _profileSizingState.value = when {
+                    hasSize -> ProfileSizingState.Full
+                    hasMeasurement -> ProfileSizingState.EstimateOnly
+                    else -> ProfileSizingState.Missing
+                }
+            },
+            onFailure = { _profileSizingState.value = ProfileSizingState.Unknown },
+        )
     }
 
     private suspend fun loadQuickInterestChips() {
@@ -833,6 +898,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 condition = _selectedConditionFilter.value,
                 limit = ExploreFeedPageSize,
                 offset = offset,
+                // The "Match my size" quick toggle now propagates to personalized browse too,
+                // not just text search — this closes the gap where browsing without a search
+                // term ignored the user's saved reference size/measurements.
+                sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
             )
         } else if (guest) {
             searchRepository.browseListings(
@@ -1048,6 +1117,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val m = if (mode.equals("match_profile", ignoreCase = true)) "match_profile" else "all"
         if (m == _sizingMode.value) return
         _sizingMode.value = m
+        ExploreSizingPreference.write(getApplication(), m)
+        // When the user activates Match my size but has nothing on file, route them to the setup sheet
+        // BEFORE we fire a network request that would otherwise silently degrade to "all". Guests fall
+        // through (`Unknown`) — they will be prompted to sign in via the standard guest-gate elsewhere.
+        if (m == "match_profile" && _profileSizingState.value == ProfileSizingState.Missing) {
+            _showSizingSetupNudge.tryEmit(Unit)
+        }
         viewModelScope.launch {
             _isLoading.value = true
             _loadError.value = false
@@ -1089,7 +1165,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _selectedCountryId.value = null
         _selectedCountryIso2.value = null
         _selectedConditionFilter.value = null
-        _sizingMode.value = "all"
+        if (_sizingMode.value != "all") {
+            _sizingMode.value = "all"
+            ExploreSizingPreference.write(getApplication(), "all")
+        }
         _hasMore.value = true
         reloadAfterFilterChange()
         viewModelScope.launch { requestScrollExploreToTop() }
@@ -1121,7 +1200,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _selectedCountryId.value = null
             _selectedCountryIso2.value = null
             _selectedConditionFilter.value = null
-            _sizingMode.value = "all"
+            if (_sizingMode.value != "all") {
+                _sizingMode.value = "all"
+                ExploreSizingPreference.write(getApplication(), "all")
+            }
             _isSearchMode.value = false
             _committedListingSearchQuery.value = ""
             _searchQuery.value = ""
@@ -1282,6 +1364,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                             likeCount = (cur.likeCount + delta).coerceAtLeast(0),
                         )
                     }
+                    if (liked) feedEventReporter.like(item.id, surface = "explore")
                     _events.tryEmit(
                         getApplication<Application>().getString(
                             if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
@@ -1314,6 +1397,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                             saveCount = (cur.saveCount + delta).coerceAtLeast(0),
                         )
                     }
+                    if (saved) feedEventReporter.save(item.id, surface = "explore")
                     _events.tryEmit(
                         getApplication<Application>().getString(
                             if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,

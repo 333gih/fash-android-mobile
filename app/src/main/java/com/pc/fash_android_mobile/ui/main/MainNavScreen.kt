@@ -65,7 +65,6 @@ import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
-import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.ui.main.tabs.ChatScreen
 import com.pc.fash_android_mobile.ui.main.tabs.NotificationScreen
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileScreen
@@ -190,6 +189,11 @@ fun MainNavScreen(
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
+    /**
+     * When returning true, the default reselect reload (scroll-to-top + refresh) is skipped.
+     * Use when a fullscreen overlay (e.g. seller shop) is open on top of the selected tab.
+     */
+    onMainTabReselectedIntercept: ((MainTab) -> Boolean)? = null,
     /** First-launch spotlight tour; completion is stored in [AppFeatureTourStore]. */
     featureTourActive: Boolean = false,
     onFeatureTourFinished: () -> Unit = {},
@@ -222,27 +226,13 @@ fun MainNavScreen(
     }
     val tabs = MainTab.entries
 
-    val onHomeTrendingCategoryToExplore = remember(exploreViewModel, onTabChange) {
-        { category: Category ->
-            exploreViewModel.openExploreFromProfileFilter(
-                categoryId = category.id,
-                brandId = null,
-                aestheticTagId = null,
-                searchQuery = "",
-                countryId = null,
-                countryIso2 = null,
-            )
-            onTabChange(MainTab.Explore.ordinal)
-        }
-    }
-
     val homeRefreshing by homeViewModel.isRefreshing.collectAsState()
     val exploreRefreshing by exploreViewModel.isRefreshing.collectAsState()
     val chatRefreshing by chatViewModel.isRefreshing.collectAsState()
     val profileRefreshing by profileViewModel.isRefreshing.collectAsState()
     val postNavReloading by postViewModel.navReselectLoading.collectAsState()
 
-    val onMainTabReselected: (MainTab) -> Unit = { tab ->
+    val defaultMainTabReselected: (MainTab) -> Unit = { tab ->
         when (tab) {
             MainTab.Home -> {
                 homeViewModel.requestScrollHomeToTop()
@@ -258,6 +248,11 @@ fun MainNavScreen(
                 profileViewModel.requestScrollProfileToTop()
                 profileViewModel.refresh()
             }
+        }
+    }
+    val onMainTabReselected: (MainTab) -> Unit = { tab ->
+        if (onMainTabReselectedIntercept?.invoke(tab) != true) {
+            defaultMainTabReselected(tab)
         }
     }
 
@@ -559,9 +554,10 @@ fun MainNavScreen(
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
                         onHomeEditorialPostClick = onHomeEditorialPostClick,
-                        onHomeTrendingCategoryClick = onHomeTrendingCategoryToExplore,
                         onFeaturedSellerClick = onFeaturedSellerClick,
                         onOpenFeaturedSellersAll = onOpenFeaturedSellersAll,
+                        // Home "Add your size" banner routes to the same editor as Explore's nudge.
+                        onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
                     )
                     MainTab.Explore -> ExploreScreen(
                         viewModel = exploreViewModel,
@@ -572,6 +568,9 @@ fun MainNavScreen(
                         promoSlides = promoSlides,
                         isGuestMode = isGuestMode,
                         onRequestLogin = onRequestLogin,
+                        // "Match my size" nudge → open the profile editor where the user can
+                        // add a reference size/measurements (reuses the same flow as edit profile).
+                        onOpenSizingSetup = onEditProfile,
                     )
                     MainTab.Post -> if (isGuestMode) {
                         GuestTabPlaceholder(

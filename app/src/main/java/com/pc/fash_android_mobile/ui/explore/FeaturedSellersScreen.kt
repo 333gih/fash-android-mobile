@@ -126,11 +126,28 @@ fun FeaturedSellersScreen(
         ) {
             when {
                 isLoading && items.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
+                    // Skeleton scaffold: rail of avatars + a few seller card placeholders.
+                    androidx.compose.foundation.layout.Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = FashTheme.spacing.spacing3),
                     ) {
-                        CircularProgressIndicator(color = FashColors.Primary)
+                        com.pc.fash_android_mobile.ui.components.FashSkeletonSellerStrip(
+                            cellCount = 8,
+                        )
+                        repeat(3) {
+                            com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = FashTheme.spacing.editorialStart,
+                                        end = FashTheme.spacing.editorialEnd,
+                                        bottom = FashTheme.spacing.spacing3,
+                                    )
+                                    .height(220.dp),
+                                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+                            )
+                        }
                     }
                 }
                 loadError && items.isEmpty() -> {

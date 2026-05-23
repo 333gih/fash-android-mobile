@@ -12,6 +12,7 @@ import com.pc.fash_android_mobile.data.listing.ProductDetailGuideStore
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
+import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,17 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val sessionStore =
         (application as FashApplication).authManager.sessionStore
     private val guideStore = ProductDetailGuideStore(application)
+
+    private val feedEventReporter = FeedEventReporter(
+        repository = fashApp.recommendationRepository,
+        sessionIdProvider = {
+            val uid = fashApp.authManager.sessionStore.read()?.userId
+            if (!uid.isNullOrBlank()) fashApp.browseSessionStore.sessionIdForUser(uid)
+            else fashApp.browseSessionStore.sessionId()
+        },
+        publicBrowse = { isGuestBrowse() },
+        scope = viewModelScope,
+    )
 
     private val _detail = MutableStateFlow<ListingDetail?>(null)
     val detail: StateFlow<ListingDetail?> = _detail.asStateFlow()
@@ -356,6 +368,31 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _isFollowing.value = following
     }
 
+    /**
+     * Records a share signal. Call from the PDP host right before invoking the Android share sheet
+     * so the backend taste graph attributes the outbound link to this listing. Falls back to a no-op
+     * when no listing is loaded.
+     */
+    fun reportShare() {
+        val id = _detail.value?.id ?: return
+        feedEventReporter.share(id, surface = "pdp")
+    }
+
+    /**
+     * Records a high-intent chat-initiate signal — the user opened or created a chat thread about
+     * this listing. Backend weights this above save (see core-service feed_events normalization).
+     */
+    fun reportChatInitiate() {
+        val id = _detail.value?.id ?: return
+        feedEventReporter.chatInitiate(id, surface = "pdp")
+    }
+
+    /** Viewer followed the seller from PDP — distinct surface from profile follow. */
+    fun reportSellerFollowedFromPdp() {
+        val id = _detail.value?.id ?: return
+        feedEventReporter.followSeller(id, surface = "pdp")
+    }
+
     fun toggleSave() {
         val d = _detail.value ?: return
         viewModelScope.launch {
@@ -365,6 +402,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             result.fold(
                 onSuccess = { saved ->
                     _detail.update { it?.copy(isSaved = saved) }
+                    if (saved) feedEventReporter.save(d.id, surface = "pdp")
                     _events.tryEmit(
                         getApplication<Application>().getString(
                             if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
@@ -401,6 +439,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                             likeCount = (c.likeCount + delta).coerceAtLeast(0),
                         )
                     }
+                    if (liked) feedEventReporter.like(d.id, surface = "pdp")
                     _events.tryEmit(
                         getApplication<Application>().getString(
                             if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,

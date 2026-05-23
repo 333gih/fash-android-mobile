@@ -57,6 +57,83 @@ class FeedEventReporter(
         )
     }
 
+    /**
+     * High-intent buyer signal — listing was saved to wishlist. Server weights saves > clicks > impressions
+     * (see core-service feed_events normalization). Flushed immediately so taste refresh sees it.
+     */
+    fun save(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "save",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
+    /** Lightweight affection signal. Less weight than `save` but stronger than `click`. */
+    fun like(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "like",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
+    /**
+     * Outbound share (deeplink generated, share sheet shown). Surface is whatever the user shared
+     * FROM (e.g. "pdp", "explore_grid", "home_for_you").
+     */
+    fun share(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "share",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
+    /**
+     * User opened/created a chat about the listing — closest signal to "ready to buy" we currently
+     * collect. Flushed eagerly.
+     */
+    fun chatInitiate(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "chat_initiate",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
+    /**
+     * Viewer followed the seller from a listing context. Distinct from a plain profile follow so the
+     * backend can attribute the signal to a listing surface for content-based taste building.
+     */
+    fun followSeller(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "follow_seller",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
     private fun enqueue(event: FeedEventPayload) {
         synchronized(lock) {
             pending.add(event)

@@ -32,6 +32,12 @@ class HttpHomeDiscoveryRepository(
     /** Home rail size for recently viewed. */
     private val homeRecentlyViewedLimit: Int = 12,
     private val guestBrowseProvider: () -> Boolean = { false },
+    /**
+     * Per-call sizing preference resolver. Returning `"match_profile"` propagates the user's
+     * "Match my size" toggle from Explore through to the Home rails (for_you / style_picks /
+     * similar_to_saved) so Home behaves consistently with Explore. Default `"all"`.
+     */
+    private val sizingModeProvider: () -> String = { "all" },
 ) : HomeDiscoveryRepository {
 
     override suspend fun loadDiscoveryBundle(): Result<HomeDiscoveryBundle> = coroutineScope {
@@ -72,6 +78,7 @@ class HttpHomeDiscoveryRepository(
                 publicBrowse = guest,
                 forYouLimit = homeRecentlyViewedLimit,
                 sectionLimit = 8,
+                sizingMode = sizingModeProvider().takeIf { it.equals("match_profile", ignoreCase = true) },
             ).getOrElse {
                 Log.w(TAG, "home-sections failed: ${it.message}")
                 null

@@ -50,25 +50,25 @@ fun ShoppingPreferencesOnboardScreen(
 
         // Gender preference — helps power personalised recommendations
         Text(
-            text = "Bạn thường mua đồ cho ai?",
+            text = stringResource(R.string.onboarding_shopping_gender_title),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Giúp chúng tôi gợi ý sản phẩm phù hợp hơn.",
+            text = stringResource(R.string.onboarding_shopping_gender_subtitle),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                "women" to "Nữ",
-                "men" to "Nam",
-                "non_binary" to "Cả hai",
-            ).forEach { (value, label) ->
+                "women" to R.string.onboarding_shopping_gender_women,
+                "men" to R.string.onboarding_shopping_gender_men,
+                "non_binary" to R.string.onboarding_shopping_gender_non_binary,
+            ).forEach { (value, labelRes) ->
                 FilterChip(
                     selected = selectedGender == value,
                     onClick = { onGenderSelect(if (selectedGender == value) "" else value) },
-                    label = { Text(label) },
+                    label = { Text(stringResource(labelRes)) },
                 )
             }
         }

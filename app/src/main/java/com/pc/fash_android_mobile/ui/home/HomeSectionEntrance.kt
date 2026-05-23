@@ -13,16 +13,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 /**
  * Staggered fade + slide-up for home dashboard rows (Gen Z–friendly motion, not distracting).
+ *
+ * Use [StaggeredEntrance] when several siblings should appear in sequence (e.g. journey stat cards
+ * that share a parent composition). For LazyColumn rails, prefer [HomeSectionReveal] which animates
+ * each rail individually as it scrolls into view and persists the "seen" flag across the session so
+ * re-entering a rail does not re-trigger the motion.
  */
 @Composable
 internal fun StaggeredEntrance(
@@ -50,6 +56,55 @@ internal fun StaggeredEntrance(
             stiffness = Spring.StiffnessMediumLow,
         ),
         label = "homeStaggerY",
+    )
+    Box(
+        modifier = modifier
+            .offset { IntOffset(0, offsetY.roundToPx()) }
+            .graphicsLayer { this.alpha = alpha },
+    ) {
+        content()
+    }
+}
+
+/**
+ * One-shot fade + slide-up reveal for a single rail/section in a LazyColumn.
+ *
+ * Each call uses [rememberSaveable] keyed by [sectionKey] so:
+ * - the rail animates the FIRST time it scrolls into view, and
+ * - re-scrolling past it later does not retrigger (no jitter during fast scroll).
+ *
+ * [initialOffsetY] = 16dp + 240ms is intentionally subtler than the journey stagger (14dp + 360ms +
+ * cross-stagger) so individual rails feel light rather than dramatic.
+ */
+@Composable
+internal fun HomeSectionReveal(
+    sectionKey: String,
+    modifier: Modifier = Modifier,
+    initialOffsetY: Dp = 16.dp,
+    durationMs: Int = 240,
+    content: @Composable () -> Unit,
+) {
+    // Survives scroll-off; if the user already saw this rail this session we render without motion.
+    var seen by rememberSaveable(sectionKey) { mutableStateOf(false) }
+    var visible by remember(sectionKey) { mutableStateOf(seen) }
+    LaunchedEffect(sectionKey) {
+        if (!seen) {
+            visible = true
+            seen = true
+        }
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMs, easing = FastOutSlowInEasing),
+        label = "homeRevealAlpha-$sectionKey",
+    )
+    val offsetY by animateDpAsState(
+        targetValue = if (visible) 0.dp else initialOffsetY,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "homeRevealOffsetY-$sectionKey",
     )
     Box(
         modifier = modifier

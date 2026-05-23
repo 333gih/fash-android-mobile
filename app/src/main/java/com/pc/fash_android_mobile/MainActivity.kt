@@ -106,6 +106,7 @@ import com.pc.fash_android_mobile.ui.sellerpackages.SellerPackageCheckoutScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
+import com.pc.fash_android_mobile.ui.login.LoginHeroSlidesViewModel
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingShoppingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
@@ -254,6 +255,7 @@ class MainActivity : ComponentActivity() {
     private val changePasswordViewModel: ChangePasswordViewModel by viewModels()
     private val notificationsViewModel: com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel by viewModels()
     private val promoSlidesViewModel: PromoSlidesViewModel by viewModels()
+    private val loginHeroSlidesViewModel: LoginHeroSlidesViewModel by viewModels()
     private val sellerProductPackagesViewModel: SellerProductPackagesViewModel by viewModels()
     private val authManager get() = (application as FashApplication).authManager
 
@@ -341,6 +343,7 @@ class MainActivity : ComponentActivity() {
             val password by loginViewModel.password.collectAsState()
             val usePasswordLogin by loginViewModel.usePasswordLogin.collectAsState()
             val isPasswordLoading by loginViewModel.isPasswordLoading.collectAsState()
+            val loginHeroSlides by loginHeroSlidesViewModel.remoteSlides.collectAsState()
             val isAuthenticated by authManager.isAuthenticated.collectAsState(initial = false)
             val sessionExpiredMessage by authManager.sessionExpiredMessage.collectAsState()
             // Show snackbar when the server force-expires the session, then navigate to login
@@ -390,6 +393,7 @@ class MainActivity : ComponentActivity() {
             val onboardingSetupPwConfirm by onboardingViewModel.setupPasswordConfirm.collectAsState()
             val onboardingLoading by onboardingViewModel.isLoading.collectAsState()
             val onboardingSubmitting by onboardingViewModel.isSubmitting.collectAsState()
+            val facebookLoginEnabled = LoginViewModel.isFacebookLoginEnabled()
             val facebookOk = LoginViewModel.isFacebookConfigured()
             val googleOk = LoginViewModel.isGoogleConfigured()
             val profileSetupBlocksShellChrome =
@@ -429,14 +433,35 @@ class MainActivity : ComponentActivity() {
                     val hasSession = withContext(Dispatchers.IO) {
                         authManager.sessionStore.read() != null
                     }
-                    if (hasSession) {
-                        withContext(Dispatchers.IO) {
-                            authManager.validateOrClearSession()
+                    // `authenticated` is the definitive result: we don't rely on the Compose
+                    // collectAsState snapshot of isAuthenticated here because validateOrClearSession
+                    // sets _isAuthenticated on the IO thread and the StateFlow update may not yet
+                    // have been delivered to the Compose snapshot by the time we return to the main
+                    // thread. Using the direct boolean prevents a one-frame race where
+                    // splashFinished=true but isAuthenticated is still false, which would cause
+                    // LaunchedEffect(splashFinished, isAuthenticated) below to incorrectly set
+                    // isGuestBrowse=true and briefly show the guest shell.
+                    val authenticated = if (hasSession) {
+                        withContext(Dispatchers.IO) { authManager.validateOrClearSession() }
+                    } else {
+                        false
+                    }
+                    // Decide guest vs authenticated shell in the same synchronous block as
+                    // splashFinished so all three mutations are batched into one recomposition.
+                    if (!initialGuestShellDecided) {
+                        initialGuestShellDecided = true
+                        if (!authenticated && PublicBrowseHttp.isConfigured()) {
+                            isGuestBrowse = true
+                            fashApp.isGuestBrowseActive = true
                         }
                     }
                     splashFinished = true
                 }
 
+                // Fallback: handles the (rare) process-restore path where splashFinished is
+                // already true from rememberSaveable but guest-shell was not yet decided.
+                // In the normal cold-start path, initialGuestShellDecided is already true by
+                // the time splashFinished=true so this block is a no-op.
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || initialGuestShellDecided) return@LaunchedEffect
                     initialGuestShellDecided = true
@@ -1114,6 +1139,15 @@ class MainActivity : ComponentActivity() {
                                         dismissSellerShopOverlay()
                                         selectedTab = MainTab.Explore.ordinal
                                     }
+                                    /** Bottom nav while seller shop overlay is open — dismiss overlay then land on [tabIndex]. */
+                                    val handleMainTabSelectedFromSellerShop: (Int) -> Unit = { tabIndex ->
+                                        if (tabIndex == MainTab.Explore.ordinal) {
+                                            navigateToExploreFromSellerShop()
+                                        } else {
+                                            dismissSellerShopOverlay()
+                                            selectedTab = tabIndex
+                                        }
+                                    }
                                     val context = LocalContext.current
                                     LaunchedEffect(Unit) {
                                         editListingViewModel.events.collect { msg ->
@@ -1444,7 +1478,21 @@ class MainActivity : ComponentActivity() {
                                             promoSlides = mappedPromoSlides,
                                             onPromoSlideClick = handlePromoClick,
                                             selectedTab = selectedTab,
-                                            onTabChange = { selectedTab = it },
+                                            onTabChange = { tabIndex ->
+                                                if (sellerShopUsername != null) {
+                                                    handleMainTabSelectedFromSellerShop(tabIndex)
+                                                } else {
+                                                    selectedTab = tabIndex
+                                                }
+                                            },
+                                            onMainTabReselectedIntercept = { tab ->
+                                                if (sellerShopUsername == null) {
+                                                    false
+                                                } else {
+                                                    handleMainTabSelectedFromSellerShop(tab.ordinal)
+                                                    true
+                                                }
+                                            },
                                             featureTourActive = showFeatureTour,
                                             onFeatureTourFinished = { showFeatureTour = false },
                                             )
@@ -1623,6 +1671,8 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                     selectedListingId = null
                                                     selectedTab = MainTab.Explore.ordinal
+                                                    sellerShopUsername = null
+                                                    sellerShopEntrySource = SellerShopEntrySource.None
                                                     sellerShopRestoreContext = SellerShopRestoreContext()
                                                 },
                                             )
@@ -2307,6 +2357,7 @@ class MainActivity : ComponentActivity() {
                                 loginStep == LoginStep.Email -> LoginScreen(
                                     email = email,
                                     onEmailChange = loginViewModel::onEmailChange,
+                                    remoteSlides = loginHeroSlides,
                                     isOtpLoading = isOtpLoading,
                                     isSocialLoading = isSocialLoading,
                                     snackbarHostState = snackbarHostState,
@@ -2333,6 +2384,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     onFacebookClick = {
+                                        if (!facebookLoginEnabled) return@LoginScreen
                                         if (!facebookOk) {
                                             loginViewModel.warnFacebookNotConfigured()
                                         } else {
@@ -2343,6 +2395,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     isGoogleConfigured = googleOk,
+                                    showFacebookLogin = facebookLoginEnabled,
                                     isFacebookConfigured = facebookOk,
                                     onTermsClick = {
                                         openUrl(AppEnvironment.legalTermsUrl(AppLocale.currentTag(this@MainActivity)))
@@ -2544,6 +2597,7 @@ class MainActivity : ComponentActivity() {
                 FashGlobalDialogHost(
                     message = if (profileSetupBlocksShellChrome) null else dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
+                    onDismissAll = { fashApp.uiDialog.dismissAll() },
                     bottomOverlayInset = welcomeBottomInset,
                 )
             }

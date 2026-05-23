@@ -52,6 +52,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +65,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -152,6 +155,12 @@ fun ExploreScreen(
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     isGuestMode: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
+    /**
+     * Opens the profile editor (or sizing onboarding) when the user accepts the
+     * "Set up your size" nudge from the sizing setup sheet. Optional: when null the
+     * sheet simply dismisses without routing.
+     */
+    onOpenSizingSetup: (() -> Unit)? = null,
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
@@ -161,6 +170,11 @@ fun ExploreScreen(
     val selectedCountryId by viewModel.selectedCountryId.collectAsState()
     val selectedCountryIso2 by viewModel.selectedCountryIso2.collectAsState()
     val sizingMode by viewModel.sizingMode.collectAsState()
+    val profileSizingState by viewModel.profileSizingState.collectAsState()
+    var showSizingSetupSheet by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.showSizingSetupNudge.collect { showSizingSetupSheet = true }
+    }
     val featuredSellers by viewModel.featuredSellers.collectAsState()
     val listings by viewModel.listings.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -403,7 +417,22 @@ fun ExploreScreen(
                                     },
                                 )
                             }
-                            if (quickInterestChips.isNotEmpty() && !hasActiveFilters && !isSearchMode) {
+                            // Quick toggle so buyers can switch "Match my size" without opening
+                            // the full filter sheet — surfaces Fash's size-first identity directly
+                            // in the discovery flow.
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                ExploreSizingQuickToggle(
+                                    enabled = sizingMode.equals("match_profile", ignoreCase = true),
+                                    profileSizingState = profileSizingState,
+                                    onToggle = { on ->
+                                        viewModel.setSizingModeFilter(if (on) "match_profile" else "all")
+                                    },
+                                )
+                            }
+                            // Quick interest chips visible whenever the user isn't typing a text
+                            // search. We keep them under active filters so the buyer can still
+                            // pivot/discovery another style without first clearing constraints.
+                            if (quickInterestChips.isNotEmpty() && !isSearchMode) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     ExploreInterestChipsRow(
                                         chips = quickInterestChips,
@@ -414,14 +443,11 @@ fun ExploreScreen(
                             when {
                                 isLoading && listings.isEmpty() -> {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(200.dp),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            CircularProgressIndicator(color = FashColors.Primary)
-                                        }
+                                        // Skeleton 2-col grid — matches real ListingGridCard geometry.
+                                        com.pc.fash_android_mobile.ui.components.FashSkeletonGrid(
+                                            rows = 4,
+                                            imageAspectRatio = ExploreListingTileAspectRatio,
+                                        )
                                     }
                                 }
                                 loadError && listings.isEmpty() -> {
@@ -569,6 +595,76 @@ fun ExploreScreen(
                     onDismiss = { showFilterSheet = false },
                 )
             }
+
+            if (showSizingSetupSheet) {
+                ExploreSizingSetupSheet(
+                    onSetUpClick = {
+                        showSizingSetupSheet = false
+                        onOpenSizingSetup?.invoke()
+                    },
+                    onSkip = { showSizingSetupSheet = false },
+                    onDismiss = { showSizingSetupSheet = false },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExploreSizingSetupSheet(
+    onSetUpClick: () -> Unit,
+    onSkip: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = scheme.surface,
+        contentColor = scheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(
+                    start = FashTheme.spacing.editorialStart,
+                    end = FashTheme.spacing.editorialEnd,
+                    bottom = 24.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.explore_sizing_setup_sheet_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.explore_sizing_setup_sheet_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Button(
+                onClick = onSetUpClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FashColors.Primary,
+                    contentColor = scheme.onPrimary,
+                ),
+                shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+            ) {
+                Text(text = stringResource(R.string.explore_sizing_setup_sheet_cta))
+            }
+            TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.explore_sizing_setup_sheet_skip),
+                    color = scheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -708,14 +804,22 @@ private fun ExploreSellersDiscoveryColumn(
         when {
             sellersLoading && sellerBrowseResults.isEmpty() -> {
                 item {
-                    Box(
+                    com.pc.fash_android_mobile.ui.components.FashSkeletonSellerStrip(
+                        cellCount = 8,
+                    )
+                }
+                items(count = 4) {
+                    com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(color = FashColors.Primary)
-                    }
+                            .padding(
+                                start = FashTheme.spacing.editorialStart,
+                                end = FashTheme.spacing.editorialEnd,
+                                bottom = FashTheme.spacing.spacing3,
+                            )
+                            .height(220.dp),
+                        shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+                    )
                 }
             }
             sellersLoadError && sellerBrowseResults.isEmpty() -> {
@@ -878,20 +982,12 @@ private fun ExploreSellerTikTokCard(
             }
             when {
                 previewPosts == null -> {
-                    Box(
+                    com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(132.dp)
-                            .clip(RoundedCornerShape(spacing.radiusSoftMin))
-                            .background(scheme.surfaceContainerHighest.copy(alpha = 0.85f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(28.dp),
-                            color = FashColors.Primary,
-                            strokeWidth = 2.dp,
-                        )
-                    }
+                            .height(132.dp),
+                        shape = RoundedCornerShape(spacing.radiusSoftMin),
+                    )
                 }
                 previewPosts.isEmpty() -> {
                     ExploreSellerNoListingsBanner()
@@ -1114,7 +1210,103 @@ private fun ExploreFiltersBarTrailingAction(
     }
 }
 
+/**
+ * Pill-style toggle pinned directly under the filter bar. Lets the buyer flip "Match my size"
+ * without opening the full filter sheet — surfacing Fash's size-first identity in the primary
+ * discovery surface.
+ *
+ * The actual personalization is gated server-side by Phase 3 (`sizing_mode` on the browse
+ * endpoint). Until then the toggle still drives `/search/listings?sizing_mode=match_profile` when
+ * the user has a search query active.
+ */
 @OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExploreSizingQuickToggle(
+    enabled: Boolean,
+    profileSizingState: ExploreViewModel.ProfileSizingState,
+    onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val cd = stringResource(R.string.explore_quick_sizing_cd)
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
+    // Subtitle priority: setup hint (no size on file) > active/idle copy.
+    val subtitleRes = when {
+        enabled && profileSizingState == ExploreViewModel.ProfileSizingState.Missing ->
+            R.string.explore_quick_sizing_setup_hint
+        enabled && profileSizingState == ExploreViewModel.ProfileSizingState.EstimateOnly ->
+            R.string.explore_quick_sizing_setup_hint
+        enabled -> R.string.explore_quick_sizing_subtitle_on
+        else -> R.string.explore_quick_sizing_subtitle_off
+    }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 10.dp)
+            .clip(shape)
+            .clickable { onToggle(!enabled) }
+            .semantics { contentDescription = cd; role = Role.Switch },
+        shape = shape,
+        color = if (enabled) FashColors.Primary.copy(alpha = 0.10f) else scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.explore_quick_sizing_title),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = if (enabled) FashColors.Primary else scheme.onSurface,
+                    )
+                    if (enabled && profileSizingState == ExploreViewModel.ProfileSizingState.EstimateOnly) {
+                        // Estimate pill — surfaces that backend will use height/weight, not a saved size.
+                        Surface(
+                            shape = RoundedCornerShape(FashTheme.spacing.radiusPill),
+                            color = FashColors.Primary.copy(alpha = 0.18f),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.explore_quick_sizing_estimate_badge),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FashColors.Primary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = stringResource(subtitleRes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = scheme.onPrimary,
+                    checkedTrackColor = FashColors.Primary,
+                    checkedBorderColor = FashColors.Primary,
+                    uncheckedThumbColor = scheme.surface,
+                    uncheckedTrackColor = scheme.outline.copy(alpha = 0.35f),
+                    uncheckedBorderColor = scheme.outline.copy(alpha = 0.35f),
+                ),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ExploreFiltersBar(
     hasActiveFilters: Boolean,
@@ -1738,8 +1930,10 @@ private fun ExploreMarketplaceFilters(viewModel: ExploreViewModel) {
     val isSearchMode by viewModel.isSearchMode.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val committedListingSearchQuery by viewModel.committedListingSearchQuery.collectAsState()
-    val sortApplies = isSearchMode &&
-        (committedListingSearchQuery.isNotBlank() || searchQuery.isNotBlank())
+    // Sort always selectable now — user controls order regardless of search/filter context.
+    // (Browse endpoint may ignore sort today, but the selected value is preserved for the next
+    // search submission; this avoids the previous "disabled but still selectable" confusion.)
+    val sortApplies = true
 
     val scheme = MaterialTheme.colorScheme
     val edge = FashTheme.spacing.editorialStart

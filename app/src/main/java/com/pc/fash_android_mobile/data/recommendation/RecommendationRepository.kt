@@ -42,6 +42,12 @@ class RecommendationRepository(
         condition: String? = null,
         limit: Int = 20,
         offset: Int = 0,
+        /**
+         * "all" (default) | "match_profile" — when "match_profile" the backend filters by viewer
+         * profile reference size/measurements via Typesense. Empty profile silently degrades to
+         * "all" so the request still succeeds; the UI nudges users to set up sizing.
+         */
+        sizingMode: String? = null,
     ): Result<List<ListingFeedItem>> = runCatching {
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
         val q = mutableListOf("limit=$limit", "offset=$offset")
@@ -57,6 +63,8 @@ class RecommendationRepository(
         minPrice?.let { q.add("min_price=$it") }
         maxPrice?.let { q.add("max_price=$it") }
         condition?.takeIf { it.isNotBlank() }?.let { q.add("condition=${enc(it)}") }
+        sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
+            ?.let { q.add("sizing_mode=${enc(it.trim())}") }
         val path = if (publicBrowse) {
             PublicBrowseHttp.publicApiPath("browse/recommendations/explore-listings")
         } else {
@@ -70,13 +78,18 @@ class RecommendationRepository(
         publicBrowse: Boolean,
         forYouLimit: Int = 12,
         sectionLimit: Int = 8,
+        sizingMode: String? = null,
     ): Result<HomeRecommendationSections> = runCatching {
         val path = if (publicBrowse) {
             PublicBrowseHttp.publicApiPath("browse/recommendations/home-sections")
         } else {
             AppEnvironment.apiPath("api/v1/recommendations/home-sections")
         }
-        val url = "$path?for_you_limit=$forYouLimit&section_limit=$sectionLimit"
+        val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
+        val q = mutableListOf("for_you_limit=$forYouLimit", "section_limit=$sectionLimit")
+        sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
+            ?.let { q.add("sizing_mode=${enc(it.trim())}") }
+        val url = "$path?${q.joinToString("&")}"
         val body = executeGet(url, publicBrowse)
         val root = JSONObject(body)
         val data = root.optJSONObject("data") ?: root

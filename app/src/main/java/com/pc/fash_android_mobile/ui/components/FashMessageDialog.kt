@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -59,23 +61,29 @@ import com.pc.fash_android_mobile.ui.theme.FashColors
  * Global success / error / info dialog aligned with Fash editorial surfaces and Material 3.
  *
  * @param bottomOverlayInset Space reserved above the gesture/nav bar so tab bar and/or chat composer stay visible.
+ * @param onDismissAll Called when the user taps the backdrop or back — clears the entire queue.
+ *   Falls back to [onDismiss] when not provided for backwards compatibility.
  */
 @Composable
 fun FashGlobalDialogHost(
     message: UiDialogMessage?,
     onDismiss: () -> Unit,
     bottomOverlayInset: Dp = 0.dp,
+    onDismissAll: (() -> Unit)? = null,
 ) {
     if (message == null) return
+    val dismissAll = onDismissAll ?: onDismiss
     val scheme = MaterialTheme.colorScheme
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismissAll,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             // Let the activity show through in the reserved bottom region (nav bar + composer).
             decorFitsSystemWindows = false,
             dismissOnBackPress = true,
-            dismissOnClickOutside = false,
+            // Allow system-level outside-tap dismissal as a safety fallback in addition to
+            // the manual backdrop click below, so the dialog can never get stuck.
+            dismissOnClickOutside = true,
         ),
     ) {
         Column(
@@ -88,6 +96,7 @@ fun FashGlobalDialogHost(
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
+                // Backdrop — tap anywhere outside the card to clear all queued messages
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -95,7 +104,7 @@ fun FashGlobalDialogHost(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = onDismiss,
+                            onClick = dismissAll,
                         ),
                 )
                 Box(
@@ -172,6 +181,8 @@ private fun FashGlobalDialogCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            // Cap height so the card never extends off-screen; the message body scrolls inside
+            .heightIn(max = 480.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -187,44 +198,56 @@ private fun FashGlobalDialogCard(
         ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 22.dp, bottom = 10.dp)
-                .padding(horizontal = 22.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
+            // Scrollable area: icon + title + message body
+            Column(
                 modifier = Modifier
-                    .size(56.dp)
-                    .background(iconCircleBg, CircleShape),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 22.dp, bottom = 4.dp)
+                    .padding(horizontal = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(
-                    imageVector = iconVector,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(30.dp),
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(iconCircleBg, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = iconVector,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = resolvedTitle,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = message.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = resolvedTitle,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = message.message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(18.dp))
+            // OK button always pinned at the bottom so it's never hidden
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 22.dp)
+                    .padding(bottom = 10.dp),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {

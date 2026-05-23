@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
-import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.search.toUserSearchResult
@@ -92,6 +91,31 @@ fun HomeEditorialPostsSection(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        // "Edited by Fash" pill — separates curated content from algorithmic rails. The same
+        // editorial table powers the admin curation flow; surfacing the badge here gives the
+        // rail an editorial voice that ranking-based rails (For You, Style picks) can't claim.
+        Row(
+            modifier = Modifier.padding(
+                start = spacing.editorialStart,
+                end = spacing.editorialEnd,
+                top = spacing.spacing3,
+                bottom = 4.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(spacing.radiusPill),
+                color = FashColors.Primary.copy(alpha = 0.14f),
+            ) {
+                androidx.compose.material3.Text(
+                    text = stringResource(R.string.home_edited_by_fash_badge),
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    color = FashColors.Primary,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
+        }
         HomeSectionHeader(
             title = stringResource(R.string.home_section_editorial_title),
             subtitle = stringResource(R.string.home_section_editorial_subtitle),
@@ -244,52 +268,6 @@ private fun HomeEditorialPostCard(
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = FashColors.Primary,
                     modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun HomeTrendingCategoriesSection(
-    categories: List<Category>,
-    onCategoryClick: (Category) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (categories.isEmpty()) return
-    val spacing = FashTheme.spacing
-    Column(modifier = modifier.fillMaxWidth()) {
-        HomeSectionHeader(
-            title = stringResource(R.string.home_section_trending_title),
-            subtitle = stringResource(R.string.home_section_trending_subtitle),
-        )
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(
-                start = spacing.editorialStart,
-                end = spacing.editorialEnd,
-                bottom = spacing.spacing4,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(spacing.spacing2),
-        ) {
-            items(categories, key = { it.id }) { cat ->
-                val cd = stringResource(R.string.home_trending_category_cd, cat.name)
-                FilterChip(
-                    selected = false,
-                    onClick = { onCategoryClick(cat) },
-                    label = {
-                        Text(
-                            text = cat.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    modifier = Modifier.semantics { contentDescription = cd },
-                    shape = FashTheme.spacing.chipShape(),
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
                 )
             }
         }
@@ -594,18 +572,13 @@ fun HomeHuntTodaySection(
             }
         }
         if (isLoading && items.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    color = FashColors.Primary,
-                    strokeWidth = 2.dp,
-                )
-            }
+            // Skeleton rail of listing card placeholders — matches real card geometry so the
+            // swap to actual items feels seamless (no layout shift).
+            com.pc.fash_android_mobile.ui.components.FashSkeletonRail(
+                cardWidth = 156.dp,
+                cardCount = 5,
+                showHeader = false,
+            )
         } else {
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),

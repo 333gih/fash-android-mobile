@@ -40,10 +40,21 @@ class UiDialogController {
         enqueue(UiDialogMessage.Info(title = title, message = message))
     }
 
-    /** Dismisses the visible dialog and shows the next queued message, if any. */
+    /**
+     * Dismisses the visible dialog and advances to the next queued message, if any.
+     * Call [dismissAll] to clear the entire queue at once (e.g. when user taps the scrim).
+     */
     fun dismiss() {
         synchronized(lock) {
             _current.value = queue.pollFirst()
+        }
+    }
+
+    /** Clears the visible dialog and all pending messages. Prevents an endless dismiss loop. */
+    fun dismissAll() {
+        synchronized(lock) {
+            queue.clear()
+            _current.value = null
         }
     }
 }

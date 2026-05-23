@@ -428,7 +428,10 @@ class LoginViewModel(
     }
 
     companion object {
+        fun isFacebookLoginEnabled(): Boolean = BuildConfig.FACEBOOK_LOGIN_ENABLED
+
         fun isFacebookConfigured(): Boolean {
+            if (!isFacebookLoginEnabled()) return false
             val id = BuildConfig.FACEBOOK_APP_ID.trim()
             if (id.isEmpty() || id == "0") return false
             if (id.equals("YOUR_FACEBOOK_APP_ID", ignoreCase = true)) return false

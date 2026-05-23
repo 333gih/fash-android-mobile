@@ -405,6 +405,7 @@ fun ProductDetailScreen(
                                         Button(
                                             onClick = {
                                                 showSaveNudge = false
+                                                viewModel.reportChatInitiate()
                                                 onChat(d.id)
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = DetailPrimary),
@@ -426,7 +427,10 @@ fun ProductDetailScreen(
                             chatLoading = isOpeningChat,
                             buyNowEnabled = buyNowEnabled,
                             buyerOrderAmountVnd = buyerActiveOrder?.amountVnd ?: 0L,
-                            onChat = { onChat(d.id) },
+                            onChat = {
+                                viewModel.reportChatInitiate()
+                                onChat(d.id)
+                            },
                             onBuyNow = { onBuyNow(d.id) },
                         )
                     }
@@ -438,7 +442,10 @@ fun ProductDetailScreen(
                     ) {
                         DetailTopBar(
                             onBack = onBack,
-                            onShare = { onShare(d.id, d.title) },
+                            onShare = {
+                                viewModel.reportShare()
+                                onShare(d.id, d.title)
+                            },
                         )
                         AnimatedVisibility(
                             visible = showPinnedSellerStrip,

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -90,6 +91,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.advertising.AppAdvertisingSlideItem
+import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.locale.LoginLanguageToggle
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
@@ -119,6 +122,7 @@ fun LoginScreen(
     onGoogleClick: () -> Unit,
     onFacebookClick: () -> Unit,
     isGoogleConfigured: Boolean,
+    showFacebookLogin: Boolean = true,
     isFacebookConfigured: Boolean,
     onTermsClick: () -> Unit,
     onPrivacyClick: () -> Unit,
@@ -128,6 +132,7 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit = {},
     onLoginWithPassword: (() -> Unit)? = null,
     isPasswordLoading: Boolean = false,
+    remoteSlides: List<AppAdvertisingSlideItem> = emptyList(),
     /** When set (and public browse is configured), offers guest Home/Explore without sign-in. */
     onContinueWithoutAccount: (() -> Unit)? = null,
 ) {
@@ -212,6 +217,7 @@ fun LoginScreen(
                             alpha = heroAnim.value
                             translationY = (1f - heroAnim.value) * 24f
                         },
+                    remoteSlides = remoteSlides,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -320,34 +326,39 @@ fun LoginScreen(
                         translationY = (1f - bottomAnim.value) * 18f
                     },
                 ) {
+                    val hasSocialButtons = isGoogleConfigured || showFacebookLogin
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    OrDivider()
+                    if (hasSocialButtons) {
+                        OrDivider()
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        SocialOutlineButton(
-                            modifier = Modifier.then(
-                                if (!isGoogleConfigured) Modifier.alpha(0.55f) else Modifier,
-                            ),
-                            iconRes = R.drawable.ic_brand_google,
-                            label = stringResource(R.string.login_google),
-                            enabled = !isSocialLoading,
-                            onClick = onGoogleClick,
-                        )
-                        SocialOutlineButton(
-                            modifier = Modifier.then(
-                                if (!isFacebookConfigured) Modifier.alpha(0.55f) else Modifier,
-                            ),
-                            iconRes = R.drawable.ic_brand_facebook,
-                            label = stringResource(R.string.login_facebook),
-                            enabled = !isSocialLoading,
-                            onClick = onFacebookClick,
-                        )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            SocialOutlineButton(
+                                modifier = Modifier.then(
+                                    if (!isGoogleConfigured) Modifier.alpha(0.55f) else Modifier,
+                                ),
+                                iconRes = R.drawable.ic_brand_google,
+                                label = stringResource(R.string.login_google),
+                                enabled = !isSocialLoading,
+                                onClick = onGoogleClick,
+                            )
+                            if (showFacebookLogin) {
+                                SocialOutlineButton(
+                                    modifier = Modifier.then(
+                                        if (!isFacebookConfigured) Modifier.alpha(0.55f) else Modifier,
+                                    ),
+                                    iconRes = R.drawable.ic_brand_facebook,
+                                    label = stringResource(R.string.login_facebook),
+                                    enabled = !isSocialLoading,
+                                    onClick = onFacebookClick,
+                                )
+                            }
+                        }
                     }
 
                     if (onContinueWithoutAccount != null) {
@@ -418,43 +429,90 @@ fun LoginScreen(
 }
 
 private data class LoginHeroSlide(
-    val captionRes: Int,
+    val title: String,
+    val subtitle: String,
+    val badgeLabel: String,
+    val bannerImageUrl: String?,
     val scrim: Brush,
+    val fallbackCaptionRes: Int? = null,
 )
 
 private const val LoginHeroAutoAdvanceMs = 5_500L
+
+private fun loginHeroScrim(stylePreset: String, scheme: ColorScheme): Brush {
+    return when (stylePreset.trim()) {
+        "gradient_warm" -> Brush.verticalGradient(
+            listOf(
+                FashColors.TertiaryAccent.copy(alpha = 0.08f),
+                Color.Transparent,
+                FashColors.Primary.copy(alpha = 0.10f),
+            ),
+        )
+        "gradient_neutral" -> Brush.verticalGradient(
+            listOf(
+                scheme.surfaceContainerLow.copy(alpha = 0.10f),
+                Color.Transparent,
+                scheme.surfaceContainerHighest.copy(alpha = 0.30f),
+            ),
+        )
+        else -> Brush.verticalGradient(
+            listOf(Color.Transparent, FashColors.Primary.copy(alpha = 0.12f)),
+        )
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LoginHeroCarouselSection(
     modifier: Modifier = Modifier,
+    remoteSlides: List<AppAdvertisingSlideItem> = emptyList(),
 ) {
     val scheme = MaterialTheme.colorScheme
-    val slides = remember(scheme) {
+    val localSlides = remember(scheme) {
         listOf(
             LoginHeroSlide(
-                captionRes = R.string.login_hero_slide1_caption,
-                scrim = Brush.verticalGradient(
-                    listOf(Color.Transparent, FashColors.Primary.copy(alpha = 0.09f)),
-                ),
+                title = "",
+                subtitle = "",
+                badgeLabel = "",
+                bannerImageUrl = null,
+                scrim = loginHeroScrim("gradient_primary", scheme),
+                fallbackCaptionRes = R.string.login_hero_slide1_caption,
             ),
             LoginHeroSlide(
-                captionRes = R.string.login_hero_slide2_caption,
-                scrim = Brush.verticalGradient(
-                    listOf(
-                        FashColors.TertiaryAccent.copy(alpha = 0.05f),
-                        Color.Transparent,
-                        FashColors.Primary.copy(alpha = 0.075f),
-                    ),
-                ),
+                title = "",
+                subtitle = "",
+                badgeLabel = "",
+                bannerImageUrl = null,
+                scrim = loginHeroScrim("gradient_warm", scheme),
+                fallbackCaptionRes = R.string.login_hero_slide2_caption,
             ),
             LoginHeroSlide(
-                captionRes = R.string.login_hero_slide3_caption,
-                scrim = Brush.verticalGradient(
-                    listOf(Color.Transparent, FashColors.SecondaryContainer.copy(alpha = 0.42f)),
-                ),
+                title = "",
+                subtitle = "",
+                badgeLabel = "",
+                bannerImageUrl = null,
+                scrim = loginHeroScrim("gradient_neutral", scheme),
+                fallbackCaptionRes = R.string.login_hero_slide3_caption,
             ),
         )
+    }
+    val slides = remember(remoteSlides, scheme) {
+        val cmsSlides = remoteSlides.mapNotNull { item ->
+            val title = item.title.trim()
+            val subtitle = item.subtitle.trim()
+            val badge = item.badgeLabel.trim()
+            val imageUrl = item.bannerImageUrl.trim().ifEmpty { null }
+            if (title.isBlank() && subtitle.isBlank() && imageUrl.isNullOrBlank()) return@mapNotNull null
+            LoginHeroSlide(
+                title = title,
+                subtitle = subtitle,
+                badgeLabel = badge,
+                bannerImageUrl = imageUrl,
+                scrim = loginHeroScrim(item.stylePreset, scheme),
+                fallbackCaptionRes = null,
+            )
+        }
+        if (cmsSlides.isEmpty()) localSlides else cmsSlides
     }
     val pagerState = rememberPagerState(pageCount = { slides.size })
     val infiniteTransition = rememberInfiniteTransition(label = "loginHeroFloat")
@@ -493,6 +551,11 @@ private fun LoginHeroCarouselSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) { page ->
                 val slide = slides[page]
+                val titleText = if (slide.title.isNotBlank()) {
+                    slide.title
+                } else {
+                    slide.fallbackCaptionRes?.let { stringResource(it) }.orEmpty()
+                }
                 val slideContentDescription = stringResource(
                     R.string.login_hero_pager_cd,
                     page + 1,
@@ -508,25 +571,69 @@ private fun LoginHeroCarouselSection(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(slide.scrim),
+                            .background(scheme.surfaceContainerLow),
                     )
-                    Image(
-                        painter = painterResource(R.drawable.login_hero_trench),
-                        contentDescription = null,
+                    if (!slide.bannerImageUrl.isNullOrBlank()) {
+                        FashAsyncImage(
+                            model = slide.bannerImageUrl,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationY = floatY.value * 0.6f },
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.login_hero_trench),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
+                                .graphicsLayer { translationY = floatY.value },
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(12.dp)
-                            .graphicsLayer { translationY = floatY.value },
-                        contentScale = ContentScale.Fit,
+                            .background(slide.scrim),
                     )
-                    Text(
-                        text = stringResource(slide.captionRes),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                        color = scheme.onSurface.copy(alpha = 0.82f),
+                    if (slide.badgeLabel.isNotBlank()) {
+                        Text(
+                            text = slide.badgeLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = scheme.primary,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(10.dp)
+                                .background(
+                                    color = scheme.surface.copy(alpha = 0.90f),
+                                    shape = RoundedCornerShape(999.dp),
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-                    )
+                    ) {
+                        Text(
+                            text = titleText,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = scheme.onSurface.copy(alpha = 0.90f),
+                            maxLines = 2,
+                        )
+                        if (slide.subtitle.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = slide.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurface.copy(alpha = 0.80f),
+                                maxLines = 2,
+                            )
+                        }
+                    }
                 }
             }
         }

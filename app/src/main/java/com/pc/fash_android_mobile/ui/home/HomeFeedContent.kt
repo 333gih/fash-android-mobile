@@ -15,14 +15,29 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -32,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -39,13 +55,13 @@ import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
 import com.pc.fash_android_mobile.data.search.TrendingTagChip
-import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSlider
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
+import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
 import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
@@ -78,12 +94,16 @@ fun HomeFeedContent(
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     /** Admin editorial posts (blog-style); host maps tap to Explore until in-app reader exists. */
     onHomeEditorialPostClick: (HomeEditorialPostStub) -> Unit = {},
-    onHomeTrendingCategoryClick: (Category) -> Unit = {},
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onOpenFeaturedSellersAll: () -> Unit = {},
     /** When true, follow-feed empty copy explains guest browse instead of “follow shops”. */
     isGuestBrowse: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
+    /**
+     * Opens the profile editor where the user can save reference size/measurements. Wired
+     * up to the inline "Add my size" banner on the Home feed; when null the banner is hidden.
+     */
+    onOpenSizingSetup: (() -> Unit)? = null,
 ) {
     val onLikeListing: (ListingFeedItem) -> Unit = { item ->
         if (isGuestBrowse) onRequestLogin(GuestLoginReason.Like) else viewModel.toggleLike(item)
@@ -95,10 +115,13 @@ fun HomeFeedContent(
     val huntTodayItems by viewModel.huntTodayItems.collectAsState()
     val huntTodayLoading by viewModel.huntTodayLoading.collectAsState()
     val discovery by viewModel.discoveryBundle.collectAsState()
+    val showSizingBanner by viewModel.showSizingBanner.collectAsState()
     val followingIds by viewModel.followingIds.collectAsState()
     val buyerStats by viewModel.buyerStats.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val hasMoreItems by viewModel.hasMoreItems.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
@@ -111,6 +134,23 @@ fun HomeFeedContent(
     LaunchedEffect(Unit) {
         viewModel.scrollHomeToTop.collect {
             listState.animateScrollToItem(0)
+        }
+    }
+
+    // Follow-feed infinite scroll: when the user is within ~3 list items of the bottom and the
+    // VM still reports `hasMoreItems`, request the next page. Same trigger pattern as Explore
+    // (see ExploreScreen pagination). Skipped in guest mode; soft-no-op while a load is in flight.
+    LaunchedEffect(hasMoreItems, isGuestBrowse) {
+        if (isGuestBrowse) return@LaunchedEffect
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val total = info.totalItemsCount
+            if (last < 0 || total <= 0) -1 else (total - last)
+        }.collect { distanceToEnd ->
+            if (distanceToEnd in 0..3) {
+                viewModel.loadMoreFollowFeed()
+            }
         }
     }
 
@@ -158,38 +198,54 @@ fun HomeFeedContent(
                         )
                     }
                 }
-                item {
-                    FashPromoSliderBlock(
-                        slides = promoSlides,
-                        onSlideClick = onPromoSlideClick,
-                    )
+                if (showSizingBanner && onOpenSizingSetup != null) {
+                    item {
+                        HomeSectionReveal(sectionKey = "sizing-banner") {
+                            HomeProfileSizingBanner(
+                                onCtaClick = onOpenSizingSetup,
+                                onDismiss = { viewModel.dismissSizingBanner() },
+                            )
+                        }
+                    }
                 }
                 item {
-                    HomeQuickActionsRow(
-                        onExplore = onNavigateToExplore,
-                        onSell = onNavigateToPost,
-                        onOrders = onOrdersClick,
-                    )
+                    HomeSectionReveal(sectionKey = "promo") {
+                        FashPromoSliderBlock(
+                            slides = promoSlides,
+                            onSlideClick = onPromoSlideClick,
+                        )
+                    }
+                }
+                item {
+                    HomeSectionReveal(sectionKey = "quick-actions") {
+                        HomeQuickActionsRow(
+                            onExplore = onNavigateToExplore,
+                            onSell = onNavigateToPost,
+                            onOrders = onOrdersClick,
+                        )
+                    }
                 }
 
                 item {
-                    HomeHuntTodaySection(
-                        items = huntTodayItems,
-                        isLoading = huntTodayLoading,
-                        onSeeAllClick = onNavigateToExplore,
-                        onListingClick = { id, sid ->
-                            huntTodayItems.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                viewModel.reportListingClick(huntTodayItems[pos], "hunt_today", pos)
-                            }
-                            onListingClick(id, sid)
-                        },
-                        onLike = onLikeListing,
-                        onSave = onSaveListing,
-                        onRecordView = { item ->
-                            val pos = huntTodayItems.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
-                            viewModel.recordView(item, position = pos, surface = "hunt_today")
-                        },
-                    )
+                    HomeSectionReveal(sectionKey = "hunt-today") {
+                        HomeHuntTodaySection(
+                            items = huntTodayItems,
+                            isLoading = huntTodayLoading,
+                            onSeeAllClick = onNavigateToExplore,
+                            onListingClick = { id, sid ->
+                                huntTodayItems.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                    viewModel.reportListingClick(huntTodayItems[pos], "hunt_today", pos)
+                                }
+                                onListingClick(id, sid)
+                            },
+                            onLike = onLikeListing,
+                            onSave = onSaveListing,
+                            onRecordView = { item ->
+                                val pos = huntTodayItems.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+                                viewModel.recordView(item, position = pos, surface = "hunt_today")
+                            },
+                        )
+                    }
                 }
 
                 // Prefer id-aware chips when available; fall back to name-only wrapping.
@@ -200,44 +256,47 @@ fun HomeFeedContent(
                 }
                 if (styleChips.isNotEmpty()) {
                     item {
-                        HomeTrendingStylesSection(
-                            tags = styleChips,
-                            onTagClick = { chip -> onNavigateToExploreWithTag(chip.name) },
-                        )
+                        HomeSectionReveal(sectionKey = "trending-styles") {
+                            HomeTrendingStylesSection(
+                                tags = styleChips,
+                                onTagClick = { chip -> onNavigateToExploreWithTag(chip.name) },
+                            )
+                        }
                     }
                 }
 
                 if (discovery.forYou.size >= 2) {
                     item {
-                        HomeForYouSection(
-                            items = discovery.forYou,
-                            onListingClick = { id, sid ->
-                                discovery.forYou.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                    viewModel.reportListingClick(discovery.forYou[pos], "recommendation_for_you", pos)
-                                }
-                                onListingClick(id, sid)
-                            },
-                            onLike = onLikeListing,
-                            onSave = onSaveListing,
-                            onSeeAllClick = onNavigateToExplore,
-                            onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "recommendation_for_you") },
-                        )
+                        HomeSectionReveal(sectionKey = "for-you") {
+                            HomeForYouSection(
+                                items = discovery.forYou,
+                                onListingClick = { id, sid ->
+                                    discovery.forYou.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                        viewModel.reportListingClick(discovery.forYou[pos], "recommendation_for_you", pos)
+                                    }
+                                    onListingClick(id, sid)
+                                },
+                                onLike = onLikeListing,
+                                onSave = onSaveListing,
+                                onSeeAllClick = onNavigateToExplore,
+                                onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "recommendation_for_you") },
+                            )
+                        }
                     }
                 }
 
                 when {
                     isLoading && items.isEmpty() -> {
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 32.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(32.dp),
-                                    color = FashColors.Primary,
-                                    strokeWidth = 2.dp,
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                HomeSectionHeader(
+                                    title = stringResource(R.string.home_top_section_title),
+                                    subtitle = stringResource(R.string.home_top_section_subtitle),
+                                )
+                                FashSkeletonGrid(
+                                    modifier = Modifier.padding(top = FashTheme.spacing.spacing2),
+                                    rows = 3,
+                                    imageAspectRatio = 4f / 5f,
                                 )
                             }
                         }
@@ -250,18 +309,24 @@ fun HomeFeedContent(
                             )
                         }
                     }
-                    items.isEmpty() -> {
+                    items.isEmpty() && isGuestBrowse -> {
                         item {
+                            // Guest path: short hint only — explore + featured rails below already cover discovery.
                             HomeFollowFeedEmptyHint(
                                 onFeaturedSellersClick = onOpenFeaturedSellersAll,
-                                hintRes = if (isGuestBrowse) {
-                                    R.string.home_guest_follow_hint
-                                } else {
-                                    R.string.home_follow_empty_hint
-                                },
-                                showSectionHeader = !isGuestBrowse,
-                                // Guest already has "Shops worth a look" below — orphan CTA looked like an empty section.
-                                showFeaturedCta = recommendedSellers.isNotEmpty() && !isGuestBrowse,
+                                hintRes = R.string.home_guest_follow_hint,
+                                showSectionHeader = false,
+                                showFeaturedCta = false,
+                            )
+                        }
+                    }
+                    items.isEmpty() -> {
+                        item {
+                            // Rich empty card with dual CTA: Explore + Featured shops. Conversion-focused
+                            // when the buyer follows nobody yet.
+                            HomePersonalizedFeedEmptyCard(
+                                onExploreClick = onNavigateToExplore,
+                                onFeaturedSellersClick = onOpenFeaturedSellersAll,
                             )
                         }
                     }
@@ -318,73 +383,100 @@ fun HomeFeedContent(
                                 }
                             }
                         }
+                        if (isLoadingMore) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp)
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(28.dp),
+                                        color = FashColors.Primary,
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
                 if (discovery.stylePicks.size >= 2) {
                     item {
-                        HomeHuntTodaySection(
-                            items = discovery.stylePicks,
-                            isLoading = false,
-                            onSeeAllClick = onNavigateToExplore,
-                            onListingClick = { id, sid ->
-                                discovery.stylePicks.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                    viewModel.reportListingClick(discovery.stylePicks[pos], "style_picks", pos)
-                                }
-                                onListingClick(id, sid)
-                            },
-                            onLike = onLikeListing,
-                            onSave = onSaveListing,
-                            onRecordView = { item ->
-                                val pos = discovery.stylePicks.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
-                                viewModel.recordView(item, position = pos, surface = "style_picks")
-                            },
-                            titleRes = R.string.home_style_picks_title,
-                            subtitleRes = R.string.home_style_picks_subtitle,
-                        )
+                        HomeSectionReveal(sectionKey = "style-picks") {
+                            HomeHuntTodaySection(
+                                items = discovery.stylePicks,
+                                isLoading = false,
+                                onSeeAllClick = onNavigateToExplore,
+                                onListingClick = { id, sid ->
+                                    discovery.stylePicks.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                        viewModel.reportListingClick(discovery.stylePicks[pos], "style_picks", pos)
+                                    }
+                                    onListingClick(id, sid)
+                                },
+                                onLike = onLikeListing,
+                                onSave = onSaveListing,
+                                onRecordView = { item ->
+                                    val pos = discovery.stylePicks.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+                                    viewModel.recordView(item, position = pos, surface = "style_picks")
+                                },
+                                titleRes = R.string.home_style_picks_title,
+                                subtitleRes = R.string.home_style_picks_subtitle,
+                            )
+                        }
                     }
                 }
 
                 if (discovery.similarToSaved.size >= 2) {
                     item {
-                        HomeSimilarToSavedSection(
-                            items = discovery.similarToSaved,
-                            onListingClick = { id, sid ->
-                                discovery.similarToSaved.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
-                                    viewModel.reportListingClick(discovery.similarToSaved[pos], "similar_to_saved", pos)
-                                }
-                                onListingClick(id, sid)
-                            },
-                            onLike = onLikeListing,
-                            onSave = onSaveListing,
-                            onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "similar_to_saved") },
-                        )
+                        HomeSectionReveal(sectionKey = "similar-saved") {
+                            HomeSimilarToSavedSection(
+                                items = discovery.similarToSaved,
+                                onListingClick = { id, sid ->
+                                    discovery.similarToSaved.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
+                                        viewModel.reportListingClick(discovery.similarToSaved[pos], "similar_to_saved", pos)
+                                    }
+                                    onListingClick(id, sid)
+                                },
+                                onLike = onLikeListing,
+                                onSave = onSaveListing,
+                                onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "similar_to_saved") },
+                            )
+                        }
                     }
                 }
 
                 if (recentlyViewed.size >= 2) {
                     item {
-                        HomeRecentlyViewedSection(
-                            items = recentlyViewed,
-                            onListingClick = onListingClick,
+                        HomeSectionReveal(sectionKey = "recently-viewed") {
+                            HomeRecentlyViewedSection(
+                                items = recentlyViewed,
+                                onListingClick = onListingClick,
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    HomeSectionReveal(sectionKey = "recommended-sellers") {
+                        HomeRecommendedSellersSection(
+                            sellers = recommendedSellers,
+                            followingIds = followingIds,
+                            onSellerClick = onFeaturedSellerClick,
+                            onSeeAllClick = onOpenFeaturedSellersAll,
                         )
                     }
                 }
 
                 item {
-                    HomeRecommendedSellersSection(
-                        sellers = recommendedSellers,
-                        followingIds = followingIds,
-                        onSellerClick = onFeaturedSellerClick,
-                        onSeeAllClick = onOpenFeaturedSellersAll,
-                    )
-                }
-
-                item {
-                    HomeEditorialPostsSection(
-                        posts = discovery.editorialPosts,
-                        onPostClick = onHomeEditorialPostClick,
-                    )
+                    HomeSectionReveal(sectionKey = "editorial") {
+                        HomeEditorialPostsSection(
+                            posts = discovery.editorialPosts,
+                            onPostClick = onHomeEditorialPostClick,
+                        )
+                    }
                 }
 
                 item {
@@ -411,6 +503,83 @@ fun HomeFeedContent(
                         onSlideClick = onPromoSlideClick,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Inline Home prompt encouraging users who haven't entered sizing data to fill in their reference
+ * size. Dismissible (one-shot, persisted via [HomeSizingBannerPreference]).
+ */
+@Composable
+private fun HomeProfileSizingBanner(
+    onCtaClick: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = FashTheme.spacing.editorialStart,
+                end = FashTheme.spacing.editorialEnd,
+                top = 8.dp,
+                bottom = 4.dp,
+            )
+            .clip(shape),
+        shape = shape,
+        color = FashColors.Primary.copy(alpha = 0.08f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onCtaClick)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Straighten,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(28.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.home_sizing_banner_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.home_sizing_banner_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onCtaClick) {
+                Text(
+                    text = stringResource(R.string.home_sizing_banner_cta),
+                    color = FashColors.Primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.semantics {
+                    contentDescription = "dismiss"
+                },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.home_sizing_banner_dismiss_cd),
+                    tint = scheme.onSurfaceVariant,
+                )
             }
         }
     }

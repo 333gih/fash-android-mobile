@@ -65,8 +65,13 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Listing share / deep links: HTTPS (host from env LISTING_SHARE_BASE_URL) + fash://listing/{id} -->
-            <intent-filter>
+            <!--
+              Android App Links: HTTPS verified by `/.well-known/assetlinks.json` on the share host.
+              Single intent-filter with `autoVerify="true"` covers all three share surfaces (listing,
+              profile, invite); Android requires they share an autoVerify=true filter to issue one
+              verification request per host.
+            -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
@@ -76,59 +81,30 @@
                     android:scheme="https"
                     android:host="${listingShareHost}"
                     android:pathPrefix="/p/l/" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:scheme="http"
-                    android:host="${listingShareHost}"
-                    android:pathPrefix="/p/l/" />
-            </intent-filter>
-            <!-- Seller shop share: HTTPS /p/u/{username} -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
                     android:scheme="https"
                     android:host="${listingShareHost}"
                     android:pathPrefix="/p/u/" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:scheme="http"
-                    android:host="${listingShareHost}"
-                    android:pathPrefix="/p/u/" />
-            </intent-filter>
-            <!-- HTTPS invite (linkified in SMS/chat); same host as LISTING_SHARE_BASE_URL -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
                     android:scheme="https"
                     android:host="${listingShareHost}"
                     android:pathPrefix="/invite" />
             </intent-filter>
+            <!-- HTTP fallback (e.g. dev or non-TLS environments) — not auto-verified. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
+                <data
+                    android:scheme="http"
+                    android:host="${listingShareHost}"
+                    android:pathPrefix="/p/l/" />
+                <data
+                    android:scheme="http"
+                    android:host="${listingShareHost}"
+                    android:pathPrefix="/p/u/" />
                 <data
                     android:scheme="http"
                     android:host="${listingShareHost}"

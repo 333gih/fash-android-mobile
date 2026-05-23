@@ -398,13 +398,16 @@ fun ProfileScreen(
                 /** 0 = Selling, 1 = Sold, 2 = Saved (wishlist) — see [ProfileCollapsingScrollLayout] tab labels. */
                 val wishlistTabIndex = 2
 
-                LaunchedEffect(wishlistTabOpenGen, selectedTab) {
+                // Only key on wishlistTabOpenGen — NOT on selectedTab.
+                // Keying on selectedTab caused the effect to re-run on every tab change, which forced
+                // the tab back to "Saved" whenever the user tried to switch to Selling/Sold.
+                LaunchedEffect(wishlistTabOpenGen) {
                     if (wishlistTabOpenGen == 0L) return@LaunchedEffect
                     if (selectedTab != wishlistTabIndex) {
                         selectedTab = wishlistTabIndex
-                        return@LaunchedEffect
                     }
-                    delay(90)
+                    // Let the grid settle after the tab content switches, then scroll to pin header
+                    delay(120)
                     val total = listState.layoutInfo.totalItemsCount
                     scrollScope.launch {
                         when {
