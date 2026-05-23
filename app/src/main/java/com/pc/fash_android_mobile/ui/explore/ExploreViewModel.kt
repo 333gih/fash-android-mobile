@@ -48,10 +48,15 @@ enum class ExplorePrimarySection {
     Sellers,
 }
 
-/** Half-screen quick look on Explore — feed row plus optional enriched detail from GET /listings/:id. */
+/** Half-screen quick look — feed row plus optional enriched detail from GET /listings/:id. */
 data class ExploreListingPreviewState(
     val feedItem: ListingFeedItem,
     val gridPosition: Int = 0,
+    /** Feed rail surface for recommendation attribution (explore, for_you, …). */
+    val surface: String = "explore",
+    val openedAtMs: Long = System.currentTimeMillis(),
+    /** True after user opens PDP/chat from preview — suppresses preview_dismiss. */
+    val outcomeRecorded: Boolean = false,
     val detail: ListingDetail? = null,
     val isDetailLoading: Boolean = false,
 )
@@ -1385,12 +1390,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     /** Opens the Explore half-sheet preview instead of navigating straight to PDP. */
     fun openListingPreview(item: ListingFeedItem, position: Int = 0) {
-        reportListingClick(item, position)
-        recordView(item, position)
+        openListingPreview(item, surface = "explore", position = position)
+    }
+
+    fun openListingPreview(item: ListingFeedItem, surface: String, position: Int = 0) {
+        feedEventReporter.previewOpen(item.id, surface = surface, position = position)
         listingPreviewDetailJob?.cancel()
         _listingPreview.value = ExploreListingPreviewState(
             feedItem = item,
             gridPosition = position,
+            surface = surface,
             detail = null,
             isDetailLoading = true,
         )
@@ -1416,8 +1425,40 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun closeListingPreview() {
+        val cur = _listingPreview.value
+        if (cur != null && !cur.outcomeRecorded) {
+            val dwellMs = (System.currentTimeMillis() - cur.openedAtMs).toInt().coerceAtLeast(0)
+            feedEventReporter.previewDismiss(
+                cur.feedItem.id,
+                surface = cur.surface,
+                position = cur.gridPosition,
+                dwellMs = dwellMs,
+            )
+        }
         listingPreviewDetailJob?.cancel()
         _listingPreview.value = null
+    }
+
+    /** User tapped “View detail” from quick look — stronger signal than dismiss. */
+    fun openListingDetailFromPreview(): Pair<String, String?>? {
+        val cur = _listingPreview.value ?: return null
+        feedEventReporter.previewDetail(cur.feedItem.id, surface = cur.surface, position = cur.gridPosition)
+        val id = cur.feedItem.id
+        val sellerId = cur.feedItem.sellerId
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = null
+        return id to sellerId
+    }
+
+    /** User tapped “Message seller” from quick look. */
+    fun openChatFromPreview(): Pair<String, String?>? {
+        val cur = _listingPreview.value ?: return null
+        feedEventReporter.chatInitiate(cur.feedItem.id, surface = cur.surface, position = cur.gridPosition)
+        val id = cur.feedItem.id
+        val sellerId = cur.feedItem.sellerId
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = null
+        return id to sellerId
     }
 
     fun toggleLike(item: ListingFeedItem) {

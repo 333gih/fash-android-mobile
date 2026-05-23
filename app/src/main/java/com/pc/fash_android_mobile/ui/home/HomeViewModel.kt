@@ -517,12 +517,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Opens the half-sheet quick look (same UX as Explore) instead of navigating straight to PDP. */
     fun openListingPreview(item: ListingFeedItem, surface: String, position: Int = 0) {
-        reportListingClick(item, surface, position)
+        feedEventReporter.previewOpen(item.id, surface = surface, position = position)
         recordView(item, position, surface)
         listingPreviewDetailJob?.cancel()
         _listingPreview.value = ExploreListingPreviewState(
             feedItem = item,
             gridPosition = position,
+            surface = surface,
             detail = null,
             isDetailLoading = true,
         )
@@ -548,8 +549,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closeListingPreview() {
+        val cur = _listingPreview.value
+        if (cur != null && !cur.outcomeRecorded) {
+            val dwellMs = (System.currentTimeMillis() - cur.openedAtMs).toInt().coerceAtLeast(0)
+            feedEventReporter.previewDismiss(
+                cur.feedItem.id,
+                surface = cur.surface,
+                position = cur.gridPosition,
+                dwellMs = dwellMs,
+            )
+        }
         listingPreviewDetailJob?.cancel()
         _listingPreview.value = null
+    }
+
+    fun openListingDetailFromPreview(): Pair<String, String?>? {
+        val cur = _listingPreview.value ?: return null
+        feedEventReporter.previewDetail(cur.feedItem.id, surface = cur.surface, position = cur.gridPosition)
+        val id = cur.feedItem.id
+        val sellerId = cur.feedItem.sellerId
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = null
+        return id to sellerId
+    }
+
+    fun openChatFromPreview(): Pair<String, String?>? {
+        val cur = _listingPreview.value ?: return null
+        feedEventReporter.chatInitiate(cur.feedItem.id, surface = cur.surface, position = cur.gridPosition)
+        val id = cur.feedItem.id
+        val sellerId = cur.feedItem.sellerId
+        listingPreviewDetailJob?.cancel()
+        _listingPreview.value = null
+        return id to sellerId
     }
 
     fun follow(sellerId: String?) {

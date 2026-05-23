@@ -620,15 +620,21 @@ fun ExploreScreen(
                     isDetailLoading = preview.isDetailLoading,
                     onDismiss = { viewModel.closeListingPreview() },
                     onViewDetail = {
-                        val id = preview.feedItem.id
-                        val sellerId = preview.feedItem.sellerId
-                        viewModel.closeListingPreview()
-                        onListingClick(id, sellerId)
+                        val nav = viewModel.openListingDetailFromPreview()
+                        if (nav != null) onListingClick(nav.first, nav.second)
                     },
                     onLike = { viewModel.toggleLike(preview.feedItem) },
                     onSave = { viewModel.toggleSave(preview.feedItem) },
                     isGuestMode = isGuestMode,
                     onRequestLogin = onRequestLogin,
+                    onMessageSeller = {
+                        if (isGuestMode) {
+                            onRequestLogin(GuestLoginReason.BuyOrChat)
+                        } else {
+                            val nav = viewModel.openChatFromPreview()
+                            if (nav != null) onListingClick(nav.first, nav.second)
+                        }
+                    },
                 )
             }
         }
@@ -1331,6 +1337,7 @@ private fun ExploreSizingQuickToggle(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreFiltersBar(
     hasActiveFilters: Boolean,

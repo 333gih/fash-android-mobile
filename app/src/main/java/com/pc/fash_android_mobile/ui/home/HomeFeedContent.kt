@@ -532,15 +532,21 @@ fun HomeFeedContent(
                 isDetailLoading = preview.isDetailLoading,
                 onDismiss = { viewModel.closeListingPreview() },
                 onViewDetail = {
-                    val id = preview.feedItem.id
-                    val sellerId = preview.feedItem.sellerId
-                    viewModel.closeListingPreview()
-                    onListingClick(id, sellerId)
+                    val nav = viewModel.openListingDetailFromPreview()
+                    if (nav != null) onListingClick(nav.first, nav.second)
                 },
                 onLike = { viewModel.toggleLike(preview.feedItem) },
                 onSave = { viewModel.toggleSave(preview.feedItem) },
                 isGuestMode = isGuestBrowse,
                 onRequestLogin = onRequestLogin,
+                onMessageSeller = {
+                    if (isGuestBrowse) {
+                        onRequestLogin(GuestLoginReason.BuyOrChat)
+                    } else {
+                        val nav = viewModel.openChatFromPreview()
+                        if (nav != null) onListingClick(nav.first, nav.second)
+                    }
+                },
             )
         }
     }

@@ -119,6 +119,7 @@ fun ExploreListingPreviewSheet(
     onSave: () -> Unit,
     isGuestMode: Boolean,
     onRequestLogin: (GuestLoginReason) -> Unit,
+    onMessageSeller: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -297,9 +298,7 @@ fun ExploreListingPreviewSheet(
                     if (isGuestMode) onRequestLogin(GuestLoginReason.Saved) else onSave()
                 },
                 onViewDetail = onViewDetail,
-                onMessageSeller = {
-                    if (isGuestMode) onRequestLogin(GuestLoginReason.BuyOrChat) else onViewDetail()
-                },
+                onMessageSeller = onMessageSeller,
             )
         }
     }

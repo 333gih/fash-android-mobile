@@ -40,6 +40,47 @@ class FeedEventReporter(
         flush()
     }
 
+    /** User opened the quick-look bottom sheet (lower intent than a direct PDP click). */
+    fun previewOpen(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "preview_open",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
+    /** User closed quick look without opening PDP/chat — [dwellMs] drives taste weight server-side. */
+    fun previewDismiss(listingId: String, surface: String, position: Int = 0, dwellMs: Int) {
+        if (dwellMs <= 0) return
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "preview_dismiss",
+                position = position,
+                dwellMs = dwellMs,
+            ),
+        )
+        flush()
+    }
+
+    /** User continued from quick look to full product detail. */
+    fun previewDetail(listingId: String, surface: String, position: Int = 0) {
+        enqueue(
+            FeedEventPayload(
+                listingId = listingId,
+                surface = surface,
+                eventType = "preview_detail",
+                position = position,
+            ),
+        )
+        flush()
+    }
+
     /**
      * Records a true dwell signal (item visible for [dwellMs]). Distinct from `impression` so backend
      * taste aggregation can score watch-time correctly (see AggregateFeedEventWeights).
