@@ -800,6 +800,7 @@ class UserRepository(
     fun listMyNotifications(
         limit: Int = 30,
         beforeId: String? = null,
+        group: String? = null,
     ): Result<InboxNotificationsPage> = runCatching {
         val lim = when {
             limit < 1 || limit > 100 -> 30
@@ -814,6 +815,10 @@ class UserRepository(
             val b = beforeId?.trim()?.takeIf { it.isNotEmpty() }
             if (b != null) {
                 append("&before_id=").append(Uri.encode(b, null))
+            }
+            val g = group?.trim()?.takeIf { it.isNotEmpty() }
+            if (g != null) {
+                append("&group=").append(Uri.encode(g, null))
             }
         }
         val body = securedClient.newCall(
@@ -836,6 +841,54 @@ class UserRepository(
             resBody
         }
         parseInboxNotificationsPage(body)
+    }
+
+    /** `GET /users/me/notifications/groups` — grouped inbox landing summaries. */
+    fun listMyNotificationGroups(): Result<InboxNotificationGroupsPage> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/notifications/groups")
+        val body = securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("Accept", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+            resBody
+        }
+        parseInboxNotificationGroupsPage(body)
+    }
+
+    private fun parseInboxNotificationGroupsPage(json: String): InboxNotificationGroupsPage {
+        val root = JSONObject(json.trim())
+        val arr = root.optJSONArray("data") ?: JSONArray()
+        val groups = buildList {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val group = o.optString("group", "").trim()
+                if (group.isEmpty()) continue
+                add(
+                    NotificationGroupSummaryItem(
+                        group = group,
+                        unreadCount = o.optLong("unread_count", 0L).toInt().coerceAtLeast(0),
+                        latestId = o.optString("latest_id", "").takeIf { it.isNotBlank() },
+                        latestTitle = o.optString("latest_title", "").takeIf { it.isNotBlank() },
+                        latestBody = o.optString("latest_body", "").takeIf { it.isNotBlank() },
+                        latestCreatedAtIso = o.optString("latest_created_at", "").takeIf { it.isNotBlank() },
+                    ),
+                )
+            }
+        }
+        return InboxNotificationGroupsPage(groups = groups)
     }
 
     /**
@@ -870,8 +923,17 @@ class UserRepository(
      * `PATCH /users/me/notifications/read-all` — marks every unread inbox row read for current user.
      * @return Number of rows updated (`data.updated_count`).
      */
-    fun markAllNotificationsRead(): Result<Int> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/users/me/notifications/read-all")
+    fun markAllNotificationsRead(group: String? = null): Result<Int> = runCatching {
+        val base = AppEnvironment.apiPath("api/v1/users/me/notifications/read-all")
+        val delimiter = if ('?' in base) '&' else '?'
+        val url = buildString {
+            append(base)
+            val g = group?.trim()?.takeIf { it.isNotEmpty() }
+            if (g != null) {
+                append(delimiter)
+                append("group=").append(Uri.encode(g, null))
+            }
+        }
         val resBody = securedClient.newCall(
             Request.Builder()
                 .url(url)
@@ -958,6 +1020,7 @@ class UserRepository(
             body = o.optString("body", ""),
             dataMap = parseNotificationDataObject(o.opt("data")),
             payloadType = o.optString("payload_type", "").takeIf { it.isNotBlank() },
+            notificationGroup = o.optString("notification_group", "").takeIf { it.isNotBlank() },
             source = o.optString("source", "").takeIf { it.isNotBlank() },
             sourceEventId = o.optString("source_event_id", "").takeIf { it.isNotBlank() },
             readAtIso = o.optString("read_at", "").takeIf { it.isNotBlank() },

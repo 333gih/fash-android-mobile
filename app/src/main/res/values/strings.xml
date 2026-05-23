@@ -465,6 +465,21 @@
     <string name="notification_detail_actions_heading">Điều hướng</string>
     <string name="notification_row_no_title">Thông báo</string>
     <string name="notification_unread_badge">Chưa đọc</string>
+    <string name="notification_group_system">Hệ thống</string>
+    <string name="notification_group_system_desc">Vận hành, bảo trì và cập nhật quan trọng</string>
+    <string name="notification_group_commerce">Giao dịch</string>
+    <string name="notification_group_commerce_desc">Đơn hàng, thanh toán, đề nghị giá và đánh giá</string>
+    <string name="notification_group_social">Cộng đồng</string>
+    <string name="notification_group_social_desc">Theo dõi, thích và hoạt động shop</string>
+    <string name="notification_group_recommendation">Gợi ý</string>
+    <string name="notification_group_recommendation_desc">Sản phẩm và nội dung dành riêng cho bạn</string>
+    <string name="notification_group_ads">Quảng cáo</string>
+    <string name="notification_group_ads_desc">Khuyến mãi và chiến dịch monetization</string>
+    <string name="notification_group_reengagement">Quay lại</string>
+    <string name="notification_group_reengagement_desc">Nhắc bạn quay lại và hoàn tất việc dang dở</string>
+    <string name="notification_group_realtime">Trực tiếp</string>
+    <string name="notification_group_realtime_desc">Chat và tương tác live</string>
+    <string name="notification_group_empty_title">Chưa có thông báo trong nhóm này</string>
     <string name="notification_mark_all_read">Đọc tất cả</string>
     <string name="notification_mark_all_read_cd">Đánh dấu tất cả thông báo là đã đọc</string>
     <string name="notification_mark_all_read_success">Đã đánh dấu %1$d thông báo là đã đọc.</string>
@@ -587,6 +602,12 @@
     <string name="explore_preview_detail_nudge">Còn nhiều thông tin hơn</string>
     <string name="explore_preview_detail_nudge_sub">Mô tả đầy đủ, size, ảnh &amp; điều kiện mua</string>
     <string name="explore_preview_detail_nudge_cta">Mở chi tiết</string>
+    <string name="explore_preview_image_page">%1$d / %2$d</string>
+    <string name="explore_preview_seller_username_fallback">user</string>
+    <string name="explore_preview_seller_at_username">@%1$s</string>
+    <string name="explore_preview_inline_separator"> · </string>
+    <string name="explore_preview_scroll_hint_cd">Lướt xuống xem thêm thông tin sản phẩm</string>
+    <string name="explore_preview_image_pager_cd">Ảnh sản phẩm %1$d trên %2$d — vuốt ngang để xem tiếp</string>
 
     <string name="product_detail_error">Không tải được sản phẩm. Thử lại.</string>
     <string name="product_detail_title">Chi tiết sản phẩm</string>

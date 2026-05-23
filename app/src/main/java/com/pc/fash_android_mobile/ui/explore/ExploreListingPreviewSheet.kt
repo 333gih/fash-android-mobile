@@ -91,6 +91,7 @@ import com.pc.fash_android_mobile.ui.feed.formatListingPriceVnd
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrlOrNull
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.locale.ProvideAppLocale
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
@@ -150,6 +151,8 @@ fun ExploreListingPreviewSheet(
         containerColor = scheme.surface,
         contentColor = scheme.onSurface,
     ) {
+        // Dialog window uses system/default Configuration — re-apply app locale for stringResource.
+        ProvideAppLocale {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -301,6 +304,7 @@ fun ExploreListingPreviewSheet(
                 onMessageSeller = onMessageSeller,
             )
         }
+        }
     }
 }
 
@@ -348,7 +352,7 @@ private fun ExplorePreviewScrollMoreHint(
         ) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.explore_preview_scroll_hint_cd),
                 modifier = Modifier
                     .size(14.dp)
                     .offset(y = bounceY.dp),
@@ -460,7 +464,11 @@ private fun ExplorePreviewImageThumb(
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     FashAsyncImage(
                         model = imageUrls[page],
-                        contentDescription = title,
+                        contentDescription = stringResource(
+                            R.string.explore_preview_image_pager_cd,
+                            page + 1,
+                            imageUrls.size,
+                        ),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
@@ -473,7 +481,11 @@ private fun ExplorePreviewImageThumb(
                     color = scheme.scrim.copy(alpha = 0.55f),
                 ) {
                     Text(
-                        text = "${pagerState.currentPage + 1}/${imageUrls.size}",
+                        text = stringResource(
+                            R.string.explore_preview_image_page,
+                            pagerState.currentPage + 1,
+                            imageUrls.size,
+                        ),
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.SemiBold,
@@ -601,7 +613,8 @@ private fun ExplorePreviewSellerRow(
     val scheme = MaterialTheme.colorScheme
     val avatarUrl = resolvePreviewSellerAvatarUrl(feedItem, detail)
     val displayName = detail?.sellerDisplayName?.trim()?.takeIf { it.isNotEmpty() }
-    val username = detail?.sellerUsername ?: feedItem.sellerUsername ?: "user"
+    val username = detail?.sellerUsername ?: feedItem.sellerUsername
+        ?: stringResource(R.string.explore_preview_seller_username_fallback)
     val listingCount = detail?.sellerListingCount
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -615,7 +628,7 @@ private fun ExplorePreviewSellerRow(
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = displayName ?: "@$username",
+                text = displayName ?: stringResource(R.string.explore_preview_seller_at_username, username),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = scheme.onSurface,
                 maxLines = 1,
@@ -623,9 +636,9 @@ private fun ExplorePreviewSellerRow(
             )
             Text(
                 text = buildString {
-                    append("@$username")
+                    append(stringResource(R.string.explore_preview_seller_at_username, username))
                     listingCount?.takeIf { it >= 0 }?.let {
-                        append(" · ")
+                        append(stringResource(R.string.explore_preview_inline_separator))
                         append(stringResource(R.string.product_seller_products_count, it))
                     }
                 },
@@ -757,7 +770,7 @@ private fun ExplorePreviewShippingHint(detail: ListingDetail?) {
             text = buildString {
                 append(stringResource(R.string.product_shipping_estimate, formatListingPriceVnd(fee)))
                 region?.let {
-                    append(" · ")
+                    append(stringResource(R.string.explore_preview_inline_separator))
                     append(stringResource(R.string.product_ship_from_upper, it))
                 }
             },

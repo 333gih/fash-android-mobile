@@ -72,6 +72,7 @@ import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
+import com.pc.fash_android_mobile.ui.components.FashAnimatedSearchIconButton
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashInboxNotificationIconButton
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
@@ -400,6 +401,7 @@ fun MainNavScreen(
                     onOrdersClick = openOrders,
                     showGuestSignIn = isGuestMode,
                     onGuestSignInClick = openGuestSignIn,
+                    searchHintAnimation = true,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -858,6 +860,7 @@ private fun MainTopBar(
     onOrdersClick: (() -> Unit)? = null,
     showGuestSignIn: Boolean = false,
     onGuestSignInClick: () -> Unit = {},
+    searchHintAnimation: Boolean = false,
     tourTopBarAnchorsEnabled: Boolean = false,
     onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
 ) {
@@ -877,12 +880,19 @@ private fun MainTopBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = stringResource(R.string.search_label),
-                            tint = MaterialTheme.colorScheme.onSurface,
+                    if (searchHintAnimation) {
+                        FashAnimatedSearchIconButton(
+                            onClick = onSearchClick,
+                            animateHint = !tourTopBarAnchorsEnabled,
                         )
+                    } else {
+                        IconButton(onClick = onSearchClick) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = stringResource(R.string.search_label),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                     if (showGuestSignIn) {
                         GuestTopBarSignInAction(onClick = onGuestSignInClick)

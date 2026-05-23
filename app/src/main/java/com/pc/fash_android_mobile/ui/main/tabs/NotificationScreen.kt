@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,7 +60,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
+import com.pc.fash_android_mobile.data.user.NotificationGroupSummaryItem
+import com.pc.fash_android_mobile.ui.notifications.notificationGroupHasActivity
+import com.pc.fash_android_mobile.ui.notifications.notificationGroupIcon
+import com.pc.fash_android_mobile.ui.notifications.notificationGroupSubtitleRes
+import com.pc.fash_android_mobile.ui.notifications.notificationGroupTitleRes
+import com.pc.fash_android_mobile.ui.notifications.notificationPayloadIcon
+import com.pc.fash_android_mobile.ui.notifications.parseAppPromoCampaignFromInbox
+import com.pc.fash_android_mobile.ui.notifications.parseNotificationDetailActions
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
@@ -107,12 +121,15 @@ fun NotificationScreen(
     val unreadCount by viewModel.unreadCount.collectAsState()
     val markAllReadBusy by viewModel.markAllReadBusy.collectAsState()
     val selectedDetailId by viewModel.selectedDetailId.collectAsState()
+    val groups by viewModel.groups.collectAsState()
+    val selectedGroup by viewModel.selectedGroup.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val canMarkAllRead = !inboxUnavailable &&
         !markAllReadBusy &&
-        (unreadCount > 0 || items.any { it.isUnread })
+        selectedGroup != null &&
+        (items.any { it.isUnread } || (groups.find { it.group == selectedGroup }?.unreadCount ?: 0) > 0)
 
     DisposableEffect(Unit) {
         onDispose { viewModel.closeDetail() }
@@ -162,13 +179,23 @@ fun NotificationScreen(
                     TopAppBar(
                         title = {
                             Text(
-                                text = stringResource(R.string.notifications),
+                                text = if (selectedGroup != null) {
+                                    stringResource(notificationGroupTitleRes(selectedGroup!!))
+                                } else {
+                                    stringResource(R.string.notifications)
+                                },
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 color = scheme.onSurface,
                             )
                         },
                         navigationIcon = {
-                            IconButton(onClick = onBack) {
+                            IconButton(onClick = {
+                                if (selectedGroup != null) {
+                                    viewModel.closeGroup()
+                                } else {
+                                    onBack()
+                                }
+                            }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = stringResource(R.string.cd_back),
@@ -177,36 +204,38 @@ fun NotificationScreen(
                             }
                         },
                         actions = {
-                            if (markAllReadBusy) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(end = FashTheme.spacing.editorialStart - 4.dp)
-                                        .size(48.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(22.dp),
-                                        color = FashColors.Primary,
-                                        strokeWidth = 2.dp,
-                                    )
-                                }
-                            } else {
-                                TextButton(
-                                    onClick = { viewModel.markAllRead() },
-                                    enabled = canMarkAllRead,
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = FashColors.Primary,
-                                        disabledContentColor = scheme.onSurface.copy(alpha = 0.38f),
-                                    ),
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.notification_mark_all_read),
-                                        style = MaterialTheme.typography.labelLarge.copy(
-                                            fontWeight = FontWeight.SemiBold,
+                            if (selectedGroup != null) {
+                                if (markAllReadBusy) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(end = FashTheme.spacing.editorialStart - 4.dp)
+                                            .size(48.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = FashColors.Primary,
+                                            strokeWidth = 2.dp,
+                                        )
+                                    }
+                                } else {
+                                    TextButton(
+                                        onClick = { viewModel.markAllRead() },
+                                        enabled = canMarkAllRead,
+                                        colors = ButtonDefaults.textButtonColors(
+                                            contentColor = FashColors.Primary,
+                                            disabledContentColor = scheme.onSurface.copy(alpha = 0.38f),
                                         ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.notification_mark_all_read),
+                                            style = MaterialTheme.typography.labelLarge.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -228,12 +257,12 @@ fun NotificationScreen(
                             .fillMaxWidth(),
                     ) {
                             when {
-                                isLoading && items.isEmpty() -> {
+                                isLoading && (if (selectedGroup == null) groups.isEmpty() else items.isEmpty()) -> {
                                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         CircularProgressIndicator(color = FashColors.Primary)
                                     }
                                 }
-                                loadError != null && items.isEmpty() -> {
+                                loadError != null && (if (selectedGroup == null) groups.isEmpty() else items.isEmpty()) -> {
                                     if (inboxUnavailable) {
                                         FashEmptyState(
                                             icon = Icons.Outlined.Notifications,
@@ -265,7 +294,7 @@ fun NotificationScreen(
                                         )
                                     }
                                 }
-                                items.isEmpty() -> {
+                                selectedGroup == null && groups.all { it.latestId == null && it.unreadCount == 0 } -> {
                                     FashEmptyState(
                                         icon = Icons.Outlined.Notifications,
                                         title = stringResource(R.string.notification_empty_title),
@@ -292,6 +321,51 @@ fun NotificationScreen(
                                             }
                                         },
                                     )
+                                }
+                                selectedGroup != null && items.isEmpty() -> {
+                                    FashEmptyState(
+                                        icon = notificationGroupIcon(selectedGroup!!),
+                                        title = stringResource(R.string.notification_group_empty_title),
+                                        subtitle = stringResource(notificationGroupSubtitleRes(selectedGroup!!)),
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentDescription = null,
+                                    )
+                                }
+                                selectedGroup == null -> {
+                                    PullToRefreshBox(
+                                        isRefreshing = isRefreshing,
+                                        onRefresh = { viewModel.refresh() },
+                                        modifier = Modifier.fillMaxSize(),
+                                        state = pullState,
+                                        indicator = {
+                                            PullToRefreshDefaults.Indicator(
+                                                state = pullState,
+                                                isRefreshing = isRefreshing,
+                                                color = FashColors.Primary,
+                                                containerColor = scheme.surface,
+                                                modifier = Modifier.align(Alignment.TopCenter),
+                                            )
+                                        },
+                                    ) {
+                                        LazyColumn(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentPadding = PaddingValues(
+                                                horizontal = FashTheme.spacing.editorialStart,
+                                                vertical = 8.dp,
+                                            ),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            items(
+                                                items = groups,
+                                                key = { stableLazyKey(it.group, 0, "ng") },
+                                            ) { row ->
+                                                NotificationGroupRow(
+                                                    item = row,
+                                                    onClick = { viewModel.openGroup(row.group) },
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                                 else -> {
                                     PullToRefreshBox(
@@ -383,6 +457,89 @@ fun NotificationScreen(
     }
 }
 
+/** Compact uniform height so all 7 groups fit on one screen. */
+private val NotificationGroupRowHeight = 64.dp
+
+@Composable
+private fun NotificationGroupRow(
+    item: NotificationGroupSummaryItem,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val preview = item.latestBody?.takeIf { it.isNotBlank() }
+        ?: item.latestTitle?.takeIf { it.isNotBlank() }
+        ?: stringResource(notificationGroupSubtitleRes(item.group))
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(NotificationGroupRowHeight)
+            .clip(RoundedCornerShape(FashTheme.spacing.radiusCard))
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = notificationGroupIcon(item.group),
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.height(20.dp),
+                ) {
+                    Text(
+                        text = stringResource(notificationGroupTitleRes(item.group)),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (item.unreadCount > 0) {
+                        Text(
+                            text = item.unreadCount.coerceAtMost(99).toString(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = scheme.onPrimary,
+                            modifier = Modifier
+                                .background(FashColors.Primary, RoundedCornerShape(999.dp))
+                                .padding(horizontal = 7.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun NotificationInboxRow(
     item: InboxNotificationItem,
@@ -403,25 +560,49 @@ private fun NotificationInboxRow(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column(
+        Row(
             Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            RowTitleUnread(item)
-            Text(
-                text = item.body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurface,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
+            Icon(
+                imageVector = notificationPayloadIcon(item.payloadType),
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(24.dp),
             )
-            Text(
-                text = formatNotificationListTime(item.createdAtIso),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                RowTitleUnread(item)
+                Text(
+                    text = item.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurface,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = formatNotificationListTime(item.createdAtIso),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            notificationRowImageUrl(item)?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+            }
         }
     }
+}
+
+private fun notificationRowImageUrl(item: InboxNotificationItem): String? {
+    parseAppPromoCampaignFromInbox(item)?.remoteImageUrls?.firstOrNull()?.let { return it }
+    return parseNotificationDetailActions(item).imageUrl?.takeIf { it.isNotBlank() }
 }
 
 @Composable

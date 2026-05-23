@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
+import com.pc.fash_android_mobile.data.user.NotificationGroupSummaryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,6 +24,12 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
 
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+
+    private val _groups = MutableStateFlow<List<NotificationGroupSummaryItem>>(emptyList())
+    val groups: StateFlow<List<NotificationGroupSummaryItem>> = _groups.asStateFlow()
+
+    private val _selectedGroup = MutableStateFlow<String?>(null)
+    val selectedGroup: StateFlow<String?> = _selectedGroup.asStateFlow()
 
     private val _items = MutableStateFlow<List<InboxNotificationItem>>(emptyList())
     val items: StateFlow<List<InboxNotificationItem>> = _items.asStateFlow()
@@ -49,7 +56,6 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     val selectedDetailId: StateFlow<String?> = _selectedDetailId.asStateFlow()
 
     private val _unreadCount = MutableStateFlow(0)
-    /** Total unread from server ([UserRepository.getMyNotificationsUnreadCount]); not limited to the first inbox page. */
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
 
     private val _markAllReadBusy = MutableStateFlow(false)
@@ -72,6 +78,8 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun clearCachesForSignedOutUser() {
+        _groups.value = emptyList()
+        _selectedGroup.value = null
         _items.value = emptyList()
         _unreadCount.value = 0
         _loadError.value = null
@@ -84,20 +92,45 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         _markAllReadBusy.value = false
     }
 
+    fun openGroup(group: String) {
+        val g = group.trim().takeIf { it.isNotEmpty() } ?: return
+        _selectedGroup.value = g
+        _items.value = emptyList()
+        _hasMore.value = false
+        refreshGroupItems()
+    }
+
+    fun closeGroup() {
+        _selectedGroup.value = null
+        _items.value = emptyList()
+        _hasMore.value = false
+        _selectedDetailId.value = null
+        refreshGroups()
+    }
+
     fun markAllRead() {
         if (_markAllReadBusy.value || _inboxUnavailable.value) return
-        if (_unreadCount.value <= 0 && _items.value.none { it.isUnread }) return
+        val group = _selectedGroup.value?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val groupUnread = _groups.value.find { it.group == group }?.unreadCount ?: 0
+        if (_items.value.none { it.isUnread } && groupUnread <= 0) return
         viewModelScope.launch {
             _markAllReadBusy.value = true
-            val result = withContext(Dispatchers.IO) { userRepository.markAllNotificationsRead() }
+            val result = withContext(Dispatchers.IO) {
+                userRepository.markAllNotificationsRead(group = group)
+            }
             _markAllReadBusy.value = false
             val app = getApplication<Application>()
             result.fold(
                 onSuccess = { updated ->
                     val stamp = Instant.now().toString()
                     _items.update { list -> list.map { row -> row.copy(readAtIso = row.readAtIso ?: stamp) } }
-                    _unreadCount.value = 0
+                    _groups.update { list ->
+                        list.map { row ->
+                            if (row.group == group) row.copy(unreadCount = 0) else row
+                        }
+                    }
                     refreshUnreadSummary()
+                    refreshGroups()
                     val msg = when {
                         updated > 0 -> app.getString(R.string.notification_mark_all_read_success, updated)
                         else -> app.getString(R.string.notification_mark_all_read_none)
@@ -115,6 +148,42 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun refresh() {
+        if (_selectedGroup.value == null) {
+            refreshGroups()
+        } else {
+            refreshGroupItems()
+        }
+    }
+
+    private fun refreshGroups() {
+        viewModelScope.launch {
+            if (_groups.value.isEmpty()) {
+                _isLoading.value = true
+            } else {
+                _isRefreshing.value = true
+            }
+            _loadError.value = null
+            _inboxUnavailable.value = false
+            val result = withContext(Dispatchers.IO) { userRepository.listMyNotificationGroups() }
+            result.onSuccess { page ->
+                val merged = mergeGroupSummaries(page.groups)
+                _groups.value = merged
+                refreshUnreadSummary()
+            }.onFailure { e ->
+                val msg = e.message.orEmpty()
+                _loadError.value = msg
+                if (msg.contains("HTTP 404") || msg.contains("HTTP 503")) {
+                    _inboxUnavailable.value = true
+                }
+                _groups.value = emptyList()
+            }
+            _isLoading.value = false
+            _isRefreshing.value = false
+        }
+    }
+
+    private fun refreshGroupItems() {
+        val group = _selectedGroup.value ?: return
         viewModelScope.launch {
             if (_items.value.isEmpty()) {
                 _isLoading.value = true
@@ -124,7 +193,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
             _loadError.value = null
             _inboxUnavailable.value = false
             val result = withContext(Dispatchers.IO) {
-                userRepository.listMyNotifications(PAGE_LIMIT, beforeId = null)
+                userRepository.listMyNotifications(PAGE_LIMIT, beforeId = null, group = group)
             }
             result.onSuccess { page ->
                 _items.value = page.items
@@ -144,17 +213,33 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    private fun mergeGroupSummaries(serverGroups: List<NotificationGroupSummaryItem>): List<NotificationGroupSummaryItem> {
+        val byGroup = serverGroups.associateBy { it.group }
+        val merged = NotificationGroups.displayOrder.map { code ->
+            byGroup[code] ?: NotificationGroupSummaryItem(
+                group = code,
+                unreadCount = 0,
+                latestId = null,
+                latestTitle = null,
+                latestBody = null,
+                latestCreatedAtIso = null,
+            )
+        }
+        return merged
+    }
+
     fun retryAfterError() {
         refresh()
     }
 
     fun loadMore() {
+        val group = _selectedGroup.value ?: return
         val last = _items.value.lastOrNull() ?: return
         if (!_hasMore.value || _loadMoreBusy.value || _isLoading.value) return
         viewModelScope.launch {
             _loadMoreBusy.value = true
             val r = withContext(Dispatchers.IO) {
-                userRepository.listMyNotifications(PAGE_LIMIT, beforeId = last.id)
+                userRepository.listMyNotifications(PAGE_LIMIT, beforeId = last.id, group = group)
             }
             r.onSuccess { page ->
                 val have = _items.value.map { it.id }.toSet()
@@ -170,13 +255,14 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         _selectedDetailId.value = id.trim().takeIf { it.isNotEmpty() }
     }
 
-    /**
-     * Tray / deep-link open: reload inbox (and paginate) until [notificationId] is found, then show detail and mark read.
-     */
     fun openInboxDetailFromPush(notificationId: String) {
         val id = notificationId.trim()
         if (id.isEmpty()) return
         viewModelScope.launch {
+            _selectedGroup.value = null
+            if (_groups.value.isEmpty()) {
+                refreshGroups()
+            }
             if (_items.value.isEmpty()) {
                 _isLoading.value = true
             }
@@ -188,6 +274,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 onSuccess = { page ->
                     _items.value = page.items
                     _hasMore.value = page.items.size >= PAGE_LIMIT
+                    page.items.find { it.id == id }?.notificationGroup?.let { openGroup(it) }
                 },
                 onFailure = { e ->
                     _loadError.value = e.message
@@ -217,8 +304,14 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
             }
             _isLoading.value = false
             if (found) {
+                val item = _items.value.find { it.id == id }
+                item?.notificationGroup?.let { g ->
+                    if (_selectedGroup.value != g) {
+                        openGroup(g)
+                    }
+                }
                 _selectedDetailId.value = id
-                _items.value.find { it.id == id }?.let { markReadIfNeeded(it) }
+                item?.let { markReadIfNeeded(it) }
             } else {
                 openDetail(id)
             }
@@ -238,6 +331,15 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 _items.update { list ->
                     list.map { row ->
                         if (row.id == item.id) row.copy(readAtIso = stamp) else row
+                    }
+                }
+                _groups.update { list ->
+                    list.map { row ->
+                        if (row.group == item.notificationGroup && row.unreadCount > 0) {
+                            row.copy(unreadCount = (row.unreadCount - 1).coerceAtLeast(0))
+                        } else {
+                            row
+                        }
                     }
                 }
                 refreshUnreadSummary()
