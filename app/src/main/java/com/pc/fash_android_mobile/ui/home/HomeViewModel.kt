@@ -106,9 +106,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    /** Follow-feed pagination — true while next page is in flight. */
+    /** Follow-feed pagination — guards duplicate in-flight requests (no UI spinner). */
     private val _isLoadingMore = MutableStateFlow(false)
-    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
 
     /** Follow-feed pagination — false when last fetch returned < HomeFollowFeedPageSize. */
     private val _hasMoreItems = MutableStateFlow(true)
@@ -216,6 +215,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /** Call after the viewer saves profile sizing so the Home banner hides without restarting. */
+    fun refreshSizingBannerAfterProfileSave() {
+        viewModelScope.launch(Dispatchers.IO) { refreshSizingBannerState() }
+    }
+
     /** Permanently hides the Home sizing banner until SharedPreferences are cleared (sign-out wipes them). */
     fun dismissSizingBanner() {
         val ctx = getApplication<Application>().applicationContext
@@ -306,15 +310,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Fetch the next page of follow-feed listings (offset = current size). Idempotent: the call is
      * a no-op when a previous load is still in flight, when there are no more items, when we are in
-     * guest browse mode, or when nothing has loaded yet. Triggered from the UI by the
-     * lazy-list "near the bottom" snapshotFlow in HomeFeedContent.
+     * guest browse mode, or when nothing has loaded yet. Throttled so fast scroll at the feed/style
+     * boundary does not spam the API or recompose the list.
      */
+    private var lastFollowFeedLoadMoreAtMs = 0L
+
     fun loadMoreFollowFeed() {
         if (isGuestBrowse()) return
         if (_isLoadingMore.value || !_hasMoreItems.value) return
         if (_isLoading.value || _isRefreshing.value) return
         val offset = _items.value.size
         if (offset == 0) return
+        val now = System.currentTimeMillis()
+        if (now - lastFollowFeedLoadMoreAtMs < 900) return
+        lastFollowFeedLoadMoreAtMs = now
         viewModelScope.launch {
             _isLoadingMore.value = true
             val result = withContext(Dispatchers.IO) {

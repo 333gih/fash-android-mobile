@@ -137,6 +137,11 @@ fun GuestMainShell(
         sellerShopUsername = handle
         fashApp.pendingDeepLinkSellerUsername.value = null
     }
+    val pendingInviteFriends by fashApp.pendingOpenInviteFriends.collectAsState()
+    LaunchedEffect(pendingInviteFriends) {
+        if (!pendingInviteFriends) return@LaunchedEffect
+        requestLogin(GuestLoginReason.Invite)
+    }
 
     LaunchedEffect(sellerShopUsername) {
         sellerShopUsername?.let { sellerProfileViewModel.loadForSeller(it) }

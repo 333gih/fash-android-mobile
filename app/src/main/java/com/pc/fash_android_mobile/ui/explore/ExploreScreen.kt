@@ -1215,9 +1215,8 @@ private fun ExploreFiltersBarTrailingAction(
  * without opening the full filter sheet — surfacing Fash's size-first identity in the primary
  * discovery surface.
  *
- * The actual personalization is gated server-side by Phase 3 (`sizing_mode` on the browse
- * endpoint). Until then the toggle still drives `/search/listings?sizing_mode=match_profile` when
- * the user has a search query active.
+ * When enabled, the client sends `sizing_mode=match_profile` on personalized browse and search
+ * so core-service filters listings to the viewer's saved size / measurements.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

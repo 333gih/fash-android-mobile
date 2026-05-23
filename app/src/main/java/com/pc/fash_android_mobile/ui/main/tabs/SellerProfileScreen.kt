@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -139,14 +139,10 @@ fun SellerProfileScreen(
         viewModel.loadForSeller(sellerUsername)
     }
 
-    val listState = remember(selectedTab) { LazyListState(0, 0) }
+    val listState = rememberLazyListState()
     val scrollScope = rememberCoroutineScope()
     val collapseProgress = rememberProfileHeaderCollapseProgress(listState)
     val showPromoFooter by rememberProfilePromoFooterVisible(listState)
-
-    LaunchedEffect(selectedTab) {
-        listState.scrollToItem(0, 0)
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -301,7 +297,14 @@ fun SellerProfileScreen(
                                     )
                                 },
                                 selectedTab = selectedTab,
-                                onTabSelected = { selectedTab = it },
+                                onTabSelected = { newTab ->
+                                    if (newTab != selectedTab) {
+                                        selectedTab = newTab
+                                        scrollScope.launch {
+                                            listState.scrollProfileToPinnedGrid(initialDelayMs = 80)
+                                        }
+                                    }
+                                },
                                 items = items,
                                 wishlistTabVisible = false,
                                 onListingClick = { item ->

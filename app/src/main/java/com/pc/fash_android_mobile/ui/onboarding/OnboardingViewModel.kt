@@ -536,6 +536,7 @@ class OnboardingViewModel(
                 onboardResult.fold(
                     onSuccess = {
                         fashApp.pendingReferralToken.value = null
+                        fashApp.pendingReferrerUsername.value = null
                         val status = withContext(Dispatchers.IO) {
                             userRepository.getUserAccessStatus().getOrNull()
                         }

@@ -68,17 +68,37 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val ackMeetingReverifyInFlight: StateFlow<Boolean> = _ackMeetingReverifyInFlight.asStateFlow()
 
     /**
-     * Incremented when the user taps “Đã lưu” on Home so [ProfileScreen] opens the wishlist tab
-     * and animates scroll to pin the tab chrome.
+     * One-shot open-profile-tab request (e.g. Home journey “Đã lưu” → Saved tab with grid visible).
      */
-    private val _wishlistTabOpenGeneration = MutableStateFlow(0L)
-    val wishlistTabOpenGeneration: StateFlow<Long> = _wishlistTabOpenGeneration.asStateFlow()
+    data class ProfileTabOpenRequest(
+        val tabIndex: Int,
+        val scrollToGrid: Boolean = true,
+    )
+
+    private val _profileTabOpenRequest = MutableStateFlow<ProfileTabOpenRequest?>(null)
+    private val _profileTabOpenGeneration = MutableStateFlow(0L)
+    val profileTabOpenGeneration: StateFlow<Long> = _profileTabOpenGeneration.asStateFlow()
 
     private val _scrollProfileToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollProfileToTop: SharedFlow<Unit> = _scrollProfileToTop.asSharedFlow()
 
-    fun requestWishlistTabFromHome() {
-        _wishlistTabOpenGeneration.update { it + 1L }
+    fun requestOpenProfileTab(tabIndex: Int, scrollToGrid: Boolean = true) {
+        _profileTabOpenRequest.value = ProfileTabOpenRequest(
+            tabIndex = tabIndex.coerceIn(0, 2),
+            scrollToGrid = scrollToGrid,
+        )
+        _profileTabOpenGeneration.update { it + 1L }
+    }
+
+    /** Home journey row → Profile Saved tab, scrolled to pinned grid. */
+    fun requestWishlistTabFromHome() = requestOpenProfileTab(tabIndex = 2, scrollToGrid = true)
+
+    fun consumeProfileTabOpenRequest(): ProfileTabOpenRequest? {
+        if (_profileTabOpenGeneration.value == 0L) return null
+        val req = _profileTabOpenRequest.value
+        _profileTabOpenRequest.value = null
+        _profileTabOpenGeneration.value = 0L
+        return req
     }
 
     /** Bottom nav re-tap on Profile — scroll list to top (pairs with [refresh]). */
@@ -108,7 +128,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
      */
     fun clearCachedProfile() {
         lastLoadedProfileForUserId = null
-        _wishlistTabOpenGeneration.value = 0L
+        _profileTabOpenRequest.value = null
+        _profileTabOpenGeneration.value = 0L
         clearProfileCachesOnly()
     }
 
@@ -182,8 +203,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     /** Pull-to-refresh — same payload as [loadProfile], with Material indicator (no full-screen blocking). */
     fun refresh() {
         loadProfileJob?.cancel()
+        _isRefreshing.value = true
         loadProfileJob = viewModelScope.launch {
-            _isRefreshing.value = true
             try {
                 _loadError.value = false
                 fetchProfileAndListings()

@@ -16,6 +16,8 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     SellFromHome(R.string.guest_login_reason_post),
     BuyOrChat(R.string.guest_login_reason_buy),
     Follow(R.string.guest_login_reason_follow),
+    /** Friend invite deep link — sign up to join and attribute referral token. */
+    Invite(R.string.guest_login_reason_invite),
     /** Top-bar “Sign in” chip on Home / Explore while browsing without an account. */
     TopBar(R.string.guest_login_reason_topbar),
 }

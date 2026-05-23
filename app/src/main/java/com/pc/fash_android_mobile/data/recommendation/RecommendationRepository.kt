@@ -40,6 +40,7 @@ class RecommendationRepository(
         minPrice: Long? = null,
         maxPrice: Long? = null,
         condition: String? = null,
+        countryIso2: String? = null,
         limit: Int = 20,
         offset: Int = 0,
         /**
@@ -63,6 +64,9 @@ class RecommendationRepository(
         minPrice?.let { q.add("min_price=$it") }
         maxPrice?.let { q.add("max_price=$it") }
         condition?.takeIf { it.isNotBlank() }?.let { q.add("condition=${enc(it)}") }
+        countryIso2?.trim()?.uppercase(java.util.Locale.US)
+            ?.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } }
+            ?.let { q.add("country_iso2=${enc(it)}") }
         sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
             ?.let { q.add("sizing_mode=${enc(it.trim())}") }
         val path = if (publicBrowse) {

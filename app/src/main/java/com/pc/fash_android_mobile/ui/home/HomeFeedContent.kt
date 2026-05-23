@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Straighten
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +47,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -120,16 +121,49 @@ fun HomeFeedContent(
     val buyerStats by viewModel.buyerStats.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMoreItems by viewModel.hasMoreItems.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
 
     val showJourneyRow = buyerStats.hasJourneyActivity()
-    val homePromoLazyIndex = if (showJourneyRow) 1 else 0
+    // Lazy item index of the inline promo row — must match item order below (journey → sizing banner → promo).
+    val homePromoLazyIndex = remember(showJourneyRow, showSizingBanner, onOpenSizingSetup) {
+        var idx = 0
+        if (showJourneyRow) idx++
+        if (showSizingBanner && onOpenSizingSetup != null) idx++
+        idx
+    }
     val recentlyViewed = discovery.recentlyViewed
     val recommendedSellers = discovery.recommendedSellers
+
+    val styleChips = if (discovery.trendingStyleTagChips.isNotEmpty()) {
+        discovery.trendingStyleTagChips
+    } else {
+        discovery.trendingStyleTags.map { TrendingTagChip(id = "", name = it) }
+    }
+    val followFeedLazyRange = remember(
+        showJourneyRow,
+        showSizingBanner,
+        onOpenSizingSetup,
+        styleChips.size,
+        discovery.forYou.size,
+        items.size,
+        isLoading,
+        loadError,
+        isGuestBrowse,
+    ) {
+        computeFollowFeedLazyIndexRange(
+            showJourneyRow = showJourneyRow,
+            showSizingBanner = showSizingBanner && onOpenSizingSetup != null,
+            styleChipCount = styleChips.size,
+            forYouCount = discovery.forYou.size,
+            feedItems = items,
+            isLoading = isLoading,
+            loadError = loadError,
+            isGuestBrowse = isGuestBrowse,
+        )
+    }
 
     LaunchedEffect(Unit) {
         viewModel.scrollHomeToTop.collect {
@@ -137,31 +171,40 @@ fun HomeFeedContent(
         }
     }
 
-    // Follow-feed infinite scroll: when the user is within ~3 list items of the bottom and the
-    // VM still reports `hasMoreItems`, request the next page. Same trigger pattern as Explore
-    // (see ExploreScreen pagination). Skipped in guest mode; soft-no-op while a load is in flight.
-    LaunchedEffect(hasMoreItems, isGuestBrowse) {
-        if (isGuestBrowse) return@LaunchedEffect
+    // Paginate follow feed only while the viewport is still **inside** the grid (not when style
+    // picks / similar-saved are visible). Silent — no spinner overlay near the sticky promo bar.
+    LaunchedEffect(hasMoreItems, isGuestBrowse, followFeedLazyRange) {
+        if (isGuestBrowse || items.isEmpty()) return@LaunchedEffect
+        val range = followFeedLazyRange ?: return@LaunchedEffect
         snapshotFlow {
             val info = listState.layoutInfo
+            val first = info.visibleItemsInfo.firstOrNull()?.index ?: -1
             val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-            val total = info.totalItemsCount
-            if (last < 0 || total <= 0) -1 else (total - last)
-        }.collect { distanceToEnd ->
-            if (distanceToEnd in 0..3) {
-                viewModel.loadMoreFollowFeed()
-            }
+            first to last
         }
+            .debounce(180)
+            .distinctUntilChanged()
+            .collect { (first, last) ->
+                if (first < 0 || last < 0) return@collect
+                val viewportInsideFeed = first >= range.first && last <= range.last
+                val atFeedBottom = last >= range.last - 1
+                if (viewportInsideFeed && atFeedBottom && hasMoreItems) {
+                    viewModel.loadMoreFollowFeed()
+                }
+            }
     }
 
-    val showStickyPromo by remember(showJourneyRow) {
-        val promoIndex = homePromoLazyIndex
+    // Sticky promo: show only after the inline promo row has scrolled off the top. Using
+    // firstVisibleItemIndex avoids oscillation at the promo boundary (checking visibleItems
+    // toggles every frame when the row is partially visible). Render as a bottom overlay so
+    // showing/hiding the bar does not resize the LazyColumn (that resize caused a feedback
+    // loop — bar appears → list shrinks → promo re-enters viewport → bar hides → repeat).
+    val showStickyPromo by remember(homePromoLazyIndex) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             if (layoutInfo.visibleItemsInfo.isEmpty()) return@derivedStateOf false
-            val inlinePromoVisible =
-                layoutInfo.visibleItemsInfo.any { it.index == promoIndex }
-            !inlinePromoVisible
+            val firstVisible = layoutInfo.visibleItemsInfo.first().index
+            firstVisible > homePromoLazyIndex
         }
     }
 
@@ -180,11 +223,11 @@ fun HomeFeedContent(
             )
         },
     ) {
-        Column(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxSize()
                     .fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = FashTheme.spacing.spacing8 + 72.dp),
             ) {
@@ -249,11 +292,6 @@ fun HomeFeedContent(
                 }
 
                 // Prefer id-aware chips when available; fall back to name-only wrapping.
-                val styleChips = if (discovery.trendingStyleTagChips.isNotEmpty()) {
-                    discovery.trendingStyleTagChips
-                } else {
-                    discovery.trendingStyleTags.map { TrendingTagChip(id = "", name = it) }
-                }
                 if (styleChips.isNotEmpty()) {
                     item {
                         HomeSectionReveal(sectionKey = "trending-styles") {
@@ -383,30 +421,12 @@ fun HomeFeedContent(
                                 }
                             }
                         }
-                        if (isLoadingMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp)
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(28.dp),
-                                        color = FashColors.Primary,
-                                        strokeWidth = 2.dp,
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
                 if (discovery.stylePicks.size >= 2) {
                     item {
-                        HomeSectionReveal(sectionKey = "style-picks") {
-                            HomeHuntTodaySection(
+                        HomeHuntTodaySection(
                                 items = discovery.stylePicks,
                                 isLoading = false,
                                 onSeeAllClick = onNavigateToExplore,
@@ -425,14 +445,12 @@ fun HomeFeedContent(
                                 titleRes = R.string.home_style_picks_title,
                                 subtitleRes = R.string.home_style_picks_subtitle,
                             )
-                        }
                     }
                 }
 
                 if (discovery.similarToSaved.size >= 2) {
                     item {
-                        HomeSectionReveal(sectionKey = "similar-saved") {
-                            HomeSimilarToSavedSection(
+                        HomeSimilarToSavedSection(
                                 items = discovery.similarToSaved,
                                 onListingClick = { id, sid ->
                                     discovery.similarToSaved.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { pos ->
@@ -444,39 +462,32 @@ fun HomeFeedContent(
                                 onSave = onSaveListing,
                                 onRecordView = { item, pos -> viewModel.recordView(item, position = pos, surface = "similar_to_saved") },
                             )
-                        }
                     }
                 }
 
                 if (recentlyViewed.size >= 2) {
                     item {
-                        HomeSectionReveal(sectionKey = "recently-viewed") {
-                            HomeRecentlyViewedSection(
+                        HomeRecentlyViewedSection(
                                 items = recentlyViewed,
                                 onListingClick = onListingClick,
                             )
-                        }
                     }
                 }
 
                 item {
-                    HomeSectionReveal(sectionKey = "recommended-sellers") {
-                        HomeRecommendedSellersSection(
+                    HomeRecommendedSellersSection(
                             sellers = recommendedSellers,
                             followingIds = followingIds,
                             onSellerClick = onFeaturedSellerClick,
                             onSeeAllClick = onOpenFeaturedSellersAll,
                         )
-                    }
                 }
 
                 item {
-                    HomeSectionReveal(sectionKey = "editorial") {
-                        HomeEditorialPostsSection(
-                            posts = discovery.editorialPosts,
-                            onPostClick = onHomeEditorialPostClick,
-                        )
-                    }
+                    HomeEditorialPostsSection(
+                        posts = discovery.editorialPosts,
+                        onPostClick = onHomeEditorialPostClick,
+                    )
                 }
 
                 item {
@@ -486,7 +497,9 @@ fun HomeFeedContent(
 
             AnimatedVisibility(
                 visible = showStickyPromo,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
                 enter = slideInVertically(
                     animationSpec = tween(280, easing = FastOutSlowInEasing),
                     initialOffsetY = { it },
@@ -504,6 +517,40 @@ fun HomeFeedContent(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * LazyColumn index range for the follow-feed block (header + grid rows). Used to scope infinite
+ * scroll so pagination does not run while the user reads discovery rails below the grid.
+ */
+private fun computeFollowFeedLazyIndexRange(
+    showJourneyRow: Boolean,
+    showSizingBanner: Boolean,
+    styleChipCount: Int,
+    forYouCount: Int,
+    feedItems: List<ListingFeedItem>,
+    isLoading: Boolean,
+    loadError: Boolean,
+    isGuestBrowse: Boolean,
+): IntRange? {
+    var idx = 0
+    if (showJourneyRow) idx++
+    if (showSizingBanner) idx++
+    idx += 3 // promo, quick actions, hunt today
+    if (styleChipCount > 0) idx++
+    if (forYouCount >= 2) idx++
+    val start = idx
+    return when {
+        isLoading && feedItems.isEmpty() -> start..start
+        loadError && feedItems.isEmpty() -> start..start
+        feedItems.isEmpty() -> start..start
+        isGuestBrowse && feedItems.isEmpty() -> start..start
+        else -> {
+            val rowCount = feedItems.chunked(2).size
+            // Header at `start`, grid rows at start+1 … start+rowCount.
+            start..(start + rowCount)
         }
     }
 }

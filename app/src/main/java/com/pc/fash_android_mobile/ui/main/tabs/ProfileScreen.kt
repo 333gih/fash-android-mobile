@@ -31,8 +31,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
@@ -69,8 +69,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -339,7 +341,12 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val listState = rememberLazyListState()
+    val scrollScope = rememberCoroutineScope()
+    val profileTabOpenGen by viewModel.profileTabOpenGeneration.collectAsState()
+    /** Set when Home (or other external entry) opens a profile tab — scroll runs after list + refresh settle. */
+    var pendingExternalGridScroll by remember { mutableStateOf(false) }
     val meetingReverifyRequired by viewModel.meetingSchedulingReverifyRequired.collectAsState()
     val meetingSuspendedUntil by viewModel.meetingSchedulingSuspendedUntil.collectAsState()
     val ackMeetingReverifyInFlight by viewModel.ackMeetingReverifyInFlight.collectAsState()
@@ -347,6 +354,19 @@ fun ProfileScreen(
 
     LaunchedEffect(Unit) {
         viewModel.ensureProfileLoaded()
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollProfileToTop.collect {
+            listState.animateScrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(profileTabOpenGen, profile) {
+        if (profileTabOpenGen == 0L || profile == null) return@LaunchedEffect
+        val req = viewModel.consumeProfileTabOpenRequest() ?: return@LaunchedEffect
+        selectedTab = req.tabIndex
+        pendingExternalGridScroll = req.scrollToGrid
     }
 
     val scheme = MaterialTheme.colorScheme
@@ -386,40 +406,17 @@ fun ProfileScreen(
                 }
             }
             else -> {
-                val listState = remember(selectedTab) { LazyListState(0, 0) }
-                val scrollScope = rememberCoroutineScope()
                 val pullState = rememberPullToRefreshState()
-                LaunchedEffect(Unit) {
-                    viewModel.scrollProfileToTop.collect {
-                        listState.animateScrollToItem(0)
-                    }
-                }
-                val wishlistTabOpenGen by viewModel.wishlistTabOpenGeneration.collectAsState()
-                /** 0 = Selling, 1 = Sold, 2 = Saved (wishlist) — see [ProfileCollapsingScrollLayout] tab labels. */
-                val wishlistTabIndex = 2
-
-                // Only key on wishlistTabOpenGen — NOT on selectedTab.
-                // Keying on selectedTab caused the effect to re-run on every tab change, which forced
-                // the tab back to "Saved" whenever the user tried to switch to Selling/Sold.
-                LaunchedEffect(wishlistTabOpenGen) {
-                    if (wishlistTabOpenGen == 0L) return@LaunchedEffect
-                    if (selectedTab != wishlistTabIndex) {
-                        selectedTab = wishlistTabIndex
-                    }
-                    // Let the grid settle after the tab content switches, then scroll to pin header
-                    delay(120)
-                    val total = listState.layoutInfo.totalItemsCount
-                    scrollScope.launch {
-                        when {
-                            total > 2 -> runCatching { listState.animateScrollToItem(2, scrollOffset = 0) }
-                            total > 1 -> runCatching { listState.animateScrollToItem(1, scrollOffset = 0) }
-                        }
-                    }
-                }
                 val items = when (selectedTab) {
                     0 -> sellingListings
                     1 -> soldListings
                     else -> wishlistListings
+                }
+                LaunchedEffect(pendingExternalGridScroll, selectedTab, isRefreshing, items.size) {
+                    if (!pendingExternalGridScroll) return@LaunchedEffect
+                    if (isRefreshing) return@LaunchedEffect
+                    listState.scrollProfileToPinnedGrid(initialDelayMs = 80, instant = true)
+                    pendingExternalGridScroll = false
                 }
                 PullToRefreshBox(
                     isRefreshing = isRefreshing,
@@ -496,7 +493,14 @@ fun ProfileScreen(
                             )
                         },
                         selectedTab = selectedTab,
-                        onTabSelected = { selectedTab = it },
+                        onTabSelected = { newTab ->
+                            if (newTab != selectedTab) {
+                                selectedTab = newTab
+                                scrollScope.launch {
+                                    listState.scrollProfileToPinnedGrid(initialDelayMs = 80)
+                                }
+                            }
+                        },
                         items = items,
                         wishlistTabVisible = true,
                         onListingClick = { item -> onListingClick(item.id, item.sellerId) },

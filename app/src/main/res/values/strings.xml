@@ -1693,6 +1693,7 @@
     <string name="guest_login_reason_like">Thích sản phẩm cần đăng nhập để đồng bộ trên mọi thiết bị.</string>
     <string name="guest_login_reason_buy">Mua hoặc trò chuyện với người bán cần đăng nhập an toàn.</string>
     <string name="guest_login_reason_follow">Theo dõi người bán để thấy tin mới trên Trang chủ — cần đăng nhập.</string>
+    <string name="guest_login_reason_invite">Bạn bè mời bạn tham gia Fash — đăng nhập hoặc tạo tài khoản để tham gia cộng đồng second-hand.</string>
     <string name="guest_topbar_sign_in">Đăng nhập</string>
     <string name="guest_topbar_sign_in_cd">Đăng nhập hoặc tạo tài khoản</string>
     <string name="guest_login_reason_topbar">Đơn hàng, thông báo, chat và hồ sơ có sau khi bạn đăng nhập.</string>

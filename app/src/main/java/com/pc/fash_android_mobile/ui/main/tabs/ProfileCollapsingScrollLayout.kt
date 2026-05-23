@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +73,43 @@ import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.withFrameMillis
+
+/**
+ * Scroll past the hero so sticky tabs + listing grid (or empty state) are visible.
+ * Retries briefly so navigation from Home (tab switch + refresh) still lands on the grid.
+ */
+suspend fun LazyListState.scrollProfileToPinnedGrid(
+    initialDelayMs: Long = 0,
+    instant: Boolean = false,
+) {
+    if (initialDelayMs > 0) delay(initialDelayMs)
+    repeat(5) { attempt ->
+        snapshotFlow {
+            layoutInfo.totalItemsCount to layoutInfo.visibleItemsInfo.isNotEmpty()
+        }.first { (total, hasVisible) -> total > 1 && hasVisible }
+        withFrameMillis { 0 }
+        val total = layoutInfo.totalItemsCount
+        val targetIndex = when {
+            total > 2 -> 2
+            total > 1 -> 1
+            else -> return
+        }
+        val scrollBlock: suspend () -> Unit = {
+            if (instant && attempt == 0) {
+                scrollToItem(targetIndex, scrollOffset = 0)
+            } else {
+                animateScrollToItem(targetIndex, scrollOffset = 0)
+            }
+        }
+        runCatching { scrollBlock() }
+        if (firstVisibleItemIndex >= targetIndex) return
+        delay(80L * (attempt + 1))
+    }
+}
 
 /** Scroll distance (first list item) used to derive collapse progress for the hero item only. */
 private val ProfileHeaderCollapseScrollDp: Dp = 280.dp
@@ -112,7 +150,7 @@ fun rememberProfilePromoFooterVisible(listState: LazyListState): State<Boolean> 
 fun rememberProfileHeaderCollapseProgress(listState: LazyListState): androidx.compose.runtime.State<Float> {
     val density = LocalDensity.current
     val collapsePx = remember(density) { with(density) { ProfileHeaderCollapseScrollDp.toPx() } }
-    return remember {
+    return remember(listState) {
         derivedStateOf {
             val offsetPx = if (listState.firstVisibleItemIndex == 0) {
                 listState.firstVisibleItemScrollOffset
@@ -319,7 +357,7 @@ private fun ProfileStickyProfileChrome(
     tabLabelResIds: List<Int>,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val headerScrolledOff by remember {
+    val headerScrolledOff by remember(listState) {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
     // Hysteresis so elastic scroll doesn't flash the brief row.

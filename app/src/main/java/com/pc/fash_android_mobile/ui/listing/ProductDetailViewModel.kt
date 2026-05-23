@@ -333,6 +333,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 onSuccess = {
                     _isFollowing.update { true }
                     _detail.update { it?.copy(sellerIsFollowing = true) }
+                    reportSellerFollowedFromPdp()
                     _events.tryEmit(getApplication<Application>().getString(R.string.follow_success))
                 },
                 onFailure = {

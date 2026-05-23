@@ -272,6 +272,7 @@ class MainActivity : ComponentActivity() {
             fashApp.pendingOpenInviteFriends.value = true
         }
         InviteDeepLinks.parseReferralTokenFromIntent(intent)?.let { fashApp.pendingReferralToken.value = it }
+        InviteDeepLinks.parseReferrerFromIntent(intent)?.let { fashApp.pendingReferrerUsername.value = it }
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
         ProfileDeepLinks.parseUsernameFromIntent(intent)?.let { fashApp.pendingDeepLinkSellerUsername.value = it }
         InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
@@ -1743,6 +1744,8 @@ class MainActivity : ComponentActivity() {
                                                 onSaved = {
                                                     showEditProfile = false
                                                     profileViewModel.loadProfile()
+                                                    exploreViewModel.refreshProfileSizingStateAfterSave()
+                                                    homeViewModel.refreshSizingBannerAfterProfileSave()
                                                 },
                                             )
                                         }

@@ -84,14 +84,15 @@ internal fun HomeSectionReveal(
     durationMs: Int = 240,
     content: @Composable () -> Unit,
 ) {
-    // Survives scroll-off; if the user already saw this rail this session we render without motion.
     var seen by rememberSaveable(sectionKey) { mutableStateOf(false) }
-    var visible by remember(sectionKey) { mutableStateOf(seen) }
+    if (seen) {
+        Box(modifier = modifier) { content() }
+        return
+    }
+    var visible by remember(sectionKey) { mutableStateOf(false) }
     LaunchedEffect(sectionKey) {
-        if (!seen) {
-            visible = true
-            seen = true
-        }
+        visible = true
+        seen = true
     }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,

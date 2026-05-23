@@ -697,6 +697,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
      * non-fatal — guests and offline users degrade silently to `Unknown` and the toggle still
      * works, but the Explore UI won't push the setup nudge.
      */
+    /** Call after the viewer saves profile sizing so the Explore toggle badge updates immediately. */
+    fun refreshProfileSizingStateAfterSave() {
+        viewModelScope.launch(Dispatchers.IO) { refreshProfileSizingState() }
+    }
+
     private suspend fun refreshProfileSizingState() {
         if (isGuestBrowse()) {
             _profileSizingState.value = ProfileSizingState.Unknown
@@ -879,12 +884,22 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private fun listingSearchQueryForApi(): String =
         _committedListingSearchQuery.value.trim().ifBlank { _searchQuery.value.trim() }
 
+    private fun countryIso2ForApi(): String? {
+        normalizeCountryIso2(_selectedCountryIso2.value)?.let { return it }
+        val id = _selectedCountryId.value?.takeIf { it.isNotBlank() } ?: return null
+        return _countriesCatalog.value
+            .find { it.id == id }
+            ?.iso2
+            ?.let { normalizeCountryIso2(it) }
+    }
+
     private fun searchListingsPage(offset: Int, isSearch: Boolean): Result<List<ListingFeedItem>> {
         val q = if (isSearch) listingSearchQueryForApi() else ""
         val categoryId = _selectedCategoryId.value
         val sort = if (isSearch && q.isNotEmpty()) _sortOption.value else "popular"
         val (minP, maxP) = normalizedPriceBounds()
         val tagIds = _selectedAestheticTagIds.value.toList()
+        val countryIso2 = countryIso2ForApi()
         val guest = isGuestBrowse()
         val usePersonalizedBrowse = q.isEmpty()
         return if (usePersonalizedBrowse) {
@@ -896,6 +911,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 minPrice = minP,
                 maxPrice = maxP,
                 condition = _selectedConditionFilter.value,
+                countryIso2 = countryIso2,
                 limit = ExploreFeedPageSize,
                 offset = offset,
                 // The "Match my size" quick toggle now propagates to personalized browse too,
@@ -909,8 +925,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 categoryId = categoryId,
                 aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
                 brandId = _selectedBrandId.value,
-                countryId = _selectedCountryId.value,
-                countryIso2 = normalizeCountryIso2(_selectedCountryIso2.value),
+                countryIso2 = countryIso2,
                 minPrice = minP,
                 maxPrice = maxP,
                 condition = _selectedConditionFilter.value,
@@ -925,8 +940,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
                 sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
                 brandId = _selectedBrandId.value,
-                countryId = _selectedCountryId.value,
-                countryIso2 = normalizeCountryIso2(_selectedCountryIso2.value),
+                countryIso2 = countryIso2,
                 minPrice = minP,
                 maxPrice = maxP,
                 condition = _selectedConditionFilter.value,

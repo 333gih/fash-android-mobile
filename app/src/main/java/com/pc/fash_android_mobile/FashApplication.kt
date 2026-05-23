@@ -111,6 +111,12 @@ class FashApplication : Application(), ImageLoaderFactory {
     val pendingReferralToken = MutableStateFlow<String?>(null)
 
     /**
+     * Optional `?ref=` handle from invite links — display-only hint until the user signs up.
+     * Cleared after successful username onboard.
+     */
+    val pendingReferrerUsername = MutableStateFlow<String?>(null)
+
+    /**
      * When true, authenticated main shell should open the invite-friends screen once (from `fash://invite`).
      * Cleared after consumption.
      */
