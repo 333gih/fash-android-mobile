@@ -59,6 +59,7 @@ import com.pc.fash_android_mobile.data.search.toUserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
+import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrl
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.data.user.UserSearchResult
@@ -359,7 +360,7 @@ private fun HomeCompactSellerStory(
     val ring = ringStroke
     val gap = ringGap
     val outer = inner + ring * 2 + gap * 2
-    val imageUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }
+    val imageUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveProfileImageUrl(it) }
 
     Column(
         modifier = Modifier

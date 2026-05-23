@@ -125,6 +125,7 @@ import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
+import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrl
 import com.pc.fash_android_mobile.ui.home.HomeBrandFooterStrip
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -935,7 +936,7 @@ private fun ExploreSellerTikTokCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FashAvatarCircle(
-                    imageUrl = user.avatarUrl,
+                    imageUrl = user.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveProfileImageUrl(it) },
                     contentDescription = null,
                     size = 52.dp,
                 )
@@ -2335,7 +2336,7 @@ private fun FeaturedSellerStoryAvatar(
     val ring = ringStroke
     val gap = ringGap
     val outer = inner + ring * 2 + gap * 2
-    val imageUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }
+    val imageUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveProfileImageUrl(it) }
 
     Box(
         modifier = Modifier.size(outer),

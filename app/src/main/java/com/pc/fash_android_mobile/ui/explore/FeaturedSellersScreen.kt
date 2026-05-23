@@ -55,6 +55,7 @@ import com.pc.fash_android_mobile.ui.components.ProfilePreviewEmptySlotPlacehold
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
+import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrl
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -232,7 +233,7 @@ private fun FeaturedSellerFullCard(
                     .clickable(onClick = onSellerClick),
                 verticalAlignment = Alignment.Top,
             ) {
-                val avatarUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }
+                val avatarUrl = seller.avatarUrl.takeIf { it.isNotBlank() }?.let { resolveProfileImageUrl(it) }
                 com.pc.fash_android_mobile.ui.components.FashAvatarCircle(
                     imageUrl = avatarUrl,
                     contentDescription = null,

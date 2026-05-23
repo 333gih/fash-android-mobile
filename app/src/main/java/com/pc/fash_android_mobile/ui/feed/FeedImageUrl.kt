@@ -7,3 +7,6 @@ fun resolveListingImageUrl(path: String): String {
     val base = AppEnvironment.apiBaseUrl.trimEnd('/')
     return if (path.startsWith("/")) "$base$path" else "$base/$path"
 }
+
+/** Profile avatars/covers — same resolution rules as listing media URLs. */
+fun resolveProfileImageUrl(path: String): String = resolveListingImageUrl(path)
