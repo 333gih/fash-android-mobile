@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -44,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -79,8 +81,8 @@ fun SizingReferenceScreen(
     onMeasurementSleeveChange: (String) -> Unit,
     canSubmit: Boolean,
     isSubmitting: Boolean,
-    progressStep: Int = 2,
-    progressTotal: Int = 3,
+    displayProgressStep: Int = 2,
+    progressTotal: Int = OnboardingFlowProgress.TOTAL_STEPS,
     onComplete: () -> Unit,
     onSkip: () -> Unit,
     onBack: () -> Unit,
@@ -146,17 +148,13 @@ fun SizingReferenceScreen(
                     )
                     Spacer(modifier = Modifier.width(48.dp))
                 }
-                OnboardingProgressBar(
-                    currentStep = progressStep,
-                    totalSteps = progressTotal,
-                )
-                OnboardingStepCaption(
-                    currentStep = progressStep,
+                OnboardingProgressHeader(
+                    displayProgressStep = displayProgressStep,
                     totalSteps = progressTotal,
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Column(
                 modifier = Modifier
@@ -174,31 +172,13 @@ fun SizingReferenceScreen(
                     color = scheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                ProfileSetupSizingSection(
-                    referenceSize = referenceSize,
-                    onReferenceSizeChange = onReferenceSizeChange,
-                    measurementUnit = measurementUnit,
-                    onMeasurementUnitChange = onMeasurementUnitChange,
-                    hem = measurementHem,
-                    onHemChange = onMeasurementHemChange,
-                    chest = measurementChest,
-                    onChestChange = onMeasurementChestChange,
-                    length = measurementLength,
-                    onLengthChange = onMeasurementLengthChange,
-                    shoulders = measurementShoulders,
-                    onShouldersChange = onMeasurementShouldersChange,
-                    sleeve = measurementSleeve,
-                    onSleeveChange = onMeasurementSleeveChange,
-                    genderPreference = genderPreference,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = stringResource(R.string.onboarding_sizing_optional_body_title),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                 )
                 Text(
-                    text = stringResource(R.string.onboarding_sizing_optional_body_subtitle),
+                    text = stringResource(R.string.onboarding_sizing_body_first_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
@@ -236,6 +216,26 @@ fun SizingReferenceScreen(
                         ),
                     )
                 }
+                Spacer(modifier = Modifier.height(20.dp))
+                ProfileSetupSizingSection(
+                    referenceSize = referenceSize,
+                    onReferenceSizeChange = onReferenceSizeChange,
+                    measurementUnit = measurementUnit,
+                    onMeasurementUnitChange = onMeasurementUnitChange,
+                    hem = measurementHem,
+                    onHemChange = onMeasurementHemChange,
+                    chest = measurementChest,
+                    onChestChange = onMeasurementChestChange,
+                    length = measurementLength,
+                    onLengthChange = onMeasurementLengthChange,
+                    shoulders = measurementShoulders,
+                    onShouldersChange = onMeasurementShouldersChange,
+                    sleeve = measurementSleeve,
+                    onSleeveChange = onMeasurementSleeveChange,
+                    genderPreference = genderPreference,
+                    heightCm = heightCm,
+                    weightKg = weightKg,
+                )
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
@@ -310,6 +310,8 @@ internal fun ProfileSetupSizingSection(
     onSleeveChange: (String) -> Unit,
     supportedMeasurementUnits: List<String> = listOf("cm", "in"),
     genderPreference: String = "",
+    heightCm: String = "",
+    weightKg: String = "",
     compactDensity: Boolean = false,
     showTitle: Boolean = true,
 ) {
@@ -321,6 +323,16 @@ internal fun ProfileSetupSizingSection(
     val gapBeforeMeasurements = if (compactDensity) 10.dp else 16.dp
     val gapMeasurementsLabelToFields = if (compactDensity) 6.dp else 8.dp
     val fieldBottom = if (compactDensity) 4.dp else 8.dp
+
+    val parsedHeight = remember(heightCm) { parseHeightCmInput(heightCm) }
+    val parsedWeight = remember(weightKg) { parseWeightKgInput(weightKg) }
+    val sizeRecommendation = remember(parsedHeight, parsedWeight, genderPreference) {
+        recommendSizeFromBodyMetrics(parsedHeight, parsedWeight, genderPreference)
+    }
+    var userDismissedRecommendation by remember { mutableStateOf(false) }
+    LaunchedEffect(parsedHeight, parsedWeight) {
+        userDismissedRecommendation = false
+    }
 
     val standardSizes = remember(genderPreference) { standardReferenceSizes(genderPreference) }
     val selectedGuide = remember(referenceSize, genderPreference) {
@@ -357,20 +369,66 @@ internal fun ProfileSetupSizingSection(
         color = scheme.onSurfaceVariant,
     )
     Spacer(modifier = Modifier.height(8.dp))
+
+    val recommendedSize = sizeRecommendation?.primarySize
+    val showRecommendationBanner = sizeRecommendation != null &&
+        !userDismissedRecommendation &&
+        (referenceSize.isBlank() || !referenceSize.equals(recommendedSize, ignoreCase = true))
+    if (showRecommendationBanner) {
+        SizingRecommendationBanner(
+            recommendation = sizeRecommendation!!,
+            heightCm = parsedHeight,
+            weightKg = parsedWeight,
+            onApply = {
+                userDismissedRecommendation = true
+                customSizeMode = false
+                onReferenceSizeChange(sizeRecommendation.primarySize)
+                if (measurementsAreBlank(chest, hem, length, shoulders, sleeve)) {
+                    applyTypicalMeasurementsForSize(
+                        referenceSize = sizeRecommendation.primarySize,
+                        genderPreference = genderPreference,
+                        measurementUnit = measurementUnit,
+                        onChestChange = onChestChange,
+                        onWaistChange = onHemChange,
+                        onLengthChange = onLengthChange,
+                        onShouldersChange = onShouldersChange,
+                        onSleeveChange = onSleeveChange,
+                    )
+                }
+            },
+            onDismiss = { userDismissedRecommendation = true },
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+    }
+
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         standardSizes.forEach { size ->
-            FashPillFilterChip(
-                selected = !customSizeMode && referenceSize.equals(size, ignoreCase = true),
-                onClick = {
-                    customSizeMode = false
-                    onReferenceSizeChange(size)
-                },
-                label = size,
-            )
+            val isRecommended = recommendedSize != null &&
+                size.equals(recommendedSize, ignoreCase = true) &&
+                !userDismissedRecommendation
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                FashPillFilterChip(
+                    selected = !customSizeMode && referenceSize.equals(size, ignoreCase = true),
+                    onClick = {
+                        customSizeMode = false
+                        userDismissedRecommendation = true
+                        onReferenceSizeChange(size)
+                    },
+                    label = size,
+                )
+                if (isRecommended && !( !customSizeMode && referenceSize.equals(size, ignoreCase = true))) {
+                    Text(
+                        text = stringResource(R.string.profile_setup_size_chip_recommended),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = FashColors.Primary,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
         }
         FashPillFilterChip(
             selected = customSizeMode,
@@ -401,12 +459,11 @@ internal fun ProfileSetupSizingSection(
     }
 
     if (selectedGuide != null) {
-        Spacer(modifier = Modifier.height(12.dp))
-        SizingGuideSummaryCard(
-            referenceSize = referenceSize,
-            guide = selectedGuide,
-            measurementUnit = measurementUnit,
-            genderPreference = genderPreference,
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.profile_setup_sizing_inline_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
         )
     }
 
@@ -451,151 +508,145 @@ internal fun ProfileSetupSizingSection(
         }
     }
     Spacer(modifier = Modifier.height(gapMeasurementsLabelToFields))
+
+    var focusedMeasurement by remember { mutableStateOf<SizingMeasurementField?>(null) }
+    val chestRange = selectedGuide?.let { formatMeasurementRangeCm(it.chestCm, measurementUnit) }
+    val waistRange = selectedGuide?.let { formatMeasurementRangeCm(it.waistCm, measurementUnit) }
+    val lengthRange = selectedGuide?.let { formatMeasurementRangeCm(it.lengthCm, measurementUnit) }
+    val shouldersRange = selectedGuide?.let { formatMeasurementRangeCm(it.shouldersCm, measurementUnit) }
+    val sleeveRange = selectedGuide?.let { formatMeasurementRangeCm(it.sleeveCm, measurementUnit) }
+
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_chest),
         value = chest,
         onValueChange = onChestChange,
-        supportingText = selectedGuide?.let {
-            stringResource(
-                R.string.profile_setup_measurement_reference_range,
-                formatMeasurementRangeCm(it.chestCm, measurementUnit),
-            )
-        },
+        guideRange = chestRange,
+        showGuide = focusedMeasurement == SizingMeasurementField.Chest,
+        onFocusChange = { focused -> if (focused) focusedMeasurement = SizingMeasurementField.Chest },
         bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_hem),
         value = hem,
         onValueChange = onHemChange,
-        supportingText = selectedGuide?.let {
-            stringResource(
-                R.string.profile_setup_measurement_reference_range,
-                formatMeasurementRangeCm(it.waistCm, measurementUnit),
-            )
-        },
+        guideRange = waistRange,
+        showGuide = focusedMeasurement == SizingMeasurementField.Waist,
+        onFocusChange = { focused -> if (focused) focusedMeasurement = SizingMeasurementField.Waist },
         bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_length),
         value = length,
         onValueChange = onLengthChange,
-        supportingText = selectedGuide?.let {
-            stringResource(
-                R.string.profile_setup_measurement_reference_range,
-                formatMeasurementRangeCm(it.lengthCm, measurementUnit),
-            )
-        },
+        guideRange = lengthRange,
+        showGuide = focusedMeasurement == SizingMeasurementField.Length,
+        onFocusChange = { focused -> if (focused) focusedMeasurement = SizingMeasurementField.Length },
         bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_shoulders),
         value = shoulders,
         onValueChange = onShouldersChange,
-        supportingText = selectedGuide?.let {
-            stringResource(
-                R.string.profile_setup_measurement_reference_range,
-                formatMeasurementRangeCm(it.shouldersCm, measurementUnit),
-            )
-        },
+        guideRange = shouldersRange,
+        showGuide = focusedMeasurement == SizingMeasurementField.Shoulders,
+        onFocusChange = { focused -> if (focused) focusedMeasurement = SizingMeasurementField.Shoulders },
         bottomPadding = fieldBottom,
     )
     ProfileMeasurementField(
         label = stringResource(R.string.profile_setup_measurement_sleeve),
         value = sleeve,
         onValueChange = onSleeveChange,
-        supportingText = selectedGuide?.let {
-            stringResource(
-                R.string.profile_setup_measurement_reference_range,
-                formatMeasurementRangeCm(it.sleeveCm, measurementUnit),
-            )
-        },
+        guideRange = sleeveRange,
+        showGuide = focusedMeasurement == SizingMeasurementField.Sleeve,
+        onFocusChange = { focused -> if (focused) focusedMeasurement = SizingMeasurementField.Sleeve },
         bottomPadding = fieldBottom,
     )
 }
 
+private enum class SizingMeasurementField {
+    Chest, Waist, Length, Shoulders, Sleeve,
+}
+
 @Composable
-private fun SizingGuideSummaryCard(
-    referenceSize: String,
-    guide: SizingMeasurementGuide,
-    measurementUnit: String,
-    genderPreference: String,
+private fun SizingRecommendationBanner(
+    recommendation: SizeRecommendation,
+    heightCm: Int?,
+    weightKg: Double?,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val chartLabel = if (genderPreference.equals("men", ignoreCase = true)) {
-        stringResource(R.string.profile_setup_sizing_chart_men)
-    } else {
-        stringResource(R.string.profile_setup_sizing_chart_women)
+    val bodyText = when {
+        heightCm != null && weightKg != null -> stringResource(
+            R.string.profile_setup_size_recommendation_banner_both,
+            heightCm,
+            formatWeightForDisplay(weightKg),
+            recommendation.primarySize,
+        )
+        heightCm != null -> stringResource(
+            R.string.profile_setup_size_recommendation_banner_height,
+            heightCm,
+            recommendation.primarySize,
+        )
+        weightKg != null -> stringResource(
+            R.string.profile_setup_size_recommendation_banner_weight,
+            formatWeightForDisplay(weightKg),
+            recommendation.primarySize,
+        )
+        else -> ""
     }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
+        color = FashColors.Primary.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, FashColors.Primary.copy(alpha = 0.22f)),
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             Text(
-                text = stringResource(R.string.profile_setup_sizing_guide_title, referenceSize.uppercase()),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = scheme.onSurface,
+                text = stringResource(R.string.profile_setup_size_recommendation_title),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = FashColors.Primary,
             )
             Text(
-                text = chartLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.profile_setup_sizing_guide_body),
+                text = bodyText,
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            SizingGuideRow(
-                label = stringResource(R.string.profile_setup_measurement_chest),
-                range = formatMeasurementRangeCm(guide.chestCm, measurementUnit),
-            )
-            SizingGuideRow(
-                label = stringResource(R.string.profile_setup_measurement_hem),
-                range = formatMeasurementRangeCm(guide.waistCm, measurementUnit),
-            )
-            SizingGuideRow(
-                label = stringResource(R.string.profile_setup_measurement_length),
-                range = formatMeasurementRangeCm(guide.lengthCm, measurementUnit),
-            )
-            SizingGuideRow(
-                label = stringResource(R.string.profile_setup_measurement_shoulders),
-                range = formatMeasurementRangeCm(guide.shouldersCm, measurementUnit),
-            )
-            SizingGuideRow(
-                label = stringResource(R.string.profile_setup_measurement_sleeve),
-                range = formatMeasurementRangeCm(guide.sleeveCm, measurementUnit),
-            )
+            recommendation.alternateSize?.let { alternate ->
+                Text(
+                    text = stringResource(
+                        R.string.profile_setup_size_recommendation_alternate,
+                        alternate,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.85f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.profile_setup_size_recommendation_dismiss))
+                }
+                TextButton(onClick = onApply) {
+                    Text(
+                        text = stringResource(R.string.profile_setup_size_recommendation_apply),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun SizingGuideRow(label: String, range: String) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
-        )
-        Text(
-            text = range,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-            color = scheme.onSurface,
-        )
-    }
-}
+private fun formatWeightForDisplay(weightKg: Double): String =
+    if (weightKg % 1.0 == 0.0) weightKg.toInt().toString()
+    else String.format(java.util.Locale.US, "%.1f", weightKg)
 
 @Composable
 private fun ProfileMeasurementUnitToggle(
@@ -648,21 +699,31 @@ private fun ProfileMeasurementField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    supportingText: String? = null,
+    guideRange: String? = null,
+    showGuide: Boolean = false,
+    onFocusChange: (Boolean) -> Unit = {},
     bottomPadding: Dp = 8.dp,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val guideText = if (showGuide && !guideRange.isNullOrBlank()) {
+        stringResource(R.string.profile_setup_measurement_reference_range, guideRange)
+    } else {
+        null
+    }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = bottomPadding),
+            .padding(bottom = bottomPadding)
+            .onFocusChanged { onFocusChange(it.isFocused) },
         label = { Text(label) },
-        placeholder = supportingText?.let { { Text(it) } },
-        supportingText = supportingText?.let {
-            { Text(stringResource(R.string.profile_setup_measurement_optional_note)) }
+        placeholder = if (!showGuide && !guideRange.isNullOrBlank() && value.isEmpty()) {
+            { Text(guideRange) }
+        } else {
+            null
         },
+        supportingText = guideText?.let { { Text(it) } },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         shape = RoundedCornerShape(12.dp),

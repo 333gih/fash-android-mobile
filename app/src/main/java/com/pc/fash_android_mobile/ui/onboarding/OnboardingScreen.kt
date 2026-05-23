@@ -59,7 +59,7 @@ fun OnboardingScreen(
     selectedIds: Set<String>,
     isLoading: Boolean,
     isSubmitting: Boolean,
-    progressStep: Int = 2,
+    displayProgressStep: Int = 2,
     progressTotal: Int = OnboardingFlowProgress.TOTAL_STEPS,
     onToggleSelection: (CommonAestheticTagDto) -> Unit,
     onContinue: () -> Unit,
@@ -123,15 +123,9 @@ fun OnboardingScreen(
                     Spacer(modifier = Modifier.width(48.dp))
                 }
 
-                OnboardingProgressBar(
-                    currentStep = progressStep,
+                OnboardingProgressHeader(
+                    displayProgressStep = displayProgressStep,
                     totalSteps = progressTotal,
-                )
-
-                OnboardingStepCaption(
-                    currentStep = progressStep,
-                    totalSteps = progressTotal,
-                    modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart),
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

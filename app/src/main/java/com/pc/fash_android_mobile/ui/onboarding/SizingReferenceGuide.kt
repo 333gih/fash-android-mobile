@@ -90,3 +90,154 @@ data class TypicalMeasurements(
     val shoulders: String,
     val sleeve: String,
 )
+
+/** Ideal height/weight band per letter size — used to infer size before the user measures garments. */
+private data class SizeBodyProfile(
+    val heightMidCm: Int,
+    val heightHalfRangeCm: Int,
+    val weightMidKg: Double,
+    val weightHalfRangeKg: Double,
+)
+
+enum class SizeRecommendationConfidence {
+    High, Medium, Low,
+}
+
+data class SizeRecommendation(
+    val primarySize: String,
+    val alternateSize: String? = null,
+    val confidence: SizeRecommendationConfidence,
+    val usedHeight: Boolean,
+    val usedWeight: Boolean,
+)
+
+private val womenBodyProfiles: Map<String, SizeBodyProfile> = mapOf(
+    "XXS" to SizeBodyProfile(152, 5, 43.0, 4.0),
+    "XS" to SizeBodyProfile(156, 4, 47.0, 4.5),
+    "S" to SizeBodyProfile(160, 4, 52.0, 5.0),
+    "M" to SizeBodyProfile(165, 4, 57.0, 5.5),
+    "L" to SizeBodyProfile(170, 4, 63.0, 6.0),
+    "XL" to SizeBodyProfile(175, 5, 70.0, 6.5),
+    "XXL" to SizeBodyProfile(180, 5, 78.0, 7.0),
+)
+
+private val menBodyProfiles: Map<String, SizeBodyProfile> = mapOf(
+    "XS" to SizeBodyProfile(165, 5, 58.0, 5.0),
+    "S" to SizeBodyProfile(170, 4, 65.0, 6.0),
+    "M" to SizeBodyProfile(175, 4, 72.0, 7.0),
+    "L" to SizeBodyProfile(180, 4, 80.0, 8.0),
+    "XL" to SizeBodyProfile(185, 5, 88.0, 9.0),
+    "XXL" to SizeBodyProfile(190, 5, 98.0, 10.0),
+    "XXXL" to SizeBodyProfile(195, 5, 108.0, 12.0),
+)
+
+private fun bodyProfilesForGender(genderPreference: String): Map<String, SizeBodyProfile> =
+    if (genderPreference.equals("men", ignoreCase = true)) menBodyProfiles else womenBodyProfiles
+
+private fun normalizedDistance(value: Double, mid: Double, halfRange: Double): Double =
+    kotlin.math.abs(value - mid) / halfRange.coerceAtLeast(1.0)
+
+private fun scoreSizeForBody(
+    size: String,
+    profile: SizeBodyProfile,
+    heightCm: Int?,
+    weightKg: Double?,
+): Double? {
+    val heightScore = heightCm?.let {
+        normalizedDistance(it.toDouble(), profile.heightMidCm.toDouble(), profile.heightHalfRangeCm.toDouble())
+    }
+    val weightScore = weightKg?.let {
+        normalizedDistance(it, profile.weightMidKg, profile.weightHalfRangeKg)
+    }
+    return when {
+        heightScore != null && weightScore != null -> {
+            val bmi = weightKg!! / ((heightCm!! / 100.0) * (heightCm / 100.0))
+            val idealBmi = profile.weightMidKg /
+                ((profile.heightMidCm / 100.0) * (profile.heightMidCm / 100.0))
+            val bmiScore = normalizedDistance(bmi, idealBmi, 3.5)
+            heightScore * 0.38 + weightScore * 0.42 + bmiScore * 0.20
+        }
+        heightScore != null -> heightScore
+        weightScore != null -> weightScore
+        else -> null
+    }
+}
+
+/**
+ * Suggest a letter size from body metrics. Works best with both height and weight;
+ * single-metric input still returns a hint with lower confidence.
+ */
+fun recommendSizeFromBodyMetrics(
+    heightCm: Int?,
+    weightKg: Double?,
+    genderPreference: String,
+): SizeRecommendation? {
+    val validHeight = heightCm?.takeIf { it in 100..250 }
+    val validWeight = weightKg?.takeIf { it in 20.0..300.0 }
+    if (validHeight == null && validWeight == null) return null
+
+    val profiles = bodyProfilesForGender(genderPreference)
+    val availableSizes = standardReferenceSizes(genderPreference)
+    val scored = availableSizes.mapNotNull { size ->
+        val profile = profiles[size] ?: return@mapNotNull null
+        val score = scoreSizeForBody(size, profile, validHeight, validWeight) ?: return@mapNotNull null
+        size to score
+    }.sortedBy { it.second }
+    if (scored.isEmpty()) return null
+
+    val best = scored.first()
+    val runnerUp = scored.getOrNull(1)
+    val alternate = runnerUp?.takeIf { (size, score) ->
+        score - best.second <= 0.35 && size != best.first
+    }?.first
+
+    val confidence = when {
+        validHeight != null && validWeight != null && best.second <= 0.55 -> SizeRecommendationConfidence.High
+        validHeight != null && validWeight != null && best.second <= 1.15 -> SizeRecommendationConfidence.Medium
+        validHeight != null && validWeight != null -> SizeRecommendationConfidence.Low
+        best.second <= 0.75 -> SizeRecommendationConfidence.Medium
+        else -> SizeRecommendationConfidence.Low
+    }
+
+    return SizeRecommendation(
+        primarySize = best.first,
+        alternateSize = alternate,
+        confidence = confidence,
+        usedHeight = validHeight != null,
+        usedWeight = validWeight != null,
+    )
+}
+
+fun parseHeightCmInput(raw: String): Int? =
+    raw.trim().toIntOrNull()?.takeIf { it in 100..250 }
+
+fun parseWeightKgInput(raw: String): Double? =
+    raw.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 20.0..300.0 }
+
+fun measurementsAreBlank(
+    chest: String,
+    waist: String,
+    length: String,
+    shoulders: String,
+    sleeve: String,
+): Boolean = chest.isBlank() && waist.isBlank() && length.isBlank() &&
+    shoulders.isBlank() && sleeve.isBlank()
+
+fun applyTypicalMeasurementsForSize(
+    referenceSize: String,
+    genderPreference: String,
+    measurementUnit: String,
+    onChestChange: (String) -> Unit,
+    onWaistChange: (String) -> Unit,
+    onLengthChange: (String) -> Unit,
+    onShouldersChange: (String) -> Unit,
+    onSleeveChange: (String) -> Unit,
+) {
+    typicalMeasurementsForSize(referenceSize, genderPreference, measurementUnit)?.let { typical ->
+        onChestChange(typical.chest)
+        onWaistChange(typical.waist)
+        onLengthChange(typical.length)
+        onShouldersChange(typical.shoulders)
+        onSleeveChange(typical.sleeve)
+    }
+}

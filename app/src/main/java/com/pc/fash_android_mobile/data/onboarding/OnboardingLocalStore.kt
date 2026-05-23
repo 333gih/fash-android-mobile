@@ -24,6 +24,13 @@ class OnboardingLocalStore(context: Context) {
         prefs.edit().putBoolean(key(KEY_SIZING, userId), value).apply()
     }
 
+    fun skippedProfilePhoto(userId: String): Boolean =
+        prefs.getBoolean(key(KEY_PROFILE_PHOTO, userId), false)
+
+    fun setSkippedProfilePhoto(userId: String, value: Boolean) {
+        prefs.edit().putBoolean(key(KEY_PROFILE_PHOTO, userId), value).apply()
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }
@@ -37,5 +44,6 @@ class OnboardingLocalStore(context: Context) {
         const val PREFS_NAME = "onboarding_flow"
         const val KEY_AESTHETIC = "skipped_aesthetic_tags"
         const val KEY_SIZING = "skipped_sizing"
+        const val KEY_PROFILE_PHOTO = "skipped_profile_photo"
     }
 }

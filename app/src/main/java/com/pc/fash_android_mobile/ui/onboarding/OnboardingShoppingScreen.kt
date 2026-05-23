@@ -31,7 +31,7 @@ fun OnboardingShoppingScreen(
     buySelected: Boolean,
     sellSelected: Boolean,
     isSubmitting: Boolean,
-    progressStep: Int,
+    displayProgressStep: Int,
     progressTotal: Int = OnboardingFlowProgress.TOTAL_STEPS,
     onToggleBuy: () -> Unit,
     onToggleSell: () -> Unit,
@@ -64,15 +64,9 @@ fun OnboardingShoppingScreen(
                 }
                 Spacer(modifier = Modifier.width(48.dp))
             }
-            OnboardingProgressBar(
-                currentStep = progressStep,
+            OnboardingProgressHeader(
+                displayProgressStep = displayProgressStep,
                 totalSteps = progressTotal,
-                modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart),
-            )
-            OnboardingStepCaption(
-                currentStep = progressStep,
-                totalSteps = progressTotal,
-                modifier = Modifier.padding(horizontal = FashTheme.spacing.editorialStart),
             )
             Spacer(Modifier.height(16.dp))
             ShoppingPreferencesOnboardScreen(

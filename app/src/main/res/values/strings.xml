@@ -241,8 +241,22 @@
     <string name="home_style_picks_title">Đúng gu của bạn</string>
     <string name="home_style_picks_subtitle">Theo phong cách bạn đã chọn</string>
     <string name="onboarding_sizing_screen_title">Kích thước</string>
+    <string name="onboarding_sizing_required_hint">Chọn cỡ thường mặc để mở khóa bảng tin. Số đo giúp gợi ý chính xác hơn nhưng không bắt buộc.</string>
     <string name="onboarding_sizing_optional_hint">Tùy chọn — điền để gợi ý size phù hợp hơn.</string>
-    <string name="onboarding_sizing_required_hint">Chọn cỡ thường mặc để mở khóa bảng tin. Số đo và chiều cao/cân nặng giúp gợi ý chính xác hơn nhưng không bắt buộc.</string>
+    <string name="onboarding_sizing_body_first_subtitle">Nhập trước để Fash gợi ý size tốt hơn (tuỳ chọn).</string>
+    <string name="profile_setup_sizing_inline_hint">Chạm từng ô số đo bên dưới để xem khoảng tham chiếu cho size đã chọn.</string>
+    <string name="profile_setup_size_recommendation_title">Gợi ý từ Fash</string>
+    <string name="profile_setup_size_recommendation_banner_both">Với %1$d cm và %2$s kg, cỡ phù hợp nhất là %3$s.</string>
+    <string name="profile_setup_size_recommendation_banner_height">Với chiều cao %1$d cm, cỡ gợi ý là %2$s.</string>
+    <string name="profile_setup_size_recommendation_banner_weight">Với cân nặng %1$s kg, cỡ gợi ý là %2$s.</string>
+    <string name="profile_setup_size_recommendation_alternate">Bạn cũng có thể thử %1$s nếu thích thoải mái hơn.</string>
+    <string name="profile_setup_size_recommendation_apply">Áp dụng gợi ý</string>
+    <string name="profile_setup_size_recommendation_dismiss">Bỏ qua</string>
+    <string name="profile_setup_size_chip_recommended">Gợi ý</string>
+    <string name="onboarding_profile_photo_title">Ảnh đại diện</string>
+    <string name="onboarding_profile_photo_subtitle">Thêm ảnh để người mua/bán nhận ra bạn dễ hơn.</string>
+    <string name="onboarding_profile_photo_hint">Chạm biểu tượng máy ảnh để chọn ảnh từ thư viện.</string>
+    <string name="onboarding_profile_photo_required">Vui lòng thêm ảnh hoặc bấm Bỏ qua.</string>
     <string name="onboarding_username_screen_title">Tên người dùng</string>
 
     <string name="nav_home">Trang chủ</string>

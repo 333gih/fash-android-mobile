@@ -26,6 +26,7 @@ import kotlinx.coroutines.withContext
 enum class OnboardingStep {
     AestheticTags,
     ShoppingPreferences,
+    ProfilePhoto,
     SizingReference,
     UsernameOnboard,
     SetupPassword,
@@ -108,6 +109,19 @@ class OnboardingViewModel(
     private val _weightKg = MutableStateFlow("")
     val weightKg: StateFlow<String> = _weightKg.asStateFlow()
 
+    private val _avatarUrl = MutableStateFlow<String?>(null)
+    val avatarUrl: StateFlow<String?> = _avatarUrl.asStateFlow()
+
+    private val _avatarUploading = MutableStateFlow(false)
+    val avatarUploading: StateFlow<Boolean> = _avatarUploading.asStateFlow()
+
+    /** Progress bar index (0 = empty track at first step). Updates when navigating forward or back. */
+    private val _uiProgressStep = MutableStateFlow(0)
+    val uiProgressStep: StateFlow<Int> = _uiProgressStep.asStateFlow()
+
+    private val _progressTotalSteps = MutableStateFlow(OnboardingFlowProgress.TOTAL_STEPS)
+    val progressTotalSteps: StateFlow<Int> = _progressTotalSteps.asStateFlow()
+
     private var lastAccessStatus: UserAccessStatus? = null
     private val backStack = mutableListOf<OnboardingStep>()
 
@@ -128,11 +142,54 @@ class OnboardingViewModel(
     fun applyInitialStepFromAccessStatus(status: UserAccessStatus) {
         if (status.canAccessHome) return
         lastAccessStatus = status
-        backStack.clear()
-        val current = resolveNextStep(status)
-        _onboardingStep.value = current
-        seedBackStackForStep(current, status)
-        hydrateSavedProgressFromServer()
+        viewModelScope.launch {
+            val profile = withContext(Dispatchers.IO) {
+                userRepository.getMeProfile().getOrNull()
+            }
+            profile?.let { applyProfileToState(it) }
+            backStack.clear()
+            val current = firstIncompleteStep(status)
+            _onboardingStep.value = current
+            seedBackStackForStep(current, status)
+            syncProgressFromCurrentStep(status)
+        }
+    }
+
+    private fun stepCompletionContext(status: UserAccessStatus): StepCompletionContext {
+        val uid = currentUserId()
+        return StepCompletionContext(
+            status = status,
+            skippedAestheticTags = onboardingLocalStore.skippedAestheticTags(uid),
+            skippedProfilePhoto = onboardingLocalStore.skippedProfilePhoto(uid),
+            skippedSizing = onboardingLocalStore.skippedSizing(uid),
+            hasAvatar = !_avatarUrl.value.isNullOrBlank(),
+            skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted,
+        )
+    }
+
+    private fun canonicalFlow(status: UserAccessStatus): List<OnboardingStep> =
+        OnboardingFlowProgress.buildCanonicalSteps(
+            includePassword = OnboardingFlowProgress.includesPasswordStep(status),
+            includeSizing = !AppEnvironment.skipSizingReferenceCompleted,
+        )
+
+    private fun firstIncompleteStep(status: UserAccessStatus): OnboardingStep {
+        val ctx = stepCompletionContext(status)
+        return OnboardingFlowProgress.firstIncompleteStep(
+            flow = canonicalFlow(status),
+            status = ctx.status,
+            skippedAestheticTags = ctx.skippedAestheticTags,
+            skippedProfilePhoto = ctx.skippedProfilePhoto,
+            skippedSizing = ctx.skippedSizing,
+            hasAvatar = ctx.hasAvatar,
+            skipSizingEnv = ctx.skipSizingEnv,
+        )
+    }
+
+    private fun syncProgressFromCurrentStep(status: UserAccessStatus) {
+        val flow = canonicalFlow(status)
+        _progressTotalSteps.value = flow.size
+        _uiProgressStep.value = OnboardingFlowProgress.progressDisplayIndex(_onboardingStep.value, flow)
     }
 
     /**
@@ -145,28 +202,8 @@ class OnboardingViewModel(
         _onboardingStep.value = OnboardingStep.Completed
     }
 
-    private fun resolveNextStep(status: UserAccessStatus): OnboardingStep {
-        val uid = currentUserId()
-        val skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted
-        val ns = status.nextStep?.trim()?.lowercase()
-        return when {
-            status.needsPasswordSetup() || ns == "password" ->
-                OnboardingStep.SetupPassword
-            !status.aestheticTagsConfigured && !onboardingLocalStore.skippedAestheticTags(uid) ->
-                OnboardingStep.AestheticTags
-            !status.shoppingPreferencesConfigured ->
-                OnboardingStep.ShoppingPreferences
-            !status.sizingReferenceCompleted && !skipSizingEnv && !onboardingLocalStore.skippedSizing(uid) ->
-                OnboardingStep.SizingReference
-            ns == "shopping_preferences" -> OnboardingStep.ShoppingPreferences
-            !status.onboardingDone ->
-                OnboardingStep.UsernameOnboard
-            status.canAccessHome ->
-                OnboardingStep.Completed
-            else ->
-                OnboardingStep.AestheticTags
-        }
-    }
+    private fun resolveNextStep(status: UserAccessStatus): OnboardingStep =
+        firstIncompleteStep(status)
 
     private fun advanceAfterStatus(
         status: UserAccessStatus,
@@ -174,11 +211,27 @@ class OnboardingViewModel(
     ) {
         lastAccessStatus = status
         val prev = _onboardingStep.value
-        val next = resolveNextStep(status)
+        val flow = canonicalFlow(status)
+        val next = when {
+            completedStep == OnboardingStep.UsernameOnboard -> OnboardingStep.Completed
+            completedStep != null -> {
+                OnboardingFlowProgress.nextStepInFlow(flow, completedStep)
+                    ?: if (status.canAccessHome || status.onboardingDone) {
+                        OnboardingStep.Completed
+                    } else {
+                        firstIncompleteStep(status)
+                    }
+            }
+            else -> {
+                OnboardingFlowProgress.nextStepInFlow(flow, prev)
+                    ?: firstIncompleteStep(status)
+            }
+        }
         if (next != prev) {
             backStack.add(prev)
         }
         _onboardingStep.value = next
+        syncProgressFromCurrentStep(status)
     }
 
     /** Steps the user can navigate back to before [current], including after app restart mid-flow. */
@@ -187,39 +240,8 @@ class OnboardingViewModel(
         backStack.addAll(priorStepsFor(current, status))
     }
 
-    private fun priorStepsFor(current: OnboardingStep, status: UserAccessStatus): List<OnboardingStep> {
-        val uid = currentUserId()
-        val skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted
-        return buildList {
-            if (includesPasswordStep(status) && current != OnboardingStep.SetupPassword) {
-                add(OnboardingStep.SetupPassword)
-            }
-            if (
-                !onboardingLocalStore.skippedAestheticTags(uid) &&
-                current != OnboardingStep.SetupPassword &&
-                current != OnboardingStep.AestheticTags
-            ) {
-                add(OnboardingStep.AestheticTags)
-            }
-            if (
-                current == OnboardingStep.SizingReference ||
-                current == OnboardingStep.UsernameOnboard
-            ) {
-                add(OnboardingStep.ShoppingPreferences)
-            }
-            if (
-                !skipSizingEnv &&
-                !onboardingLocalStore.skippedSizing(uid) &&
-                current == OnboardingStep.UsernameOnboard
-            ) {
-                add(OnboardingStep.SizingReference)
-            }
-        }
-    }
-
-    private fun includesPasswordStep(status: UserAccessStatus): Boolean =
-        status.needsPasswordSetup() ||
-            status.nextStep?.trim()?.equals("password", ignoreCase = true) == true
+    private fun priorStepsFor(current: OnboardingStep, status: UserAccessStatus): List<OnboardingStep> =
+        OnboardingFlowProgress.buildPriorSteps(canonicalFlow(status), current)
 
     /**
      * Navigate to the previous onboarding step. Never signs the user out.
@@ -232,6 +254,7 @@ class OnboardingViewModel(
         }
         val previous = backStack.removeLastOrNull() ?: return false
         _onboardingStep.value = previous
+        lastAccessStatus?.let { syncProgressFromCurrentStep(it) }
         hydrateSavedProgressFromServer()
         if (previous == OnboardingStep.AestheticTags && _tags.value.isEmpty()) {
             loadTags()
@@ -279,6 +302,9 @@ class OnboardingViewModel(
         profile.weightKg?.let { _weightKg.value = formatMeasurement(it) }
         if (profile.username.isNotBlank() && _username.value.isBlank()) {
             _username.value = profile.username
+        }
+        if (profile.avatarUrl.isNotBlank()) {
+            _avatarUrl.value = profile.avatarUrl
         }
     }
 
@@ -488,6 +514,68 @@ class OnboardingViewModel(
     fun onHeightCmChange(value: String) { _heightCm.value = value }
     fun onWeightKgChange(value: String) { _weightKg.value = value }
 
+    fun setAvatarFromBytes(bytes: ByteArray, mimeType: String = "image/jpeg") {
+        val ext = when (mimeType.lowercase()) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "image/gif" -> "gif"
+            else -> "jpg"
+        }
+        viewModelScope.launch {
+            _avatarUploading.value = true
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    userRepository.uploadProfileImage(bytes, "avatar.$ext", "avatar", mimeType)
+                }
+                result.fold(
+                    onSuccess = { _avatarUrl.value = it },
+                    onFailure = {
+                        _events.tryEmit(
+                            getApplication<Application>().getString(R.string.edit_profile_upload_error),
+                        )
+                    },
+                )
+            } finally {
+                _avatarUploading.value = false
+            }
+        }
+    }
+
+    fun canContinueFromProfilePhoto(): Boolean = !_avatarUrl.value.isNullOrBlank()
+
+    fun completeProfilePhotoStep(onSuccess: () -> Unit) {
+        if (!canContinueFromProfilePhoto()) {
+            _events.tryEmit(getApplication<Application>().getString(R.string.onboarding_profile_photo_required))
+            return
+        }
+        advanceAfterProfilePhoto(onSuccess)
+    }
+
+    fun skipProfilePhoto(onSuccess: () -> Unit) {
+        val uid = currentUserId()
+        if (uid.isNotBlank()) {
+            onboardingLocalStore.setSkippedProfilePhoto(uid, true)
+        }
+        advanceAfterProfilePhoto(onSuccess)
+    }
+
+    private fun advanceAfterProfilePhoto(onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                val status = withContext(Dispatchers.IO) {
+                    userRepository.getUserAccessStatus().getOrNull()
+                }
+                if (status != null) {
+                    advanceAfterStatus(status, OnboardingStep.ProfilePhoto)
+                }
+                onSuccess()
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
     fun submitShoppingPreferences(onSuccess: () -> Unit) {
         val intents = buildList {
             if (_shoppingBuy.value) add("buy")
@@ -547,7 +635,7 @@ class OnboardingViewModel(
                     userRepository.getUserAccessStatus().getOrNull()
                 }
                 if (status != null) {
-                    advanceAfterStatus(status, null)
+                    advanceAfterStatus(status, OnboardingStep.AestheticTags)
                 }
                 onSuccess()
             } finally {
@@ -608,7 +696,7 @@ class OnboardingViewModel(
                     userRepository.getUserAccessStatus().getOrNull()
                 }
                 if (status != null) {
-                    advanceAfterStatus(status, null)
+                    advanceAfterStatus(status, OnboardingStep.SizingReference)
                 }
                 onSuccess()
             } finally {
@@ -636,7 +724,7 @@ class OnboardingViewModel(
                         val status = withContext(Dispatchers.IO) {
                             userRepository.getUserAccessStatus().getOrNull()
                         }
-                        val base = status ?: lastAccessStatus?.copy(onboardingDone = true)
+                        val base = (status ?: lastAccessStatus
                             ?: UserAccessStatus(
                                 hasProfile = false,
                                 aestheticTagsConfigured = true,
@@ -644,7 +732,10 @@ class OnboardingViewModel(
                                 sizingReferenceCompleted = true,
                                 passwordSet = null,
                                 isChangePassword = null,
-                            )
+                            )).copy(
+                            onboardingDone = true,
+                            hasProfile = true,
+                        )
                         advanceAfterStatus(base, OnboardingStep.UsernameOnboard)
                         onSuccess()
                     },
@@ -734,3 +825,12 @@ class OnboardingViewModel(
         }
     }
 }
+
+private data class StepCompletionContext(
+    val status: UserAccessStatus,
+    val skippedAestheticTags: Boolean,
+    val skippedProfilePhoto: Boolean,
+    val skippedSizing: Boolean,
+    val hasAvatar: Boolean,
+    val skipSizingEnv: Boolean,
+)

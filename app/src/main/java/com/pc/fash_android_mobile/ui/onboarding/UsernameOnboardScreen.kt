@@ -70,8 +70,8 @@ fun UsernameOnboardScreen(
     isUsernameValid: Boolean,
     canSubmit: Boolean,
     isSubmitting: Boolean,
-    progressStep: Int = 3,
-    progressTotal: Int = 3,
+    displayProgressStep: Int = 3,
+    progressTotal: Int = OnboardingFlowProgress.TOTAL_STEPS,
     onComplete: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -142,17 +142,13 @@ fun UsernameOnboardScreen(
                     )
                     Spacer(modifier = Modifier.width(48.dp))
                 }
-                OnboardingProgressBar(
-                    currentStep = progressStep,
-                    totalSteps = progressTotal,
-                )
-                OnboardingStepCaption(
-                    currentStep = progressStep,
+                OnboardingProgressHeader(
+                    displayProgressStep = displayProgressStep,
                     totalSteps = progressTotal,
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Column(
                 modifier = Modifier

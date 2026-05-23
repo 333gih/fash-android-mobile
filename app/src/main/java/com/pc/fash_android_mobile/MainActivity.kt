@@ -107,6 +107,7 @@ import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesViewModel
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.login.LoginHeroSlidesViewModel
+import com.pc.fash_android_mobile.ui.onboarding.ProfilePhotoOnboardScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingShoppingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
@@ -400,9 +401,10 @@ class MainActivity : ComponentActivity() {
             val profileSetupBlocksShellChrome =
                 OnboardingFlowProgress.blocksShellPromosAndTours(needsOnboarding) ||
                     (isAuthenticated && onboardingStep != OnboardingStep.Completed)
-            val onboardingProgressStep =
-                OnboardingFlowProgress.progressStep(onboardingStep)
-            val onboardingProgressTotal = OnboardingFlowProgress.TOTAL_STEPS
+            val onboardingProgressStep by onboardingViewModel.uiProgressStep.collectAsState()
+            val onboardingProgressTotal by onboardingViewModel.progressTotalSteps.collectAsState()
+            val onboardingAvatarUrl by onboardingViewModel.avatarUrl.collectAsState()
+            val onboardingAvatarUploading by onboardingViewModel.avatarUploading.collectAsState()
 
             ProvideAppLocale {
             val contextForTheme = LocalContext.current
@@ -810,13 +812,33 @@ class MainActivity : ComponentActivity() {
                                     val userRepoOnboarding = remember {
                                         (application as FashApplication).userRepository
                                     }
+                                    val onboardingAvatarPicker = rememberLauncherForActivityResult(
+                                        contract = ActivityResultContracts.GetContent(),
+                                    ) { uri: android.net.Uri? ->
+                                        uri?.let { u ->
+                                            mainScope.launch {
+                                                val pair = withContext(Dispatchers.IO) {
+                                                    val mimeType = contextForTheme.contentResolver.getType(u)
+                                                        ?.takeIf { !it.contains('*') } ?: "image/jpeg"
+                                                    contextForTheme.contentResolver.openInputStream(u)?.use { stream ->
+                                                        Pair(stream.readBytes(), mimeType)
+                                                    }
+                                                }
+                                                pair?.let { (bytes, mime) ->
+                                                    if (bytes.isNotEmpty()) {
+                                                        onboardingViewModel.setAvatarFromBytes(bytes, mime)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     when (onboardingStep) {
                                         OnboardingStep.AestheticTags -> OnboardingScreen(
                                             tags = onboardingTags,
                                             selectedIds = onboardingSelected,
                                             isLoading = onboardingLoading,
                                             isSubmitting = onboardingSubmitting,
-                                            progressStep = onboardingProgressStep,
+                                            displayProgressStep = onboardingProgressStep,
                                             progressTotal = onboardingProgressTotal,
                                             onToggleSelection = onboardingViewModel::toggleSelection,
                                             onContinue = {
@@ -849,7 +871,7 @@ class MainActivity : ComponentActivity() {
                                             buySelected = onboardingShoppingBuy,
                                             sellSelected = onboardingShoppingSell,
                                             isSubmitting = onboardingSubmitting,
-                                            progressStep = onboardingProgressStep,
+                                            displayProgressStep = onboardingProgressStep,
                                             progressTotal = onboardingProgressTotal,
                                             onToggleBuy = onboardingViewModel::toggleShoppingBuy,
                                             onToggleSell = onboardingViewModel::toggleShoppingSell,
@@ -869,6 +891,45 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onBack = { onboardingViewModel.goBack() },
                                         )
+                                        OnboardingStep.ProfilePhoto -> {
+                                            val canProfilePhoto = remember(onboardingAvatarUrl) {
+                                                !onboardingAvatarUrl.isNullOrBlank()
+                                            }
+                                            ProfilePhotoOnboardScreen(
+                                            avatarUrl = onboardingAvatarUrl,
+                                            isUploading = onboardingAvatarUploading,
+                                            isSubmitting = onboardingSubmitting,
+                                            canContinue = canProfilePhoto,
+                                            displayProgressStep = onboardingProgressStep,
+                                            progressTotal = onboardingProgressTotal,
+                                            onPickPhoto = { onboardingAvatarPicker.launch("image/*") },
+                                            onContinue = {
+                                                onboardingViewModel.completeProfilePhotoStep {
+                                                    mainScope.launch {
+                                                        needsOnboarding = withContext(Dispatchers.IO) {
+                                                            resolveShellNeedsOnboardingAfterStep(
+                                                                userRepoOnboarding,
+                                                                onboardingViewModel,
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onSkip = {
+                                                onboardingViewModel.skipProfilePhoto {
+                                                    mainScope.launch {
+                                                        needsOnboarding = withContext(Dispatchers.IO) {
+                                                            resolveShellNeedsOnboardingAfterStep(
+                                                                userRepoOnboarding,
+                                                                onboardingViewModel,
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onBack = { onboardingViewModel.goBack() },
+                                        )
+                                        }
                                         OnboardingStep.SizingReference -> {
                                             val canSizing = remember(
                                                 onboardingReferenceSize,
@@ -897,7 +958,7 @@ class MainActivity : ComponentActivity() {
                                                 onWeightKgChange = onboardingViewModel::onWeightKgChange,
                                                 canSubmit = canSizing,
                                                 isSubmitting = onboardingSubmitting,
-                                                progressStep = onboardingProgressStep,
+                                                displayProgressStep = onboardingProgressStep,
                                                 progressTotal = onboardingProgressTotal,
                                                 onComplete = {
                                                     onboardingViewModel.submitSizingOnly {
@@ -936,7 +997,7 @@ class MainActivity : ComponentActivity() {
                                                 isUsernameValid = onboardingViewModel.isUsernameValid(),
                                                 canSubmit = canUsername,
                                                 isSubmitting = onboardingSubmitting,
-                                                progressStep = onboardingProgressStep,
+                                                displayProgressStep = onboardingProgressStep,
                                                 progressTotal = onboardingProgressTotal,
                                                 onComplete = {
                                                     onboardingViewModel.submitUsernameOnboard {
@@ -968,7 +1029,7 @@ class MainActivity : ComponentActivity() {
                                                 onConfirmPasswordChange = onboardingViewModel::onSetupPasswordConfirmChange,
                                                 canSubmit = canPw,
                                                 isSubmitting = onboardingSubmitting,
-                                                progressStep = onboardingProgressStep,
+                                                displayProgressStep = onboardingProgressStep,
                                                 progressTotal = onboardingProgressTotal,
                                                 onComplete = {
                                                     onboardingViewModel.submitSetupPassword {

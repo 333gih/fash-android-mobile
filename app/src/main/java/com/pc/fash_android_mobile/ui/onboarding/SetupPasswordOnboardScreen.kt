@@ -57,7 +57,7 @@ fun SetupPasswordOnboardScreen(
     onConfirmPasswordChange: (String) -> Unit,
     canSubmit: Boolean,
     isSubmitting: Boolean,
-    progressStep: Int,
+    displayProgressStep: Int,
     progressTotal: Int,
     onComplete: () -> Unit,
     onBack: () -> Unit,
@@ -88,12 +88,8 @@ fun SetupPasswordOnboardScreen(
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            OnboardingProgressBar(
-                currentStep = progressStep,
-                totalSteps = progressTotal,
-            )
-            OnboardingStepCaption(
-                currentStep = progressStep,
+            OnboardingProgressHeader(
+                displayProgressStep = displayProgressStep,
                 totalSteps = progressTotal,
             )
             Spacer(modifier = Modifier.height(24.dp))
