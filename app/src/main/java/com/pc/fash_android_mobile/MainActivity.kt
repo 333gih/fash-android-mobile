@@ -843,7 +843,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                             },
-                                            onBack = clearLocalSessionAndSocial,
+                                            onBack = { onboardingViewModel.goBack() },
                                         )
                                         OnboardingStep.ShoppingPreferences -> OnboardingShoppingScreen(
                                             buySelected = onboardingShoppingBuy,
@@ -867,6 +867,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                             },
+                                            onBack = { onboardingViewModel.goBack() },
                                         )
                                         OnboardingStep.SizingReference -> {
                                             val canSizing = remember(
@@ -889,6 +890,7 @@ class MainActivity : ComponentActivity() {
                                                 onMeasurementShouldersChange = onboardingViewModel::onMeasurementShouldersChange,
                                                 measurementSleeve = onboardingMeasSleeve,
                                                 onMeasurementSleeveChange = onboardingViewModel::onMeasurementSleeveChange,
+                                                genderPreference = onboardingGenderPreference,
                                                 heightCm = onboardingHeightCm,
                                                 onHeightCmChange = onboardingViewModel::onHeightCmChange,
                                                 weightKg = onboardingWeightKg,
@@ -921,11 +923,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 },
-                                                onBack = {
-                                                    if (!onboardingViewModel.handleBack()) {
-                                                        clearLocalSessionAndSocial()
-                                                    }
-                                                },
+                                                onBack = { onboardingViewModel.goBack() },
                                             )
                                         }
                                         OnboardingStep.UsernameOnboard -> {
@@ -956,11 +954,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 },
-                                                onBack = {
-                                                    if (!onboardingViewModel.handleBack()) {
-                                                        clearLocalSessionAndSocial()
-                                                    }
-                                                },
+                                                onBack = { onboardingViewModel.goBack() },
                                             )
                                         }
                                         OnboardingStep.SetupPassword -> {
@@ -988,11 +982,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 },
-                                                onBack = {
-                                                    if (!onboardingViewModel.handleBack()) {
-                                                        clearLocalSessionAndSocial()
-                                                    }
-                                                },
+                                                onBack = { onboardingViewModel.goBack() },
                                             )
                                         }
                                         OnboardingStep.Completed -> {

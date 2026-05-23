@@ -209,14 +209,24 @@
     <string name="profile_setup_complete">Hoàn tất</string>
     <string name="profile_setup_username_taken">Tên người dùng đã được sử dụng. Chọn tên khác.</string>
     <string name="profile_setup_sizing_title">Kích thước tham chiếu</string>
-    <string name="profile_setup_sizing_subtitle">Bắt buộc để mở khóa bảng tin. Thêm cỡ thường mặc và có thể nhập số đo (tuỳ chọn).</string>
+    <string name="profile_setup_sizing_subtitle">Chọn cỡ thường mặc để mở khóa bảng tin. Số đo cơ thể là tuỳ chọn — bạn không cần tự đo.</string>
     <string name="profile_setup_reference_size_label">Cỡ / size tham chiếu</string>
-    <string name="profile_setup_reference_size_hint">Ví dụ: M, L, EU 38</string>
+    <string name="profile_setup_reference_size_hint">Ví dụ: EU 38, US 6</string>
+    <string name="profile_setup_reference_size_custom">Khác</string>
+    <string name="profile_setup_reference_size_custom_label">Nhập size khác</string>
     <string name="profile_setup_measurement_unit">Đơn vị đo</string>
     <string name="profile_setup_unit_cm">cm</string>
     <string name="profile_setup_unit_in">inch</string>
     <string name="profile_setup_measurements_optional">Số đo cơ thể (tuỳ chọn)</string>
-    <string name="profile_setup_measurement_hem">Hem</string>
+    <string name="profile_setup_measurements_guideline_hint">Tham khảo theo size đã chọn. Chỉ điền nếu bạn biết số đo — không bắt buộc.</string>
+    <string name="profile_setup_measurement_reference_range">Tham khảo: %1$s</string>
+    <string name="profile_setup_measurement_optional_note">Không bắt buộc — có thể bỏ trống</string>
+    <string name="profile_setup_fill_typical_measurements">Điền số đo tham khảo</string>
+    <string name="profile_setup_sizing_guide_title">Size %1$s — số đo tham khảo</string>
+    <string name="profile_setup_sizing_guide_body">Khoảng số đo phổ biến cho size này. Hầu hết người dùng không tự đo — bạn có thể bấm \"Điền số đo tham khảo\" hoặc bỏ qua.</string>
+    <string name="profile_setup_sizing_chart_women">Bảng tham chiếu nữ</string>
+    <string name="profile_setup_sizing_chart_men">Bảng tham chiếu nam</string>
+    <string name="profile_setup_measurement_hem">Vòng eo</string>
     <string name="profile_setup_measurement_chest">Ngực</string>
     <string name="profile_setup_measurement_length">Dài</string>
     <string name="profile_setup_measurement_shoulders">Vai</string>
@@ -232,6 +242,7 @@
     <string name="home_style_picks_subtitle">Theo phong cách bạn đã chọn</string>
     <string name="onboarding_sizing_screen_title">Kích thước</string>
     <string name="onboarding_sizing_optional_hint">Tùy chọn — điền để gợi ý size phù hợp hơn.</string>
+    <string name="onboarding_sizing_required_hint">Chọn cỡ thường mặc để mở khóa bảng tin. Số đo và chiều cao/cân nặng giúp gợi ý chính xác hơn nhưng không bắt buộc.</string>
     <string name="onboarding_username_screen_title">Tên người dùng</string>
 
     <string name="nav_home">Trang chủ</string>
@@ -843,7 +854,7 @@
     <string name="profile_sizing_ref_separator"> · </string>
     <string name="profile_sizing_ref_unit_default">cm</string>
     <string name="profile_sizing_ref_chest">Ngực %1$.0f %2$s</string>
-    <string name="profile_sizing_ref_hem">Lưng %1$.0f %2$s</string>
+    <string name="profile_sizing_ref_hem">Vòng eo %1$.0f %2$s</string>
     <string name="profile_sizing_ref_length">Dài %1$.0f %2$s</string>
     <string name="profile_sizing_ref_shoulders">Vai %1$.0f %2$s</string>
     <string name="profile_sizing_ref_sleeve">Tay %1$.0f %2$s</string>

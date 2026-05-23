@@ -450,6 +450,7 @@ fun EditProfileScreen(
                                 sleeve = measurementSleeve,
                                 onSleeveChange = viewModel::onMeasurementSleeveChange,
                                 supportedMeasurementUnits = listOf("cm", "in", "st"),
+                                genderPreference = gender,
                                 compactDensity = true,
                                 showTitle = false,
                             )

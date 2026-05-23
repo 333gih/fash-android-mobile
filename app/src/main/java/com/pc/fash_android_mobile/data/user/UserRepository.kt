@@ -1127,6 +1127,15 @@ class UserRepository(
                 o.optBoolean("SizingReferenceCompleted", false),
             ),
             gender = o.optString("gender", o.optString("Gender", "")).trim().lowercase(Locale.ROOT),
+            shoppingIntents = o.optJSONArray("shopping_intents")?.let { arr ->
+                buildList {
+                    for (i in 0 until arr.length()) {
+                        arr.optString(i, "").trim().takeIf { it.isNotEmpty() }?.let { add(it) }
+                    }
+                }
+            } ?: emptyList(),
+            heightCm = o.optInt("height_cm", -1).takeIf { it in 100..250 },
+            weightKg = optDoubleIfPresent("weight_kg"),
             accountEmail = "",
             accountPhone = "",
         )
@@ -1598,6 +1607,9 @@ data class ProfileInfo(
     val sizingReferenceCompleted: Boolean = false,
     /** Clothing gender preference set during onboarding or in Edit Profile. */
     val gender: String = "",
+    val shoppingIntents: List<String> = emptyList(),
+    val heightCm: Int? = null,
+    val weightKg: Double? = null,
     /** From auth-service `GET /auth/me` — account email (core profile may omit). */
     val accountEmail: String = "",
     /** From auth-service `GET /auth/me` — account phone. */

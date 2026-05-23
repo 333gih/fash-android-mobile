@@ -9,6 +9,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.user.AestheticTagPutItem
+import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.SizingReferenceRequest
 import com.pc.fash_android_mobile.data.user.UserAccessStatus
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -128,7 +129,10 @@ class OnboardingViewModel(
         if (status.canAccessHome) return
         lastAccessStatus = status
         backStack.clear()
-        _onboardingStep.value = resolveNextStep(status)
+        val current = resolveNextStep(status)
+        _onboardingStep.value = current
+        seedBackStackForStep(current, status)
+        hydrateSavedProgressFromServer()
     }
 
     /**
@@ -171,28 +175,120 @@ class OnboardingViewModel(
         lastAccessStatus = status
         val prev = _onboardingStep.value
         val next = resolveNextStep(status)
-        if (completedStep != null && prev == completedStep) {
-            when {
-                completedStep == OnboardingStep.AestheticTags && next == OnboardingStep.SizingReference ->
-                    backStack.add(OnboardingStep.AestheticTags)
-                completedStep == OnboardingStep.SizingReference && next == OnboardingStep.UsernameOnboard ->
-                    backStack.add(OnboardingStep.SizingReference)
-                completedStep == OnboardingStep.UsernameOnboard && next == OnboardingStep.SetupPassword ->
-                    backStack.add(OnboardingStep.UsernameOnboard)
-                completedStep == OnboardingStep.SetupPassword && next == OnboardingStep.Completed ->
-                    backStack.add(OnboardingStep.SetupPassword)
-            }
+        if (next != prev) {
+            backStack.add(prev)
         }
         _onboardingStep.value = next
     }
 
+    /** Steps the user can navigate back to before [current], including after app restart mid-flow. */
+    private fun seedBackStackForStep(current: OnboardingStep, status: UserAccessStatus) {
+        backStack.clear()
+        backStack.addAll(priorStepsFor(current, status))
+    }
+
+    private fun priorStepsFor(current: OnboardingStep, status: UserAccessStatus): List<OnboardingStep> {
+        val uid = currentUserId()
+        val skipSizingEnv = AppEnvironment.skipSizingReferenceCompleted
+        return buildList {
+            if (includesPasswordStep(status) && current != OnboardingStep.SetupPassword) {
+                add(OnboardingStep.SetupPassword)
+            }
+            if (
+                !onboardingLocalStore.skippedAestheticTags(uid) &&
+                current != OnboardingStep.SetupPassword &&
+                current != OnboardingStep.AestheticTags
+            ) {
+                add(OnboardingStep.AestheticTags)
+            }
+            if (
+                current == OnboardingStep.SizingReference ||
+                current == OnboardingStep.UsernameOnboard
+            ) {
+                add(OnboardingStep.ShoppingPreferences)
+            }
+            if (
+                !skipSizingEnv &&
+                !onboardingLocalStore.skippedSizing(uid) &&
+                current == OnboardingStep.UsernameOnboard
+            ) {
+                add(OnboardingStep.SizingReference)
+            }
+        }
+    }
+
+    private fun includesPasswordStep(status: UserAccessStatus): Boolean =
+        status.needsPasswordSetup() ||
+            status.nextStep?.trim()?.equals("password", ignoreCase = true) == true
+
     /**
-     * @return true if navigated to previous step; false if caller should sign out / exit onboarding.
+     * Navigate to the previous onboarding step. Never signs the user out.
+     * @return true when navigation happened; false on the first step (no-op).
      */
-    fun handleBack(): Boolean {
-        val prev = backStack.removeLastOrNull() ?: return false
-        _onboardingStep.value = prev
+    fun goBack(): Boolean {
+        if (backStack.isEmpty()) {
+            val status = lastAccessStatus ?: return false
+            seedBackStackForStep(_onboardingStep.value, status)
+        }
+        val previous = backStack.removeLastOrNull() ?: return false
+        _onboardingStep.value = previous
+        hydrateSavedProgressFromServer()
+        if (previous == OnboardingStep.AestheticTags && _tags.value.isEmpty()) {
+            loadTags()
+        }
         return true
+    }
+
+    /** @deprecated Use [goBack] — kept for call sites migrating off sign-out fallback. */
+    fun handleBack(): Boolean = goBack()
+
+    fun canNavigateBack(): Boolean {
+        if (backStack.isNotEmpty()) return true
+        val status = lastAccessStatus ?: return false
+        return priorStepsFor(_onboardingStep.value, status).isNotEmpty()
+    }
+
+    fun hydrateSavedProgressFromServer() {
+        viewModelScope.launch {
+            val profile = withContext(Dispatchers.IO) {
+                userRepository.getMeProfile().getOrNull()
+            } ?: return@launch
+            applyProfileToState(profile)
+        }
+    }
+
+    private fun applyProfileToState(profile: ProfileInfo) {
+        if (profile.aestheticTagSnapshots.isNotEmpty()) {
+            _selectedIds.value = profile.aestheticTagSnapshots.map { it.id }.toSet()
+        }
+        if (profile.gender.isNotBlank()) {
+            _genderPreference.value = profile.gender
+        }
+        if (profile.shoppingIntents.isNotEmpty()) {
+            _shoppingBuy.value = profile.shoppingIntents.any { it.equals("buy", ignoreCase = true) }
+            _shoppingSell.value = profile.shoppingIntents.any { it.equals("sell", ignoreCase = true) }
+        }
+        profile.referenceSize?.let { _referenceSize.value = it }
+        profile.referenceMeasurementUnit?.let { onMeasurementUnitChange(it) }
+        profile.referenceMeasurementChest?.let { _measurementChest.value = formatMeasurement(it) }
+        profile.referenceMeasurementHem?.let { _measurementHem.value = formatMeasurement(it) }
+        profile.referenceMeasurementLength?.let { _measurementLength.value = formatMeasurement(it) }
+        profile.referenceMeasurementShoulders?.let { _measurementShoulders.value = formatMeasurement(it) }
+        profile.referenceMeasurementSleeveLength?.let { _measurementSleeve.value = formatMeasurement(it) }
+        profile.heightCm?.let { _heightCm.value = it.toString() }
+        profile.weightKg?.let { _weightKg.value = formatMeasurement(it) }
+        if (profile.username.isNotBlank() && _username.value.isBlank()) {
+            _username.value = profile.username
+        }
+    }
+
+    private fun formatMeasurement(value: Double): String {
+        val rounded = kotlin.math.round(value * 10.0) / 10.0
+        return if (rounded % 1.0 == 0.0) {
+            rounded.toInt().toString()
+        } else {
+            rounded.toString()
+        }
     }
 
     fun seedUsernameFromEmailIfEmpty(email: String) {
