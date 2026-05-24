@@ -657,6 +657,9 @@
     <string name="explore_search_active_label">Đang tìm</string>
     <string name="explore_search_active_cd">Từ khóa tìm kiếm hiện tại</string>
     <string name="explore_search_clear_active">Xóa</string>
+    <string name="explore_search_browse_title">Lướt toàn sàn</string>
+    <string name="explore_search_browse_subtitle">Xem tin hot và mới đăng — không cần gõ từ khóa</string>
+    <string name="explore_search_browse_action">Xem ngay</string>
 
     <string name="explore_preview_sheet_title">Xem nhanh</string>
     <string name="explore_preview_sheet_subtitle">Lướt sơ trước — xem chi tiết khi bạn muốn chốt</string>

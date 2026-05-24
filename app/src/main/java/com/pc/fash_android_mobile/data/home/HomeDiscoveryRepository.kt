@@ -46,6 +46,10 @@ data class HomeEditorialPostStub(
 )
 
 interface HomeDiscoveryRepository {
+    /** Header rails only — featured sellers, editorial, trending tags (no feed tab sections). */
+    suspend fun loadShell(): Result<HomeDiscoveryBundle>
+
+    /** Full bundle including all recommendation sections (legacy / refresh-all). */
     suspend fun loadDiscoveryBundle(): Result<HomeDiscoveryBundle>
 }
 
@@ -54,6 +58,8 @@ interface HomeDiscoveryRepository {
  * and listing / seller shapes from production parsers ([FeaturedSellerItem], [ListingFeedItem]).
  */
 class StubHomeDiscoveryRepository : HomeDiscoveryRepository {
+
+    override suspend fun loadShell(): Result<HomeDiscoveryBundle> = loadDiscoveryBundle()
 
     override suspend fun loadDiscoveryBundle(): Result<HomeDiscoveryBundle> {
         // Tiny delay keeps the same “async boundary” as a future network call (easy to swap impl).

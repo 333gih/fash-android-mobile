@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -133,6 +134,11 @@ fun ExploreSearchOverlay(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 12.dp),
             ) {
+                item {
+                    ExploreSearchBrowseEntryRow(
+                        onBrowse = { viewModel.setSearchBarExpanded(false) },
+                    )
+                }
                 if (idleEmpty) {
                     item {
                         Text(
@@ -212,6 +218,52 @@ fun ExploreSearchOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ExploreSearchBrowseEntryRow(onBrowse: () -> Unit) {
+    val spacing = FashTheme.spacing
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = spacing.editorialStart,
+                end = spacing.editorialEnd,
+                top = 12.dp,
+                bottom = 8.dp,
+            )
+            .clip(RoundedCornerShape(spacing.radiusSoftMin))
+            .clickable(onClick = onBrowse),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(spacing.radiusSoftMin),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.explore_search_browse_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.explore_search_browse_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Text(
+                text = stringResource(R.string.explore_search_browse_action),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = FashColors.Primary,
+            )
         }
     }
 }

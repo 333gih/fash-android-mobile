@@ -640,6 +640,9 @@
     <string name="explore_search_active_label">Searching</string>
     <string name="explore_search_active_cd">Current search keyword</string>
     <string name="explore_search_clear_active">Clear</string>
+    <string name="explore_search_browse_title">Browse the marketplace</string>
+    <string name="explore_search_browse_subtitle">See hot and new listings — no keyword needed</string>
+    <string name="explore_search_browse_action">Browse</string>
     <string name="explore_preview_sheet_title">Quick look</string>
     <string name="explore_preview_sheet_subtitle">A fast preview — open full details when you\'re ready</string>
     <string name="explore_preview_view_detail">View product details</string>

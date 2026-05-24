@@ -427,16 +427,19 @@ fun HomeRecommendedSellersSection(
     onSellerClick: (UserSearchResult) -> Unit,
     onSeeAllClick: () -> Unit,
     modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
 ) {
     if (sellers.isEmpty()) return
     val spacing = FashTheme.spacing
+    val edgeStart = if (includeHorizontalEdgePadding) spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) spacing.editorialEnd else 0.dp
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = spacing.editorialStart,
-                    end = spacing.editorialEnd,
+                    start = edgeStart,
+                    end = edgeEnd,
                     top = spacing.spacing2,
                     bottom = spacing.spacing1,
                 ),
@@ -466,8 +469,8 @@ fun HomeRecommendedSellersSection(
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
-                start = spacing.editorialStart,
-                end = spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 bottom = spacing.spacing4,
             ),
             horizontalArrangement = Arrangement.spacedBy(spacing.spacing3),

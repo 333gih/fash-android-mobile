@@ -43,6 +43,7 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 private const val ExploreFeedPageSize = 20
+private const val ExploreStaleThresholdMs = 60_000L
 
 /** Top-level Explore: product grid vs seller discovery (same tab, clear mental model). */
 enum class ExplorePrimarySection {
@@ -231,6 +232,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
      * [loadMore] snapshots this at start and aborts if it changed mid-flight.
      */
     private val listingsFetchGeneration = AtomicInteger(0)
+
+    private var lastSuccessfulExploreRefreshAtMs = 0L
 
     /** Digits-only VND hints; empty = no bound. */
     private val _minPriceText = MutableStateFlow("")
@@ -440,6 +443,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 if (gen != sellersBrowseGeneration.get()) return@fold
                 _sellerBrowseResults.value = users
                 _sellersLoadError.value = false
+                lastSuccessfulExploreRefreshAtMs = System.currentTimeMillis()
             },
             onFailure = {
                 if (gen != sellersBrowseGeneration.get()) return@fold
@@ -1076,6 +1080,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 syncSellerFollowingFromListings(page)
                 _hasMore.value = page.size >= ExploreFeedPageSize
                 _loadError.value = false
+                lastSuccessfulExploreRefreshAtMs = System.currentTimeMillis()
             },
             onFailure = {
                 _loadError.value = true
@@ -1466,7 +1471,22 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Refreshes listings/sellers only when data is older than [ExploreStaleThresholdMs]. */
+    fun onExploreOpened() {
+        refreshIfStale()
+    }
+
+    fun refreshIfStale() {
+        val now = System.currentTimeMillis()
+        if (now - lastSuccessfulExploreRefreshAtMs < ExploreStaleThresholdMs) return
+        reloadExploreContent()
+    }
+
     fun onExploreTabSelected() {
+        reloadExploreContent()
+    }
+
+    private fun reloadExploreContent() {
         viewModelScope.launch {
             when (_primarySection.value) {
                 ExplorePrimarySection.Listings -> {

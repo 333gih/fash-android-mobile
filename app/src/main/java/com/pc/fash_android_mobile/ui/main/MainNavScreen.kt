@@ -240,7 +240,7 @@ fun MainNavScreen(
     val postNavReloading by postViewModel.navReselectLoading.collectAsState()
 
     val openExploreOverlay: (expandSearch: Boolean) -> Unit = { expandSearch ->
-        exploreViewModel.onExploreTabSelected()
+        exploreViewModel.onExploreOpened()
         if (expandSearch) {
             exploreViewModel.requestSearchBarExpanded()
         }
@@ -250,9 +250,6 @@ fun MainNavScreen(
     val closeExploreOverlay: () -> Unit = {
         showExploreOverlay = false
         exploreViewModel.setSearchBarExpanded(false)
-        if (tabs.getOrNull(selectedTab) != MainTab.Home) {
-            onTabChange(MainTab.Home.ordinal)
-        }
     }
 
     LaunchedEffect(exploreOverlayOpenNonce) {
@@ -498,7 +495,10 @@ fun MainNavScreen(
                     exploreViewModel.setSearchBarExpanded(false)
                 }
                 when (tab) {
-                    MainTab.Home -> homeViewModel.refreshIfStale()
+                    MainTab.Home -> {
+                        homeViewModel.requestScrollHomeToTop()
+                        homeViewModel.refreshIfStale()
+                    }
                     MainTab.Orders -> ordersViewModel.refreshOrders()
                     MainTab.Post -> postViewModel.reloadOnNavReselect()
                     MainTab.Chat -> {

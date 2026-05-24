@@ -118,7 +118,6 @@ import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSlider
-import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
 import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewEmptySlotPlaceholder
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
@@ -135,9 +134,6 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-
-/** Lazy grid index of the inline promo row (header block = 0, promo = 1, filters = 2, …). */
-private const val EXPLORE_PROMO_GRID_INDEX = 1
 
 /** Filter bottom sheet: cap height so the map/list behind stays partly visible; content scrolls inside. */
 private const val ExploreFilterSheetMaxHeightFraction = 0.7f
@@ -244,6 +240,19 @@ fun ExploreScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val quickInterestChips by viewModel.quickInterestChips.collectAsState()
+    val selectedInterestChipNames = remember(
+        quickInterestChips,
+        aestheticTagsCatalog,
+        selectedAestheticTagIds,
+    ) {
+        quickInterestChips.filter { chipName ->
+            aestheticTagsCatalog.any { tag ->
+                tag.id in selectedAestheticTagIds &&
+                    (tag.name.equals(chipName, ignoreCase = true) ||
+                        tag.displayName.equals(chipName, ignoreCase = true))
+            }
+        }.toSet()
+    }
     val searchBarExpanded by viewModel.searchBarExpanded.collectAsState()
     val isSearchMode by viewModel.isSearchMode.collectAsState()
     val committedListingSearchQuery by viewModel.committedListingSearchQuery.collectAsState()
@@ -365,15 +374,6 @@ fun ExploreScreen(
             ) {
                 when (primarySection) {
                     ExplorePrimarySection.Listings -> {
-                        val showStickyExplorePromo by remember {
-                            derivedStateOf {
-                                val layoutInfo = gridState.layoutInfo
-                                if (layoutInfo.visibleItemsInfo.isEmpty()) return@derivedStateOf false
-                                val inlinePromoVisible =
-                                    layoutInfo.visibleItemsInfo.any { it.index == EXPLORE_PROMO_GRID_INDEX }
-                                !inlinePromoVisible
-                            }
-                        }
                         Column(Modifier.fillMaxSize()) {
                         LazyVerticalStaggeredGrid(
                             columns = StaggeredGridCells.Fixed(2),
@@ -390,75 +390,63 @@ fun ExploreScreen(
                             horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                             verticalItemSpacing = FashTheme.spacing.spacing2,
                         ) {
-                            item(span = StaggeredGridItemSpan.FullLine) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    ExplorePrimarySectionSwitcher(
-                                        selected = primarySection,
-                                        onSelect = viewModel::setPrimarySection,
-                                        modifier = Modifier.padding(bottom = 10.dp),
-                                    )
-                                    if (isSearchMode && committedListingSearchQuery.isNotBlank()) {
-                                        ExploreActiveSearchQueryBanner(
-                                            query = committedListingSearchQuery,
-                                            onClear = { viewModel.clearListingSearch() },
-                                            modifier = Modifier.padding(bottom = 10.dp),
+                            if (!showStickyExploreChrome) {
+                                item(span = StaggeredGridItemSpan.FullLine) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        ExplorePrimarySectionSwitcher(
+                                            selected = primarySection,
+                                            onSelect = viewModel::setPrimarySection,
+                                            modifier = Modifier.padding(bottom = 8.dp),
+                                        )
+                                        if (isSearchMode && committedListingSearchQuery.isNotBlank()) {
+                                            ExploreActiveSearchQueryBanner(
+                                                query = committedListingSearchQuery,
+                                                onClear = { viewModel.clearListingSearch() },
+                                                modifier = Modifier.padding(bottom = 8.dp),
+                                            )
+                                        }
+                                        ExploreFiltersBar(
+                                            hasActiveFilters = hasActiveFilters,
+                                            filterSummaryParts = filterSummaryParts,
+                                            filterSummaryLine = filterSummaryLine,
+                                            includeEdgeHorizontalPadding = false,
+                                            compact = true,
+                                            onOpenFilters = { showFilterSheet = true },
+                                            onClearFilters = if (hasActiveFilters) {
+                                                { viewModel.clearMarketplaceFilters() }
+                                            } else {
+                                                null
+                                            },
                                         )
                                     }
-                                    Text(
-                                        text = stringResource(R.string.explore_feed_subtitle),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 4.dp, bottom = 8.dp),
-                                    )
                                 }
-                            }
-                            item(span = StaggeredGridItemSpan.FullLine) {
-                                FashPromoSliderBlock(
-                                    slides = promoSlides,
-                                    contentPadding = PaddingValues(0.dp),
-                                    onSlideClick = onPromoSlideClick,
-                                )
-                            }
-                            item(span = StaggeredGridItemSpan.FullLine) {
-                                ExploreFiltersBar(
-                                    hasActiveFilters = hasActiveFilters,
-                                    filterSummaryParts = filterSummaryParts,
-                                    filterSummaryLine = filterSummaryLine,
-                                    includeEdgeHorizontalPadding = false,
-                                    onOpenFilters = { showFilterSheet = true },
-                                    onClearFilters = if (hasActiveFilters) {
-                                        { viewModel.clearMarketplaceFilters() }
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-                            if (
-                                sizingMode.equals("match_profile", ignoreCase = true) ||
-                                browseLocationMode != BrowseLocationMode.Off
-                            ) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    ExploreActivePersonalFilterChips(
-                                        sizingActive = sizingMode.equals("match_profile", ignoreCase = true),
-                                        browseLocationMode = browseLocationMode,
-                                        browseLocationLabel = viewModel.activeBrowseLocationLabel(),
-                                        onClearSizing = { viewModel.setSizingModeFilter("all") },
-                                        onClearLocation = { viewModel.clearBrowseLocationFilter() },
-                                        onOpenFilters = { showFilterSheet = true },
-                                    )
+                                if (
+                                    sizingMode.equals("match_profile", ignoreCase = true) ||
+                                    browseLocationMode != BrowseLocationMode.Off
+                                ) {
+                                    item(span = StaggeredGridItemSpan.FullLine) {
+                                        ExploreActivePersonalFilterChips(
+                                            sizingActive = sizingMode.equals("match_profile", ignoreCase = true),
+                                            browseLocationMode = browseLocationMode,
+                                            browseLocationLabel = viewModel.activeBrowseLocationLabel(),
+                                            onClearSizing = { viewModel.setSizingModeFilter("all") },
+                                            onClearLocation = { viewModel.clearBrowseLocationFilter() },
+                                            onOpenFilters = { showFilterSheet = true },
+                                        )
+                                    }
                                 }
-                            }
-                            // Quick interest chips visible whenever the user isn't typing a text
-                            // search. We keep them under active filters so the buyer can still
-                            // pivot/discovery another style without first clearing constraints.
-                            if (quickInterestChips.isNotEmpty() && !isSearchMode) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    ExploreInterestChipsRow(
-                                        chips = quickInterestChips,
-                                        onChipClick = { viewModel.toggleInterestChip(it) },
-                                    )
+                                if (
+                                    quickInterestChips.isNotEmpty() &&
+                                    !hasActiveFilters &&
+                                    !isSearchMode
+                                ) {
+                                    item(span = StaggeredGridItemSpan.FullLine) {
+                                        ExploreInterestChipsRow(
+                                            chips = quickInterestChips,
+                                            selectedChipNames = selectedInterestChipNames,
+                                            onChipClick = { viewModel.toggleInterestChip(it) },
+                                        )
+                                    }
                                 }
                             }
                             when {
@@ -551,7 +539,7 @@ fun ExploreScreen(
                             }
                         }
                         AnimatedVisibility(
-                            visible = showStickyExplorePromo,
+                            visible = promoSlides.isNotEmpty(),
                             modifier = Modifier.fillMaxWidth(),
                             enter = slideInVertically(
                                 animationSpec = tween(280, easing = FastOutSlowInEasing),
@@ -1241,35 +1229,47 @@ private fun exploreFilterSummaryLineFromParts(parts: List<String>): String {
 @Composable
 private fun ExploreInterestChipsRow(
     chips: List<String>,
+    selectedChipNames: Set<String>,
     onChipClick: (tagName: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (chips.isEmpty()) return
-    LazyRow(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
-        contentPadding = PaddingValues(horizontal = 0.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(chips, key = { it }) { tag ->
-            androidx.compose.material3.FilterChip(
-                selected = false,
-                onClick = { onChipClick(tag) },
-                label = {
-                    Text(
-                        text = "#$tag",
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                shape = RoundedCornerShape(20.dp),
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.explore_style_chips_title),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            contentPadding = PaddingValues(horizontal = 0.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(chips, key = { it }) { tag ->
+                val selected = tag in selectedChipNames
+                androidx.compose.material3.FilterChip(
+                    selected = selected,
+                    onClick = { onChipClick(tag) },
+                    label = {
+                        Text(
+                            text = "#$tag",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = FashColors.Primary.copy(alpha = 0.14f),
+                        selectedLabelColor = FashColors.Primary,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+            }
         }
     }
 }
@@ -1453,6 +1453,7 @@ private fun ExploreFiltersBar(
     filterSummaryLine: String,
     /** When false, horizontal padding is omitted (parent already applies grid `contentPadding`). */
     includeEdgeHorizontalPadding: Boolean = true,
+    compact: Boolean = false,
     onOpenFilters: () -> Unit,
     onClearFilters: (() -> Unit)? = null,
 ) {
@@ -1481,7 +1482,7 @@ private fun ExploreFiltersBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = if (compact) 8.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -1551,8 +1552,8 @@ private fun ExploreFiltersBar(
                     }
                 } else {
                     ExploreFilterIdleTeaser(
-                        modifier = Modifier.padding(top = 4.dp),
-                        compact = false,
+                        modifier = Modifier.padding(top = if (compact) 2.dp else 4.dp),
+                        compact = compact,
                     )
                 }
             }

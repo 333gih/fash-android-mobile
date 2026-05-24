@@ -69,16 +69,17 @@ data class HomeFeedUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val discoveryLoading: Boolean = false,
+    val tabsLoading: Set<HomeFeedTab> = emptySet(),
+    val tabsLoadError: Set<HomeFeedTab> = emptySet(),
     val hasMoreItems: Boolean = true,
-    val loadError: Boolean = false,
-    val discoveryLoadError: Boolean = false,
     val showSizingBanner: Boolean = false,
     val listingPreview: ExploreListingPreviewState? = null,
 )
 
 /** Size of one follow-feed page (`GET /api/v1/listings/home`). */
 internal const val HomeFollowFeedPageSize = 20
+
+private const val HomeHuntTodayLimit = 12
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -125,8 +126,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    private val _discoveryLoading = MutableStateFlow(false)
-    val discoveryLoading: StateFlow<Boolean> = _discoveryLoading.asStateFlow()
+    /** Per-tab feed loading (lazy fetch when tab is opened / prefetched). */
+    private val _tabsLoading = MutableStateFlow<Set<HomeFeedTab>>(emptySet())
+    val tabsLoading: StateFlow<Set<HomeFeedTab>> = _tabsLoading.asStateFlow()
+
+    /** Per-tab feed load failure — drives retry on the active tab only. */
+    private val _tabsLoadError = MutableStateFlow<Set<HomeFeedTab>>(emptySet())
+    val tabsLoadError: StateFlow<Set<HomeFeedTab>> = _tabsLoadError.asStateFlow()
+
+    private val loadedTabs = mutableSetOf<HomeFeedTab>()
+    private var recommendationSectionsFetched = false
+    private val tabLoadJobs = mutableMapOf<HomeFeedTab, Job>()
 
     /** Follow-feed pagination — guards duplicate in-flight requests. */
     private val _isLoadingMore = MutableStateFlow(false)
@@ -143,7 +153,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val selectedFeedTab: StateFlow<HomeFeedTab> = _selectedFeedTab.asStateFlow()
 
     fun setSelectedFeedTab(tab: HomeFeedTab) {
+        if (_selectedFeedTab.value == tab) return
         _selectedFeedTab.value = tab
+        ensureTabLoaded(tab)
+        prefetchAdjacentTabs(tab)
     }
 
     /** Coerce selection when guest mode hides personalized tabs (e.g. after sign-out). */
@@ -151,16 +164,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val allowed = HomeFeedTab.tabsFor(isGuestBrowse)
         if (_selectedFeedTab.value !in allowed) {
             _selectedFeedTab.value = HomeFeedTab.HuntToday
+            ensureTabLoaded(HomeFeedTab.HuntToday)
         }
     }
-
-    /** True when last follow-feed load failed (network/server error). User can retry. */
-    private val _loadError = MutableStateFlow(false)
-    val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
-
-    /** True when discovery bundle load failed — affects Hunt Today / For You / style rails. */
-    private val _discoveryLoadError = MutableStateFlow(false)
-    val discoveryLoadError: StateFlow<Boolean> = _discoveryLoadError.asStateFlow()
 
     private var lastSuccessfulRefreshAtMs = 0L
 
@@ -200,10 +206,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading,
         _isRefreshing,
         _isLoadingMore,
-        _discoveryLoading,
+        _tabsLoading,
+        _tabsLoadError,
         _hasMoreItems,
-        _loadError,
-        _discoveryLoadError,
         _showSizingBanner,
         _listingPreview,
     ) { values ->
@@ -217,12 +222,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoading = values[5] as Boolean,
             isRefreshing = values[6] as Boolean,
             isLoadingMore = values[7] as Boolean,
-            discoveryLoading = values[8] as Boolean,
-            hasMoreItems = values[9] as Boolean,
-            loadError = values[10] as Boolean,
-            discoveryLoadError = values[11] as Boolean,
-            showSizingBanner = values[12] as Boolean,
-            listingPreview = values[13] as ExploreListingPreviewState?,
+            tabsLoading = values[8] as Set<HomeFeedTab>,
+            tabsLoadError = values[9] as Set<HomeFeedTab>,
+            hasMoreItems = values[10] as Boolean,
+            showSizingBanner = values[11] as Boolean,
+            listingPreview = values[12] as ExploreListingPreviewState?,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -233,48 +237,170 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             AppLocale.localeRevisionFlow.collect {
-                withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
+                invalidateAllTabFeeds()
+                withContext(Dispatchers.IO) { reloadHomeShell() }
+                ensureTabLoaded(_selectedFeedTab.value, force = true)
             }
         }
         loadFeed()
-        // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
         viewModelScope.launch {
             if (isGuestBrowse()) return@launch
             realtimeManager.events.collect { event ->
                 if (event is RealtimeEvent.FeedRefresh) {
-                    withContext(Dispatchers.IO) {
-                        coroutineScope {
-                            val stats = async { loadBuyerHomeStats() }
-                            val discovery = async { reloadDiscoveryBundle() }
-                            val feed = async { fetchHomeFeedWithRetry() }
-                            stats.await()
-                            discovery.await()
-                            feed.await().getOrNull()
-                        }
-                    }?.let { feed ->
-                        _items.value = feed
-                        syncSellerFollowingFromListings(feed)
-                        syncSellerFollowingFromListings(_discoveryBundle.value.huntToday)
-                        lastSuccessfulRefreshAtMs = System.currentTimeMillis()
+                    withContext(Dispatchers.IO) { loadBuyerHomeStats() }
+                    if (HomeFeedTab.Following in loadedTabs) {
+                        ensureTabLoaded(HomeFeedTab.Following, force = true)
                     }
                 }
             }
         }
     }
 
-    private suspend fun reloadDiscoveryBundle() {
-        _discoveryLoading.value = true
-        homeDiscoveryRepository.loadDiscoveryBundle().fold(
-            onSuccess = { bundle ->
-                _discoveryBundle.value = bundle
-                _discoveryLoadError.value = false
-                syncSellerFollowingFromListings(bundle.huntToday)
+    private suspend fun reloadHomeShell() {
+        homeDiscoveryRepository.loadShell().fold(
+            onSuccess = { shell ->
+                _discoveryBundle.update { cur ->
+                    cur.copy(
+                        editorialPosts = shell.editorialPosts,
+                        recommendedSellers = shell.recommendedSellers,
+                        trendingStyleTagChips = shell.trendingStyleTagChips,
+                        trendingStyleTags = shell.trendingStyleTags,
+                    )
+                }
             },
-            onFailure = {
-                _discoveryLoadError.value = true
-            },
+            onFailure = { /* shell sections degrade to empty */ },
         )
-        _discoveryLoading.value = false
+    }
+
+    private fun setTabLoading(tab: HomeFeedTab, loading: Boolean) {
+        _tabsLoading.update { cur ->
+            if (loading) cur + tab else cur - tab
+        }
+    }
+
+    private fun setTabError(tab: HomeFeedTab, errored: Boolean) {
+        _tabsLoadError.update { cur ->
+            if (errored) cur + tab else cur - tab
+        }
+    }
+
+    private fun invalidateAllTabFeeds() {
+        loadedTabs.clear()
+        recommendationSectionsFetched = false
+        tabLoadJobs.values.forEach { it.cancel() }
+        tabLoadJobs.clear()
+        _tabsLoading.value = emptySet()
+        _tabsLoadError.value = emptySet()
+        _items.value = emptyList()
+        _hasMoreItems.value = true
+        _discoveryBundle.update {
+            it.copy(
+                huntToday = emptyList(),
+                forYou = emptyList(),
+                stylePicks = emptyList(),
+                similarToSaved = emptyList(),
+                recentlyViewed = emptyList(),
+            )
+        }
+    }
+
+    private fun ensureTabLoaded(tab: HomeFeedTab, force: Boolean = false) {
+        if (isGuestBrowse() && tab.requiresAuth) return
+        if (!force && tab in loadedTabs) return
+        if (tab in _tabsLoading.value) return
+        if (!force && tab in HomeFeedTab.recommendationSectionTabs() && recommendationSectionsFetched) {
+            loadedTabs.add(tab)
+            return
+        }
+
+        tabLoadJobs[tab]?.cancel()
+        tabLoadJobs[tab] = viewModelScope.launch {
+            setTabLoading(tab, true)
+            setTabError(tab, false)
+            val ok = withContext(Dispatchers.IO) {
+                when (tab) {
+                    HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
+                    HomeFeedTab.Following -> loadFollowingTab(force)
+                    HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved ->
+                        loadRecommendationSections(force)
+                }
+            }
+            if (ok) {
+                loadedTabs.add(tab)
+                if (tab in HomeFeedTab.recommendationSectionTabs()) {
+                    HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
+                }
+            } else {
+                setTabError(tab, true)
+            }
+            setTabLoading(tab, false)
+        }
+    }
+
+    private fun prefetchAdjacentTabs(tab: HomeFeedTab) {
+        val tabs = HomeFeedTab.tabsFor(isGuestBrowse())
+        val idx = tabs.indexOf(tab)
+        if (idx < 0) return
+        listOf(idx - 1, idx + 1).forEach { i ->
+            if (i in tabs.indices) ensureTabLoaded(tabs[i])
+        }
+    }
+
+    private suspend fun loadHuntTodayTab(force: Boolean): Boolean {
+        if (!force && HomeFeedTab.HuntToday in loadedTabs) return true
+        return fashApp.recommendationRepository.exploreListings(
+            publicBrowse = isGuestBrowse(),
+            limit = HomeHuntTodayLimit,
+            offset = 0,
+        ).fold(
+            onSuccess = { items ->
+                _discoveryBundle.update { it.copy(huntToday = items) }
+                syncSellerFollowingFromListings(items)
+                true
+            },
+            onFailure = { false },
+        )
+    }
+
+    private suspend fun loadFollowingTab(force: Boolean): Boolean {
+        if (!force && HomeFeedTab.Following in loadedTabs && _items.value.isNotEmpty()) return true
+        return fetchHomeFeedWithRetry().fold(
+            onSuccess = { feed ->
+                _items.value = feed
+                syncSellerFollowingFromListings(feed)
+                true
+            },
+            onFailure = { false },
+        )
+    }
+
+    private suspend fun loadRecommendationSections(force: Boolean): Boolean {
+        if (!force && recommendationSectionsFetched) return true
+        val sizingMode = com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
+            .read(getApplication())
+        return fashApp.recommendationRepository.homeSections(
+            publicBrowse = isGuestBrowse(),
+            huntTodayLimit = 12,
+            forYouLimit = 16,
+            sectionLimit = 12,
+            sizingMode = sizingMode.takeIf { it.equals("match_profile", ignoreCase = true) },
+        ).fold(
+            onSuccess = { sections ->
+                _discoveryBundle.update { cur ->
+                    cur.copy(
+                        forYou = sections.forYou,
+                        stylePicks = sections.stylePicks,
+                        similarToSaved = sections.similarToSaved,
+                    )
+                }
+                syncSellerFollowingFromListings(
+                    sections.forYou + sections.stylePicks + sections.similarToSaved,
+                )
+                recommendationSectionsFetched = true
+                true
+            },
+            onFailure = { false },
+        )
     }
 
     /**
@@ -344,36 +470,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun loadFeed() {
         viewModelScope.launch {
             _isLoading.value = true
-            _loadError.value = false
-            val result = withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 coroutineScope {
                     val stats = async { loadBuyerHomeStats() }
-                    val discovery = async { reloadDiscoveryBundle() }
+                    val shell = async { reloadHomeShell() }
                     val sizing = async { refreshSizingBannerState() }
-                    val feed = async { fetchHomeFeedWithRetry() }
                     stats.await()
-                    discovery.await()
+                    shell.await()
                     sizing.await()
-                    feed.await()
                 }
             }
             _isLoading.value = false
-            result.fold(
-                onSuccess = {
-                    _items.value = it
-                    syncSellerFollowingFromListings(it)
-                    syncSellerFollowingFromListings(_discoveryBundle.value.huntToday)
-                    _loadError.value = false
-                    lastSuccessfulRefreshAtMs = System.currentTimeMillis()
-                },
-                onFailure = {
-                    _loadError.value = true
-                    _events.tryEmit(
-                        it.message?.takeIf { m -> m.isNotBlank() }
-                            ?: getApplication<Application>().getString(R.string.feed_load_error),
-                    )
-                },
-            )
+            ensureTabLoaded(_selectedFeedTab.value, force = true)
+            prefetchAdjacentTabs(_selectedFeedTab.value)
+            lastSuccessfulRefreshAtMs = System.currentTimeMillis()
         }
     }
 
@@ -447,14 +557,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun retryLoad() {
-        loadFeed()
+        retryTab(HomeFeedTab.Following)
     }
 
     fun retryDiscovery() {
-        viewModelScope.launch {
-            _discoveryLoadError.value = false
-            withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
+        retryTab(_selectedFeedTab.value)
+    }
+
+    fun retryTab(tab: HomeFeedTab) {
+        requestScrollHomeToTop()
+        loadedTabs.remove(tab)
+        if (tab in HomeFeedTab.recommendationSectionTabs()) {
+            recommendationSectionsFetched = false
+            HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.remove(it) }
         }
+        ensureTabLoaded(tab, force = true)
     }
 
     /**
@@ -462,19 +579,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * the previous account’s home after logout / account switch.
      */
     fun clearCachesForSignedOutUser() {
-        _items.value = emptyList()
+        invalidateAllTabFeeds()
         _likedIds.value = emptySet()
         _savedIds.value = emptySet()
         _followingIds.value = emptySet()
         _buyerStats.value = BuyerHomeStats()
         _discoveryBundle.value = HomeDiscoveryBundle()
-        _loadError.value = false
-        _discoveryLoadError.value = false
         _showSizingBanner.value = false
         _isLoading.value = false
         _isRefreshing.value = false
         _isLoadingMore.value = false
-        _hasMoreItems.value = true
         lastSuccessfulRefreshAtMs = 0L
     }
 
@@ -493,30 +607,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            _loadError.value = false
-            val result = withContext(Dispatchers.IO) {
+            val selected = _selectedFeedTab.value
+            invalidateAllTabFeeds()
+            withContext(Dispatchers.IO) {
                 coroutineScope {
                     val stats = async { loadBuyerHomeStats() }
-                    val discovery = async { reloadDiscoveryBundle() }
+                    val shell = async { reloadHomeShell() }
                     val sizing = async { refreshSizingBannerState() }
-                    val feed = async { fetchHomeFeedWithRetry() }
                     stats.await()
-                    discovery.await()
+                    shell.await()
                     sizing.await()
-                    feed.await()
                 }
             }
+            ensureTabLoaded(selected, force = true)
+            prefetchAdjacentTabs(selected)
             _isRefreshing.value = false
-            result.fold(
-                onSuccess = {
-                    _items.value = it
-                    syncSellerFollowingFromListings(it)
-                    syncSellerFollowingFromListings(_discoveryBundle.value.huntToday)
-                    _loadError.value = false
-                    lastSuccessfulRefreshAtMs = System.currentTimeMillis()
-                },
-                onFailure = { _loadError.value = true },
-            )
+            lastSuccessfulRefreshAtMs = System.currentTimeMillis()
+            requestScrollHomeToTop()
         }
     }
 

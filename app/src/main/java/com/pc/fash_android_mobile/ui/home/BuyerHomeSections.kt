@@ -60,16 +60,19 @@ fun HomeSizingBanner(
     onAddSizeClick: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     val dismissCd = stringResource(R.string.home_sizing_banner_dismiss_cd)
+    val edgeStart = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialEnd else 0.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(
-                start = FashTheme.spacing.editorialStart,
-                end = FashTheme.spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 top = 4.dp,
                 bottom = 8.dp,
             )
@@ -222,14 +225,17 @@ fun BuyerHomeJourneyCompactBar(
     onSavedClick: () -> Unit,
     onMessagesClick: () -> Unit,
     modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val edgeStart = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialEnd else 0.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(
-                start = FashTheme.spacing.editorialStart,
-                end = FashTheme.spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 top = 6.dp,
                 bottom = 4.dp,
             ),

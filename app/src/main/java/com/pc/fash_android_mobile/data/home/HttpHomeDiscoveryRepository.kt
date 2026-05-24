@@ -40,6 +40,46 @@ class HttpHomeDiscoveryRepository(
     private val sizingModeProvider: () -> String = { "all" },
 ) : HomeDiscoveryRepository {
 
+    override suspend fun loadShell(): Result<HomeDiscoveryBundle> = coroutineScope {
+        val editorialAsync = async {
+            editorialGuideRepository.listCarousel().getOrElse {
+                Log.w(TAG, "editorial carousel failed: ${it.message}")
+                emptyList()
+            }
+        }
+        val guest = guestBrowseProvider()
+        val sellersAsync = async {
+            if (guest) {
+                searchRepository.browseFeaturedSellersPage(limit = homeFeaturedSellersLimit, offset = 0)
+                    .map { it.items }
+                    .getOrElse {
+                        Log.w(TAG, "public featured sellers failed: ${it.message}")
+                        emptyList()
+                    }
+            } else {
+                searchRepository.getFeaturedSellers(limit = homeFeaturedSellersLimit, offset = 0).getOrElse {
+                    Log.w(TAG, "featured sellers failed: ${it.message}")
+                    emptyList<FeaturedSellerItem>()
+                }
+            }
+        }
+        val trendingTagsAsync = async {
+            searchRepository.getTrendingTagsWithIds(limit = 10).getOrElse {
+                Log.w(TAG, "trending tags failed: ${it.message}")
+                emptyList()
+            }
+        }
+        val tags = trendingTagsAsync.await()
+        Result.success(
+            HomeDiscoveryBundle(
+                editorialPosts = editorialAsync.await(),
+                recommendedSellers = sellersAsync.await(),
+                trendingStyleTagChips = tags,
+                trendingStyleTags = tags.map { it.name },
+            ),
+        )
+    }
+
     override suspend fun loadDiscoveryBundle(): Result<HomeDiscoveryBundle> = coroutineScope {
         val editorialAsync = async {
             editorialGuideRepository.listCarousel().getOrElse {
