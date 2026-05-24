@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,6 +44,7 @@ import com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileScreen
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
+import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 
@@ -55,6 +57,7 @@ fun GuestMainShell(
     fashApp: FashApplication,
     homeViewModel: HomeViewModel,
     exploreViewModel: ExploreViewModel,
+    ordersViewModel: OrdersViewModel,
     postViewModel: PostViewModel,
     addressBookViewModel: AddressBookViewModel,
     profileViewModel: ProfileViewModel,
@@ -69,6 +72,7 @@ fun GuestMainShell(
     onExitGuestToLogin: () -> Unit,
 ) {
     val context = LocalContext.current
+    var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
@@ -97,7 +101,7 @@ fun GuestMainShell(
         val t = nav?.type?.trim()?.lowercase().orEmpty()
         when (t) {
             "", "none" -> Unit
-            "in_app_explore" -> selectedTab = MainTab.Explore.ordinal
+            "in_app_explore" -> exploreOverlayOpenNonce++
             "in_app_orders" -> requestLogin(GuestLoginReason.Orders)
             "in_app_chat" -> requestLogin(GuestLoginReason.ChatFromHome)
             "in_app_product_packages" -> requestLogin(GuestLoginReason.Post)
@@ -170,6 +174,7 @@ fun GuestMainShell(
             isLoggingOut = false,
             homeViewModel = homeViewModel,
             exploreViewModel = exploreViewModel,
+            ordersViewModel = ordersViewModel,
             postViewModel = postViewModel,
             addressBookViewModel = addressBookViewModel,
             profileViewModel = profileViewModel,
@@ -196,6 +201,7 @@ fun GuestMainShell(
             },
             selectedTab = selectedTab,
             onTabChange = { selectedTab = it },
+            exploreOverlayOpenNonce = exploreOverlayOpenNonce,
             isGuestMode = true,
             onRequestLogin = requestLogin,
             featureTourActive = false,
@@ -248,7 +254,7 @@ fun GuestMainShell(
                         countryIso2 = countryIso2,
                     )
                     sellerShopUsername = null
-                    selectedTab = MainTab.Explore.ordinal
+                    exploreOverlayOpenNonce++
                 },
                 isGuestMode = true,
                 onRequestLogin = requestLogin,
@@ -287,7 +293,7 @@ fun GuestMainShell(
                     )
                     selectedListingId = null
                     sellerShopUsername = null
-                    selectedTab = MainTab.Explore.ordinal
+                    exploreOverlayOpenNonce++
                 },
                 isGuestMode = true,
                 onRequestLogin = requestLogin,

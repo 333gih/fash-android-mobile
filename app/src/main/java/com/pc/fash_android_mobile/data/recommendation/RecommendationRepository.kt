@@ -13,6 +13,7 @@ import org.json.JSONObject
 
 /** Home sections from GET /recommendations/home-sections (or public browse variant). */
 data class HomeRecommendationSections(
+    val huntToday: List<ListingFeedItem> = emptyList(),
     val forYou: List<ListingFeedItem> = emptyList(),
     val stylePicks: List<ListingFeedItem> = emptyList(),
     val continueBrowsing: List<ListingFeedItem> = emptyList(),
@@ -52,6 +53,8 @@ class RecommendationRepository(
         sellerProvinceId: String? = null,
         sellerDistrictId: String? = null,
         sellerWardId: String? = null,
+        surface: String? = null,
+        excludeListingIds: List<String>? = null,
     ): Result<List<ListingFeedItem>> = runCatching {
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
         val q = mutableListOf("limit=$limit", "offset=$offset")
@@ -75,6 +78,14 @@ class RecommendationRepository(
         sellerProvinceId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_province_id=${enc(it)}") }
         sellerDistrictId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_district_id=${enc(it)}") }
         sellerWardId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_ward_id=${enc(it)}") }
+        surface?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("surface=${enc(it)}") }
+        excludeListingIds
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.takeIf { it.isNotEmpty() }
+            ?.joinToString(",")
+            ?.let { q.add("exclude_listing_ids=${enc(it)}") }
         val path = if (publicBrowse) {
             PublicBrowseHttp.publicApiPath("browse/recommendations/explore-listings")
         } else {
@@ -86,8 +97,9 @@ class RecommendationRepository(
 
     fun homeSections(
         publicBrowse: Boolean,
-        forYouLimit: Int = 12,
-        sectionLimit: Int = 8,
+        huntTodayLimit: Int = 12,
+        forYouLimit: Int = 16,
+        sectionLimit: Int = 12,
         sizingMode: String? = null,
     ): Result<HomeRecommendationSections> = runCatching {
         val path = if (publicBrowse) {
@@ -96,7 +108,11 @@ class RecommendationRepository(
             AppEnvironment.apiPath("api/v1/recommendations/home-sections")
         }
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
-        val q = mutableListOf("for_you_limit=$forYouLimit", "section_limit=$sectionLimit")
+        val q = mutableListOf(
+            "hunt_today_limit=$huntTodayLimit",
+            "for_you_limit=$forYouLimit",
+            "section_limit=$sectionLimit",
+        )
         sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
             ?.let { q.add("sizing_mode=${enc(it.trim())}") }
         val url = "$path?${q.joinToString("&")}"
@@ -104,6 +120,7 @@ class RecommendationRepository(
         val root = JSONObject(body)
         val data = root.optJSONObject("data") ?: root
         HomeRecommendationSections(
+            huntToday = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("hunt_today")),
             forYou = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("for_you")),
             stylePicks = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("style_picks")),
             continueBrowsing = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("continue_browsing")),

@@ -30,11 +30,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
@@ -125,6 +125,7 @@ import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.feed.listingMasonryStaggerAspectRatio
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrl
@@ -134,8 +135,6 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-/** Taller tiles on Explore so listing art isn’t read as thin strips (3:5 portrait). */
-private val ExploreListingTileAspectRatio = 3f / 5f
 
 /** Lazy grid index of the inline promo row (header block = 0, promo = 1, filters = 2, …). */
 private const val EXPLORE_PROMO_GRID_INDEX = 1
@@ -255,7 +254,7 @@ fun ExploreScreen(
     val sellerPreviewPosts by viewModel.sellerPreviewPosts.collectAsState()
     val sellersLoading by viewModel.sellersLoading.collectAsState()
     val sellersLoadError by viewModel.sellersLoadError.collectAsState()
-    val gridState = rememberLazyGridState()
+    val gridState = rememberLazyStaggeredGridState()
     val sellersListState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
     val density = LocalDensity.current
@@ -376,8 +375,8 @@ fun ExploreScreen(
                             }
                         }
                         Column(Modifier.fillMaxSize()) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 172.dp),
+                        LazyVerticalStaggeredGrid(
+                            columns = StaggeredGridCells.Fixed(2),
                             state = gridState,
                             modifier = Modifier
                                 .weight(1f)
@@ -389,9 +388,9 @@ fun ExploreScreen(
                                 bottom = FashTheme.spacing.spacing3,
                             ),
                             horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
-                            verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing4),
+                            verticalItemSpacing = FashTheme.spacing.spacing2,
                         ) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ExplorePrimarySectionSwitcher(
                                         selected = primarySection,
@@ -415,14 +414,14 @@ fun ExploreScreen(
                                     )
                                 }
                             }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
                                 FashPromoSliderBlock(
                                     slides = promoSlides,
                                     contentPadding = PaddingValues(0.dp),
                                     onSlideClick = onPromoSlideClick,
                                 )
                             }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
                                 ExploreFiltersBar(
                                     hasActiveFilters = hasActiveFilters,
                                     filterSummaryParts = filterSummaryParts,
@@ -440,7 +439,7 @@ fun ExploreScreen(
                                 sizingMode.equals("match_profile", ignoreCase = true) ||
                                 browseLocationMode != BrowseLocationMode.Off
                             ) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(span = StaggeredGridItemSpan.FullLine) {
                                     ExploreActivePersonalFilterChips(
                                         sizingActive = sizingMode.equals("match_profile", ignoreCase = true),
                                         browseLocationMode = browseLocationMode,
@@ -455,7 +454,7 @@ fun ExploreScreen(
                             // search. We keep them under active filters so the buyer can still
                             // pivot/discovery another style without first clearing constraints.
                             if (quickInterestChips.isNotEmpty() && !isSearchMode) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(span = StaggeredGridItemSpan.FullLine) {
                                     ExploreInterestChipsRow(
                                         chips = quickInterestChips,
                                         onChipClick = { viewModel.toggleInterestChip(it) },
@@ -464,16 +463,16 @@ fun ExploreScreen(
                             }
                             when {
                                 isLoading && listings.isEmpty() -> {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        // Skeleton 2-col grid — matches real ListingGridCard geometry.
+                                    item(span = StaggeredGridItemSpan.FullLine) {
+                                        // Skeleton 2-col masonry — matches Home follow feed tile geometry.
                                         com.pc.fash_android_mobile.ui.components.FashSkeletonGrid(
                                             rows = 4,
-                                            imageAspectRatio = ExploreListingTileAspectRatio,
+                                            staggered = true,
                                         )
                                     }
                                 }
                                 loadError && listings.isEmpty() -> {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item(span = StaggeredGridItemSpan.FullLine) {
                                         FeedErrorColumn(
                                             message = stringResource(R.string.feed_load_error),
                                             onRetry = { viewModel.retryLoad() },
@@ -482,7 +481,7 @@ fun ExploreScreen(
                                     }
                                 }
                                 listings.isEmpty() -> {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item(span = StaggeredGridItemSpan.FullLine) {
                                         if (hasActiveFilters || isSearchMode) {
                                             ExploreFilteredEmptyCard(
                                                 modifier = Modifier.fillMaxWidth(),
@@ -514,7 +513,7 @@ fun ExploreScreen(
                                             onDwell = { dwellMs ->
                                                 viewModel.recordListingDwell(item, "explore", index, dwellMs)
                                             },
-                                            imageAspectRatio = ExploreListingTileAspectRatio,
+                                            imageAspectRatio = listingMasonryStaggerAspectRatio(item.id),
                                             showQuickActions = true,
                                             onLike = {
                                                 if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
@@ -527,7 +526,7 @@ fun ExploreScreen(
                                         )
                                     }
                                     if (isLoadingMore) {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                        item(span = StaggeredGridItemSpan.FullLine) {
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -544,7 +543,7 @@ fun ExploreScreen(
                                         }
                                     }
                                     if (!hasMore && listings.isNotEmpty()) {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                        item(span = StaggeredGridItemSpan.FullLine) {
                                             HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
                                         }
                                     }

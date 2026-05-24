@@ -8,7 +8,7 @@ import com.pc.fash_android_mobile.ui.main.MainTab
  */
 enum class FeatureTourAnchor {
     BottomHome,
-    BottomExplore,
+    BottomOrders,
     BottomPostFab,
     BottomChat,
     BottomProfile,
@@ -18,7 +18,7 @@ enum class FeatureTourAnchor {
 enum class AppTourStep {
     Intro,
     NavHome,
-    NavExplore,
+    NavOrders,
     NavPost,
     NavChat,
     NavProfile,
@@ -28,7 +28,7 @@ enum class AppTourStep {
     fun anchor(): FeatureTourAnchor? = when (this) {
         Intro -> null
         NavHome -> FeatureTourAnchor.BottomHome
-        NavExplore -> FeatureTourAnchor.BottomExplore
+        NavOrders -> FeatureTourAnchor.BottomOrders
         NavPost -> FeatureTourAnchor.BottomPostFab
         NavChat -> FeatureTourAnchor.BottomChat
         NavProfile -> FeatureTourAnchor.BottomProfile
@@ -41,7 +41,7 @@ enum class AppTourStep {
     fun prepareTab(): MainTab? = when (this) {
         Intro -> MainTab.Home
         NavHome -> MainTab.Home
-        NavExplore -> MainTab.Explore
+        NavOrders -> MainTab.Orders
         NavPost -> MainTab.Home
         NavChat -> MainTab.Chat
         NavProfile -> MainTab.Profile

@@ -13,8 +13,9 @@ object AppPromoNavigation {
         campaign: AppPromoCampaign,
         onTab: (MainTab) -> Unit,
         onOpenOrders: () -> Unit = {},
+        onOpenExplore: () -> Unit = {},
     ) {
-        campaign.primaryAction?.let { apply(activity, it, onTab, onOpenOrders) }
+        campaign.primaryAction?.let { apply(activity, it, onTab, onOpenOrders, onOpenExplore) }
     }
 
     fun applySecondary(
@@ -22,8 +23,9 @@ object AppPromoNavigation {
         campaign: AppPromoCampaign,
         onTab: (MainTab) -> Unit,
         onOpenOrders: () -> Unit = {},
+        onOpenExplore: () -> Unit = {},
     ) {
-        campaign.secondaryAction?.let { apply(activity, it, onTab, onOpenOrders) }
+        campaign.secondaryAction?.let { apply(activity, it, onTab, onOpenOrders, onOpenExplore) }
     }
 
     private fun apply(
@@ -31,6 +33,7 @@ object AppPromoNavigation {
         action: AppPromoButtonAction,
         onTab: (MainTab) -> Unit,
         onOpenOrders: () -> Unit,
+        onOpenExplore: () -> Unit,
     ) {
         when (action.type.trim().lowercase()) {
             "external_url", "deeplink" -> {
@@ -44,15 +47,14 @@ object AppPromoNavigation {
                     }
                 }
             }
-            "in_app_explore" -> onTab(MainTab.Explore)
+            "in_app_explore" -> onOpenExplore()
             "in_app_orders" -> onOpenOrders()
             "in_app_chat" -> onTab(MainTab.Chat)
             "in_app_post_tab" -> onTab(MainTab.Post)
             "in_app_listing" -> {
                 val listingId = action.payload.trim()
                 if (listingId.isNotEmpty()) {
-                    // Deep link handled by existing nav if present; fallback to explore.
-                    onTab(MainTab.Explore)
+                    onOpenExplore()
                 }
             }
             else -> Unit

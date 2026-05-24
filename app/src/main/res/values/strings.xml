@@ -48,8 +48,8 @@
     <string name="app_tour_intro_body">Fash là chợ thời trang second-hand: xem tin đăng, lưu yêu thích, chat với người bán và theo dõi đơn hàng. Trong vài bước tới, bạn sẽ thấy các khu vực chính của ứng dụng.</string>
     <string name="app_tour_nav_home_title">Trang chủ</string>
     <string name="app_tour_nav_home_body">Luồng cá nhân của bạn: khám phá tin đăng, khuyến mãi và lối tắt tới các phần quan trọng.</string>
-    <string name="app_tour_nav_explore_title">Khám phá</string>
-    <string name="app_tour_nav_explore_body">Tìm kiếm theo phong cách, thương hiệu, người bán nổi bật và bộ lọc — nơi “săn đồ” hiệu quả nhất.</string>
+    <string name="app_tour_nav_orders_title">Đơn hàng</string>
+    <string name="app_tour_nav_orders_body">Theo dõi đơn mua và đơn bán, trạng thái thanh toán, giao hàng và xác nhận — ngay trên thanh điều hướng.</string>
     <string name="app_tour_nav_post_title">Đăng bán</string>
     <string name="app_tour_nav_post_body">Nút + ở giữa thanh dưới để đăng món bạn muốn bán lại. Bạn có thể chỉnh sửa ảnh, mô tả và giao vận sau khi tạo tin.</string>
     <string name="app_tour_nav_chat_title">Tin nhắn</string>
@@ -76,6 +76,7 @@
     <!-- Main top bar: second line after wordmark (same scale as Explore). -->
     <string name="brand_header_suffix_home">Home</string>
     <string name="brand_header_suffix_explore">Explore</string>
+    <string name="brand_header_suffix_orders">Orders</string>
     <string name="brand_header_suffix_post">Post</string>
     <string name="brand_header_suffix_chat">Chat</string>
     <string name="brand_header_suffix_profile">Profile</string>
@@ -261,6 +262,7 @@
 
     <string name="nav_home">Trang chủ</string>
     <string name="nav_explore">Khám phá</string>
+    <string name="nav_orders">Đơn hàng</string>
     <string name="nav_post">Đăng tin</string>
     <string name="nav_post_fab_label">ĐĂNG TIN</string>
     <string name="nav_post_fab_cd">Đăng tin mới</string>
@@ -331,6 +333,14 @@
     <string name="home_feed_empty_subtitle">Theo dõi người bán để thấy tin mới trên Trang chủ — hoặc sang Khám phá để lướt toàn sàn.</string>
     <!-- Legacy strings kept for any stale references; UI uses home_follow_empty_* -->
     <string name="home_empty_cta_explore">Đi tới Khám phá</string>
+    <string name="home_tab_empty_hunt_title">Chưa có tin hot</string>
+    <string name="home_tab_empty_hunt_subtitle">Quay lại sau — đồ mới được cập nhật liên tục trên Fash.</string>
+    <string name="home_tab_empty_for_you_title">Chưa có gợi ý</string>
+    <string name="home_tab_empty_for_you_subtitle">Lướt và lưu vài món để Fash hiểu gu của bạn hơn.</string>
+    <string name="home_tab_empty_style_title">Chưa có gợi ý theo gu</string>
+    <string name="home_tab_empty_style_subtitle">Chọn phong cách trong hồ sơ hoặc lưu tin bạn thích.</string>
+    <string name="home_tab_empty_similar_title">Chưa có món tương tự</string>
+    <string name="home_tab_empty_similar_subtitle">Lưu vài tin yêu thích — Fash sẽ gợi ý đồ cùng vibe.</string>
     <string name="home_feed_empty_cta_featured">Xem shop nổi bật</string>
     <string name="home_section_editorial_title">Cẩm nang</string>
     <string name="home_section_editorial_subtitle">Bài viết ngắn: phối đồ, chọn đồ đã qua sử dụng và gợi ý an toàn khi mua bán.</string>
@@ -1862,12 +1872,28 @@
     <string name="guest_login_reason_topbar">Đơn hàng, thông báo, chat và hồ sơ có sau khi bạn đăng nhập.</string>
     <string name="guest_login_reason_sizing_match">Khớp size cần đăng nhập để dùng size đã lưu trong hồ sơ của bạn.</string>
     <string name="guest_login_reason_browse_location">Lọc shop gần bạn cần đăng nhập để dùng địa chỉ mặc định của bạn.</string>
+    <string name="guest_login_reason_home_for_you">Gợi ý riêng dựa trên gu và hoạt động của bạn — đăng nhập để bật.</string>
+    <string name="guest_login_reason_home_following">Theo dõi shop và xem tin mới trên Trang chủ — cần đăng nhập.</string>
+    <string name="guest_login_reason_home_style">Gợi ý theo phong cách bạn chọn — đăng nhập để Fash hiểu gu của bạn.</string>
+    <string name="guest_login_reason_home_similar">Gợi ý tương tự món đã lưu — đăng nhập để đồng bộ wishlist.</string>
+    <string name="home_guest_tab_for_you_title">Gợi ý riêng cho bạn</string>
+    <string name="home_guest_tab_for_you_body">Đăng nhập để Fash gợi ý đồ phù hợp gu và hoạt động lướt/lưu của bạn.</string>
+    <string name="home_guest_tab_following_title">Từ shop bạn theo dõi</string>
+    <string name="home_guest_tab_following_body">Theo dõi người bán bạn thích — tin mới sẽ hiện ngay trên Trang chủ.</string>
+    <string name="home_guest_tab_style_title">Đúng gu của bạn</string>
+    <string name="home_guest_tab_style_body">Chọn phong cách trong hồ sơ — Fash sẽ lọc đồ đúng vibe bạn.</string>
+    <string name="home_guest_tab_similar_title">Tương tự món đã lưu</string>
+    <string name="home_guest_tab_similar_body">Lưu tin yêu thích — Fash gợi ý thêm đồ cùng phong cách.</string>
+    <string name="home_guest_tab_sign_in">Đăng nhập</string>
+    <string name="home_guest_tab_sign_in_cd">Đăng nhập để mở feed này</string>
     <string name="guest_tab_profile_title">Tài khoản của bạn</string>
     <string name="guest_tab_profile_body">Đăng nhập để xem hồ sơ, tin đã đăng, wishlist và cài đặt. Trước đó bạn vẫn xem được sản phẩm trên Home và Khám phá.</string>
     <string name="guest_tab_chat_title">Tin nhắn</string>
     <string name="guest_tab_chat_body">Chat trực tiếp với người bán sau khi đăng nhập — giúp giao dịch minh bạch và an toàn hơn.</string>
     <string name="guest_tab_post_title">Đăng bán</string>
     <string name="guest_tab_post_body">Tạo tài khoản để đăng đồ second-hand và quản lý tin của bạn.</string>
+    <string name="guest_tab_orders_title">Đơn hàng</string>
+    <string name="guest_tab_orders_body">Đăng nhập để theo dõi đơn mua, đơn bán và trạng thái giao dịch. Trước đó bạn vẫn khám phá sản phẩm qua tìm kiếm trên Home.</string>
     <string name="home_guest_follow_hint">Đăng nhập để xem tin từ shop bạn theo dõi. Trước mắt, khám phá “Săn đồ hôm nay” và tab Khám phá bên dưới.</string>
 
     <!-- Phase 1: Scarcity badges on listing cards -->

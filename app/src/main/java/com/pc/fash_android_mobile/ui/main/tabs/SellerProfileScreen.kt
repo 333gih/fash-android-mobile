@@ -115,8 +115,6 @@ fun SellerProfileScreen(
     /** Same default promo deck as Orders / Explore; tap usually opens Explore. */
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     promoSlides: List<FashPromoSlideDef> = emptyList(),
-    /** Bottom strip below the promo slider — same as Orders / Notifications. */
-    onExploreClick: () -> Unit = {},
     isGuestMode: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
@@ -334,10 +332,8 @@ fun SellerProfileScreen(
                         ) {
                             FashPromoSliderAdFooter(
                                 modifier = Modifier.fillMaxWidth(),
-                                onExploreClick = onExploreClick,
                                 slides = promoSlides,
                                 onSlideClick = onPromoSlideClick,
-                                edgeToEdgeAdStrip = true,
                             )
                         }
                     }

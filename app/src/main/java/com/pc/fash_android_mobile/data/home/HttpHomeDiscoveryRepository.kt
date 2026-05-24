@@ -76,8 +76,9 @@ class HttpHomeDiscoveryRepository(
         val recSectionsAsync = async {
             recommendationRepository.homeSections(
                 publicBrowse = guest,
-                forYouLimit = homeRecentlyViewedLimit,
-                sectionLimit = 8,
+                huntTodayLimit = 12,
+                forYouLimit = 16,
+                sectionLimit = 12,
                 sizingMode = sizingModeProvider().takeIf { it.equals("match_profile", ignoreCase = true) },
             ).getOrElse {
                 Log.w(TAG, "home-sections failed: ${it.message}")
@@ -98,6 +99,7 @@ class HttpHomeDiscoveryRepository(
                 recommendedSellers = sellersAsync.await(),
                 recentlyViewed = rec?.continueBrowsing?.takeIf { it.isNotEmpty() }
                     ?: recentlyViewedAsync.await(),
+                huntToday = rec?.huntToday.orEmpty(),
                 stylePicks = rec?.stylePicks.orEmpty(),
                 similarToSaved = rec?.similarToSaved.orEmpty(),
                 forYou = rec?.forYou.orEmpty(),

@@ -320,7 +320,6 @@ fun ProfileScreen(
     onEditProfile: () -> Unit = { },
     onShippingAddressesClick: () -> Unit = { },
     onInviteFriendsClick: () -> Unit = { },
-    onOrdersClick: () -> Unit = { },
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     /** 0 = Following tab, 1 = Followers — same as [com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen]. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},

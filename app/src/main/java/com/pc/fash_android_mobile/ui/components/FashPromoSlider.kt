@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.orders.pendingPaymentSliderAnchor
@@ -71,8 +72,10 @@ data class FashPromoSlideDef(
     val navigation: FashPromoNav? = null,
 )
 
-/** Promo carousel card height — shared with [FashBottomPromoAdStrip] on Orders / Notifications. */
+/** Promo carousel card height — shared with [FashPromoSliderAdFooter] on Orders / Notifications. */
 val FashPromoCarouselCardHeight = 112.dp
+/** Compact promo height for Home feed footer (below brand strip). */
+val FashPromoCompactCarouselCardHeight = 72.dp
 private const val AutoAdvanceMs = 6_500L
 
 /**
@@ -90,6 +93,7 @@ fun FashPromoSlider(
     contentPadding: PaddingValues = PaddingValues(
         horizontal = FashTheme.spacing.editorialStart,
     ),
+    cardHeight: Dp = FashPromoCarouselCardHeight,
     onSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
     if (slides.isEmpty()) return
@@ -129,6 +133,7 @@ fun FashPromoSlider(
                 badge = slide.badgeText?.takeIf { it.isNotBlank() }
                     ?: stringResource(R.string.orders_promo_badge),
                 contentDescription = cd,
+                cardHeight = cardHeight,
                 onClick = { onSlideClick(slide, page) },
             )
         }
@@ -179,8 +184,10 @@ private fun FashPromoCard(
     slide: FashPromoSlideDef,
     badge: String,
     contentDescription: String,
+    cardHeight: Dp = FashPromoCarouselCardHeight,
     onClick: () -> Unit,
 ) {
+    val compact = cardHeight < FashPromoCarouselCardHeight
     val banner = slide.bannerImageUrl?.takeIf { it.isNotBlank() }
     val titleColor = if (banner != null) Color.White else slide.gradient.fashReadableOnGradient()
     val subtitleColor = titleColor.copy(alpha = 0.92f)
@@ -193,7 +200,7 @@ private fun FashPromoCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(FashPromoCarouselCardHeight)
+            .height(cardHeight)
             .semantics(mergeDescendants = true) {
                 this.contentDescription = contentDescription
             }
@@ -234,30 +241,39 @@ private fun FashPromoCard(
             color = titleColor.copy(alpha = 0.85f),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(
+                    horizontal = if (compact) 10.dp else 16.dp,
+                    vertical = if (compact) 6.dp else 12.dp,
+                ),
         )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.CenterStart)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .padding(end = 48.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(
+                    horizontal = if (compact) 10.dp else 16.dp,
+                    vertical = if (compact) 8.dp else 12.dp,
+                )
+                .padding(end = if (compact) 32.dp else 48.dp, bottom = if (compact) 4.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
         ) {
             Text(
                 text = titleStr,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                style = (if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall)
+                    .copy(fontWeight = FontWeight.Bold),
                 color = titleColor,
-                maxLines = 2,
+                maxLines = if (compact) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = subtitleStr,
-                style = MaterialTheme.typography.bodySmall,
-                color = subtitleColor,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (!compact || subtitleStr.isNotBlank()) {
+                Text(
+                    text = subtitleStr,
+                    style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                    color = subtitleColor,
+                    maxLines = if (compact) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

@@ -250,7 +250,7 @@ private fun stepTitle(step: AppTourStep): String = stringResource(
     when (step) {
         AppTourStep.Intro -> R.string.app_tour_intro_title
         AppTourStep.NavHome -> R.string.app_tour_nav_home_title
-        AppTourStep.NavExplore -> R.string.app_tour_nav_explore_title
+        AppTourStep.NavOrders -> R.string.app_tour_nav_orders_title
         AppTourStep.NavPost -> R.string.app_tour_nav_post_title
         AppTourStep.NavChat -> R.string.app_tour_nav_chat_title
         AppTourStep.NavProfile -> R.string.app_tour_nav_profile_title
@@ -263,7 +263,7 @@ private fun stepBody(step: AppTourStep): String = stringResource(
     when (step) {
         AppTourStep.Intro -> R.string.app_tour_intro_body
         AppTourStep.NavHome -> R.string.app_tour_nav_home_body
-        AppTourStep.NavExplore -> R.string.app_tour_nav_explore_body
+        AppTourStep.NavOrders -> R.string.app_tour_nav_orders_body
         AppTourStep.NavPost -> R.string.app_tour_nav_post_body
         AppTourStep.NavChat -> R.string.app_tour_nav_chat_body
         AppTourStep.NavProfile -> R.string.app_tour_nav_profile_body

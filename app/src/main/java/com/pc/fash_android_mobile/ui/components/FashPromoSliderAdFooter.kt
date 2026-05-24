@@ -2,9 +2,7 @@ package com.pc.fash_android_mobile.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -12,29 +10,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-/** Gap between the promo carousel and the “Khám phá thời trang pre-loved” card. */
-val FashPromoSliderToAdStripGap = 12.dp
-
 /**
- * Pinned footer height (divider + slider + gap + ad strip), excluding navigation-bar inset on the ad strip.
+ * Pinned footer height (divider + slider), excluding navigation-bar inset.
  * Use for list [contentPadding] bottom inset on seller profile and similar screens.
  */
 val FashPromoSliderAdFooterContentHeight =
-    1.dp + 6.dp + FashPromoCarouselCardHeight + 4.dp + FashPromoSliderToAdStripGap + FashPromoCarouselCardHeight
+    1.dp + 6.dp + FashPromoCarouselCardHeight + 4.dp
 
 /**
- * Compact bottom chrome for Orders / Notifications: divider → slider → gap → ad card
- * with the **same height as the promo carousel card** ([FashPromoCarouselCardHeight]).
- *
- * @param edgeToEdgeAdStrip When true, the pre-loved banner is full-bleed (no side inset).
+ * Compact bottom chrome for Orders / Notifications: divider → CMS promo slider only.
  */
 @Composable
 fun FashPromoSliderAdFooter(
     modifier: Modifier = Modifier,
-    onExploreClick: () -> Unit,
     slides: List<FashPromoSlideDef> = emptyList(),
     onSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
-    edgeToEdgeAdStrip: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(
@@ -54,13 +44,6 @@ fun FashPromoSliderAdFooter(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 horizontal = FashTheme.spacing.editorialStart,
             ),
-        )
-        Spacer(Modifier.height(FashPromoSliderToAdStripGap))
-        FashBottomPromoAdStrip(
-            modifier = Modifier.fillMaxWidth(),
-            onExploreClick = onExploreClick,
-            cardHeight = FashPromoCarouselCardHeight,
-            edgeToEdge = edgeToEdgeAdStrip,
         )
     }
 }

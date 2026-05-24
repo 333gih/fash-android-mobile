@@ -55,7 +55,18 @@ fun BuyerHomeJourneyRow(
     onSavedClick: () -> Unit,
     onMessagesClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
+    if (compact) {
+        BuyerHomeJourneyCompactBar(
+            stats = stats,
+            onDeliveringClick = onDeliveringClick,
+            onSavedClick = onSavedClick,
+            onMessagesClick = onMessagesClick,
+            modifier = modifier,
+        )
+        return
+    }
     var titleVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { titleVisible = true }
     val titleAlpha by animateFloatAsState(
@@ -134,6 +145,109 @@ fun BuyerHomeJourneyRow(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+        }
+    }
+}
+
+/** Slim journey chips — icon, label, count in one horizontal row (no section title). */
+@Composable
+fun BuyerHomeJourneyCompactBar(
+    stats: BuyerHomeStats,
+    onDeliveringClick: () -> Unit,
+    onSavedClick: () -> Unit,
+    onMessagesClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = FashTheme.spacing.editorialStart,
+                end = FashTheme.spacing.editorialEnd,
+                top = 6.dp,
+                bottom = 4.dp,
+            ),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        JourneyCompactChip(
+            icon = {
+                Icon(
+                    Icons.Default.LocalShipping,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = FashColors.Primary,
+                )
+            },
+            label = stringResource(R.string.home_journey_delivering),
+            value = formatJourneyCount(stats.activeDeliveryOrders),
+            onClick = onDeliveringClick,
+            modifier = Modifier.weight(1f),
+        )
+        JourneyCompactChip(
+            icon = {
+                Icon(
+                    Icons.Outlined.BookmarkBorder,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = FashColors.Primary,
+                )
+            },
+            label = stringResource(R.string.home_journey_saved),
+            value = formatJourneyCount(stats.savedListingsCount),
+            onClick = onSavedClick,
+            modifier = Modifier.weight(1f),
+        )
+        JourneyCompactChip(
+            icon = {
+                Icon(
+                    Icons.Default.ChatBubbleOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = FashColors.Primary,
+                )
+            },
+            label = stringResource(R.string.home_journey_messages),
+            value = formatJourneyCount(stats.unreadMessages),
+            onClick = onMessagesClick,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun JourneyCompactChip(
+    icon: @Composable () -> Unit,
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(scheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        icon()
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+            )
         }
     }
 }

@@ -98,9 +98,9 @@ fun OrdersScreen(
     modifier: Modifier = Modifier,
     viewModel: OrdersViewModel,
     onBack: () -> Unit,
+    /** When true, omits the screen [TopAppBar] — host provides main navigation chrome. */
+    embeddedInMainNav: Boolean = false,
     /** Bottom promo strip — same role as chat inbox (e.g. open Explore). */
-    onExploreClick: () -> Unit = {},
-    /** Slider above ad: [slideId] from [FashPromoSlideDef], page index for analytics / deep links. */
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     /** When non-null, replaces default promo slides (e.g. remote config / admin CMS). */
     promoSlides: List<FashPromoSlideDef> = emptyList(),
@@ -124,6 +124,7 @@ fun OrdersScreen(
     }
 
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+        if (!embeddedInMainNav) {
         TopAppBar(
             title = {
                 Text(
@@ -146,6 +147,7 @@ fun OrdersScreen(
                 titleContentColor = MaterialTheme.colorScheme.onSurface,
             ),
         )
+        }
 
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -268,7 +270,6 @@ fun OrdersScreen(
                                         ) {
                                             OrdersEmptyHint(
                                                 isBuying = selectedTab == 0,
-                                                onExploreClick = onExploreClick,
                                             )
                                         }
                                     }
@@ -319,10 +320,8 @@ fun OrdersScreen(
 
             FashPromoSliderAdFooter(
                 modifier = Modifier.fillMaxWidth(),
-                onExploreClick = onExploreClick,
                 slides = promoSlides,
                 onSlideClick = onPromoSlideClick,
-                edgeToEdgeAdStrip = true,
             )
         }
     }
@@ -397,7 +396,6 @@ private fun OrdersFilteredEmptyHint(onClearFilter: () -> Unit) {
 @Composable
 private fun OrdersEmptyHint(
     isBuying: Boolean,
-    onExploreClick: () -> Unit,
 ) {
     FashEmptyState(
         icon = if (isBuying) Icons.Outlined.ShoppingBag else Icons.Outlined.Storefront,
@@ -409,16 +407,6 @@ private fun OrdersEmptyHint(
         ),
         modifier = Modifier.fillMaxSize(),
         scrollable = false,
-        footer = {
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedButton(
-                onClick = onExploreClick,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
-                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
-            ) {
-                Text(stringResource(R.string.home_empty_cta_explore))
-            }
-        },
     )
 }
 

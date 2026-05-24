@@ -37,7 +37,17 @@ fun HomeQuickActionsRow(
     onSell: () -> Unit,
     onOrders: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
+    if (compact) {
+        HomeQuickActionsCompactRow(
+            onExplore = onExplore,
+            onSell = onSell,
+            onOrders = onOrders,
+            modifier = modifier,
+        )
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -113,6 +123,93 @@ fun HomeQuickActionsRow(
                 }
             }
         }
+    }
+}
+
+/** Inline shortcut pills — no section title, minimal vertical space. */
+@Composable
+fun HomeQuickActionsCompactRow(
+    onExplore: () -> Unit,
+    onSell: () -> Unit,
+    onOrders: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = FashTheme.spacing.editorialStart,
+                end = FashTheme.spacing.editorialEnd,
+                top = 2.dp,
+                bottom = 6.dp,
+            ),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        QuickActionCompactChip(
+            label = stringResource(R.string.home_quick_explore),
+            onClick = onExplore,
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Explore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = FashColors.Primary,
+            )
+        }
+        QuickActionCompactChip(
+            label = stringResource(R.string.home_quick_sell),
+            onClick = onSell,
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = FashColors.Primary,
+            )
+        }
+        QuickActionCompactChip(
+            label = stringResource(R.string.home_quick_orders),
+            onClick = onOrders,
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocalMall,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = FashColors.Primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionCompactChip(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(scheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        icon()
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onSurface,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 

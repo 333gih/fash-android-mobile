@@ -51,7 +51,7 @@ private val BuyerDeliveringStatuses = setOf(
     "shipping",
 )
 
-private const val HomeHuntTodayPreviewLimit = 8
+private const val HomeHuntTodayPreviewLimit = 12
 
 /** Size of one follow-feed page (`GET /api/v1/listings/home`). */
 internal const val HomeFollowFeedPageSize = 20
@@ -108,6 +108,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _discoveryLoading = MutableStateFlow(false)
+    val discoveryLoading: StateFlow<Boolean> = _discoveryLoading.asStateFlow()
+
     /** Follow-feed pagination — guards duplicate in-flight requests (no UI spinner). */
     private val _isLoadingMore = MutableStateFlow(false)
 
@@ -117,6 +120,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _scrollHomeToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollHomeToTop: SharedFlow<Unit> = _scrollHomeToTop.asSharedFlow()
+
+    private val _selectedFeedTab = MutableStateFlow(HomeFeedTab.HuntToday)
+    val selectedFeedTab: StateFlow<HomeFeedTab> = _selectedFeedTab.asStateFlow()
+
+    fun setSelectedFeedTab(tab: HomeFeedTab) {
+        _selectedFeedTab.value = tab
+    }
+
+    /** Coerce selection when guest mode hides personalized tabs (e.g. after sign-out). */
+    fun normalizeSelectedFeedTab(isGuestBrowse: Boolean) {
+        val allowed = HomeFeedTab.tabsFor(isGuestBrowse)
+        if (_selectedFeedTab.value !in allowed) {
+            _selectedFeedTab.value = HomeFeedTab.HuntToday
+        }
+    }
 
     /** True when last load failed (network/server error). User can retry. */
     private val _loadError = MutableStateFlow(false)
@@ -179,10 +197,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun reloadDiscoveryBundle() {
+        _discoveryLoading.value = true
         homeDiscoveryRepository.loadDiscoveryBundle().fold(
-            onSuccess = { _discoveryBundle.value = it },
+            onSuccess = { bundle ->
+                _discoveryBundle.value = bundle
+                if (bundle.huntToday.isNotEmpty()) {
+                    _huntTodayItems.value = bundle.huntToday
+                }
+            },
             onFailure = { /* keep last good payload; stub should not fail */ },
         )
+        _discoveryLoading.value = false
     }
 
     /**

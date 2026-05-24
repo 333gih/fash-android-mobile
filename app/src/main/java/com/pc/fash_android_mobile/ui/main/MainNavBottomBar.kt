@@ -123,19 +123,19 @@ fun MainNavBottomBar(
                     onTourAnchorPositioned = onTourAnchorPositioned,
                 )
                 MainNavSideItem(
-                    tab = MainTab.Explore,
-                    selected = selectedTab == MainTab.Explore.ordinal,
-                    showLoading = isTabNavLoading(MainTab.Explore),
+                    tab = MainTab.Orders,
+                    selected = selectedTab == MainTab.Orders.ordinal,
+                    showLoading = isTabNavLoading(MainTab.Orders),
                     chatUnreadCount = 0,
                     onClick = {
-                        if (selectedTab == MainTab.Explore.ordinal) {
-                            onTabReselected(MainTab.Explore)
+                        if (selectedTab == MainTab.Orders.ordinal) {
+                            onTabReselected(MainTab.Orders)
                         } else {
-                            onTabChange(MainTab.Explore.ordinal)
+                            onTabChange(MainTab.Orders.ordinal)
                         }
                     },
                     tourAnchorsEnabled = tourAnchorsEnabled,
-                    tourAnchor = FeatureTourAnchor.BottomExplore,
+                    tourAnchor = FeatureTourAnchor.BottomOrders,
                     onTourAnchorPositioned = onTourAnchorPositioned,
                 )
                 MainNavPostFab(

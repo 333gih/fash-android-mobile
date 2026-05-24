@@ -59,8 +59,6 @@ fun FollowConnectionsScreen(
     modifier: Modifier = Modifier,
     viewModel: FollowConnectionsViewModel,
     onBack: () -> Unit,
-    /** Same pattern as chat empty inbox — opens Explore. */
-    onExploreClick: () -> Unit = {},
     onUserClick: (UserSearchResult) -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
@@ -153,7 +151,6 @@ fun FollowConnectionsScreen(
                             emptyContent = {
                                 FollowConnectionsEmptyState(
                                     isFollowingTab = true,
-                                    onExploreClick = onExploreClick,
                                 )
                             },
                         )
@@ -169,7 +166,6 @@ fun FollowConnectionsScreen(
                             emptyContent = {
                                 FollowConnectionsEmptyState(
                                     isFollowingTab = false,
-                                    onExploreClick = onExploreClick,
                                 )
                             },
                         )
@@ -183,7 +179,6 @@ fun FollowConnectionsScreen(
 @Composable
 private fun FollowConnectionsEmptyState(
     isFollowingTab: Boolean,
-    onExploreClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val title = stringResource(
@@ -232,17 +227,6 @@ private fun FollowConnectionsEmptyState(
             ) {
                 FashEmptyBulletTipLine(text = tip1)
                 FashEmptyBulletTipLine(text = tip2)
-            }
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onExploreClick,
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
-            ) {
-                Text(
-                    text = stringResource(R.string.home_empty_cta_explore),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                )
             }
         },
     )

@@ -178,13 +178,16 @@ fun FashSkeletonRail(
 
 /**
  * 2-column grid skeleton for follow feed (Home) and main Explore grid.
+ * [staggered] alternates tile heights to match masonry listing cards.
  */
 @Composable
 fun FashSkeletonGrid(
     modifier: Modifier = Modifier,
     rows: Int = 4,
     imageAspectRatio: Float = 4f / 5f,
+    staggered: Boolean = false,
 ) {
+    val leftRatios = listOf(3f / 4f, 4f / 5f, 5f / 6f)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -194,18 +197,22 @@ fun FashSkeletonGrid(
             ),
         verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing3),
     ) {
-        repeat(rows) {
+        repeat(rows) { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
             ) {
                 FashSkeletonListingCard(
                     modifier = Modifier.weight(1f),
-                    imageAspectRatio = imageAspectRatio,
+                    imageAspectRatio = if (staggered) leftRatios[row % leftRatios.size] else imageAspectRatio,
                 )
                 FashSkeletonListingCard(
                     modifier = Modifier.weight(1f),
-                    imageAspectRatio = imageAspectRatio,
+                    imageAspectRatio = if (staggered) {
+                        leftRatios[(row + 1) % leftRatios.size]
+                    } else {
+                        imageAspectRatio
+                    },
                 )
             }
         }

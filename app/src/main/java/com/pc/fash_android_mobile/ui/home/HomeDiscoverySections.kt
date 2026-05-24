@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -68,7 +69,151 @@ import kotlinx.coroutines.isActive
 
 /** Hero ratio inside the editorial gutter (width = screen minus [FashTheme.spacing.editorialStart/End]). */
 private val EditorialImageAspect = 16f / 9f
+private val EditorialCompactImageAspect = 2.4f
 private const val EditorialAutoAdvanceMs = 5_200L
+
+/**
+ * Slim editorial strip for Home — badge + horizontal swipe, smaller cards than [HomeEditorialPostsSection].
+ */
+@Composable
+fun HomeEditorialCompactStrip(
+    posts: List<HomeEditorialPostStub>,
+    onPostClick: (HomeEditorialPostStub) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (posts.isEmpty()) return
+    val spacing = FashTheme.spacing
+    val pagerState = rememberPagerState(pageCount = { posts.size })
+
+    LaunchedEffect(posts.size) {
+        if (posts.size <= 1) return@LaunchedEffect
+        while (isActive) {
+            delay(EditorialAutoAdvanceMs)
+            runCatching {
+                val next = (pagerState.currentPage + 1) % posts.size
+                pagerState.animateScrollToPage(next)
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                start = spacing.editorialStart,
+                end = spacing.editorialEnd,
+                top = 4.dp,
+                bottom = 6.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(spacing.radiusPill),
+                color = FashColors.Primary.copy(alpha = 0.12f),
+            ) {
+                androidx.compose.material3.Text(
+                    text = stringResource(R.string.home_edited_by_fash_badge),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = FashColors.Primary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+            Text(
+                text = stringResource(R.string.home_section_editorial_title),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(
+                start = spacing.editorialStart,
+                end = spacing.editorialEnd,
+            ),
+            pageSpacing = spacing.spacing2,
+        ) { page ->
+            HomeEditorialCompactCard(
+                post = posts[page],
+                onClick = { onPostClick(posts[page]) },
+            )
+        }
+        if (posts.size > 1) {
+            HomeEditorialPagerDots(
+                pageCount = posts.size,
+                currentPage = pagerState.currentPage,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeEditorialCompactCard(
+    post: HomeEditorialPostStub,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val spacing = FashTheme.spacing
+    val title = post.title.ifBlank { post.slug }
+    val resolved = post.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(spacing.radiusSoftMin))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(spacing.radiusSoftMin),
+        color = scheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(0.38f)
+                    .aspectRatio(EditorialCompactImageAspect)
+                    .background(scheme.surfaceVariant),
+            ) {
+                if (resolved != null) {
+                    FashAsyncImage(
+                        model = resolved,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(0.62f)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.home_editorial_read_more),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = FashColors.Primary,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun HomeEditorialPostsSection(

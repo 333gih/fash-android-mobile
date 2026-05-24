@@ -61,7 +61,6 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -199,8 +198,6 @@ fun ChatDetailScreen(
     otherInboxUnreadCount: Int = 0,
     /** Open the counterparty’s public seller profile (by username). */
     onOtherUserProfileClick: (username: String) -> Unit = {},
-    /** Opens the orders list (same as main app bar). */
-    onOrdersClick: () -> Unit = {},
     /**
      * When non-null, shows [ChatOrderDetailOverlay] as a **child** of this screen so chat stays
      * composed under the sheet (stable with main nav / bottom bar; avoids overlay–sibling ordering issues).
@@ -336,14 +333,6 @@ fun ChatDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOrdersClick) {
-                        Icon(
-                            imageVector = Icons.Default.LocalMall,
-                            contentDescription = stringResource(R.string.orders_icon_cd),
-                            tint = FashColors.Primary,
-                        )
-                    }
-                    // Report: hide flow when this thread already has the viewer's report (server `my_report`).
                     if (detail?.myReport == null) {
                         var expanded by remember { mutableStateOf(false) }
                         Box {

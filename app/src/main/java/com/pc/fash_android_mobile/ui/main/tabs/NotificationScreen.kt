@@ -98,7 +98,6 @@ fun NotificationScreen(
     modifier: Modifier = Modifier,
     viewModel: NotificationsViewModel,
     onBack: () -> Unit,
-    onExploreClick: () -> Unit = {},
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     onOpenOrder: (String) -> Unit = {},
@@ -170,7 +169,7 @@ fun NotificationScreen(
         Box(Modifier.fillMaxSize()) {
             Scaffold(
                 // Match OrdersScreen: do not reserve bottom system bar in content padding — the promo
-                // footer (FashBottomPromoAdStrip edgeToEdge) applies navigation-bar padding internally.
+                // Match OrdersScreen: bottom inset handled inside the promo footer.
                 contentWindowInsets = WindowInsets.safeDrawing.only(
                     WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
                 ),
@@ -428,10 +427,8 @@ fun NotificationScreen(
 
                     FashPromoSliderAdFooter(
                         modifier = Modifier.fillMaxWidth(),
-                        onExploreClick = onExploreClick,
                         slides = promoSlides,
                         onSlideClick = onPromoSlideClick,
-                        edgeToEdgeAdStrip = true,
                     )
                 }
             }

@@ -24,4 +24,12 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     SizingMatch(R.string.guest_login_reason_sizing_match),
     /** Explore “Shop nearby” filter — needs a default shipping address or manual pick. */
     BrowseLocation(R.string.guest_login_reason_browse_location),
+    /** Home “Gợi ý riêng cho bạn” — personalized recommendations need an account. */
+    HomeForYou(R.string.guest_login_reason_home_for_you),
+    /** Home “Từ shop bạn theo dõi” — follow feed requires sign-in. */
+    HomeFollowing(R.string.guest_login_reason_home_following),
+    /** Home “Đúng gu của bạn” — style picks use profile taste signals. */
+    HomeStylePicks(R.string.guest_login_reason_home_style),
+    /** Home “Tương tự món đã lưu” — needs wishlist history. */
+    HomeSimilarSaved(R.string.guest_login_reason_home_similar),
 }

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Person
@@ -58,8 +57,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.text.font.FontWeight
-import com.pc.fash_android_mobile.ui.explore.ExploreScreen
-import com.pc.fash_android_mobile.ui.explore.ExploreTopBar
+import com.pc.fash_android_mobile.ui.orders.OrdersScreen
+import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
+import com.pc.fash_android_mobile.ui.explore.ExploreOverlayHost
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
@@ -82,7 +82,6 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
-import com.pc.fash_android_mobile.ui.guest.GuestTopBarSignInAction
 import com.pc.fash_android_mobile.ui.guest.GuestTabPlaceholder
 import com.pc.fash_android_mobile.ui.onboarding.AppFeatureTourOverlay
 import com.pc.fash_android_mobile.ui.onboarding.AppTourStep
@@ -117,18 +116,19 @@ enum class MainTab(
     @StringRes val headerSuffixRes: Int,
 ) {
     Home(R.string.nav_home, Icons.Default.Home, R.string.brand_header_suffix_home),
-    Explore(R.string.nav_explore, Icons.Default.Explore, R.string.brand_header_suffix_explore),
+    Orders(R.string.nav_orders, Icons.Default.LocalMall, R.string.brand_header_suffix_orders),
     Post(R.string.nav_post, Icons.Default.Add, R.string.brand_header_suffix_post),
     Chat(R.string.nav_chat, Icons.Default.ChatBubbleOutline, R.string.brand_header_suffix_chat),
     Profile(R.string.nav_profile, Icons.Default.Person, R.string.brand_header_suffix_profile),
 }
 
-private val guestLockedTabs = setOf(MainTab.Post, MainTab.Chat, MainTab.Profile)
+private val guestLockedTabs = setOf(MainTab.Orders, MainTab.Post, MainTab.Chat, MainTab.Profile)
 
 private fun MainTab.guestLoginReason(): GuestLoginReason? = when (this) {
     MainTab.Profile -> GuestLoginReason.Profile
     MainTab.Chat -> GuestLoginReason.Chat
     MainTab.Post -> GuestLoginReason.Post
+    MainTab.Orders -> GuestLoginReason.Orders
     else -> null
 }
 
@@ -141,6 +141,7 @@ fun MainNavScreen(
     isLoggingOut: Boolean,
     homeViewModel: com.pc.fash_android_mobile.ui.home.HomeViewModel,
     exploreViewModel: com.pc.fash_android_mobile.ui.explore.ExploreViewModel,
+    ordersViewModel: OrdersViewModel,
     postViewModel: com.pc.fash_android_mobile.ui.post.PostViewModel,
     addressBookViewModel: AddressBookViewModel,
     profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel,
@@ -190,6 +191,8 @@ fun MainNavScreen(
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
     selectedTab: Int,
     onTabChange: (Int) -> Unit,
+    /** Increment to open the Explore overlay (search + filters) from outside MainNavScreen. */
+    exploreOverlayOpenNonce: Long = 0L,
     /**
      * When returning true, the default reselect reload (scroll-to-top + refresh) is skipped.
      * Use when a fullscreen overlay (e.g. seller shop) is open on top of the selected tab.
@@ -207,6 +210,7 @@ fun MainNavScreen(
     var wasNotificationOverlayVisible by remember { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
     var showChangePasswordScreen by rememberSaveable { mutableStateOf(false) }
+    var showExploreOverlay by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     var tourStep by remember { mutableStateOf(AppTourStep.Intro) }
     val tourAnchors = remember { mutableStateMapOf<FeatureTourAnchor, LayoutCoordinates>() }
@@ -231,7 +235,31 @@ fun MainNavScreen(
     val exploreRefreshing by exploreViewModel.isRefreshing.collectAsState()
     val chatRefreshing by chatViewModel.isRefreshing.collectAsState()
     val profileRefreshing by profileViewModel.isRefreshing.collectAsState()
+    val ordersRefreshing by ordersViewModel.isRefreshing.collectAsState()
+    val ordersLoading by ordersViewModel.isLoading.collectAsState()
     val postNavReloading by postViewModel.navReselectLoading.collectAsState()
+
+    val openExploreOverlay: (expandSearch: Boolean) -> Unit = { expandSearch ->
+        exploreViewModel.onExploreTabSelected()
+        if (expandSearch) {
+            exploreViewModel.requestSearchBarExpanded()
+        }
+        showExploreOverlay = true
+    }
+
+    val closeExploreOverlay: () -> Unit = {
+        showExploreOverlay = false
+        exploreViewModel.setSearchBarExpanded(false)
+        if (tabs.getOrNull(selectedTab) != MainTab.Home) {
+            onTabChange(MainTab.Home.ordinal)
+        }
+    }
+
+    LaunchedEffect(exploreOverlayOpenNonce) {
+        if (exploreOverlayOpenNonce > 0L) {
+            openExploreOverlay(false)
+        }
+    }
 
     val defaultMainTabReselected: (MainTab) -> Unit = { tab ->
         when (tab) {
@@ -239,9 +267,8 @@ fun MainNavScreen(
                 homeViewModel.requestScrollHomeToTop()
                 homeViewModel.refresh()
             }
-            MainTab.Explore -> {
-                exploreViewModel.requestScrollExploreToTop()
-                exploreViewModel.refresh()
+            MainTab.Orders -> {
+                ordersViewModel.refreshOrders()
             }
             MainTab.Post -> postViewModel.reloadOnNavReselect()
             MainTab.Chat -> chatViewModel.refresh()
@@ -263,7 +290,7 @@ fun MainNavScreen(
         } else {
             when (tab) {
                 MainTab.Home -> homeRefreshing
-                MainTab.Explore -> exploreRefreshing
+                MainTab.Orders -> ordersRefreshing || ordersLoading
                 MainTab.Post -> postNavReloading
                 MainTab.Chat -> chatRefreshing
                 MainTab.Profile -> profileRefreshing
@@ -306,10 +333,8 @@ fun MainNavScreen(
     }
     val inboxUnreadTotal by notificationsViewModel.unreadCount.collectAsState()
     val notificationDetailId by notificationsViewModel.selectedDetailId.collectAsState()
-    val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val openExploreSearch: () -> Unit = {
-        exploreViewModel.requestSearchBarExpanded()
-        onTabChange(MainTab.Explore.ordinal)
+        openExploreOverlay(true)
     }
     val openNotifications: () -> Unit = {
         if (isGuestMode) {
@@ -318,13 +343,14 @@ fun MainNavScreen(
             showNotificationScreen = true
         }
     }
-    val openOrders: () -> Unit = {
+    val openOrdersTab: () -> Unit = {
         if (isGuestMode) {
             onRequestLogin(GuestLoginReason.Orders)
         } else {
-            onOrdersClick()
+            onTabChange(MainTab.Orders.ordinal)
         }
     }
+    val openOrders: () -> Unit = openOrdersTab
     val openGuestSignIn: () -> Unit = { onRequestLogin(GuestLoginReason.TopBar) }
     val isPostListingFlow = tabs.getOrNull(selectedTab) == MainTab.Post
     val featureTourVisible = featureTourActive && !isGuestMode &&
@@ -346,7 +372,7 @@ fun MainNavScreen(
     LaunchedEffect(selectedTab, featureTourActive) {
         if (!featureTourActive) return@LaunchedEffect
         val tab = tabs.getOrNull(selectedTab)
-        if (tab != MainTab.Home && tab != MainTab.Chat && tab != MainTab.Post) {
+        if (tab != MainTab.Home && tab != MainTab.Chat && tab != MainTab.Post && tab != MainTab.Orders) {
             tourAnchors.remove(FeatureTourAnchor.TopActionsRow)
         }
     }
@@ -371,21 +397,18 @@ fun MainNavScreen(
         topBar = {
             if (!isPostListingFlow) {
                 when (val tab = tabs.getOrNull(selectedTab)) {
-                MainTab.Explore -> ExploreTopBar(
-                    viewModel = exploreViewModel,
+                MainTab.Orders -> MainTopBar(
+                    suffixRes = tab.headerSuffixRes,
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
-                    onOrdersClick = openOrders,
+                    onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
-                    onGuestSignInClick = openGuestSignIn,
                 )
                 MainTab.Profile -> ProfileTopBar(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
-                    onOrdersClick = openOrders,
                     showGuestSignIn = isGuestMode,
-                    onGuestSignInClick = openGuestSignIn,
                     onLogout = onLogout,
                     onOpenSettings = {
                         showNotificationScreen = false
@@ -398,9 +421,7 @@ fun MainNavScreen(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
-                    onOrdersClick = openOrders,
                     showGuestSignIn = isGuestMode,
-                    onGuestSignInClick = openGuestSignIn,
                     searchHintAnimation = true,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
@@ -411,7 +432,6 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
-                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -420,9 +440,7 @@ fun MainNavScreen(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
-                    onOrdersClick = openOrders,
                     showGuestSignIn = isGuestMode,
-                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -431,9 +449,7 @@ fun MainNavScreen(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
-                    onOrdersClick = openOrders,
                     showGuestSignIn = isGuestMode,
-                    onGuestSignInClick = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -478,14 +494,12 @@ fun MainNavScreen(
         ) {
             LaunchedEffect(selectedTab) {
                 val tab = tabs.getOrNull(selectedTab)
-                if (tab == MainTab.Explore) {
-                    exploreViewModel.onExploreTabSelected()
-                } else {
+                if (!showExploreOverlay) {
                     exploreViewModel.setSearchBarExpanded(false)
                 }
                 when (tab) {
                     MainTab.Home -> homeViewModel.refresh()
-                    MainTab.Explore -> Unit
+                    MainTab.Orders -> ordersViewModel.refreshOrders()
                     MainTab.Post -> postViewModel.reloadOnNavReselect()
                     MainTab.Chat -> {
                         chatViewModel.loadConversations()
@@ -525,13 +539,11 @@ fun MainNavScreen(
                     MainTab.Home -> HomeFeedContent(
                         viewModel = homeViewModel,
                         onListingClick = onListingClick,
-                        onNavigateToExplore = { onTabChange(MainTab.Explore.ordinal) },
+                        onNavigateToExplore = { openExploreOverlay(false) },
                         onNavigateToExploreWithTag = { tagName ->
-                            // tagName is the display name. We look up the ID from the HomeViewModel's
-                            // cached discovery bundle so we can use toggleInterestChipWithId directly.
                             val chipId = homeViewModel.trendingStyleTagChipIdForName(tagName)
                             exploreViewModel.toggleInterestChipWithId(chipId, tagName)
-                            onTabChange(MainTab.Explore.ordinal)
+                            openExploreOverlay(false)
                         },
                         onOrdersClick = openOrders,
                         onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: openOrders,
@@ -561,20 +573,22 @@ fun MainNavScreen(
                         // Home "Add your size" banner routes to the same editor as Explore's nudge.
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
                     )
-                    MainTab.Explore -> ExploreScreen(
-                        viewModel = exploreViewModel,
-                        onListingClick = onListingClick,
-                        onFeaturedSellerClick = onFeaturedSellerClick,
-                        onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
-                        onPromoSlideClick = onPromoSlideClick,
-                        promoSlides = promoSlides,
-                        isGuestMode = isGuestMode,
-                        onRequestLogin = onRequestLogin,
-                        // "Match my size" nudge → open the profile editor where the user can
-                        // add a reference size/measurements (reuses the same flow as edit profile).
-                        onOpenSizingSetup = onEditProfile,
-                        onOpenShippingAddresses = onShippingAddressesClick,
-                    )
+                    MainTab.Orders -> if (isGuestMode) {
+                        GuestTabPlaceholder(
+                            titleRes = R.string.guest_tab_orders_title,
+                            bodyRes = R.string.guest_tab_orders_body,
+                            onSignIn = { onRequestLogin(GuestLoginReason.Orders) },
+                        )
+                    } else {
+                        OrdersScreen(
+                            viewModel = ordersViewModel,
+                            onBack = {},
+                            embeddedInMainNav = true,
+                            onPromoSlideClick = onPromoSlideClick,
+                            promoSlides = promoSlides,
+                            onOrderClick = { order -> onOpenOrderFromNotification(order.orderId) },
+                        )
+                    }
                     MainTab.Post -> if (isGuestMode) {
                         GuestTabPlaceholder(
                             titleRes = R.string.guest_tab_post_title,
@@ -619,15 +633,40 @@ fun MainNavScreen(
                             onEditProfile = onEditProfile,
                             onShippingAddressesClick = onShippingAddressesClick,
                             onInviteFriendsClick = onInviteFriendsClick,
-                            onOrdersClick = onOrdersClick,
                             onListingClick = onListingClick,
                             onOpenFollowConnections = onOpenFollowConnections,
-                            onNavigateToExploreFromProfile = onNavigateToExploreFromProfile,
+                            onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
+                                exploreViewModel.openExploreFromProfileFilter(
+                                    categoryId = cat,
+                                    brandId = brand,
+                                    aestheticTagId = aes,
+                                    searchQuery = q,
+                                    countryId = countryId,
+                                    countryIso2 = countryIso2,
+                                )
+                                openExploreOverlay(q.isNotBlank())
+                            },
                         )
                     }
                 }
             }
         }
+    }
+    if (showExploreOverlay) {
+        ExploreOverlayHost(
+            modifier = Modifier.fillMaxSize(),
+            viewModel = exploreViewModel,
+            onClose = closeExploreOverlay,
+            onListingClick = onListingClick,
+            onFeaturedSellerClick = onFeaturedSellerClick,
+            onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
+            onPromoSlideClick = onPromoSlideClick,
+            promoSlides = promoSlides,
+            isGuestMode = isGuestMode,
+            onRequestLogin = onRequestLogin,
+            onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
+            onOpenShippingAddresses = onShippingAddressesClick,
+        )
     }
     if (featureTourVisible) {
         AppFeatureTourOverlay(
@@ -650,10 +689,6 @@ fun MainNavScreen(
             modifier = Modifier.fillMaxSize(),
             viewModel = notificationsViewModel,
             onBack = { showNotificationScreen = false },
-            onExploreClick = {
-                showNotificationScreen = false
-                onTabChange(MainTab.Explore.ordinal)
-            },
             onPromoSlideClick = onPromoSlideClick,
             promoSlides = promoSlides,
             onOpenOrder = { orderId ->
@@ -674,7 +709,7 @@ fun MainNavScreen(
             },
             onOpenExplore = {
                 showNotificationScreen = false
-                onTabChange(MainTab.Explore.ordinal)
+                openExploreOverlay(false)
             },
             onOpenInviteFriends = {
                 showNotificationScreen = false
@@ -686,7 +721,7 @@ fun MainNavScreen(
             },
             onPromoOpenOrders = {
                 showNotificationScreen = false
-                onOrdersClick()
+                openOrdersTab()
             },
         )
     }
@@ -730,24 +765,21 @@ fun MainNavScreen(
             onBack = { showChangePasswordScreen = false },
         )
     }
+    val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
     val hasMainNavOverlayBack = remember(
         featureTourVisible,
         showChangePasswordScreen,
         showSettingsScreen,
         showNotificationScreen,
         notificationDetailId,
-        selectedTab,
+        showExploreOverlay,
         exploreSearchExpanded,
     ) {
         featureTourVisible ||
             showChangePasswordScreen ||
             showSettingsScreen ||
             showNotificationScreen ||
-            (
-                selectedTab in tabs.indices &&
-                    tabs[selectedTab] == MainTab.Explore &&
-                    exploreSearchExpanded
-                )
+            showExploreOverlay
     }
     BackHandler(enabled = hasMainNavOverlayBack) {
         when {
@@ -757,6 +789,13 @@ fun MainNavScreen(
                 notificationsViewModel.closeDetail()
             }
             showNotificationScreen -> showNotificationScreen = false
+            showExploreOverlay -> {
+                if (exploreSearchExpanded) {
+                    exploreViewModel.setSearchBarExpanded(false)
+                } else {
+                    closeExploreOverlay()
+                }
+            }
             featureTourVisible -> {
                 if (tourStep == AppTourStep.Intro) {
                     AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
@@ -765,11 +804,6 @@ fun MainNavScreen(
                     val prev = AppTourStep.entries.getOrNull(tourStep.ordinal - 1)
                     if (prev != null) tourStep = prev
                 }
-            }
-            selectedTab in tabs.indices &&
-                tabs[selectedTab] == MainTab.Explore &&
-                exploreSearchExpanded -> {
-                exploreViewModel.setSearchBarExpanded(false)
             }
         }
     }
@@ -782,9 +816,7 @@ private fun ProfileTopBar(
     inboxUnreadCount: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
-    onOrdersClick: () -> Unit,
     showGuestSignIn: Boolean = false,
-    onGuestSignInClick: () -> Unit = {},
     onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
     isLoggingOut: Boolean,
@@ -800,20 +832,11 @@ private fun ProfileTopBar(
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            if (showGuestSignIn) {
-                GuestTopBarSignInAction(onClick = onGuestSignInClick)
-            } else {
+            if (!showGuestSignIn) {
                 FashInboxNotificationIconButton(
                     unreadCount = inboxUnreadCount,
                     onClick = onNotificationsClick,
                 )
-                IconButton(onClick = onOrdersClick) {
-                    Icon(
-                        imageVector = Icons.Default.LocalMall,
-                        contentDescription = stringResource(R.string.orders_icon_cd),
-                        tint = FashColors.Primary,
-                    )
-                }
             }
             // DropdownMenu must share a Box with the anchor IconButton; as a bare Row sibling it mispositions.
             if (!showGuestSignIn) {
@@ -858,9 +881,7 @@ private fun MainTopBar(
     inboxUnreadCount: Int,
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
-    onOrdersClick: (() -> Unit)? = null,
     showGuestSignIn: Boolean = false,
-    onGuestSignInClick: () -> Unit = {},
     searchHintAnimation: Boolean = false,
     tourTopBarAnchorsEnabled: Boolean = false,
     onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
@@ -895,22 +916,11 @@ private fun MainTopBar(
                             )
                         }
                     }
-                    if (showGuestSignIn) {
-                        GuestTopBarSignInAction(onClick = onGuestSignInClick)
-                    } else {
+                    if (!showGuestSignIn) {
                         FashInboxNotificationIconButton(
                             unreadCount = inboxUnreadCount,
                             onClick = onNotificationsClick,
                         )
-                        onOrdersClick?.let { openOrders ->
-                            IconButton(onClick = openOrders) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalMall,
-                                    contentDescription = stringResource(R.string.orders_icon_cd),
-                                    tint = FashColors.Primary,
-                                )
-                            }
-                        }
                     }
                 }
             }

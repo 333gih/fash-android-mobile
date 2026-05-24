@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -93,6 +94,7 @@ import com.pc.fash_android_mobile.ui.follow.FollowConnectionsViewModel
 import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.MainNavBottomBarOverlayInset
 import com.pc.fash_android_mobile.ui.main.GuestMainShell
+import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.main.MainNavScreen
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.ui.main.MainTab
@@ -486,6 +488,7 @@ class MainActivity : ComponentActivity() {
                 var activePromoCampaign by remember { mutableStateOf<AppPromoCampaign?>(null) }
                 var pendingPromoMainTab by remember { mutableIntStateOf(-1) }
                 var pendingPromoOpenOrders by remember { mutableStateOf(false) }
+                var pendingPromoOpenExplore by remember { mutableStateOf(false) }
                 fun presentAdminPromoIfEligible(promo: AppPromoCampaign) {
                     AppPromoPendingQueue.enqueue(promo)
                     if (
@@ -1056,6 +1059,7 @@ class MainActivity : ComponentActivity() {
                                         fashApp = fashApp,
                                         homeViewModel = homeViewModel,
                                         exploreViewModel = exploreViewModel,
+                                        ordersViewModel = ordersViewModel,
                                         postViewModel = postViewModel,
                                         addressBookViewModel = addressBookViewModel,
                                         profileViewModel = profileViewModel,
@@ -1110,7 +1114,6 @@ class MainActivity : ComponentActivity() {
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
-                                    var showOrdersScreen by rememberSaveable { mutableStateOf(false) }
                                     var showHomeDeliveringScreen by rememberSaveable { mutableStateOf(false) }
                                     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
@@ -1125,15 +1128,20 @@ class MainActivity : ComponentActivity() {
                                         showInviteFriendsScreen = true
                                         fashApp.pendingOpenInviteFriends.value = false
                                     }
+                                    var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
-                                    LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders) {
+                                    LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders, pendingPromoOpenExplore) {
                                         if (pendingPromoMainTab >= 0) {
                                             selectedTab = pendingPromoMainTab
                                             pendingPromoMainTab = -1
                                         }
                                         if (pendingPromoOpenOrders) {
-                                            showOrdersScreen = true
+                                            selectedTab = MainTab.Orders.ordinal
                                             pendingPromoOpenOrders = false
+                                        }
+                                        if (pendingPromoOpenExplore) {
+                                            exploreOverlayOpenNonce++
+                                            pendingPromoOpenExplore = false
                                         }
                                     }
                                     val pendingInboxOpenId by fashApp.pendingInboxNotificationId.collectAsState()
@@ -1152,7 +1160,7 @@ class MainActivity : ComponentActivity() {
                                         sellerShopRestoreContext = SellerShopRestoreContext()
                                         when (entry) {
                                             SellerShopEntrySource.Explore -> {
-                                                selectedTab = MainTab.Explore.ordinal
+                                                exploreOverlayOpenNonce++
                                                 restore.exploreSection?.let { exploreViewModel.setPrimarySection(it) }
                                             }
                                             SellerShopEntrySource.Chat -> {
@@ -1166,7 +1174,7 @@ class MainActivity : ComponentActivity() {
                                                 showFeaturedSellersAll = true
                                             }
                                             SellerShopEntrySource.Orders -> {
-                                                showOrdersScreen = true
+                                                selectedTab = MainTab.Orders.ordinal
                                             }
                                             SellerShopEntrySource.HomeDelivering -> {
                                                 showHomeDeliveringScreen = true
@@ -1189,16 +1197,12 @@ class MainActivity : ComponentActivity() {
                                     val navigateToExploreFromSellerShop: () -> Unit = {
                                         selectedListingId = null
                                         dismissSellerShopOverlay()
-                                        selectedTab = MainTab.Explore.ordinal
+                                        exploreOverlayOpenNonce++
                                     }
                                     /** Bottom nav while seller shop overlay is open — dismiss overlay then land on [tabIndex]. */
                                     val handleMainTabSelectedFromSellerShop: (Int) -> Unit = { tabIndex ->
-                                        if (tabIndex == MainTab.Explore.ordinal) {
-                                            navigateToExploreFromSellerShop()
-                                        } else {
-                                            dismissSellerShopOverlay()
-                                            selectedTab = tabIndex
-                                        }
+                                        dismissSellerShopOverlay()
+                                        selectedTab = tabIndex
                                     }
                                     val context = LocalContext.current
                                     LaunchedEffect(Unit) {
@@ -1219,11 +1223,6 @@ class MainActivity : ComponentActivity() {
                                     LaunchedEffect(showFollowConnections, followConnectionsInitialTab) {
                                         if (showFollowConnections) {
                                             followConnectionsViewModel.show(followConnectionsInitialTab)
-                                        }
-                                    }
-                                    ReloadWhenVisible(showOrdersScreen, selectedOrderId) {
-                                        if (showOrdersScreen && selectedOrderId == null) {
-                                            ordersViewModel.refreshOrders()
                                         }
                                     }
                                     ReloadWhenVisible(showHomeDeliveringScreen, selectedOrderId) {
@@ -1264,8 +1263,7 @@ class MainActivity : ComponentActivity() {
                                         promoSlidesViewModel.refresh()
                                     }
                                     ReloadWhenVisible(
-                                        !showOrdersScreen &&
-                                            !showHomeDeliveringScreen &&
+                                        !showHomeDeliveringScreen &&
                                             !showSellerPackagesScreen &&
                                             !showInviteFriendsScreen &&
                                             sellerPackageCheckout == null &&
@@ -1285,8 +1283,8 @@ class MainActivity : ComponentActivity() {
                                         val t = nav?.type?.trim()?.lowercase().orEmpty()
                                         when (t) {
                                             "", "none" -> Unit
-                                            "in_app_explore" -> selectedTab = MainTab.Explore.ordinal
-                                            "in_app_orders" -> showOrdersScreen = true
+                                            "in_app_explore" -> exploreOverlayOpenNonce++
+                                            "in_app_orders" -> selectedTab = MainTab.Orders.ordinal
                                             "in_app_chat" -> selectedTab = MainTab.Chat.ordinal
                                             "in_app_product_packages" -> {
                                                 sellerPackageCheckout = null
@@ -1338,7 +1336,6 @@ class MainActivity : ComponentActivity() {
                                         showEditProfile,
                                         showShippingAddressList,
                                         showAddAddressScreen,
-                                        showOrdersScreen,
                                         showHomeDeliveringScreen,
                                         showFollowConnections,
                                         showFeaturedSellersAll,
@@ -1354,7 +1351,6 @@ class MainActivity : ComponentActivity() {
                                                 showEditProfile ||
                                                 showShippingAddressList ||
                                                 showAddAddressScreen ||
-                                                showOrdersScreen ||
                                                 showHomeDeliveringScreen ||
                                                 showSellerPackagesScreen ||
                                                 sellerPackageCheckout != null ||
@@ -1421,6 +1417,7 @@ class MainActivity : ComponentActivity() {
                                             isLoggingOut = isLoggingOut,
                                             homeViewModel = homeViewModel,
                                             exploreViewModel = exploreViewModel,
+                                            ordersViewModel = ordersViewModel,
                                             postViewModel = postViewModel,
                                             addressBookViewModel = addressBookViewModel,
                                             profileViewModel = profileViewModel,
@@ -1485,7 +1482,7 @@ class MainActivity : ComponentActivity() {
                                                 showShippingAddressList = true
                                             },
                                             onInviteFriendsClick = { showInviteFriendsScreen = true },
-                                            onOrdersClick = { showOrdersScreen = true },
+                                            onOrdersClick = { selectedTab = MainTab.Orders.ordinal },
                                             onHomeDeliveringJourneyClick = { showHomeDeliveringScreen = true },
                                             onHomeEditorialPostClick = { post ->
                                                 val slug = post.slug.trim().ifBlank { post.id.trim() }
@@ -1522,7 +1519,7 @@ class MainActivity : ComponentActivity() {
                                                     countryIso2 = countryIso2,
                                                 )
                                                 selectedListingId = null
-                                                selectedTab = MainTab.Explore.ordinal
+                                                exploreOverlayOpenNonce++
                                                 sellerShopUsername = null
                                                 sellerShopEntrySource = SellerShopEntrySource.None
                                                 sellerShopRestoreContext = SellerShopRestoreContext()
@@ -1537,6 +1534,7 @@ class MainActivity : ComponentActivity() {
                                                     selectedTab = tabIndex
                                                 }
                                             },
+                                            exploreOverlayOpenNonce = exploreOverlayOpenNonce,
                                             onMainTabReselectedIntercept = { tab ->
                                                 if (sellerShopUsername == null) {
                                                     false
@@ -1722,7 +1720,7 @@ class MainActivity : ComponentActivity() {
                                                         countryIso2 = countryIso2,
                                                     )
                                                     selectedListingId = null
-                                                    selectedTab = MainTab.Explore.ordinal
+                                                    exploreOverlayOpenNonce++
                                                     sellerShopUsername = null
                                                     sellerShopEntrySource = SellerShopEntrySource.None
                                                     sellerShopRestoreContext = SellerShopRestoreContext()
@@ -1761,16 +1759,13 @@ class MainActivity : ComponentActivity() {
                                                         countryIso2 = countryIso2,
                                                     )
                                                     selectedListingId = null
-                                                    selectedTab = MainTab.Explore.ordinal
+                                                    exploreOverlayOpenNonce++
                                                     sellerShopUsername = null
                                                     sellerShopEntrySource = SellerShopEntrySource.None
                                                     sellerShopRestoreContext = SellerShopRestoreContext()
                                                 },
                                                 onPromoSlideClick = handlePromoClick,
                                                 promoSlides = mappedPromoSlides,
-                                                onExploreClick = {
-                                                    navigateToExploreFromSellerShop()
-                                                },
                                             )
                                         }
                                         if (editListingId != null) {
@@ -1861,7 +1856,6 @@ class MainActivity : ComponentActivity() {
                                                         sellerShopUsername = u
                                                     }
                                                 },
-                                                onOrdersClick = { showOrdersScreen = true },
                                                 onSellerSuggestNewListing = {
                                                     chatOrderDetailOverlayId = null
                                                     selectedConversationId = null
@@ -2060,24 +2054,6 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                         }
-                                        if (showOrdersScreen && selectedOrderId == null) {
-                                            com.pc.fash_android_mobile.ui.orders.OrdersScreen(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(MaterialTheme.colorScheme.surface),
-                                                viewModel = ordersViewModel,
-                                                onBack = { showOrdersScreen = false },
-                                                onExploreClick = {
-                                                    showOrdersScreen = false
-                                                    selectedTab = MainTab.Explore.ordinal
-                                                },
-                                                promoSlides = mappedPromoSlides,
-                                                onPromoSlideClick = handlePromoClick,
-                                                onOrderClick = { order ->
-                                                    selectedOrderId = order.orderId
-                                                },
-                                            )
-                                        }
                                         val editorialSlug = homeEditorialSlug
                                         if (editorialSlug != null && selectedOrderId == null) {
                                             HomeEditorialDetailScreen(
@@ -2100,7 +2076,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onOpenAllOrders = {
                                                     showHomeDeliveringScreen = false
-                                                    showOrdersScreen = true
+                                                    selectedTab = MainTab.Orders.ordinal
                                                 },
                                                 onDataMutated = {
                                                     homeViewModel.refresh()
@@ -2135,10 +2111,6 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 viewModel = followConnectionsViewModel,
                                                 onBack = { showFollowConnections = false },
-                                                onExploreClick = {
-                                                    showFollowConnections = false
-                                                    selectedTab = MainTab.Explore.ordinal
-                                                },
                                                 onUserClick = { user ->
                                                     val u = user.username.trim()
                                                     if (u.isNotEmpty()) {
@@ -2235,7 +2207,6 @@ class MainActivity : ComponentActivity() {
                                             showSellerPackagesScreen,
                                             showInviteFriendsScreen,
                                             sellerPackageCheckout,
-                                            showOrdersScreen,
                                             selectedCheckoutListingId,
                                             showAddAddressScreen,
                                             showShippingAddressList,
@@ -2254,7 +2225,6 @@ class MainActivity : ComponentActivity() {
                                                 showSellerPackagesScreen ||
                                                 showInviteFriendsScreen ||
                                                 sellerPackageCheckout != null ||
-                                                showOrdersScreen ||
                                                 selectedCheckoutListingId != null ||
                                                 showAddAddressScreen ||
                                                 showShippingAddressList ||
@@ -2329,9 +2299,6 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 editListingId != null -> {
                                                     editListingId = null
-                                                }
-                                                showOrdersScreen -> {
-                                                    showOrdersScreen = false
                                                 }
                                                 selectedListingId != null -> {
                                                     selectedListingId = null
@@ -2526,6 +2493,7 @@ class MainActivity : ComponentActivity() {
                                     campaign = campaign,
                                     onTab = { tab -> pendingPromoMainTab = tab.ordinal },
                                     onOpenOrders = { pendingPromoOpenOrders = true },
+                                    onOpenExplore = { pendingPromoOpenExplore = true },
                                 )
                             }
                             AppPromoCampaignKind.Welcome -> {
@@ -2601,6 +2569,7 @@ class MainActivity : ComponentActivity() {
                                 campaign = campaign,
                                 onTab = { tab -> pendingPromoMainTab = tab.ordinal },
                                 onOpenOrders = { pendingPromoOpenOrders = true },
+                                onOpenExplore = { pendingPromoOpenExplore = true },
                             )
                         }
                         activePromoCampaign = null
