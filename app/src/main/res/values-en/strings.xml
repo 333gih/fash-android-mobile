@@ -269,7 +269,14 @@
     <string name="home_journey_title">Your journey</string>
     <string name="home_journey_delivering">In transit</string>
     <string name="home_journey_saved">Saved</string>
-    <string name="home_journey_messages">Messages</string>
+    <string name="home_journey_in_review">Pending review</string>
+    <string name="home_in_review_screen_title">Pending review</string>
+    <string name="home_in_review_list_intro">Your listings awaiting Fash approval. Tap one to view or edit.</string>
+    <string name="home_in_review_empty_title">No listings pending review</string>
+    <string name="home_in_review_empty_subtitle">When you post an item, it will appear here until it is approved.</string>
+    <string name="home_in_review_error_title">Couldn\'t load listings</string>
+    <string name="home_in_review_error_subtitle">Check your connection and try again.</string>
+    <string name="home_in_review_cta_post">Post an item</string>
     <string name="home_delivering_screen_title">In transit</string>
     <string name="home_delivering_list_intro">These are purchases on the way to you or waiting for your action. Tap an order for full details.</string>
     <string name="home_delivering_coming_soon_title">Delivery tracking — coming soon</string>

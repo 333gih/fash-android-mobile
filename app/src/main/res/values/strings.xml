@@ -300,7 +300,14 @@
     <string name="home_journey_title">Hành trình của bạn</string>
     <string name="home_journey_delivering">Đang giao</string>
     <string name="home_journey_saved">Đã lưu</string>
-    <string name="home_journey_messages">Tin nhắn</string>
+    <string name="home_journey_in_review">Đang duyệt</string>
+    <string name="home_in_review_screen_title">Đang duyệt</string>
+    <string name="home_in_review_list_intro">Các tin đăng của bạn đang chờ đội ngũ Fash phê duyệt. Chạm một tin để xem hoặc chỉnh sửa.</string>
+    <string name="home_in_review_empty_title">Không có tin đang duyệt</string>
+    <string name="home_in_review_empty_subtitle">Khi bạn đăng bán, tin mới sẽ hiển thị ở đây cho đến khi được duyệt.</string>
+    <string name="home_in_review_error_title">Không tải được danh sách</string>
+    <string name="home_in_review_error_subtitle">Kiểm tra kết nối rồi thử lại.</string>
+    <string name="home_in_review_cta_post">Đăng bán ngay</string>
     <string name="home_delivering_screen_title">Đang giao</string>
     <string name="home_delivering_list_intro">Đơn mua của bạn đang trên đường tới bạn hoặc chờ bạn xác nhận. Chạm một đơn để xem chi tiết.</string>
     <string name="home_delivering_coming_soon_title">Theo dõi giao hàng — sắp ra mắt</string>

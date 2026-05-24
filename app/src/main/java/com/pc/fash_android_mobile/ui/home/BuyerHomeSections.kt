@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -121,7 +121,7 @@ fun BuyerHomeJourneyRow(
     stats: BuyerHomeStats,
     onDeliveringClick: () -> Unit,
     onSavedClick: () -> Unit,
-    onMessagesClick: () -> Unit,
+    onInReviewClick: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
@@ -130,7 +130,7 @@ fun BuyerHomeJourneyRow(
             stats = stats,
             onDeliveringClick = onDeliveringClick,
             onSavedClick = onSavedClick,
-            onMessagesClick = onMessagesClick,
+            onInReviewClick = onInReviewClick,
             modifier = modifier,
         )
         return
@@ -201,15 +201,15 @@ fun BuyerHomeJourneyRow(
                 JourneyStatCard(
                     icon = {
                         Icon(
-                            Icons.Default.ChatBubbleOutline,
+                            Icons.Default.RateReview,
                             contentDescription = null,
                             modifier = Modifier.size(26.dp),
                             tint = FashColors.Primary,
                         )
                     },
-                    label = stringResource(R.string.home_journey_messages),
-                    value = formatJourneyCount(stats.unreadMessages),
-                    onClick = onMessagesClick,
+                    label = stringResource(R.string.home_journey_in_review),
+                    value = formatJourneyCount(stats.listingsInReviewCount),
+                    onClick = onInReviewClick,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -223,7 +223,7 @@ fun BuyerHomeJourneyCompactBar(
     stats: BuyerHomeStats,
     onDeliveringClick: () -> Unit,
     onSavedClick: () -> Unit,
-    onMessagesClick: () -> Unit,
+    onInReviewClick: () -> Unit,
     modifier: Modifier = Modifier,
     includeHorizontalEdgePadding: Boolean = true,
 ) {
@@ -272,15 +272,15 @@ fun BuyerHomeJourneyCompactBar(
         JourneyCompactChip(
             icon = {
                 Icon(
-                    Icons.Default.ChatBubbleOutline,
+                    Icons.Default.RateReview,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = FashColors.Primary,
                 )
             },
-            label = stringResource(R.string.home_journey_messages),
-            value = formatJourneyCount(stats.unreadMessages),
-            onClick = onMessagesClick,
+            label = stringResource(R.string.home_journey_in_review),
+            value = formatJourneyCount(stats.listingsInReviewCount),
+            onClick = onInReviewClick,
             modifier = Modifier.weight(1f),
         )
     }

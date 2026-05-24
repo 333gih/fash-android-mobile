@@ -60,7 +60,10 @@ import androidx.compose.ui.text.font.FontWeight
 import com.pc.fash_android_mobile.ui.orders.OrdersScreen
 import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.explore.ExploreOverlayHost
+import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
+import com.pc.fash_android_mobile.ui.home.HomeInReviewViewModel
+import com.pc.fash_android_mobile.ui.home.HomeJourneyHub
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
 import com.pc.fash_android_mobile.data.chat.ConversationItem
@@ -140,6 +143,12 @@ fun MainNavScreen(
     onLogoutAll: () -> Unit,
     isLoggingOut: Boolean,
     homeViewModel: com.pc.fash_android_mobile.ui.home.HomeViewModel,
+    homeDeliveringViewModel: HomeDeliveringViewModel? = null,
+    homeInReviewViewModel: HomeInReviewViewModel? = null,
+    homeJourneyHub: HomeJourneyHub = HomeJourneyHub.Feed,
+    onHomeJourneyHubChange: (HomeJourneyHub) -> Unit = {},
+    onHomeDeliveringOrderClick: (com.pc.fash_android_mobile.data.order.OrderItem) -> Unit = {},
+    onHomeInReviewListingClick: (com.pc.fash_android_mobile.data.listing.ListingFeedItem) -> Unit = {},
     exploreViewModel: com.pc.fash_android_mobile.ui.explore.ExploreViewModel,
     ordersViewModel: OrdersViewModel,
     postViewModel: com.pc.fash_android_mobile.ui.post.PostViewModel,
@@ -156,8 +165,10 @@ fun MainNavScreen(
     onShippingAddressesClick: () -> Unit = {},
     onInviteFriendsClick: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
-    /** Home journey “Đang giao” — dedicated hub (env-gated). Falls back to [onOrdersClick] when null. */
+    /** Home journey “Đang giao” — opens in-tab hub (keeps bottom nav). */
     onHomeDeliveringJourneyClick: (() -> Unit)? = null,
+    /** Home journey “Đang duyệt” — opens in-tab hub (keeps bottom nav). */
+    onHomeInReviewJourneyClick: (() -> Unit)? = null,
     /** [initialTab] 0 = people you follow, 1 = followers. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     /** Explore featured sellers “See all” — full list from `GET /search/featured-sellers`. */
@@ -538,6 +549,12 @@ fun MainNavScreen(
                 when (tabs.getOrNull(tabIndex) ?: MainTab.Home) {
                     MainTab.Home -> HomeFeedContent(
                         viewModel = homeViewModel,
+                        journeyHub = homeJourneyHub,
+                        onJourneyHubChange = onHomeJourneyHubChange,
+                        deliveringViewModel = homeDeliveringViewModel,
+                        inReviewViewModel = homeInReviewViewModel,
+                        onOrderClick = onHomeDeliveringOrderClick,
+                        onInReviewListingClick = onHomeInReviewListingClick,
                         onListingClick = onListingClick,
                         onNavigateToExplore = { openExploreOverlay(false) },
                         onNavigateToExploreWithTag = { tagName ->
@@ -546,10 +563,16 @@ fun MainNavScreen(
                             openExploreOverlay(false)
                         },
                         onOrdersClick = openOrders,
-                        onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: openOrders,
-                        onNavigateToChat = {
-                            if (isGuestMode) onRequestLogin(GuestLoginReason.ChatFromHome)
-                            else onTabChange(MainTab.Chat.ordinal)
+                        onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: {
+                            onHomeJourneyHubChange(HomeJourneyHub.Delivering)
+                        },
+                        onInReviewJourneyClick = {
+                            if (isGuestMode) {
+                                onRequestLogin(GuestLoginReason.SellFromHome)
+                            } else {
+                                onHomeInReviewJourneyClick?.invoke()
+                                    ?: onHomeJourneyHubChange(HomeJourneyHub.InReview)
+                            }
                         },
                         onNavigateToSaved = {
                             if (isGuestMode) {

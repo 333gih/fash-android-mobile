@@ -66,9 +66,10 @@ import com.pc.fash_android_mobile.ui.explore.ExplorePrimarySection
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
-import com.pc.fash_android_mobile.ui.home.HomeDeliveringScreen
 import com.pc.fash_android_mobile.ui.home.HomeEditorialDetailScreen
 import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
+import com.pc.fash_android_mobile.ui.home.HomeInReviewViewModel
+import com.pc.fash_android_mobile.ui.home.HomeJourneyHub
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.invite.InviteFriendsScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
@@ -239,6 +240,7 @@ class MainActivity : ComponentActivity() {
     private val onboardingViewModel: OnboardingViewModel by viewModels()
     private val homeViewModel: HomeViewModel by viewModels()
     private val homeDeliveringViewModel: HomeDeliveringViewModel by viewModels()
+    private val homeInReviewViewModel: HomeInReviewViewModel by viewModels()
     private val exploreViewModel: ExploreViewModel by viewModels()
     private val productDetailViewModel: ProductDetailViewModel by viewModels()
     private val editListingViewModel: EditListingViewModel by viewModels()
@@ -519,6 +521,7 @@ class MainActivity : ComponentActivity() {
                         profileViewModel.clearCachedProfile()
                         homeViewModel.clearCachesForSignedOutUser()
                         homeDeliveringViewModel.clearCachesForSignedOutUser()
+                        homeInReviewViewModel.clearCachesForSignedOutUser()
                         exploreViewModel.clearCachesForSignedOutUser()
                         chatViewModel.clearCachesForSignedOutUser()
                         chatDetailViewModel.clearCachesForSignedOutUser()
@@ -1114,7 +1117,15 @@ class MainActivity : ComponentActivity() {
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
-                                    var showHomeDeliveringScreen by rememberSaveable { mutableStateOf(false) }
+                                    var homeJourneyHubOrdinal by rememberSaveable {
+                                        mutableIntStateOf(HomeJourneyHub.Feed.ordinal)
+                                    }
+                                    val homeJourneyHub = HomeJourneyHub.entries.getOrElse(homeJourneyHubOrdinal) {
+                                        HomeJourneyHub.Feed
+                                    }
+                                    val onHomeJourneyHubChange: (HomeJourneyHub) -> Unit = { hub ->
+                                        homeJourneyHubOrdinal = hub.ordinal
+                                    }
                                     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
@@ -1177,7 +1188,8 @@ class MainActivity : ComponentActivity() {
                                                 selectedTab = MainTab.Orders.ordinal
                                             }
                                             SellerShopEntrySource.HomeDelivering -> {
-                                                showHomeDeliveringScreen = true
+                                                homeJourneyHubOrdinal = HomeJourneyHub.Delivering.ordinal
+                                                selectedTab = MainTab.Home.ordinal
                                             }
                                             SellerShopEntrySource.OrderDetail -> {
                                                 restore.orderId?.let { selectedOrderId = it }
@@ -1225,9 +1237,14 @@ class MainActivity : ComponentActivity() {
                                             followConnectionsViewModel.show(followConnectionsInitialTab)
                                         }
                                     }
-                                    ReloadWhenVisible(showHomeDeliveringScreen, selectedOrderId) {
-                                        if (showHomeDeliveringScreen && selectedOrderId == null) {
+                                    ReloadWhenVisible(homeJourneyHub == HomeJourneyHub.Delivering, selectedOrderId) {
+                                        if (homeJourneyHub == HomeJourneyHub.Delivering && selectedOrderId == null) {
                                             homeDeliveringViewModel.refresh(AppEnvironment.shippingEnabled)
+                                        }
+                                    }
+                                    ReloadWhenVisible(homeJourneyHub == HomeJourneyHub.InReview) {
+                                        if (homeJourneyHub == HomeJourneyHub.InReview) {
+                                            homeInReviewViewModel.refresh()
                                         }
                                     }
                                     ReloadWhenVisible(showFeaturedSellersAll, sellerShopUsername, selectedListingId) {
@@ -1263,8 +1280,7 @@ class MainActivity : ComponentActivity() {
                                         promoSlidesViewModel.refresh()
                                     }
                                     ReloadWhenVisible(
-                                        !showHomeDeliveringScreen &&
-                                            !showSellerPackagesScreen &&
+                                        !showSellerPackagesScreen &&
                                             !showInviteFriendsScreen &&
                                             sellerPackageCheckout == null &&
                                             sellerShopUsername == null &&
@@ -1336,7 +1352,6 @@ class MainActivity : ComponentActivity() {
                                         showEditProfile,
                                         showShippingAddressList,
                                         showAddAddressScreen,
-                                        showHomeDeliveringScreen,
                                         showFollowConnections,
                                         showFeaturedSellersAll,
                                         showInviteFriendsScreen,
@@ -1351,7 +1366,6 @@ class MainActivity : ComponentActivity() {
                                                 showEditProfile ||
                                                 showShippingAddressList ||
                                                 showAddAddressScreen ||
-                                                showHomeDeliveringScreen ||
                                                 showSellerPackagesScreen ||
                                                 sellerPackageCheckout != null ||
                                                 showFollowConnections ||
@@ -1416,6 +1430,16 @@ class MainActivity : ComponentActivity() {
                                             onLogoutAll = loginViewModel::logoutAll,
                                             isLoggingOut = isLoggingOut,
                                             homeViewModel = homeViewModel,
+                                            homeDeliveringViewModel = homeDeliveringViewModel,
+                                            homeInReviewViewModel = homeInReviewViewModel,
+                                            homeJourneyHub = homeJourneyHub,
+                                            onHomeJourneyHubChange = onHomeJourneyHubChange,
+                                            onHomeDeliveringOrderClick = { order ->
+                                                selectedOrderId = order.orderId
+                                            },
+                                            onHomeInReviewListingClick = { item ->
+                                                editListingId = item.id
+                                            },
                                             exploreViewModel = exploreViewModel,
                                             ordersViewModel = ordersViewModel,
                                             postViewModel = postViewModel,
@@ -1483,7 +1507,12 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onInviteFriendsClick = { showInviteFriendsScreen = true },
                                             onOrdersClick = { selectedTab = MainTab.Orders.ordinal },
-                                            onHomeDeliveringJourneyClick = { showHomeDeliveringScreen = true },
+                                            onHomeDeliveringJourneyClick = {
+                                                homeJourneyHubOrdinal = HomeJourneyHub.Delivering.ordinal
+                                            },
+                                            onHomeInReviewJourneyClick = {
+                                                homeJourneyHubOrdinal = HomeJourneyHub.InReview.ordinal
+                                            },
                                             onHomeEditorialPostClick = { post ->
                                                 val slug = post.slug.trim().ifBlank { post.id.trim() }
                                                 if (slug.isNotEmpty()) homeEditorialSlug = slug
@@ -2064,26 +2093,7 @@ class MainActivity : ComponentActivity() {
                                                 onBack = { homeEditorialSlug = null },
                                             )
                                         }
-                                        if (showHomeDeliveringScreen && selectedOrderId == null) {
-                                            HomeDeliveringScreen(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(MaterialTheme.colorScheme.surface),
-                                                viewModel = homeDeliveringViewModel,
-                                                onBack = { showHomeDeliveringScreen = false },
-                                                onOrderClick = { order ->
-                                                    selectedOrderId = order.orderId
-                                                },
-                                                onOpenAllOrders = {
-                                                    showHomeDeliveringScreen = false
-                                                    selectedTab = MainTab.Orders.ordinal
-                                                },
-                                                onDataMutated = {
-                                                    homeViewModel.refresh()
-                                                    ordersViewModel.refreshOrders()
-                                                },
-                                            )
-                                        }
+
                                         if (sellerPackageCheckout != null) {
                                             SellerPackageCheckoutScreen(
                                                 modifier = Modifier
@@ -2203,7 +2213,6 @@ class MainActivity : ComponentActivity() {
                                             showFeaturedSellersAll,
                                             sellerShopUsername,
                                             showFollowConnections,
-                                            showHomeDeliveringScreen,
                                             showSellerPackagesScreen,
                                             showInviteFriendsScreen,
                                             sellerPackageCheckout,
@@ -2221,7 +2230,6 @@ class MainActivity : ComponentActivity() {
                                             showFeaturedSellersAll ||
                                                 sellerShopUsername != null ||
                                                 showFollowConnections ||
-                                                showHomeDeliveringScreen ||
                                                 showSellerPackagesScreen ||
                                                 showInviteFriendsScreen ||
                                                 sellerPackageCheckout != null ||
@@ -2246,9 +2254,6 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 showFollowConnections -> {
                                                     showFollowConnections = false
-                                                }
-                                                showHomeDeliveringScreen && selectedOrderId == null -> {
-                                                    showHomeDeliveringScreen = false
                                                 }
                                                 sellerPackageCheckout != null -> {
                                                     sellerPackageCheckout = null

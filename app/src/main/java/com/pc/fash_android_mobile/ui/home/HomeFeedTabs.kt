@@ -151,7 +151,7 @@ fun HomeFeedTabHost(
     buyerStats: BuyerHomeStats,
     onDeliveringJourneyClick: () -> Unit,
     onSavedJourneyClick: () -> Unit,
-    onMessagesJourneyClick: () -> Unit,
+    onInReviewJourneyClick: () -> Unit,
     onLikeListing: (ListingFeedItem) -> Unit,
     onSaveListing: (ListingFeedItem) -> Unit,
     onListingClick: (ListingFeedItem, Int, String) -> Unit,
@@ -267,7 +267,7 @@ fun HomeFeedTabHost(
                         stats = buyerStats,
                         onDeliveringClick = onDeliveringJourneyClick,
                         onSavedClick = onSavedJourneyClick,
-                        onMessagesClick = onMessagesJourneyClick,
+                        onInReviewClick = onInReviewJourneyClick,
                         modifier = Modifier.fillMaxWidth(),
                         includeHorizontalEdgePadding = false,
                     )

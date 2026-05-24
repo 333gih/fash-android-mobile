@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.home
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +33,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -57,6 +57,8 @@ import com.pc.fash_android_mobile.data.order.OrderItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
+import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.orders.normalizeOrderStatus
 import com.pc.fash_android_mobile.ui.orders.orderStatusLabelForList
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -77,6 +79,10 @@ fun HomeDeliveringScreen(
     onOpenAllOrders: () -> Unit,
     /** After confirm receipt or refresh — keep Home journey counts in sync. */
     onDataMutated: () -> Unit = {},
+    /** When true, keeps bottom nav visible and shows promo slider above it. */
+    embeddedInMainNav: Boolean = true,
+    promoSlides: List<FashPromoSlideDef> = emptyList(),
+    onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
     val shippingEnabled = AppEnvironment.shippingEnabled
@@ -87,39 +93,35 @@ fun HomeDeliveringScreen(
     val confirmingOrderId by viewModel.confirmingOrderId.collectAsState()
     val pullState = rememberPullToRefreshState()
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.home_delivering_screen_title),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = scheme.onSurface,
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(scheme.surfaceContainerLow),
+    ) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(R.string.home_delivering_screen_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = scheme.onSurface,
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.orders_back),
+                        tint = FashColors.Primary,
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.orders_back),
-                            tint = FashColors.Primary,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = scheme.surface,
-                    titleContentColor = scheme.onSurface,
-                ),
-            )
-        },
-    ) { paddingValues ->
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            color = scheme.surfaceContainerLow,
-        ) {
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = scheme.surface,
+                titleContentColor = scheme.onSurface,
+            ),
+        )
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (!shippingEnabled) {
                 ComingSoonPanel(onOpenAllOrders = onOpenAllOrders)
             } else {
@@ -236,6 +238,14 @@ fun HomeDeliveringScreen(
                     }
                 }
             }
+        }
+
+        if (embeddedInMainNav) {
+            FashPromoSliderAdFooter(
+                modifier = Modifier.fillMaxWidth(),
+                slides = promoSlides,
+                onSlideClick = onPromoSlideClick,
+            )
         }
     }
 }

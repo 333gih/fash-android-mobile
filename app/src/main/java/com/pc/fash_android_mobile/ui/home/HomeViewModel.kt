@@ -37,15 +37,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Buyer dashboard counts for the home journey row (orders in delivery, wishlist size, chat unread). */
+/** Buyer/seller dashboard counts for the home journey row (orders in delivery, wishlist, listings pending review). */
 data class BuyerHomeStats(
     val activeDeliveryOrders: Int = 0,
     val savedListingsCount: Int = 0,
-    val unreadMessages: Int = 0,
+    val listingsInReviewCount: Int = 0,
 ) {
     /** Show journey row only when at least one stat is non-zero. */
     fun hasJourneyActivity(): Boolean =
-        activeDeliveryOrders > 0 || savedListingsCount > 0 || unreadMessages > 0
+        activeDeliveryOrders > 0 || savedListingsCount > 0 || listingsInReviewCount > 0
 }
 
 private val BuyerDeliveringStatuses = setOf(
@@ -459,11 +459,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val orders = orderRepository.getBuyingOrders(limit = 50, offset = 0).getOrElse { emptyList() }
         val delivering = orders.count { it.status in BuyerDeliveringStatuses }
         val saved = listingRepository.getWishlistSavedCount(limit = 100, offset = 0).getOrElse { 0 }
-        val unread = chatRepository.getUnreadCount().getOrElse { 0 }
+        val inReview = listingRepository.getMyListings(status = "in_review", limit = 50, offset = 0)
+            .getOrElse { emptyList() }
+            .size
         _buyerStats.value = BuyerHomeStats(
             activeDeliveryOrders = delivering,
             savedListingsCount = saved,
-            unreadMessages = unread,
+            listingsInReviewCount = inReview,
         )
     }
 

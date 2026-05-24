@@ -57,11 +57,18 @@ class ListingRepository(
     }
 
     /**
-     * Authenticated: `GET /api/v1/users/me/listings` — all statuses for the signed-in user (paginated).
+     * Authenticated: `GET /api/v1/users/me/listings` — paginated; omit [status] for all statuses.
      */
-    fun getMyListings(limit: Int = 50, offset: Int = 0): Result<List<ListingFeedItem>> = runCatching {
-        val url =
-            "${AppEnvironment.apiPath("api/v1/users/me/listings")}?limit=$limit&offset=$offset"
+    fun getMyListings(
+        status: String? = null,
+        limit: Int = 50,
+        offset: Int = 0,
+    ): Result<List<ListingFeedItem>> = runCatching {
+        val q = mutableListOf("limit=$limit", "offset=$offset")
+        status?.takeIf { it.isNotBlank() }?.let {
+            q.add("status=${java.net.URLEncoder.encode(it, "UTF-8")}")
+        }
+        val url = "${AppEnvironment.apiPath("api/v1/users/me/listings")}?${q.joinToString("&")}"
         parseFeedResponse(executeGet(url))
     }
 
