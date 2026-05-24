@@ -1,6 +1,5 @@
 package com.pc.fash_android_mobile.ui.home
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,10 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -79,8 +83,6 @@ fun HomeDeliveringScreen(
     onOpenAllOrders: () -> Unit,
     /** After confirm receipt or refresh — keep Home journey counts in sync. */
     onDataMutated: () -> Unit = {},
-    /** When true, keeps bottom nav visible and shows promo slider above it. */
-    embeddedInMainNav: Boolean = true,
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
@@ -93,35 +95,48 @@ fun HomeDeliveringScreen(
     val confirmingOrderId by viewModel.confirmingOrderId.collectAsState()
     val pullState = rememberPullToRefreshState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(scheme.surfaceContainerLow),
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = scheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(R.string.home_delivering_screen_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
+        Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing.only(
+                WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+            ),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.home_delivering_screen_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = scheme.onSurface,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.orders_back),
+                                tint = FashColors.Primary,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = scheme.surface,
+                        titleContentColor = scheme.onSurface,
+                    ),
                 )
             },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.orders_back),
-                        tint = FashColors.Primary,
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = scheme.surface,
-                titleContentColor = scheme.onSurface,
-            ),
-        )
-
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(scheme.surfaceContainerLow),
+            ) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (!shippingEnabled) {
                 ComingSoonPanel(onOpenAllOrders = onOpenAllOrders)
             } else {
@@ -238,14 +253,14 @@ fun HomeDeliveringScreen(
                     }
                 }
             }
-        }
+                }
 
-        if (embeddedInMainNav) {
-            FashPromoSliderAdFooter(
-                modifier = Modifier.fillMaxWidth(),
-                slides = promoSlides,
-                onSlideClick = onPromoSlideClick,
-            )
+                FashPromoSliderAdFooter(
+                    modifier = Modifier.fillMaxWidth(),
+                    slides = promoSlides,
+                    onSlideClick = onPromoSlideClick,
+                )
+            }
         }
     }
 }

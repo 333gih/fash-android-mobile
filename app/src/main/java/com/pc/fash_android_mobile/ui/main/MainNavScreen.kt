@@ -60,8 +60,10 @@ import androidx.compose.ui.text.font.FontWeight
 import com.pc.fash_android_mobile.ui.orders.OrdersScreen
 import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.explore.ExploreOverlayHost
+import com.pc.fash_android_mobile.ui.home.HomeDeliveringScreen
 import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
+import com.pc.fash_android_mobile.ui.home.HomeInReviewScreen
 import com.pc.fash_android_mobile.ui.home.HomeInReviewViewModel
 import com.pc.fash_android_mobile.ui.home.HomeJourneyHub
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
@@ -549,12 +551,6 @@ fun MainNavScreen(
                 when (tabs.getOrNull(tabIndex) ?: MainTab.Home) {
                     MainTab.Home -> HomeFeedContent(
                         viewModel = homeViewModel,
-                        journeyHub = homeJourneyHub,
-                        onJourneyHubChange = onHomeJourneyHubChange,
-                        deliveringViewModel = homeDeliveringViewModel,
-                        inReviewViewModel = homeInReviewViewModel,
-                        onOrderClick = onHomeDeliveringOrderClick,
-                        onInReviewListingClick = onHomeInReviewListingClick,
                         onListingClick = onListingClick,
                         onNavigateToExplore = { openExploreOverlay(false) },
                         onNavigateToExploreWithTag = { tagName ->
@@ -562,7 +558,6 @@ fun MainNavScreen(
                             exploreViewModel.toggleInterestChipWithId(chipId, tagName)
                             openExploreOverlay(false)
                         },
-                        onOrdersClick = openOrders,
                         onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: {
                             onHomeJourneyHubChange(HomeJourneyHub.Delivering)
                         },
@@ -582,10 +577,6 @@ fun MainNavScreen(
                                 onTabChange(MainTab.Profile.ordinal)
                             }
                         },
-                        onNavigateToPost = {
-                            if (isGuestMode) onRequestLogin(GuestLoginReason.SellFromHome)
-                            else onTabChange(MainTab.Post.ordinal)
-                        },
                         isGuestBrowse = isGuestMode,
                         onRequestLogin = onRequestLogin,
                         onPromoSlideClick = onPromoSlideClick,
@@ -593,7 +584,6 @@ fun MainNavScreen(
                         onHomeEditorialPostClick = onHomeEditorialPostClick,
                         onFeaturedSellerClick = onFeaturedSellerClick,
                         onOpenFeaturedSellersAll = onOpenFeaturedSellersAll,
-                        // Home "Add your size" banner routes to the same editor as Explore's nudge.
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
                     )
                     MainTab.Orders -> if (isGuestMode) {
@@ -705,6 +695,44 @@ fun MainNavScreen(
                 AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
                 onFeatureTourFinished()
             },
+        )
+    }
+    if (homeJourneyHub == HomeJourneyHub.Delivering && homeDeliveringViewModel != null) {
+        BackHandler { onHomeJourneyHubChange(HomeJourneyHub.Feed) }
+        LaunchedEffect(Unit) {
+            homeDeliveringViewModel.loadIfShippingEnabled(
+                com.pc.fash_android_mobile.config.AppEnvironment.shippingEnabled,
+            )
+        }
+        HomeDeliveringScreen(
+            modifier = Modifier.fillMaxSize(),
+            viewModel = homeDeliveringViewModel,
+            onBack = { onHomeJourneyHubChange(HomeJourneyHub.Feed) },
+            onOrderClick = onHomeDeliveringOrderClick,
+            onOpenAllOrders = {
+                onHomeJourneyHubChange(HomeJourneyHub.Feed)
+                openOrdersTab()
+            },
+            onDataMutated = { homeViewModel.refresh() },
+            promoSlides = promoSlides,
+            onPromoSlideClick = onPromoSlideClick,
+        )
+    }
+    if (homeJourneyHub == HomeJourneyHub.InReview && homeInReviewViewModel != null) {
+        BackHandler { onHomeJourneyHubChange(HomeJourneyHub.Feed) }
+        LaunchedEffect(Unit) { homeInReviewViewModel.loadIfNeeded() }
+        HomeInReviewScreen(
+            modifier = Modifier.fillMaxSize(),
+            viewModel = homeInReviewViewModel,
+            onBack = { onHomeJourneyHubChange(HomeJourneyHub.Feed) },
+            onListingClick = onHomeInReviewListingClick,
+            onOpenPostListing = {
+                onHomeJourneyHubChange(HomeJourneyHub.Feed)
+                onTabChange(MainTab.Post.ordinal)
+            },
+            onDataMutated = { homeViewModel.refresh() },
+            promoSlides = promoSlides,
+            onPromoSlideClick = onPromoSlideClick,
         )
     }
     if (showNotificationScreen) {

@@ -1352,6 +1352,7 @@ class MainActivity : ComponentActivity() {
                                         showEditProfile,
                                         showShippingAddressList,
                                         showAddAddressScreen,
+                                        homeJourneyHub,
                                         showFollowConnections,
                                         showFeaturedSellersAll,
                                         showInviteFriendsScreen,
@@ -1366,6 +1367,7 @@ class MainActivity : ComponentActivity() {
                                                 showEditProfile ||
                                                 showShippingAddressList ||
                                                 showAddAddressScreen ||
+                                                homeJourneyHub != HomeJourneyHub.Feed ||
                                                 showSellerPackagesScreen ||
                                                 sellerPackageCheckout != null ||
                                                 showFollowConnections ||
@@ -2213,6 +2215,7 @@ class MainActivity : ComponentActivity() {
                                             showFeaturedSellersAll,
                                             sellerShopUsername,
                                             showFollowConnections,
+                                            homeJourneyHub,
                                             showSellerPackagesScreen,
                                             showInviteFriendsScreen,
                                             sellerPackageCheckout,
@@ -2230,6 +2233,7 @@ class MainActivity : ComponentActivity() {
                                             showFeaturedSellersAll ||
                                                 sellerShopUsername != null ||
                                                 showFollowConnections ||
+                                                homeJourneyHub != HomeJourneyHub.Feed ||
                                                 showSellerPackagesScreen ||
                                                 showInviteFriendsScreen ||
                                                 sellerPackageCheckout != null ||
@@ -2254,6 +2258,9 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 showFollowConnections -> {
                                                     showFollowConnections = false
+                                                }
+                                                homeJourneyHub != HomeJourneyHub.Feed -> {
+                                                    onHomeJourneyHubChange(HomeJourneyHub.Feed)
                                                 }
                                                 sellerPackageCheckout != null -> {
                                                     sellerPackageCheckout = null

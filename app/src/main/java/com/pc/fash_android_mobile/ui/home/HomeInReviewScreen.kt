@@ -6,10 +6,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -25,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -62,7 +67,6 @@ fun HomeInReviewScreen(
     onListingClick: (ListingFeedItem) -> Unit,
     onOpenPostListing: () -> Unit,
     onDataMutated: () -> Unit = {},
-    embeddedInMainNav: Boolean = true,
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> },
 ) {
@@ -74,35 +78,48 @@ fun HomeInReviewScreen(
     val pullState = rememberPullToRefreshState()
     val statusLabel = stringResource(R.string.listing_status_in_review)
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(scheme.surfaceContainerLow),
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = scheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(R.string.home_in_review_screen_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = scheme.onSurface,
+        Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing.only(
+                WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+            ),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.home_in_review_screen_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = scheme.onSurface,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.orders_back),
+                                tint = FashColors.Primary,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = scheme.surface,
+                        titleContentColor = scheme.onSurface,
+                    ),
                 )
             },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.orders_back),
-                        tint = FashColors.Primary,
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = scheme.surface,
-                titleContentColor = scheme.onSurface,
-            ),
-        )
-
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(scheme.surfaceContainerLow),
+            ) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = {
@@ -202,14 +219,14 @@ fun HomeInReviewScreen(
                     }
                 }
             }
-        }
+                }
 
-        if (embeddedInMainNav) {
-            FashPromoSliderAdFooter(
-                modifier = Modifier.fillMaxWidth(),
-                slides = promoSlides,
-                onSlideClick = onPromoSlideClick,
-            )
+                FashPromoSliderAdFooter(
+                    modifier = Modifier.fillMaxWidth(),
+                    slides = promoSlides,
+                    onSlideClick = onPromoSlideClick,
+                )
+            }
         }
     }
 }
