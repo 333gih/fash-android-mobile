@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -270,6 +272,8 @@ fun SellerProfileScreen(
                                             )
                                         }
                                         SellerProfileMetricsCard(profile = profile)
+                                        SellerProfileBodyMeasurements(profile = profile)
+                                        SellerProfileTopBadges(profile = profile)
                                         SellerListingFocusSection(
                                             focus = sellerFocus,
                                             forbidden = sellerFocusForbidden,
@@ -723,6 +727,67 @@ private fun SellerProfileMetricsCard(profile: ProfileInfo?) {
                 hasShop = productCount > 0,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun SellerProfileBodyMeasurements(profile: ProfileInfo?) {
+    val p = profile ?: return
+    val height = p.heightCm
+    val weight = p.weightKg
+    if (height == null && weight == null) return
+    val scheme = MaterialTheme.colorScheme
+    val parts = buildList {
+        height?.let { add(stringResource(R.string.profile_height_cm, it)) }
+        weight?.let { w -> add(stringResource(R.string.profile_weight_kg, String.format(Locale.US, "%.1f", w))) }
+    }
+    Text(
+        text = parts.joinToString(" · "),
+        style = MaterialTheme.typography.bodySmall,
+        color = scheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = 8.dp),
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SellerProfileTopBadges(profile: ProfileInfo?) {
+    val badges = profile?.topBadges.orEmpty().filter { it.name.isNotBlank() || it.emoji.isNotBlank() }
+    if (badges.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FashTheme.spacing.editorialStart)
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        badges.forEach { badge ->
+            Surface(
+                shape = RoundedCornerShape(FashTheme.spacing.radiusPill),
+                color = scheme.surfaceContainerLow,
+            ) {
+                Text(
+                    text = buildString {
+                        if (badge.emoji.isNotBlank()) {
+                            append(badge.emoji)
+                            append(' ')
+                        }
+                        append(badge.name.ifBlank { badge.slug })
+                        if (badge.count > 1) {
+                            append(" ×")
+                            append(badge.count)
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
         }
     }
 }

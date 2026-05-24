@@ -139,6 +139,42 @@ data class ListingImageSetupDto(
     val steps: List<ListingImageStepCatalog>,
 )
 
+/** Public catalog row from `GET .../public/safe-meetup-zones`. */
+data class SafeMeetupZoneDto(
+    val id: String,
+    val name: String,
+    val nameVi: String,
+    val zoneType: String,
+    val provinceId: String,
+    val districtId: String?,
+    val addressLine: String,
+    val locationUrl: String,
+    val sortOrder: Int,
+) {
+    /** Locale-aware label: [nameVi] when Vietnamese UI, else [name]. */
+    fun displayLabel(preferVi: Boolean): String {
+        val vi = nameVi.trim()
+        val en = name.trim()
+        return if (preferVi && vi.isNotEmpty()) vi else en.ifBlank { vi.ifBlank { name } }
+    }
+}
+
+/** Gen Z review badge from `GET .../public/review-badges?all=true`. */
+data class ReviewBadgeDto(
+    val id: String,
+    val slug: String,
+    val nameEn: String,
+    val nameVi: String,
+    val emoji: String,
+    val sortOrder: Int,
+) {
+    fun displayName(isVi: Boolean): String {
+        val vi = nameVi.trim()
+        val en = nameEn.trim()
+        return if (isVi && vi.isNotEmpty()) vi else en.ifBlank { vi.ifBlank { slug } }
+    }
+}
+
 /** Default steps when common-service has no template (aligned with core DB backfill). */
 fun defaultListingImageCatalogSteps(): List<ListingImageStepCatalog> = listOf(
     ListingImageStepCatalog(

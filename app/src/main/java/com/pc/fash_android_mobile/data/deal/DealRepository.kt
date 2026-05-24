@@ -5,6 +5,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
@@ -51,11 +52,30 @@ class DealRepository(
         postJson(AppEnvironment.apiPath("api/v1/deals/$id/cancel"), "{}")
     }
 
-    fun submitDealReview(dealId: String, rating: Int, comment: String?): Result<Unit> = runCatching {
+    fun submitDealReview(
+        dealId: String,
+        rating: Int,
+        comment: String?,
+        badgeIds: List<ReviewBadgeRefPayload> = emptyList(),
+    ): Result<Unit> = runCatching {
         val id = dealId.trim()
         if (id.isEmpty()) error("deal id required")
         val json = JSONObject().put("rating", rating.coerceIn(1, 5))
         comment?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("comment", it) }
+        if (badgeIds.isNotEmpty()) {
+            val arr = JSONArray()
+            badgeIds.forEach { b ->
+                arr.put(
+                    JSONObject().apply {
+                        put("id", b.id)
+                        b.slug?.takeIf { it.isNotBlank() }?.let { put("slug", it) }
+                        b.name?.takeIf { it.isNotBlank() }?.let { put("name", it) }
+                        b.emoji?.takeIf { it.isNotBlank() }?.let { put("emoji", it) }
+                    },
+                )
+            }
+            json.put("badge_ids", arr)
+        }
         postJson(AppEnvironment.apiPath("api/v1/deals/$id/review"), json.toString())
     }
 
@@ -108,4 +128,11 @@ data class DealRecord(
     val agreedPriceVnd: Long = 0L,
     val meetingLocationUrl: String = "",
     val meetingAt: String = "",
+)
+
+data class ReviewBadgeRefPayload(
+    val id: String,
+    val slug: String? = null,
+    val name: String? = null,
+    val emoji: String? = null,
 )

@@ -65,6 +65,7 @@ import com.pc.fash_android_mobile.data.order.OrderBuyerCancelPolicy
 import com.pc.fash_android_mobile.data.order.OrderDetail
 import com.pc.fash_android_mobile.data.order.OrderMeetingAppointment
 import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
+import com.pc.fash_android_mobile.data.order.viewerShouldShowCheckIn
 import com.pc.fash_android_mobile.data.order.sellerShowsConfirmHandoffCta
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
@@ -732,6 +733,8 @@ internal fun OrderMeetingSection(
 internal fun OrderMeetingGraceSection(
     grace: OrderMeetingGrace,
     appointmentId: String?,
+    isBuyer: Boolean,
+    meetingAppointment: OrderMeetingAppointment?,
     busy: OrderDetailBusyAction,
     onCheckIn: (String) -> Unit,
     onReportNoShow: (reason: String, note: String?) -> Unit,
@@ -742,9 +745,10 @@ internal fun OrderMeetingGraceSection(
     val idle = busy == OrderDetailBusyAction.None
     var showNoShowPicker by remember { mutableStateOf(false) }
     var noShowNote by remember { mutableStateOf("") }
+    val showCheckIn = grace.viewerShouldShowCheckIn(isBuyer, meetingAppointment)
     val hasAny =
         grace.sosUnlocked ||
-            grace.canCheckIn || grace.canReportNoShow || showAcknowledgeCash ||
+            showCheckIn || grace.canReportNoShow || showAcknowledgeCash ||
             grace.checkInHint.isNotBlank() || grace.noShowHint.isNotBlank() ||
             grace.buyerCheckedInAt.isNotBlank() || grace.sellerCheckedInAt.isNotBlank() ||
             grace.phase.isNotBlank() ||
@@ -754,7 +758,7 @@ internal fun OrderMeetingGraceSection(
     val showSyncOnly =
         !appointmentId.isNullOrBlank() &&
             !grace.sosUnlocked &&
-            !grace.canCheckIn &&
+            !showCheckIn &&
             !grace.canReportNoShow &&
             !showAcknowledgeCash &&
             grace.checkInHint.isBlank() &&
@@ -897,7 +901,7 @@ internal fun OrderMeetingGraceSection(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            if (grace.canCheckIn && !appointmentId.isNullOrBlank()) {
+            if (showCheckIn && !appointmentId.isNullOrBlank()) {
                 val checkInBusy = busy == OrderDetailBusyAction.CheckIn
                 val checkInOn = FashColors.Primary.fashReadableOn()
                 Button(

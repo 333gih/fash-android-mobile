@@ -105,6 +105,46 @@ class PublicCommonCatalogRepository(
         }
     }
 
+    fun getSafeMeetupZones(
+        provinceId: String? = null,
+        districtId: String? = null,
+        limit: Int = 30,
+    ): Result<List<SafeMeetupZoneDto>> = runCatching {
+        val builder = publicPath("safe-meetup-zones").toHttpUrlOrNull()?.newBuilder()
+            ?: error("invalid safe-meetup-zones url")
+        provinceId?.trim()?.takeIf { it.isNotEmpty() }?.let { builder.addQueryParameter("province_id", it) }
+        districtId?.trim()?.takeIf { it.isNotEmpty() }?.let { builder.addQueryParameter("district_id", it) }
+        builder.addQueryParameter("limit", limit.coerceIn(1, 100).toString())
+        val url = builder.build().toString()
+        Log.d(TAG, "getSafeMeetupZones GET $url")
+        val body = executeGet(url).trim()
+        val obj = JSONObject(body)
+        val arr = obj.optJSONArray("zones") ?: JSONArray()
+        val zones = (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { parseSafeMeetupZone(it) }
+        }
+        Log.d(TAG, "getSafeMeetupZones parsed ${zones.size} zones")
+        zones
+    }.onFailure { e ->
+        Log.w(TAG, "getSafeMeetupZones failed: ${e.message}", e)
+    }
+
+    fun getReviewBadges(): Result<List<ReviewBadgeDto>> = runCatching {
+        val url = publicPath("review-badges").toHttpUrlOrNull()?.newBuilder()
+            ?.addQueryParameter("all", "true")
+            ?.build()
+            ?.toString()
+            ?: error("invalid review-badges url")
+        Log.d(TAG, "getReviewBadges GET $url")
+        val obj = JSONObject(executeGet(url).trim())
+        val arr = obj.optJSONArray("badges") ?: JSONArray()
+        (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { parseReviewBadge(it) }
+        }.sortedBy { it.sortOrder }
+    }.onFailure { e ->
+        Log.w(TAG, "getReviewBadges failed: ${e.message}", e)
+    }
+
     fun getCountries(all: Boolean = false, q: String? = null, status: String? = null, offset: Int = 0, limit: Int = 20): Result<List<CommonCountryDto>> = runCatching {
         val builder = publicPath("countries").toHttpUrlOrNull()?.newBuilder()
             ?: error("invalid countries url")
@@ -127,6 +167,29 @@ class PublicCommonCatalogRepository(
         }
     }
 }
+
+private fun parseSafeMeetupZone(o: JSONObject): SafeMeetupZoneDto =
+    SafeMeetupZoneDto(
+        id = o.optString("id"),
+        name = o.optString("name"),
+        nameVi = o.optString("name_vi", o.optString("nameVi", "")),
+        zoneType = o.optString("zone_type", o.optString("zoneType", "")),
+        provinceId = o.optString("province_id", o.optString("provinceId", "")),
+        districtId = o.optString("district_id", o.optString("districtId", "")).takeIf { it.isNotBlank() },
+        addressLine = o.optString("address_line", o.optString("addressLine", "")),
+        locationUrl = o.optString("location_url", o.optString("locationUrl", "")),
+        sortOrder = o.optInt("sort_order", o.optInt("sortOrder", 0)),
+    )
+
+private fun parseReviewBadge(o: JSONObject): ReviewBadgeDto =
+    ReviewBadgeDto(
+        id = o.optString("id"),
+        slug = o.optString("slug"),
+        nameEn = o.optString("name_en", o.optString("nameEn", "")),
+        nameVi = o.optString("name_vi", o.optString("nameVi", "")),
+        emoji = o.optString("emoji"),
+        sortOrder = o.optInt("sort_order", o.optInt("sortOrder", 0)),
+    )
 
 private fun parseCategoryTreeNode(o: JSONObject): CategoryTreeNode {
     val children = mutableListOf<CategoryTreeNode>()

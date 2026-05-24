@@ -114,6 +114,9 @@ class SearchRepository(
         sort: String = "recent",
         limit: Int = 20,
         offset: Int = 0,
+        sellerProvinceId: String? = null,
+        sellerDistrictId: String? = null,
+        sellerWardId: String? = null,
     ): Result<List<ListingFeedItem>> = runCatching {
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
         val query = mutableListOf<String>()
@@ -138,7 +141,9 @@ class SearchRepository(
         tags?.takeIf { it.isNotBlank() && idCsv == null }?.let { query.add("tags=${enc(it)}") }
         minPrice?.let { query.add("min_price=$it") }
         maxPrice?.let { query.add("max_price=$it") }
-        condition?.takeIf { it.isNotBlank() }?.let { query.add("condition=${enc(it)}") }
+        sellerProvinceId?.trim()?.takeIf { it.isNotEmpty() }?.let { query.add("seller_province_id=${enc(it)}") }
+        sellerDistrictId?.trim()?.takeIf { it.isNotEmpty() }?.let { query.add("seller_district_id=${enc(it)}") }
+        sellerWardId?.trim()?.takeIf { it.isNotEmpty() }?.let { query.add("seller_ward_id=${enc(it)}") }
         query.add("sort=${enc(sort)}")
         val url = AppEnvironment.apiPath("api/v1/search/listings") + "?" + query.joinToString("&")
         val body = executeGet(url, publicBrowse = false)
@@ -159,6 +164,9 @@ class SearchRepository(
         sort: String = "popular",
         limit: Int = 20,
         offset: Int = 0,
+        sellerProvinceId: String? = null,
+        sellerDistrictId: String? = null,
+        sellerWardId: String? = null,
     ): Result<List<ListingFeedItem>> = runCatching {
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
         val query = mutableListOf<String>()
@@ -180,6 +188,9 @@ class SearchRepository(
         minPrice?.let { query.add("min_price=$it") }
         maxPrice?.let { query.add("max_price=$it") }
         condition?.takeIf { it.isNotBlank() }?.let { query.add("condition=${enc(it)}") }
+        sellerProvinceId?.trim()?.takeIf { it.isNotEmpty() }?.let { query.add("seller_province_id=${enc(it)}") }
+        sellerDistrictId?.trim()?.takeIf { it.isNotEmpty() }?.let { query.add("seller_district_id=${enc(it)}") }
+        sellerWardId?.trim()?.takeIf { it.isNotEmpty() }?.let { query.add("seller_ward_id=${enc(it)}") }
         query.add("sort=${enc(sort)}")
         val url = "${PublicBrowseHttp.publicApiPath("browse/listings")}?" + query.joinToString("&")
         val body = executeGet(url, publicBrowse = true)

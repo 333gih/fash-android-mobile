@@ -50,7 +50,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,7 +77,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
-import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.data.order.OrderDetail
@@ -121,7 +119,6 @@ fun CheckoutScreen(
     val isCancelling by viewModel.isCancelling.collectAsState()
     val scheme = MaterialTheme.colorScheme
     var orderIdPendingCancel by remember { mutableStateOf<String?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
     val canCancelPendingOrder =
         existingOrderId != null &&
             com.pc.fash_android_mobile.data.order.OrderBuyerCancelPolicy.buyerCanCancel(
@@ -143,10 +140,6 @@ fun CheckoutScreen(
                 }
             }
         }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
     }
 
 
@@ -177,7 +170,6 @@ fun CheckoutScreen(
             Box(modifier = modifier.fillMaxSize()) {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    snackbarHost = { FashSnackbarHost(snackbarHostState) },
                     topBar = {
                         TopAppBar(
                             title = {

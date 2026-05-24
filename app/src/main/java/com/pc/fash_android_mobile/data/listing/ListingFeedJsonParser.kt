@@ -109,6 +109,10 @@ internal object ListingFeedJsonParser {
                     isSaved = listingWireBool(o, "is_saved", "IsSaved"),
                     sellerIsFollowing = sellerFollowingWireBool(seller),
                     listingStatus = listingStatusWire,
+                    onsiteInspectionCommitment = o.optBoolean(
+                        "onsite_inspection_commitment",
+                        o.optBoolean("OnsiteInspectionCommitment", false),
+                    ),
                 ),
             )
         }

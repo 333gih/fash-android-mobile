@@ -1199,9 +1199,36 @@ class UserRepository(
             } ?: emptyList(),
             heightCm = o.optInt("height_cm", -1).takeIf { it in 100..250 },
             weightKg = optDoubleIfPresent("weight_kg"),
+            browseProvinceId = o.optString("browse_province_id", o.optString("browseProvinceId", ""))
+                .trim().takeIf { it.isNotEmpty() },
+            browseProvinceName = o.optString("browse_province_name", o.optString("browseProvinceName", "")).trim(),
+            browseDistrictId = o.optString("browse_district_id", o.optString("browseDistrictId", ""))
+                .trim().takeIf { it.isNotEmpty() },
+            browseDistrictName = o.optString("browse_district_name", o.optString("browseDistrictName", "")).trim(),
+            topBadges = parseTopBadges(o.optJSONArray("top_badges") ?: o.optJSONArray("TopBadges")),
             accountEmail = "",
             accountPhone = "",
         )
+    }
+
+    private fun parseTopBadges(arr: JSONArray?): List<SellerBadgeSummary> {
+        if (arr == null || arr.length() == 0) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val b = arr.optJSONObject(i) ?: continue
+                val id = b.optString("badge_id", b.optString("id", "")).trim()
+                if (id.isEmpty()) continue
+                add(
+                    SellerBadgeSummary(
+                        badgeId = id,
+                        slug = b.optString("badge_slug", b.optString("slug", "")),
+                        name = b.optString("badge_name", b.optString("name", "")),
+                        emoji = b.optString("badge_emoji", b.optString("emoji", "")),
+                        count = b.optInt("count", 0),
+                    ),
+                )
+            }
+        }
     }
 
     fun getMe(): Result<Unit> = runCatching {
@@ -1227,6 +1254,40 @@ class UserRepository(
      * identity re-verification; clears `meeting_scheduling_reverify_required` and `meeting_scheduling_suspended_until`
      * when the server accepts.
      */
+    fun putBrowseLocation(
+        provinceId: String,
+        provinceName: String,
+        districtId: String,
+        districtName: String,
+    ): Result<Unit> = runCatching {
+        val url = AppEnvironment.apiPath("api/v1/users/me/browse-location")
+        val json = JSONObject()
+            .put("province_id", provinceId.trim())
+            .put("province_name", provinceName.trim())
+            .put("district_id", districtId.trim())
+            .put("district_name", districtName.trim())
+            .toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .put(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
     fun ackMeetingIdentityReverify(): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/users/me/meeting-trust/ack-identity-reverify")
         securedClient.newCall(
@@ -1635,6 +1696,15 @@ data class FollowListPage(
     val offset: Int,
 )
 
+/** Denormalized seller badge from profile `top_badges`. */
+data class SellerBadgeSummary(
+    val badgeId: String,
+    val slug: String,
+    val name: String,
+    val emoji: String,
+    val count: Int,
+)
+
 data class ProfileInfo(
     val userId: String,
     val username: String,
@@ -1673,6 +1743,12 @@ data class ProfileInfo(
     val shoppingIntents: List<String> = emptyList(),
     val heightCm: Int? = null,
     val weightKg: Double? = null,
+    val browseProvinceId: String? = null,
+    val browseProvinceName: String = "",
+    val browseDistrictId: String? = null,
+    val browseDistrictName: String = "",
+    /** Top seller badges from reviews (`top_badges` on public profile). */
+    val topBadges: List<SellerBadgeSummary> = emptyList(),
     /** From auth-service `GET /auth/me` — account email (core profile may omit). */
     val accountEmail: String = "",
     /** From auth-service `GET /auth/me` — account phone. */

@@ -351,6 +351,8 @@ class ChatRepository(
         scheduledAtRfc3339: String,
         reminderEnabled: Boolean,
         reminderOffsetMinutes: Int,
+        safeZoneId: String? = null,
+        safeZoneName: String? = null,
     ): Result<Unit> = runCatching {
         val json = JSONObject()
             .put("conversation_id", conversationId)
@@ -358,8 +360,25 @@ class ChatRepository(
             .put("scheduled_at", scheduledAtRfc3339.trim())
             .put("reminder_enabled", reminderEnabled)
             .put("reminder_offset_minutes", reminderOffsetMinutes)
-            .toString()
-        postJson(AppEnvironment.apiPath("api/v1/chat/meetings/propose"), json)
+        safeZoneId?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("safe_zone_id", it) }
+        safeZoneName?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("safe_zone_name", it) }
+        postJson(AppEnvironment.apiPath("api/v1/chat/meetings/propose"), json.toString())
+    }
+
+    /** POST /chat/meetings/:appointment_id/on-my-way */
+    fun meetingOnMyWay(appointmentId: String): Result<MeetingAppointmentPayload> = runCatching {
+        val id = appointmentId.trim()
+        if (id.isEmpty()) error("appointment id required")
+        val body = postJson(AppEnvironment.apiPath("api/v1/chat/meetings/$id/on-my-way"), "{}")
+        val o = JSONObject(body.trim())
+        val root = when {
+            o.has("data") && o.get("data") is JSONObject -> o.getJSONObject("data")
+            o.has("meeting_appointment") && o.get("meeting_appointment") is JSONObject ->
+                o.getJSONObject("meeting_appointment")
+            else -> o
+        }
+        meetingAppointmentJsonToPayload(root)
+            ?: error("No meeting appointment in on-my-way response")
     }
 
     fun confirmMeeting(appointmentId: String): Result<Unit> = runCatching {
@@ -387,8 +406,7 @@ class ChatRepository(
 
     /**
      * `POST /chat/meetings/:appointment_id/check-in` — optional GPS in `scheduled_at ± 30m`.
-     * Request body uses role-specific keys when coordinates are sent: `buyer_check_in_lat` /
-     * `buyer_check_in_lng` or `seller_check_in_lat` / `seller_check_in_lng`.
+     * Request body uses `lat` / `lng` when coordinates are sent (server assigns role from JWT).
      *
      * Response (typical): `meeting_appointment`, `already_checked_in`, `role`, optional `your_check_in_at`.
      * Appointment [MeetingAppointmentPayload.status] is unchanged by this call (still confirmed, etc.).
@@ -405,13 +423,8 @@ class ChatRepository(
         if (id.isEmpty()) return Result.failure(IllegalArgumentException("appointment id required"))
         val json = JSONObject()
         if (lat != null && lng != null) {
-            if (isBuyer) {
-                json.put("buyer_check_in_lat", lat)
-                json.put("buyer_check_in_lng", lng)
-            } else {
-                json.put("seller_check_in_lat", lat)
-                json.put("seller_check_in_lng", lng)
-            }
+            json.put("lat", lat)
+            json.put("lng", lng)
         }
         val payload = if (json.length() == 0) "{}" else json.toString()
         return try {
@@ -951,6 +964,9 @@ class ChatRepository(
             isProposerMe = myId.isNotBlank() && proposerId.isNotBlank() && proposerId == myId,
             buyerCheckInAt = appointmentOptIso(o, "buyer_check_in_at", "BuyerCheckInAt"),
             sellerCheckInAt = appointmentOptIso(o, "seller_check_in_at", "SellerCheckInAt"),
+            buyerOnMyWayAt = appointmentOptIso(o, "buyer_on_my_way_at", "BuyerOnMyWayAt"),
+            sellerOnMyWayAt = appointmentOptIso(o, "seller_on_my_way_at", "SellerOnMyWayAt"),
+            safeZoneName = o.optString("safe_zone_name", o.optString("SafeZoneName", "")),
         )
     }
 
@@ -1051,6 +1067,9 @@ data class MeetingAppointmentPayload(
     val isProposerMe: Boolean,
     val buyerCheckInAt: String = "",
     val sellerCheckInAt: String = "",
+    val buyerOnMyWayAt: String = "",
+    val sellerOnMyWayAt: String = "",
+    val safeZoneName: String = "",
 )
 
 data class ConversationDetail(

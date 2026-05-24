@@ -16,6 +16,8 @@ import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
+import com.pc.fash_android_mobile.data.explore.BrowseLocationMode
+import com.pc.fash_android_mobile.data.explore.ExploreBrowseLocationPreference
 import com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
@@ -69,6 +71,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private fun isGuestBrowse(): Boolean = fashApp.isGuestBrowseActive
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
+    private val userShippingAddressRepository =
+        (application as FashApplication).userShippingAddressRepository
     private val commonServiceRepository: CommonServiceRepository =
         (application as FashApplication).commonServiceRepository
     private val realtimeManager: RealtimeManager =
@@ -265,6 +269,48 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /** `recent`, `popular`, `price_asc`, `price_desc` — applied only when text search has non-empty `q`. */
     private val _sortOption = MutableStateFlow("recent")
     val sortOption: StateFlow<String> = _sortOption.asStateFlow()
+
+    data class BrowseLocationFilter(
+        val provinceId: String? = null,
+        val provinceName: String = "",
+        val districtId: String? = null,
+        val districtName: String = "",
+        val wardId: String? = null,
+        val wardName: String = "",
+    ) {
+        val hasSelection: Boolean
+            get() = !provinceId.isNullOrBlank()
+        val chipLabel: String
+            get() = listOfNotNull(
+                wardName.takeIf { it.isNotBlank() },
+                districtName.takeIf { it.isNotBlank() },
+                provinceName.takeIf { it.isNotBlank() },
+            ).joinToString(", ")
+    }
+
+    private data class SellerLocationQuery(
+        val provinceId: String? = null,
+        val districtId: String? = null,
+        val wardId: String? = null,
+    )
+
+    /** Off / nearby (default address) / manual province+district — persisted locally. */
+    private val _browseLocationMode = MutableStateFlow(ExploreBrowseLocationPreference.read(application))
+    val browseLocationMode: StateFlow<BrowseLocationMode> = _browseLocationMode.asStateFlow()
+
+    /** Manual pick synced to profile when signed in. */
+    private val _manualBrowseLocation = MutableStateFlow(BrowseLocationFilter())
+    val manualBrowseLocation: StateFlow<BrowseLocationFilter> = _manualBrowseLocation.asStateFlow()
+
+    /** Default shipping address province/district for nearby mode. */
+    private val _defaultAddressLocation = MutableStateFlow(BrowseLocationFilter())
+    val defaultAddressLocation: StateFlow<BrowseLocationFilter> = _defaultAddressLocation.asStateFlow()
+
+    /** @deprecated Use [manualBrowseLocation] — kept for gradual UI migration. */
+    val browseLocation: StateFlow<BrowseLocationFilter> = _manualBrowseLocation.asStateFlow()
+
+    private val _showBrowseLocationSetupNudge = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val showBrowseLocationSetupNudge: SharedFlow<Unit> = _showBrowseLocationSetupNudge.asSharedFlow()
 
     private var priceFilterDebounceJob: Job? = null
 
@@ -720,6 +766,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) { refreshProfileSizingState() }
     }
 
+    /** Refresh default-address snapshot after shipping address book changes. */
+    fun refreshBrowseLocationAfterAddressSave() {
+        viewModelScope.launch(Dispatchers.IO) {
+            refreshDefaultAddressLocation()
+        }
+    }
+
     private suspend fun refreshProfileSizingState() {
         if (isGuestBrowse()) {
             _profileSizingState.value = ProfileSizingState.Unknown
@@ -749,9 +802,118 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     hasMeasurement -> ProfileSizingState.EstimateOnly
                     else -> ProfileSizingState.Missing
                 }
+                _manualBrowseLocation.value = BrowseLocationFilter(
+                    provinceId = info.browseProvinceId,
+                    provinceName = info.browseProvinceName,
+                    districtId = info.browseDistrictId,
+                    districtName = info.browseDistrictName,
+                )
             },
             onFailure = { _profileSizingState.value = ProfileSizingState.Unknown },
         )
+        refreshDefaultAddressLocation()
+    }
+
+    private suspend fun refreshDefaultAddressLocation() {
+        if (isGuestBrowse()) {
+            _defaultAddressLocation.value = BrowseLocationFilter()
+            return
+        }
+        userShippingAddressRepository.listShippingAddresses().fold(
+            onSuccess = { list ->
+                val def = list.firstOrNull { it.isDefault } ?: list.firstOrNull()
+                _defaultAddressLocation.value = if (def == null) {
+                    BrowseLocationFilter()
+                } else {
+                    BrowseLocationFilter(
+                        provinceId = def.provinceId?.takeIf { it.isNotBlank() },
+                        provinceName = def.city.trim().ifBlank { def.region.trim() },
+                        districtId = def.districtId?.takeIf { it.isNotBlank() },
+                        districtName = def.district.trim(),
+                        wardId = def.wardId?.takeIf { it.isNotBlank() },
+                        wardName = def.ward.trim(),
+                    )
+                }
+            },
+            onFailure = { _defaultAddressLocation.value = BrowseLocationFilter() },
+        )
+    }
+
+    fun isBrowseLocationFilterActive(): Boolean = _browseLocationMode.value != BrowseLocationMode.Off
+
+    fun activeBrowseLocationLabel(): String {
+        return when (_browseLocationMode.value) {
+            BrowseLocationMode.Off -> ""
+            BrowseLocationMode.NearbyDefault -> _defaultAddressLocation.value.chipLabel
+            BrowseLocationMode.Manual -> _manualBrowseLocation.value.chipLabel
+        }
+    }
+
+    private fun effectiveSellerLocationQuery(): SellerLocationQuery {
+        val source = when (_browseLocationMode.value) {
+            BrowseLocationMode.Off -> return SellerLocationQuery()
+            BrowseLocationMode.NearbyDefault -> _defaultAddressLocation.value
+            BrowseLocationMode.Manual -> _manualBrowseLocation.value
+        }
+        if (!source.hasSelection) return SellerLocationQuery()
+        return when {
+            !source.wardId.isNullOrBlank() -> SellerLocationQuery(wardId = source.wardId)
+            !source.districtId.isNullOrBlank() -> SellerLocationQuery(districtId = source.districtId)
+            !source.provinceId.isNullOrBlank() -> SellerLocationQuery(provinceId = source.provinceId)
+            else -> SellerLocationQuery()
+        }
+    }
+
+    private fun persistBrowseLocationMode(mode: BrowseLocationMode) {
+        _browseLocationMode.value = mode
+        ExploreBrowseLocationPreference.write(getApplication(), mode)
+    }
+
+    /** Quick-toggle ON/OFF from the Explore card. */
+    fun setBrowseLocationEnabled(enabled: Boolean) {
+        if (!enabled) {
+            if (_browseLocationMode.value == BrowseLocationMode.Off) return
+            persistBrowseLocationMode(BrowseLocationMode.Off)
+            viewModelScope.launch { fetchListingsFirstPage() }
+            return
+        }
+        when {
+            _manualBrowseLocation.value.hasSelection -> {
+                persistBrowseLocationMode(BrowseLocationMode.Manual)
+                viewModelScope.launch { fetchListingsFirstPage() }
+            }
+            _defaultAddressLocation.value.hasSelection -> {
+                persistBrowseLocationMode(BrowseLocationMode.NearbyDefault)
+                viewModelScope.launch { fetchListingsFirstPage() }
+            }
+            else -> {
+                _showBrowseLocationSetupNudge.tryEmit(Unit)
+            }
+        }
+    }
+
+    fun setBrowseLocationModeFilter(mode: BrowseLocationMode) {
+        when (mode) {
+            BrowseLocationMode.Off -> {
+                if (_browseLocationMode.value == BrowseLocationMode.Off) return
+                persistBrowseLocationMode(BrowseLocationMode.Off)
+            }
+            BrowseLocationMode.NearbyDefault -> {
+                if (!_defaultAddressLocation.value.hasSelection) {
+                    _showBrowseLocationSetupNudge.tryEmit(Unit)
+                    return
+                }
+                persistBrowseLocationMode(BrowseLocationMode.NearbyDefault)
+            }
+            BrowseLocationMode.Manual -> {
+                if (!_manualBrowseLocation.value.hasSelection) {
+                    _showBrowseLocationSetupNudge.tryEmit(Unit)
+                    return
+                }
+                persistBrowseLocationMode(BrowseLocationMode.Manual)
+            }
+        }
+        viewModelScope.launch { fetchListingsFirstPage() }
     }
 
     private suspend fun loadQuickInterestChips() {
@@ -861,6 +1023,43 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun setBrowseLocationFilter(
+        provinceId: String,
+        provinceName: String,
+        districtId: String = "",
+        districtName: String = "",
+        wardId: String = "",
+        wardName: String = "",
+    ) {
+        viewModelScope.launch {
+            if (!isGuestBrowse() && districtId.isNotBlank()) {
+                withContext(Dispatchers.IO) {
+                    userRepository.putBrowseLocation(
+                        provinceId = provinceId,
+                        provinceName = provinceName,
+                        districtId = districtId,
+                        districtName = districtName,
+                    )
+                }
+            }
+            _manualBrowseLocation.value = BrowseLocationFilter(
+                provinceId = provinceId,
+                provinceName = provinceName,
+                districtId = districtId.takeIf { it.isNotBlank() },
+                districtName = districtName,
+                wardId = wardId.takeIf { it.isNotBlank() },
+                wardName = wardName,
+            )
+            persistBrowseLocationMode(BrowseLocationMode.Manual)
+            fetchListingsFirstPage()
+        }
+    }
+
+    fun clearBrowseLocationFilter() {
+        persistBrowseLocationMode(BrowseLocationMode.Off)
+        viewModelScope.launch { fetchListingsFirstPage() }
+    }
+
     private suspend fun fetchListingsFirstPage() {
         fetchListingsFirstPageInternal(isSearch = _isSearchMode.value)
     }
@@ -924,6 +1123,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val countryIso2 = countryIso2ForApi()
         val guest = isGuestBrowse()
         val usePersonalizedBrowse = q.isEmpty()
+        val location = effectiveSellerLocationQuery()
         return if (usePersonalizedBrowse) {
             fashApp.recommendationRepository.exploreListings(
                 publicBrowse = guest,
@@ -936,10 +1136,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 countryIso2 = countryIso2,
                 limit = ExploreFeedPageSize,
                 offset = offset,
-                // The "Match my size" quick toggle now propagates to personalized browse too,
-                // not just text search — this closes the gap where browsing without a search
-                // term ignored the user's saved reference size/measurements.
                 sizingMode = _sizingMode.value.takeIf { it.equals("match_profile", ignoreCase = true) },
+                sellerProvinceId = location.provinceId,
+                sellerDistrictId = location.districtId,
+                sellerWardId = location.wardId,
             )
         } else if (guest) {
             searchRepository.browseListings(
@@ -954,6 +1154,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 limit = ExploreFeedPageSize,
                 offset = offset,
                 sort = sort,
+                sellerProvinceId = location.provinceId,
+                sellerDistrictId = location.districtId,
+                sellerWardId = location.wardId,
             )
         } else {
             searchRepository.searchListings(
@@ -969,6 +1172,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 limit = ExploreFeedPageSize,
                 offset = offset,
                 sort = sort,
+                sellerProvinceId = location.provinceId,
+                sellerDistrictId = location.districtId,
+                sellerWardId = location.wardId,
             )
         }
     }
@@ -1206,6 +1412,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _sizingMode.value = "all"
             ExploreSizingPreference.write(getApplication(), "all")
         }
+        if (_browseLocationMode.value != BrowseLocationMode.Off) {
+            persistBrowseLocationMode(BrowseLocationMode.Off)
+        }
         _hasMore.value = true
         reloadAfterFilterChange()
         viewModelScope.launch { requestScrollExploreToTop() }
@@ -1220,7 +1429,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _selectedBrandId.value != null ||
             _selectedCountryId.value != null ||
             !_selectedCountryIso2.value.isNullOrBlank() ||
-            _sizingMode.value != "all"
+            _sizingMode.value != "all" ||
+            _browseLocationMode.value != BrowseLocationMode.Off
 
     /**
      * Resets marketplace filters, search text, and reloads the listings browse feed.
@@ -1240,6 +1450,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             if (_sizingMode.value != "all") {
                 _sizingMode.value = "all"
                 ExploreSizingPreference.write(getApplication(), "all")
+            }
+            if (_browseLocationMode.value != BrowseLocationMode.Off) {
+                persistBrowseLocationMode(BrowseLocationMode.Off)
             }
             _isSearchMode.value = false
             _committedListingSearchQuery.value = ""

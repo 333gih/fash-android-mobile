@@ -89,6 +89,11 @@ fun ListingGridCard(
         }
     }
     val scarcityBadge = listingScarcityBadge(item, compactFooter)
+    val commitmentBadge = if (item.onsiteInspectionCommitment && !compactFooter) {
+        stringResource(R.string.listing_commitment_badge)
+    } else {
+        null
+    }
     val imageUrl = resolveListingImageUrl(item.coverImageUrl)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     val metaUi = listingCardMetaUi(item, compactFooter)
@@ -131,26 +136,51 @@ fun ListingGridCard(
                 }
             }
 
-            // Scarcity badge: top-end (opposite side from photo-stack / status badges)
-            if (scarcityBadge != null) {
-                Surface(
+            // Scarcity / commitment badges: top-end
+            if (scarcityBadge != null || commitmentBadge != null) {
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp),
-                    shape = RoundedCornerShape(6.dp),
-                    color = FashColors.Primary.copy(alpha = 0.88f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalAlignment = Alignment.End,
                 ) {
-                    Text(
-                        text = scarcityBadge,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.2.sp,
-                        ),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    commitmentBadge?.let { label ->
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF1B5E20).copy(alpha = 0.88f),
+                        ) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.2.sp,
+                                ),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    scarcityBadge?.let { label ->
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = FashColors.Primary.copy(alpha = 0.88f),
+                        ) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.2.sp,
+                                ),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
             val statusTrimmed = statusOverlayLabel?.trim()?.takeIf { it.isNotEmpty() }

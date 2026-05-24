@@ -33,6 +33,7 @@ data class ListingFeedItem(
     val sellerIsFollowing: Boolean = false,
     /** Marketplace lifecycle: `in_review`, `rejected`, `active`, `inactive`, `sold`, `reserved`, `deleted` (when API sends `status`). */
     val listingStatus: String? = null,
+    val onsiteInspectionCommitment: Boolean = false,
 )
 
 /** Ship-from address on listing detail (wire: `shipping_address`). */

@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,11 +49,20 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.address.VnAddressDropdown
+import com.pc.fash_android_mobile.data.common.CommonAddressDto
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
+import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
@@ -661,6 +671,197 @@ fun ExploreAestheticTagsPickerSheet(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Province → district → ward cascade — same flow as address creation. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ExploreBrowseLocationPickerSheet(
+    visible: Boolean,
+    commonServiceRepository: CommonServiceRepository,
+    initialProvinceId: String? = null,
+    initialDistrictId: String? = null,
+    initialWardId: String? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        provinceId: String,
+        provinceName: String,
+        districtId: String,
+        districtName: String,
+        wardId: String,
+        wardName: String,
+    ) -> Unit,
+) {
+    if (!visible) return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scheme = MaterialTheme.colorScheme
+    val edge = FashTheme.spacing.editorialStart
+    var provinces by remember { mutableStateOf<List<CommonAddressDto>>(emptyList()) }
+    var districts by remember { mutableStateOf<List<CommonAddressDto>>(emptyList()) }
+    var wards by remember { mutableStateOf<List<CommonAddressDto>>(emptyList()) }
+    var selectedProvince by remember(initialProvinceId) { mutableStateOf<CommonAddressDto?>(null) }
+    var selectedDistrict by remember(initialDistrictId) { mutableStateOf<CommonAddressDto?>(null) }
+    var selectedWard by remember(initialWardId) { mutableStateOf<CommonAddressDto?>(null) }
+    var loadingProvinces by remember { mutableStateOf(true) }
+    var loadingDistricts by remember { mutableStateOf(false) }
+    var loadingWards by remember { mutableStateOf(false) }
+    val emptyDropdownText = stringResource(R.string.address_dropdown_no_options)
+    val loadingText = stringResource(R.string.explore_filter_loading)
+
+    LaunchedEffect(Unit) {
+        loadingProvinces = true
+        provinces = commonServiceRepository.getProvincesCatalog().getOrElse { emptyList() }
+        val pid = initialProvinceId?.trim()?.takeIf { it.isNotEmpty() }
+        if (pid != null) {
+            selectedProvince = provinces.find { it.id == pid }
+        }
+        loadingProvinces = false
+    }
+    LaunchedEffect(selectedProvince?.id) {
+        val pid = selectedProvince?.id ?: run {
+            districts = emptyList()
+            wards = emptyList()
+            selectedDistrict = null
+            selectedWard = null
+            return@LaunchedEffect
+        }
+        loadingDistricts = true
+        districts = commonServiceRepository.getAdministrativeChildren(pid, 2).getOrElse { emptyList() }
+        val did = initialDistrictId?.trim()?.takeIf { it.isNotEmpty() }
+        selectedDistrict = if (did != null && selectedProvince?.id == initialProvinceId) {
+            districts.find { it.id == did }
+        } else {
+            null
+        }
+        selectedWard = null
+        loadingDistricts = false
+    }
+    LaunchedEffect(selectedDistrict?.id) {
+        val did = selectedDistrict?.id ?: run {
+            wards = emptyList()
+            selectedWard = null
+            return@LaunchedEffect
+        }
+        loadingWards = true
+        wards = commonServiceRepository.getAdministrativeChildren(did, 3).getOrElse { emptyList() }
+        val wid = initialWardId?.trim()?.takeIf { it.isNotEmpty() }
+        selectedWard = if (wid != null && selectedDistrict?.id == initialDistrictId) {
+            wards.find { it.id == wid }
+        } else {
+            null
+        }
+        loadingWards = false
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = scheme.surface,
+        contentColor = scheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(bottom = FashTheme.spacing.spacing4),
+        ) {
+            ExploreFilterPickerHeader(
+                title = stringResource(R.string.browse_location_picker_title),
+                onDone = onDismiss,
+            )
+            Text(
+                text = stringResource(R.string.browse_location_picker_hierarchy_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = edge, vertical = 4.dp),
+            )
+            if (loadingProvinces) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = edge, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = FashColors.Primary,
+                    )
+                    Text(
+                        text = loadingText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            } else {
+                VnAddressDropdown(
+                    label = stringResource(R.string.address_field_province),
+                    options = provinces,
+                    selected = selectedProvince,
+                    onSelect = { selected ->
+                        selectedProvince = selected
+                        selectedDistrict = null
+                        selectedWard = null
+                    },
+                    placeholder = stringResource(R.string.address_select_province),
+                    emptyOptionsText = emptyDropdownText,
+                    modifier = Modifier.padding(horizontal = edge),
+                )
+                Spacer(modifier = Modifier.heightIn(min = 10.dp))
+                VnAddressDropdown(
+                    label = stringResource(R.string.address_field_district),
+                    options = if (loadingDistricts) emptyList() else districts,
+                    selected = selectedDistrict,
+                    onSelect = { selected ->
+                        selectedDistrict = selected
+                        selectedWard = null
+                    },
+                    enabled = selectedProvince != null && !loadingDistricts,
+                    placeholder = stringResource(R.string.address_select_district),
+                    emptyOptionsText = emptyDropdownText,
+                    modifier = Modifier.padding(horizontal = edge),
+                )
+                Spacer(modifier = Modifier.heightIn(min = 10.dp))
+                VnAddressDropdown(
+                    label = stringResource(R.string.address_field_ward),
+                    options = if (loadingWards) emptyList() else wards,
+                    selected = selectedWard,
+                    onSelect = { selectedWard = it },
+                    enabled = selectedDistrict != null && !loadingWards,
+                    placeholder = stringResource(R.string.browse_location_picker_ward_optional),
+                    emptyOptionsText = emptyDropdownText,
+                    modifier = Modifier.padding(horizontal = edge),
+                )
+            }
+            Button(
+                onClick = {
+                    val p = selectedProvince ?: return@Button
+                    val d = selectedDistrict
+                    val w = selectedWard
+                    onConfirm(
+                        p.id,
+                        p.name,
+                        d?.id.orEmpty(),
+                        d?.name.orEmpty(),
+                        w?.id.orEmpty(),
+                        w?.name.orEmpty(),
+                    )
+                },
+                enabled = selectedProvince != null && !loadingProvinces,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = edge, vertical = 12.dp),
+                shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+            ) {
+                Text(stringResource(R.string.browse_location_picker_apply))
             }
         }
     }

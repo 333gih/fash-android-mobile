@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,7 +57,6 @@ import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
 import com.pc.fash_android_mobile.data.search.TrendingTagChip
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
-import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSlider
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderBlock
@@ -377,50 +375,21 @@ fun HomeFeedContent(
                                 subtitle = stringResource(R.string.home_top_section_subtitle),
                             )
                         }
-                        val rows = items.chunked(2)
-                        itemsIndexed(
-                            items = rows,
-                            key = { index, row ->
-                                stableLazyKey(row.firstOrNull()?.id, index, "home")
-                            },
-                        ) { index, row ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(
-                                        start = FashTheme.spacing.editorialStart,
-                                        end = FashTheme.spacing.editorialEnd,
-                                    )
-                                    .padding(
-                                        top = if (index == 0) 2.dp else 0.dp,
-                                        bottom = FashTheme.spacing.spacing2,
-                                    ),
-                                horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
-                            ) {
-                                row.forEachIndexed { col, feedItem ->
-                                    val gridPosition = index * 2 + col
-                                    LaunchedEffect(feedItem.id) {
-                                        viewModel.recordView(feedItem, position = gridPosition, surface = "home")
-                                    }
-                                    ListingGridCard(
-                                        item = feedItem,
-                                        showQuickActions = true,
-                                        onLike = { onLikeListing(feedItem) },
-                                        onSave = { onSaveListing(feedItem) },
-                                        onClick = {
-                                            viewModel.openListingPreview(feedItem, "home", gridPosition)
-                                        },
-                                        onDwell = { dwellMs ->
-                                            viewModel.recordDwell(feedItem, "home", gridPosition, dwellMs)
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        imageAspectRatio = 4f / 5f,
-                                    )
-                                }
-                                repeat(2 - row.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
+                        item(key = "home-feed-staggered") {
+                            HomeFeedMasonryGrid(
+                                items = items,
+                                onLikeListing = onLikeListing,
+                                onSaveListing = onSaveListing,
+                                onListingClick = { feedItem, index ->
+                                    viewModel.openListingPreview(feedItem, "home", index)
+                                },
+                                onRecordView = { feedItem, index ->
+                                    viewModel.recordView(feedItem, position = index, surface = "home")
+                                },
+                                onDwell = { feedItem, index, dwellMs ->
+                                    viewModel.recordDwell(feedItem, "home", index, dwellMs)
+                                },
+                            )
                         }
                     }
                 }
@@ -579,10 +548,109 @@ private fun computeFollowFeedLazyIndexRange(
         feedItems.isEmpty() -> start..start
         isGuestBrowse && feedItems.isEmpty() -> start..start
         else -> {
-            val rowCount = feedItems.chunked(2).size
-            // Header at `start`, grid rows at start+1 … start+rowCount.
+            val rowCount = 1
+            // Header at `start`, staggered masonry block at start+1.
             start..(start + rowCount)
         }
+    }
+}
+
+/**
+ * Two-column masonry grid for the home follow feed. Uses a non-scrollable layout so it can live
+ * inside [LazyColumn] without infinite-height constraint crashes (nested lazy grids are disallowed).
+ */
+@Composable
+private fun HomeFeedMasonryGrid(
+    items: List<ListingFeedItem>,
+    onLikeListing: (ListingFeedItem) -> Unit,
+    onSaveListing: (ListingFeedItem) -> Unit,
+    onListingClick: (ListingFeedItem, Int) -> Unit,
+    onRecordView: (ListingFeedItem, Int) -> Unit,
+    onDwell: (ListingFeedItem, Int, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val columnItems = remember(items) {
+        val left = mutableListOf<Pair<Int, ListingFeedItem>>()
+        val right = mutableListOf<Pair<Int, ListingFeedItem>>()
+        items.forEachIndexed { index, item ->
+            if (index % 2 == 0) left += index to item else right += index to item
+        }
+        left to right
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = FashTheme.spacing.editorialStart,
+                end = FashTheme.spacing.editorialEnd,
+            ),
+        horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
+    ) {
+        Column(Modifier.weight(1f)) {
+            columnItems.first.forEach { (index, feedItem) ->
+                HomeFeedMasonryTile(
+                    feedItem = feedItem,
+                    index = index,
+                    onLikeListing = onLikeListing,
+                    onSaveListing = onSaveListing,
+                    onListingClick = onListingClick,
+                    onRecordView = onRecordView,
+                    onDwell = onDwell,
+                )
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            columnItems.second.forEach { (index, feedItem) ->
+                HomeFeedMasonryTile(
+                    feedItem = feedItem,
+                    index = index,
+                    onLikeListing = onLikeListing,
+                    onSaveListing = onSaveListing,
+                    onListingClick = onListingClick,
+                    onRecordView = onRecordView,
+                    onDwell = onDwell,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeFeedMasonryTile(
+    feedItem: ListingFeedItem,
+    index: Int,
+    onLikeListing: (ListingFeedItem) -> Unit,
+    onSaveListing: (ListingFeedItem) -> Unit,
+    onListingClick: (ListingFeedItem, Int) -> Unit,
+    onRecordView: (ListingFeedItem, Int) -> Unit,
+    onDwell: (ListingFeedItem, Int, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val aspect = homeFeedStaggerAspectRatio(feedItem.id)
+    LaunchedEffect(feedItem.id) {
+        onRecordView(feedItem, index)
+    }
+    ListingGridCard(
+        item = feedItem,
+        showQuickActions = true,
+        onLike = { onLikeListing(feedItem) },
+        onSave = { onSaveListing(feedItem) },
+        onClick = { onListingClick(feedItem, index) },
+        onDwell = { dwellMs -> onDwell(feedItem, index, dwellMs) },
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = FashTheme.spacing.spacing2),
+        imageAspectRatio = aspect,
+    )
+}
+
+/** Vary tile height by listing id hash for masonry-style home feed. */
+private fun homeFeedStaggerAspectRatio(listingId: String): Float {
+    val bucket = (listingId.hashCode() and Int.MAX_VALUE) % 3
+    return when (bucket) {
+        0 -> 3f / 4f
+        1 -> 4f / 5f
+        else -> 5f / 6f
     }
 }
 

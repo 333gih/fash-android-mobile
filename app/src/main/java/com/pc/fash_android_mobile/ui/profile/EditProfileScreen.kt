@@ -47,7 +47,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,7 +75,6 @@ import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAssets
-import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.onboarding.ProfileSetupSizingSection
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -112,7 +110,6 @@ fun EditProfileScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
     val profile by viewModel.profile.collectAsState()
     val displayName by viewModel.displayName.collectAsState()
     val username by viewModel.username.collectAsState()
@@ -137,10 +134,6 @@ fun EditProfileScreen(
     val scheme = MaterialTheme.colorScheme
 
     var showStyleSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
-    }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfile()
@@ -187,7 +180,6 @@ fun EditProfileScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = scheme.surfaceContainerLow,
-        snackbarHost = { FashSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

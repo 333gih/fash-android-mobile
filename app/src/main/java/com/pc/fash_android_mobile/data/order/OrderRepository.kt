@@ -298,12 +298,31 @@ class OrderRepository(
     }
 
     /** `POST /orders/review` */
-    fun submitReview(orderId: String, rating: Int, comment: String? = null): Result<Unit> = runCatching {
+    fun submitReview(
+        orderId: String,
+        rating: Int,
+        comment: String? = null,
+        badgeIds: List<com.pc.fash_android_mobile.data.deal.ReviewBadgeRefPayload> = emptyList(),
+    ): Result<Unit> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/orders/review")
         val json = JSONObject()
             .put("order_id", orderId.trim())
             .put("rating", rating)
         comment?.takeIf { it.isNotBlank() }?.let { json.put("comment", it) }
+        if (badgeIds.isNotEmpty()) {
+            val arr = JSONArray()
+            badgeIds.forEach { b ->
+                arr.put(
+                    JSONObject().apply {
+                        put("id", b.id)
+                        b.slug?.takeIf { it.isNotBlank() }?.let { put("slug", it) }
+                        b.name?.takeIf { it.isNotBlank() }?.let { put("name", it) }
+                        b.emoji?.takeIf { it.isNotBlank() }?.let { put("emoji", it) }
+                    },
+                )
+            }
+            json.put("badge_ids", arr)
+        }
         executePostJson(url, json.toString())
     }
 
@@ -480,7 +499,7 @@ class OrderRepository(
             o.optString("tracking_status", o.optString("TrackingStatus", o.optString("last_tracking_event", "")))
         }
         val meetingAppointment = parseOrderMeetingAppointment(o)
-        val meetingGrace = parseOrderMeetingGrace(o)
+        val meetingGrace = parseOrderMeetingGrace(o, meetingAppointment)
         val meetupDeadlineAt = o.optIsoFirst("meetup_deadline_at", "MeetupDeadlineAt")
         val canConfirmHandoff = when {
             o.has("can_confirm_handoff") -> o.optBoolean("can_confirm_handoff", false)
@@ -599,18 +618,38 @@ class OrderRepository(
         return top
     }
 
-    private fun parseOrderMeetingGrace(order: JSONObject): OrderMeetingGrace? {
+    private fun parseOrderMeetingGrace(
+        order: JSONObject,
+        appointment: OrderMeetingAppointment?,
+    ): OrderMeetingGrace? {
         val g = order.optJSONObject("meeting_grace") ?: order.optJSONObject("MeetingGrace") ?: return null
-        // `{}` is valid — do not drop; otherwise UI removes the whole meetup grace card after check-in refresh.
+        val buyerAt = appointment?.buyerCheckInAt?.trim().orEmpty()
+        val sellerAt = appointment?.sellerCheckInAt?.trim().orEmpty()
+        val selfCheckedIn = g.optBoolean(
+            "self_checked_in",
+            g.optBoolean("SelfCheckedIn", false),
+        )
+        val checkInVisible = g.optBoolean(
+            "check_in_button_visible",
+            g.optBoolean("CheckInButtonVisible", g.optBoolean("can_check_in", g.optBoolean("CanCheckIn", false))),
+        )
         return OrderMeetingGrace(
-            canCheckIn = g.optBoolean("can_check_in", g.optBoolean("CanCheckIn", false)),
-            canReportNoShow = g.optBoolean("can_report_no_show", g.optBoolean("CanReportNoShow", false)),
+            canCheckIn = checkInVisible && !selfCheckedIn,
+            selfCheckedIn = selfCheckedIn,
+            canReportNoShow = g.optBoolean(
+                "show_no_show_report_cta",
+                g.optBoolean("ShowNoShowReportCTA", g.optBoolean("can_report_no_show", g.optBoolean("CanReportNoShow", false))),
+            ),
             sosUnlocked = g.optBoolean("sos_unlocked", g.optBoolean("SosUnlocked", false)),
             checkInHint = g.optString("check_in_hint", g.optString("CheckInHint", "")).trim(),
             noShowHint = g.optString("no_show_hint", g.optString("NoShowHint", "")).trim(),
-            buyerCheckedInAt = g.optIsoGrace("buyer_checked_in_at", "BuyerCheckedInAt"),
-            sellerCheckedInAt = g.optIsoGrace("seller_checked_in_at", "SellerCheckedInAt"),
-            phase = g.optString("phase", g.optString("Phase", "")).trim().lowercase(),
+            buyerCheckedInAt = buyerAt.ifBlank {
+                g.optIsoGrace("buyer_checked_in_at", "BuyerCheckedInAt")
+            },
+            sellerCheckedInAt = sellerAt.ifBlank {
+                g.optIsoGrace("seller_checked_in_at", "SellerCheckedInAt")
+            },
+            phase = g.optString("grace_phase", g.optString("GracePhase", g.optString("phase", g.optString("Phase", "")))).trim().lowercase(),
         )
     }
 

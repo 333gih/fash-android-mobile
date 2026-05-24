@@ -55,7 +55,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.ui.UiDialogMessage
-import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
  * Global success / error / info dialog aligned with Fash editorial surfaces and Material 3.
@@ -163,18 +162,18 @@ private fun FashGlobalDialogCard(
     val (iconVector, iconTint, iconCircleBg) = when (message) {
         is UiDialogMessage.Success -> Triple(
             Icons.Default.CheckCircle,
-            FashColors.Success,
-            FashColors.Success.copy(alpha = 0.14f),
+            scheme.primary,
+            scheme.primaryContainer.copy(alpha = 0.38f),
         )
         is UiDialogMessage.Error -> Triple(
             Icons.Default.ErrorOutline,
-            scheme.error,
-            scheme.errorContainer,
+            scheme.tertiary,
+            scheme.tertiary.copy(alpha = 0.12f),
         )
         is UiDialogMessage.Info -> Triple(
             Icons.Default.Info,
-            scheme.primary,
-            scheme.primaryContainer,
+            scheme.secondary,
+            scheme.secondaryContainer.copy(alpha = 0.45f),
         )
     }
 

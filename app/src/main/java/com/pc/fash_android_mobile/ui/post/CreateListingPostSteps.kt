@@ -24,6 +24,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -684,6 +686,51 @@ fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.post_condition_score_label, draft.conditionScore),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = draft.conditionScore.toFloat(),
+                onValueChange = { v ->
+                    viewModel.updateDraft { copy(conditionScore = v.toInt().coerceIn(80, 99)) }
+                },
+                valueRange = 80f..99f,
+                steps = 18,
+                colors = SliderDefaults.colors(
+                    thumbColor = FashColors.Primary,
+                    activeTrackColor = FashColors.Primary,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.post_condition_defects_label),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ListingConditionDefectOptions.forEach { key ->
+                    PostSelectablePill(
+                        text = conditionDefectLabel(key),
+                        selected = draft.conditionDefects.contains(key),
+                        onClick = { viewModel.updateDraft { toggleConditionDefect(key) } },
+                    )
+                }
+            }
+            if (draft.conditionDefects.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.post_condition_defect_photo_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             PostListingOutlinedTextField(
                 value = draft.title,
                 onValueChange = { viewModel.updateDraft { copy(title = it.take(MaxListingTitleLength)) } },
@@ -719,4 +766,15 @@ fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+}
+
+@Composable
+private fun conditionDefectLabel(key: String): String = when (key) {
+    "stains" -> stringResource(R.string.post_defect_stains)
+    "worn" -> stringResource(R.string.post_defect_worn)
+    "missing_button" -> stringResource(R.string.post_defect_missing_button)
+    "fading" -> stringResource(R.string.post_defect_fading)
+    "pilling" -> stringResource(R.string.post_defect_pilling)
+    "odor" -> stringResource(R.string.post_defect_odor)
+    else -> key
 }

@@ -386,9 +386,7 @@ fun LoginScreen(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 12.dp),
+                        .fillMaxWidth(),
                 )
             }
             if (isSocialLoading) {

@@ -26,11 +26,14 @@ fun VnAddressDropdown(
     onSelect: (CommonAddressDto?) -> Unit,
     enabled: Boolean = true,
     placeholder: String = "",
+    emptyOptionsText: String = "—",
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = !expanded },
+        modifier = modifier,
     ) {
         OutlinedTextField(
             value = selected?.name ?: "",
@@ -51,7 +54,7 @@ fun VnAddressDropdown(
         ) {
             if (options.isEmpty()) {
                 DropdownMenuItem(
-                    text = { Text("—") },
+                    text = { Text(emptyOptionsText) },
                     onClick = { expanded = false },
                     enabled = false,
                 )

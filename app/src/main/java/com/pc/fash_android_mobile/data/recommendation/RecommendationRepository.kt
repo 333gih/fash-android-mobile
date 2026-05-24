@@ -49,6 +49,9 @@ class RecommendationRepository(
          * "all" so the request still succeeds; the UI nudges users to set up sizing.
          */
         sizingMode: String? = null,
+        sellerProvinceId: String? = null,
+        sellerDistrictId: String? = null,
+        sellerWardId: String? = null,
     ): Result<List<ListingFeedItem>> = runCatching {
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
         val q = mutableListOf("limit=$limit", "offset=$offset")
@@ -69,6 +72,9 @@ class RecommendationRepository(
             ?.let { q.add("country_iso2=${enc(it)}") }
         sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
             ?.let { q.add("sizing_mode=${enc(it.trim())}") }
+        sellerProvinceId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_province_id=${enc(it)}") }
+        sellerDistrictId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_district_id=${enc(it)}") }
+        sellerWardId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_ward_id=${enc(it)}") }
         val path = if (publicBrowse) {
             PublicBrowseHttp.publicApiPath("browse/recommendations/explore-listings")
         } else {

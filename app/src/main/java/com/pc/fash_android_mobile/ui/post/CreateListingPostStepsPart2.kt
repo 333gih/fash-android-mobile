@@ -680,6 +680,41 @@ fun CreateListingPostStep9(
                 .padding(horizontal = FashTheme.spacing.editorialStart),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = scheme.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            viewModel.updateDraft { copy(onsiteInspectionCommitment = !onsiteInspectionCommitment) }
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    androidx.compose.material3.Checkbox(
+                        checked = draft.onsiteInspectionCommitment,
+                        onCheckedChange = { checked ->
+                            viewModel.updateDraft { copy(onsiteInspectionCommitment = checked) }
+                        },
+                        colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = FashColors.Primary),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.listing_commitment_title),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        )
+                        Text(
+                            text = stringResource(R.string.listing_commitment_body),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = stringResource(R.string.address_list_header),
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),

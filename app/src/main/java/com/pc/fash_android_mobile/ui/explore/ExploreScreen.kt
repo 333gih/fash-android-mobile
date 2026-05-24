@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomSheetDefaults
@@ -107,6 +108,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
+import com.pc.fash_android_mobile.data.explore.BrowseLocationMode
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
@@ -162,6 +164,8 @@ fun ExploreScreen(
      * sheet simply dismisses without routing.
      */
     onOpenSizingSetup: (() -> Unit)? = null,
+    /** Opens saved shipping addresses when nearby filter needs a default address. */
+    onOpenShippingAddresses: (() -> Unit)? = null,
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
@@ -171,10 +175,19 @@ fun ExploreScreen(
     val selectedCountryId by viewModel.selectedCountryId.collectAsState()
     val selectedCountryIso2 by viewModel.selectedCountryIso2.collectAsState()
     val sizingMode by viewModel.sizingMode.collectAsState()
-    val profileSizingState by viewModel.profileSizingState.collectAsState()
+    val browseLocationMode by viewModel.browseLocationMode.collectAsState()
+    val manualBrowseLocation by viewModel.manualBrowseLocation.collectAsState()
+    val defaultAddressLocation by viewModel.defaultAddressLocation.collectAsState()
+    var showBrowseLocationPicker by rememberSaveable { mutableStateOf(false) }
+    var showBrowseLocationSetupSheet by rememberSaveable { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val fashApp = remember(context) { context.applicationContext as com.pc.fash_android_mobile.FashApplication }
     var showSizingSetupSheet by rememberSaveable { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.showSizingSetupNudge.collect { showSizingSetupSheet = true }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.showBrowseLocationSetupNudge.collect { showBrowseLocationSetupSheet = true }
     }
     val featuredSellers by viewModel.featuredSellers.collectAsState()
     val listings by viewModel.listings.collectAsState()
@@ -198,6 +211,7 @@ fun ExploreScreen(
         selectedCountryId,
         selectedCountryIso2,
         sizingMode,
+        browseLocationMode,
     ) {
         selectedCategoryId != null ||
             selectedAestheticTagIds.isNotEmpty() ||
@@ -207,7 +221,8 @@ fun ExploreScreen(
             selectedBrandId != null ||
             selectedCountryId != null ||
             !selectedCountryIso2.isNullOrBlank() ||
-            sizingMode != "all"
+            sizingMode != "all" ||
+            browseLocationMode != BrowseLocationMode.Off
     }
     val filterSummaryParts = exploreFilterSummaryParts(
         categories = categories,
@@ -220,6 +235,8 @@ fun ExploreScreen(
         selectedCountryId = selectedCountryId,
         selectedCountryIso2 = selectedCountryIso2,
         sizingMode = sizingMode,
+        browseLocationMode = browseLocationMode,
+        browseLocationLabel = viewModel.activeBrowseLocationLabel(),
         minPriceText = minPriceText,
         maxPriceText = maxPriceText,
         conditionFilter = conditionFilter,
@@ -419,21 +436,20 @@ fun ExploreScreen(
                                     },
                                 )
                             }
-                            // Quick toggle — match_profile only works when signed in; guests see the
-                            // control but tapping it opens the standard login sheet.
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                ExploreSizingQuickToggle(
-                                    enabled = !isGuestMode &&
-                                        sizingMode.equals("match_profile", ignoreCase = true),
-                                    profileSizingState = profileSizingState,
-                                    onToggle = { on ->
-                                        if (isGuestMode) {
-                                            if (on) onRequestLogin(GuestLoginReason.SizingMatch)
-                                        } else {
-                                            viewModel.setSizingModeFilter(if (on) "match_profile" else "all")
-                                        }
-                                    },
-                                )
+                            if (
+                                sizingMode.equals("match_profile", ignoreCase = true) ||
+                                browseLocationMode != BrowseLocationMode.Off
+                            ) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    ExploreActivePersonalFilterChips(
+                                        sizingActive = sizingMode.equals("match_profile", ignoreCase = true),
+                                        browseLocationMode = browseLocationMode,
+                                        browseLocationLabel = viewModel.activeBrowseLocationLabel(),
+                                        onClearSizing = { viewModel.setSizingModeFilter("all") },
+                                        onClearLocation = { viewModel.clearBrowseLocationFilter() },
+                                        onOpenFilters = { showFilterSheet = true },
+                                    )
+                                }
                             }
                             // Quick interest chips visible whenever the user isn't typing a text
                             // search. We keep them under active filters so the buyer can still
@@ -596,8 +612,12 @@ fun ExploreScreen(
                     selectedCountryId = selectedCountryId,
                     selectedCountryIso2 = selectedCountryIso2,
                     sizingMode = sizingMode,
+                    browseLocationMode = browseLocationMode,
+                    manualBrowseLocation = manualBrowseLocation,
+                    defaultAddressLocation = defaultAddressLocation,
                     isGuestMode = isGuestMode,
                     onRequestLogin = onRequestLogin,
+                    onOpenBrowseLocationPicker = { showBrowseLocationPicker = true },
                     onDismiss = { showFilterSheet = false },
                 )
             }
@@ -610,6 +630,46 @@ fun ExploreScreen(
                     },
                     onSkip = { showSizingSetupSheet = false },
                     onDismiss = { showSizingSetupSheet = false },
+                )
+            }
+
+            if (showBrowseLocationSetupSheet) {
+                ExploreBrowseLocationSetupSheet(
+                    onAddAddressClick = {
+                        showBrowseLocationSetupSheet = false
+                        if (isGuestMode) {
+                            onRequestLogin(GuestLoginReason.BrowseLocation)
+                        } else {
+                            onOpenShippingAddresses?.invoke()
+                        }
+                    },
+                    onPickManualClick = {
+                        showBrowseLocationSetupSheet = false
+                        showBrowseLocationPicker = true
+                    },
+                    onDismiss = { showBrowseLocationSetupSheet = false },
+                )
+            }
+
+            if (showBrowseLocationPicker) {
+                ExploreBrowseLocationPickerSheet(
+                    visible = true,
+                    commonServiceRepository = fashApp.commonServiceRepository,
+                    initialProvinceId = manualBrowseLocation.provinceId,
+                    initialDistrictId = manualBrowseLocation.districtId,
+                    initialWardId = manualBrowseLocation.wardId,
+                    onDismiss = { showBrowseLocationPicker = false },
+                    onConfirm = { provinceId, provinceName, districtId, districtName, wardId, wardName ->
+                        showBrowseLocationPicker = false
+                        viewModel.setBrowseLocationFilter(
+                            provinceId = provinceId,
+                            provinceName = provinceName,
+                            districtId = districtId,
+                            districtName = districtName,
+                            wardId = wardId,
+                            wardName = wardName,
+                        )
+                    },
                 )
             }
 
@@ -1112,6 +1172,8 @@ private fun exploreFilterSummaryParts(
     selectedCountryId: String?,
     selectedCountryIso2: String?,
     sizingMode: String,
+    browseLocationMode: BrowseLocationMode,
+    browseLocationLabel: String,
     minPriceText: String,
     maxPriceText: String,
     conditionFilter: String?,
@@ -1144,6 +1206,11 @@ private fun exploreFilterSummaryParts(
     }
     if (sizingMode.equals("match_profile", ignoreCase = true)) {
         parts.add(stringResource(R.string.explore_filter_summary_sizing_match))
+    }
+    if (browseLocationMode != BrowseLocationMode.Off) {
+        val label = browseLocationLabel.trim().takeIf { it.isNotEmpty() }
+            ?: stringResource(R.string.explore_filter_summary_location_active)
+        parts.add(label)
     }
     val min = minPriceText.trim()
     val max = maxPriceText.trim()
@@ -1241,98 +1308,140 @@ private fun ExploreFiltersBarTrailingAction(
     }
 }
 
-/**
- * Pill-style toggle pinned directly under the filter bar. Lets the buyer flip "Match my size"
- * without opening the full filter sheet — surfacing Fash's size-first identity in the primary
- * discovery surface.
- *
- * When enabled, the client sends `sizing_mode=match_profile` on personalized browse and search
- * so core-service filters listings to the viewer's saved size / measurements.
- */
+/** Compact reminders when personal filters are on — one slim row, not full-width cards. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ExploreSizingQuickToggle(
-    enabled: Boolean,
-    profileSizingState: ExploreViewModel.ProfileSizingState,
-    onToggle: (Boolean) -> Unit,
+private fun ExploreActivePersonalFilterChips(
+    sizingActive: Boolean,
+    browseLocationMode: BrowseLocationMode,
+    browseLocationLabel: String,
+    onClearSizing: () -> Unit,
+    onClearLocation: () -> Unit,
+    onOpenFilters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val cd = stringResource(R.string.explore_quick_sizing_cd)
-    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
-    // Subtitle priority: setup hint (no size on file) > active/idle copy.
-    val subtitleRes = when {
-        enabled && profileSizingState == ExploreViewModel.ProfileSizingState.Missing ->
-            R.string.explore_quick_sizing_setup_hint
-        enabled && profileSizingState == ExploreViewModel.ProfileSizingState.EstimateOnly ->
-            R.string.explore_quick_sizing_setup_hint
-        enabled -> R.string.explore_quick_sizing_subtitle_on
-        else -> R.string.explore_quick_sizing_subtitle_off
-    }
-    Surface(
+    val edge = FashTheme.spacing.editorialStart
+    LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 10.dp)
-            .clip(shape)
-            .clickable { onToggle(!enabled) }
-            .semantics { contentDescription = cd; role = Role.Switch },
-        shape = shape,
-        color = if (enabled) FashColors.Primary.copy(alpha = 0.10f) else scheme.surfaceContainerLow,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+            .padding(bottom = 6.dp),
+        contentPadding = PaddingValues(horizontal = edge),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.explore_quick_sizing_title),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (enabled) FashColors.Primary else scheme.onSurface,
-                    )
-                    if (enabled && profileSizingState == ExploreViewModel.ProfileSizingState.EstimateOnly) {
-                        // Estimate pill — surfaces that backend will use height/weight, not a saved size.
-                        Surface(
-                            shape = RoundedCornerShape(FashTheme.spacing.radiusPill),
-                            color = FashColors.Primary.copy(alpha = 0.18f),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.explore_quick_sizing_estimate_badge),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = FashColors.Primary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-                Text(
-                    text = stringResource(subtitleRes),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+        if (sizingActive) {
+            item {
+                ExplorePersonalFilterPill(
+                    label = stringResource(R.string.explore_filter_summary_sizing_match),
+                    onClear = onClearSizing,
                 )
             }
-            Switch(
-                checked = enabled,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = scheme.onPrimary,
-                    checkedTrackColor = FashColors.Primary,
-                    checkedBorderColor = FashColors.Primary,
-                    uncheckedThumbColor = scheme.surface,
-                    uncheckedTrackColor = scheme.outline.copy(alpha = 0.35f),
-                    uncheckedBorderColor = scheme.outline.copy(alpha = 0.35f),
-                ),
+        }
+        if (browseLocationMode != BrowseLocationMode.Off) {
+            item {
+                val locLabel = browseLocationLabel.trim().takeIf { it.isNotEmpty() }
+                    ?: stringResource(R.string.explore_filter_summary_location_active)
+                ExplorePersonalFilterPill(
+                    label = locLabel,
+                    onClear = onClearLocation,
+                )
+            }
+        }
+        item {
+            Text(
+                text = stringResource(R.string.explore_personal_filters_edit),
+                style = MaterialTheme.typography.labelMedium,
+                color = FashColors.Primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(FashTheme.spacing.radiusPill))
+                    .clickable(onClick = onOpenFilters)
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun ExplorePersonalFilterPill(
+    label: String,
+    onClear: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(FashColors.Primary.copy(alpha = 0.12f))
+            .clickable(onClick = onClear)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = stringResource(R.string.explore_filters_clear),
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExploreBrowseLocationSetupSheet(
+    onAddAddressClick: () -> Unit,
+    onPickManualClick: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = scheme.surface,
+        contentColor = scheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.explore_location_setup_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            )
+            Text(
+                text = stringResource(R.string.explore_location_setup_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onAddAddressClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+            ) {
+                Text(stringResource(R.string.explore_location_setup_add_address))
+            }
+            OutlinedButton(
+                onClick = onPickManualClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.explore_location_setup_pick_manual))
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                Text(stringResource(R.string.explore_location_setup_skip))
+            }
         }
     }
 }
@@ -1350,9 +1459,6 @@ private fun ExploreFiltersBar(
 ) {
     val scheme = MaterialTheme.colorScheme
     val spacing = FashTheme.spacing
-    val subtitleRes =
-        if (hasActiveFilters) R.string.explore_filters_bar_subtitle_active
-        else R.string.explore_filters_bar_subtitle_idle
     val cd = stringResource(R.string.explore_filters_toggle_cd)
     val edgeStart = if (includeEdgeHorizontalPadding) spacing.editorialStart else 0.dp
     val edgeEnd = if (includeEdgeHorizontalPadding) spacing.editorialEnd else 0.dp
@@ -1406,12 +1512,14 @@ private fun ExploreFiltersBar(
                     }
                 },
             ) {
-                Icon(
-                    imageVector = Icons.Default.FilterList,
-                    contentDescription = null,
-                    tint = FashColors.Primary,
-                    modifier = Modifier.size(26.dp),
-                )
+                ExploreFilterIconPulse(active = hasActiveFilters) {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = null,
+                        tint = FashColors.Primary,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -1443,21 +1551,11 @@ private fun ExploreFiltersBar(
                         }
                     }
                 } else {
-                    Text(
-                        text = filterSummaryLine,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                    ExploreFilterIdleTeaser(
                         modifier = Modifier.padding(top = 4.dp),
+                        compact = false,
                     )
                 }
-                Text(
-                    text = stringResource(subtitleRes),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
             }
             }
             ExploreFiltersBarTrailingAction(
@@ -1691,19 +1789,21 @@ private fun ExploreStickyFilterRow(
                     }
                 },
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(FashColors.Primary.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FilterList,
-                        contentDescription = null,
-                        tint = FashColors.Primary,
-                        modifier = Modifier.size(22.dp),
-                    )
+                ExploreFilterIconPulse(active = hasActiveFilters) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(FashColors.Primary.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = null,
+                            tint = FashColors.Primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -1712,20 +1812,21 @@ private fun ExploreStickyFilterRow(
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = scheme.onSurface,
                 )
-                Text(
-                    text = summaryCompact,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = if (hasActiveFilters) FontWeight.Medium else FontWeight.Normal,
-                    ),
-                    color = if (hasActiveFilters) {
-                        scheme.onSurface
-                    } else {
-                        scheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
+                if (hasActiveFilters) {
+                    Text(
+                        text = summaryCompact,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                } else {
+                    ExploreFilterIdleTeaser(
+                        modifier = Modifier.padding(top = 2.dp),
+                        compact = true,
+                    )
+                }
             }
         }
         ExploreFiltersBarTrailingAction(
@@ -1749,14 +1850,21 @@ private fun ExploreFilterBottomSheet(
     selectedCountryId: String?,
     selectedCountryIso2: String?,
     sizingMode: String,
+    browseLocationMode: BrowseLocationMode,
+    manualBrowseLocation: ExploreViewModel.BrowseLocationFilter,
+    defaultAddressLocation: ExploreViewModel.BrowseLocationFilter,
     isGuestMode: Boolean,
     onRequestLogin: (GuestLoginReason) -> Unit,
+    onOpenBrowseLocationPicker: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var showCategoryPicker by rememberSaveable { mutableStateOf(false) }
     var showBrandPicker by rememberSaveable { mutableStateOf(false) }
     var showCountryPicker by rememberSaveable { mutableStateOf(false) }
     var showAestheticPicker by rememberSaveable { mutableStateOf(false) }
+    val minPriceText by viewModel.minPriceText.collectAsState()
+    val maxPriceText by viewModel.maxPriceText.collectAsState()
+    val conditionFilter by viewModel.selectedConditionFilter.collectAsState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scheme = MaterialTheme.colorScheme
     val configuration = LocalConfiguration.current
@@ -1803,38 +1911,96 @@ private fun ExploreFilterBottomSheet(
                 }
             }
             HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.65f))
-            ExploreCategoryFilterRow(
-                categories = categories,
-                selectedCategoryId = selectedCategoryId,
-                onOpenPicker = { showCategoryPicker = true },
+            Text(
+                text = stringResource(R.string.explore_filter_sheet_journey_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(
+                    start = FashTheme.spacing.editorialStart,
+                    end = FashTheme.spacing.editorialEnd,
+                    top = 8.dp,
+                    bottom = 4.dp,
+                ),
             )
-            ExploreAestheticFilterRow(
-                catalog = aestheticTagsCatalog,
-                selectedIds = selectedAestheticTagIds,
-                onOpenPicker = { showAestheticPicker = true },
-            )
-            ExploreBrandFilterRow(
-                brands = brands,
-                selectedBrandId = selectedBrandId,
-                onOpenPicker = { showBrandPicker = true },
-            )
-            ExploreCountryFilterRow(
-                countries = countriesCatalog,
-                selectedCountryId = selectedCountryId,
-                selectedCountryIso2 = selectedCountryIso2,
-                onOpenPicker = { showCountryPicker = true },
-            )
-            ExploreSizingFilterSection(
-                sizingMode = sizingMode,
-                isGuestMode = isGuestMode,
-                onSelect = viewModel::setSizingModeFilter,
-                onRequestLogin = onRequestLogin,
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = scheme.outlineVariant.copy(alpha = 0.58f),
-            )
-            ExploreMarketplaceFilters(viewModel = viewModel)
+            ExploreFilterHintCarousel()
+            val personalActiveCount = run {
+                var n = 0
+                if (!sizingMode.equals("all", ignoreCase = true)) n++
+                if (browseLocationMode != BrowseLocationMode.Off) n++
+                n
+            }
+            val productActiveCount = run {
+                var n = 0
+                if (!selectedCategoryId.isNullOrBlank()) n++
+                if (selectedAestheticTagIds.isNotEmpty()) n++
+                if (!selectedBrandId.isNullOrBlank()) n++
+                if (!selectedCountryId.isNullOrBlank() || !selectedCountryIso2.isNullOrBlank()) n++
+                n
+            }
+            val priceActiveCount = run {
+                var n = 0
+                if (minPriceText.isNotBlank() || maxPriceText.isNotBlank()) n++
+                if (!conditionFilter.isNullOrBlank()) n++
+                n
+            }
+            ExploreFilterExpandableGroup(
+                title = stringResource(R.string.explore_filter_personal_title),
+                subtitle = stringResource(R.string.explore_filter_group_personal_subtitle),
+                expandedInitially = true,
+                activeCount = personalActiveCount,
+            ) {
+                ExploreSizingFilterSection(
+                    sizingMode = sizingMode,
+                    isGuestMode = isGuestMode,
+                    onSelect = viewModel::setSizingModeFilter,
+                    onRequestLogin = onRequestLogin,
+                )
+                ExploreBrowseLocationFilterSection(
+                    mode = browseLocationMode,
+                    manualLocation = manualBrowseLocation,
+                    defaultAddressLocation = defaultAddressLocation,
+                    isGuestMode = isGuestMode,
+                    onSelectMode = viewModel::setBrowseLocationModeFilter,
+                    onPickManual = onOpenBrowseLocationPicker,
+                    onRequestLogin = onRequestLogin,
+                )
+            }
+            ExploreFilterExpandableGroup(
+                title = stringResource(R.string.explore_filter_group_product_title),
+                subtitle = stringResource(R.string.explore_filter_group_product_subtitle),
+                expandedInitially = productActiveCount > 0,
+                activeCount = productActiveCount,
+            ) {
+                ExploreCategoryFilterRow(
+                    categories = categories,
+                    selectedCategoryId = selectedCategoryId,
+                    onOpenPicker = { showCategoryPicker = true },
+                )
+                ExploreAestheticFilterRow(
+                    catalog = aestheticTagsCatalog,
+                    selectedIds = selectedAestheticTagIds,
+                    onOpenPicker = { showAestheticPicker = true },
+                )
+                ExploreBrandFilterRow(
+                    brands = brands,
+                    selectedBrandId = selectedBrandId,
+                    onOpenPicker = { showBrandPicker = true },
+                )
+                ExploreCountryFilterRow(
+                    countries = countriesCatalog,
+                    selectedCountryId = selectedCountryId,
+                    selectedCountryIso2 = selectedCountryIso2,
+                    onOpenPicker = { showCountryPicker = true },
+                )
+            }
+            ExploreFilterExpandableGroup(
+                title = stringResource(R.string.explore_filter_group_price_title),
+                subtitle = stringResource(R.string.explore_filter_group_price_subtitle),
+                expandedInitially = priceActiveCount > 0,
+                activeCount = priceActiveCount,
+            ) {
+                ExploreMarketplaceFilters(viewModel = viewModel)
+            }
         }
     }
     ExploreCategoryPickerSheet(
@@ -1908,6 +2074,76 @@ private fun ExploreSizingFilterSection(
                         onSelect("match_profile")
                     }
                 },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExploreBrowseLocationFilterSection(
+    mode: BrowseLocationMode,
+    manualLocation: ExploreViewModel.BrowseLocationFilter,
+    defaultAddressLocation: ExploreViewModel.BrowseLocationFilter,
+    isGuestMode: Boolean,
+    onSelectMode: (BrowseLocationMode) -> Unit,
+    onPickManual: () -> Unit,
+    onRequestLogin: (GuestLoginReason) -> Unit,
+) {
+    val edge = FashTheme.spacing.editorialStart
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = FashTheme.spacing.spacing2),
+    ) {
+        ExploreFilterSectionLabel(text = stringResource(R.string.explore_filter_location_title))
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = edge, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ExploreFilterChip(
+                label = stringResource(R.string.explore_filter_location_all),
+                selected = mode == BrowseLocationMode.Off,
+                onClick = { onSelectMode(BrowseLocationMode.Off) },
+            )
+            ExploreFilterChip(
+                label = stringResource(R.string.explore_filter_location_nearby),
+                selected = mode == BrowseLocationMode.NearbyDefault,
+                onClick = {
+                    if (isGuestMode) {
+                        onRequestLogin(GuestLoginReason.BrowseLocation)
+                    } else {
+                        onSelectMode(BrowseLocationMode.NearbyDefault)
+                    }
+                },
+            )
+        }
+        val manualSummary = if (manualLocation.hasSelection) {
+            manualLocation.chipLabel
+        } else {
+            stringResource(R.string.explore_filter_location_manual)
+        }
+        FilterSelectionSummaryCard(
+            summary = manualSummary,
+            onClick = onPickManual,
+            contentDescription = stringResource(R.string.explore_filter_location_manual_cd, manualSummary),
+            modifier = Modifier.padding(horizontal = edge, vertical = 4.dp),
+        )
+        if (defaultAddressLocation.hasSelection && mode != BrowseLocationMode.Off) {
+            Text(
+                text = when (mode) {
+                    BrowseLocationMode.NearbyDefault ->
+                        stringResource(R.string.explore_filter_location_nearby_hint, defaultAddressLocation.chipLabel)
+                    BrowseLocationMode.Manual ->
+                        stringResource(R.string.explore_filter_location_manual_hint, manualLocation.chipLabel)
+                    BrowseLocationMode.Off -> ""
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = edge, vertical = 4.dp),
             )
         }
     }

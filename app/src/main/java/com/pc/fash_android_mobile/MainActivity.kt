@@ -1863,6 +1863,12 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onOrdersClick = { showOrdersScreen = true },
                                                 onSellerSuggestNewListing = {
+                                                    chatOrderDetailOverlayId = null
+                                                    selectedConversationId = null
+                                                    selectedConversationItem = null
+                                                    chatViewModel.loadConversations()
+                                                    chatViewModel.refreshUnreadCount()
+                                                    postViewModel.cancel()
                                                     selectedTab = MainTab.Post.ordinal
                                                 },
                                                 orderDetailOverlayOrderId = chatOrderDetailOverlayId,
@@ -2481,9 +2487,7 @@ class MainActivity : ComponentActivity() {
                                 hostState = snackbarHostState,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                                    .padding(bottom = 12.dp),
+                                    .fillMaxWidth(),
                                 additionalBottomInset = snackbarBottomChromeInset,
                             )
                         }

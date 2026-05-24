@@ -573,6 +573,7 @@ fun MainNavScreen(
                         // "Match my size" nudge → open the profile editor where the user can
                         // add a reference size/measurements (reuses the same flow as edit profile).
                         onOpenSizingSetup = onEditProfile,
+                        onOpenShippingAddresses = onShippingAddressesClick,
                     )
                     MainTab.Post -> if (isGuestMode) {
                         GuestTabPlaceholder(

@@ -395,13 +395,18 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun submitReview(orderId: String, rating: Int, comment: String?) {
+    fun submitReview(
+        orderId: String,
+        rating: Int,
+        comment: String?,
+        badgeIds: List<com.pc.fash_android_mobile.data.deal.ReviewBadgeRefPayload> = emptyList(),
+    ) {
         if (orderId.isBlank()) return
         viewModelScope.launch {
             _busyAction.value = OrderDetailBusyAction.SubmitReview
             try {
                 val result = withContext(Dispatchers.IO) {
-                    orderRepository.submitReview(orderId, rating, comment)
+                    orderRepository.submitReview(orderId, rating, comment, badgeIds)
                 }
                 result.fold(
                     onSuccess = {
@@ -524,12 +529,21 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         val stamp = isoTimestampUtcNow()
         val updated = when {
             isCurrentUserBuyer() && mg.buyerCheckedInAt.isBlank() ->
-                mg.copy(buyerCheckedInAt = stamp)
+                mg.copy(buyerCheckedInAt = stamp, canCheckIn = false, selfCheckedIn = true)
             isCurrentUserSeller() && mg.sellerCheckedInAt.isBlank() ->
-                mg.copy(sellerCheckedInAt = stamp)
+                mg.copy(sellerCheckedInAt = stamp, canCheckIn = false, selfCheckedIn = true)
             else -> return
         }
-        _detail.value = cur.copy(meetingGrace = updated)
+        val appt = cur.meetingAppointment
+        val updatedAppt = when {
+            appt == null -> null
+            isCurrentUserBuyer() && appt.buyerCheckInAt.isBlank() ->
+                appt.copy(buyerCheckInAt = stamp)
+            isCurrentUserSeller() && appt.sellerCheckInAt.isBlank() ->
+                appt.copy(sellerCheckInAt = stamp)
+            else -> appt
+        }
+        _detail.value = cur.copy(meetingGrace = updated, meetingAppointment = updatedAppt ?: cur.meetingAppointment)
     }
 
     /**
@@ -548,15 +562,29 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                     sellerCheckedInAt = fGrace.sellerCheckedInAt.ifBlank { pGrace.sellerCheckedInAt },
                     checkInHint = fGrace.checkInHint.ifBlank { pGrace.checkInHint },
                     noShowHint = fGrace.noShowHint.ifBlank { pGrace.noShowHint },
+                    selfCheckedIn = fGrace.selfCheckedIn || pGrace.selfCheckedIn,
+                    canCheckIn = fGrace.canCheckIn && !fGrace.selfCheckedIn && !pGrace.selfCheckedIn,
                 )
                 fresh.copy(meetingGrace = mg)
             }
             else -> fresh
         }
         val review = merged.buyerReview ?: prev.buyerReview
+        val pAppt = prev.meetingAppointment
+        val fAppt = merged.meetingAppointment
+        val mergedAppt = when {
+            fAppt == null && pAppt != null -> pAppt
+            fAppt != null && pAppt != null && fAppt.id.equals(pAppt.id, ignoreCase = true) ->
+                fAppt.copy(
+                    buyerCheckInAt = fAppt.buyerCheckInAt.ifBlank { pAppt.buyerCheckInAt },
+                    sellerCheckInAt = fAppt.sellerCheckInAt.ifBlank { pAppt.sellerCheckInAt },
+                )
+            else -> fAppt
+        }
         return merged.copy(
             buyerReview = review,
             canReview = merged.canReview && review == null,
+            meetingAppointment = mergedAppt,
         )
     }
 
@@ -579,6 +607,9 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
                 m.contains("WINDOW", ignoreCase = true) &&
                 (m.contains("MEETING", ignoreCase = true) || m.contains("check", ignoreCase = true)) ->
                 app.getString(R.string.chat_meeting_check_in_window_error)
+            m.contains("400", ignoreCase = true) &&
+                (m.contains("validation", ignoreCase = true) || m.contains("VALIDATION", ignoreCase = true)) ->
+                app.getString(R.string.meeting_check_in_requires_on_my_way)
             else -> m.ifBlank { app.getString(R.string.order_detail_load_error) }
         }
     }

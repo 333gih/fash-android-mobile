@@ -25,6 +25,8 @@ data class OrderMeetingAppointment(
  */
 data class OrderMeetingGrace(
     val canCheckIn: Boolean = false,
+    /** From `meeting_grace.self_checked_in` — viewer already checked in at meetup. */
+    val selfCheckedIn: Boolean = false,
     val canReportNoShow: Boolean = false,
     /** Both parties checked in — server may enable SOS / safety affordances (`meeting_grace.sos_unlocked`). */
     val sosUnlocked: Boolean = false,
@@ -34,6 +36,20 @@ data class OrderMeetingGrace(
     val sellerCheckedInAt: String = "",
     val phase: String = "",
 )
+
+/** Hide check-in when server or appointment timestamps say this party already arrived. */
+fun OrderMeetingGrace.viewerShouldShowCheckIn(
+    isBuyer: Boolean,
+    appointment: OrderMeetingAppointment?,
+): Boolean {
+    if (!canCheckIn) return false
+    if (selfCheckedIn) return false
+    val graceSelfAt = if (isBuyer) buyerCheckedInAt else sellerCheckedInAt
+    if (graceSelfAt.isNotBlank()) return false
+    val appt = appointment ?: return true
+    val apptSelfAt = if (isBuyer) appt.buyerCheckInAt else appt.sellerCheckInAt
+    return apptSelfAt.isBlank()
+}
 
 /** Buyer review on a completed order (`buyer_review` / `BuyerReview` on GET order). */
 data class OrderBuyerReview(

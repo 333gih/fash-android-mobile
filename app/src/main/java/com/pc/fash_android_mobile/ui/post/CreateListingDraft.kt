@@ -68,7 +68,27 @@ data class CreateListingDraft(
     val priceDropPercentInput: String = "10",
     val shippingAddressId: String? = null,
     val shippingAddressLabel: String = "",
+    val onsiteInspectionCommitment: Boolean = false,
+    /** 80–99 when set; sent as `condition_score`. */
+    val conditionScore: Int = 90,
+    val conditionDefects: List<String> = emptyList(),
 )
+
+/** Known defect keys for Step 5 checklist (wire values). */
+val ListingConditionDefectOptions = listOf(
+    "stains",
+    "worn",
+    "missing_button",
+    "fading",
+    "pilling",
+    "odor",
+)
+
+fun CreateListingDraft.toggleConditionDefect(key: String): CreateListingDraft {
+    val next = conditionDefects.toMutableList()
+    if (next.contains(key)) next.remove(key) else next.add(key)
+    return copy(conditionDefects = next)
+}
 
 fun CreateListingDraft.withListingPhotoSlotsFromCatalog(
     categoryId: String,
@@ -156,6 +176,9 @@ fun CreateListingDraft.toCreateListingRequest(
         floorPriceVnd = if (autoPriceDropEnabled) floor else null,
         priceDropPercent = if (autoPriceDropEnabled) parsedPriceDropPercent() else null,
         shippingAddressId = shippingAddressId?.takeIf { !it.isNullOrBlank() },
+        onsiteInspectionCommitment = onsiteInspectionCommitment,
+        conditionScore = conditionScore.coerceIn(80, 99),
+        conditionDefects = conditionDefects,
     )
 }
 
@@ -188,6 +211,7 @@ fun CreateListingDraft.validationErrorKeyForSubmit(): String? {
     val p = parsePositiveLong(priceVnd) ?: return "post_validation_price"
     if (p < MinPriceVnd || p > MaxPriceVnd) return "post_validation_price_range"
     if (selectedAestheticTagIds.size > MaxAestheticTags) return "post_validation_tags_max"
+    if (!onsiteInspectionCommitment) return "post_validation_commitment"
     if (autoPriceDropEnabled) {
         val floor = parsePositiveLong(floorPriceVnd)
         if (floor == null || floor < MinPriceVnd || floor > MaxPriceVnd) return "post_validation_floor"
@@ -282,7 +306,7 @@ fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
                 true
             }
     }
-    9 -> true
+    9 -> onsiteInspectionCommitment
     10 -> true
     else -> false
 }
@@ -310,6 +334,10 @@ fun CreateListingDraft.nextStepBlockedReasonRes(step: Int): Int? {
         }
         7 -> R.string.post_next_blocked_photos
         8 -> step8NextBlockedReason()
+        9 -> when {
+            !onsiteInspectionCommitment -> R.string.post_next_blocked_commitment
+            else -> R.string.post_next_blocked_generic
+        }
         else -> R.string.post_next_blocked_generic
     }
 }

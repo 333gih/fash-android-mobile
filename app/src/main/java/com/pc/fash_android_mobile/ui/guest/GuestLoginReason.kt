@@ -22,4 +22,6 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     TopBar(R.string.guest_login_reason_topbar),
     /** Explore “Match my size” filter — needs a profile with saved sizing reference. */
     SizingMatch(R.string.guest_login_reason_sizing_match),
+    /** Explore “Shop nearby” filter — needs a default shipping address or manual pick. */
+    BrowseLocation(R.string.guest_login_reason_browse_location),
 }

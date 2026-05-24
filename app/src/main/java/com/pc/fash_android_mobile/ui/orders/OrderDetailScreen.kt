@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +46,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,16 +58,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.BuildConfig
+import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.common.ReviewBadgeDto
+import com.pc.fash_android_mobile.data.deal.ReviewBadgeRefPayload
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
+import com.pc.fash_android_mobile.ui.components.ReviewBadgePicker
+import com.pc.fash_android_mobile.ui.components.deriveReviewRatingFromBadgeCount
 import com.pc.fash_android_mobile.data.address.ShippingAddress
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.data.order.OrderMeetingGrace
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +105,6 @@ fun OrderDetailScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var showReviewDialog by remember { mutableStateOf(false) }
-    var reviewRating by remember { mutableFloatStateOf(5f) }
     var showHelpDialog by remember { mutableStateOf(false) }
     var showShipDialog by remember { mutableStateOf(false) }
     var trackingInput by remember { mutableStateOf("") }
@@ -220,9 +225,6 @@ fun OrderDetailScreen(
         if (vm.addresses.value.isEmpty()) {
             showEmptyAddressAlert = true
         }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
     }
     LaunchedEffect(detail?.status, showOpenDisputeDialog) {
         if (showOpenDisputeDialog && detail?.status?.trim()?.lowercase() == "disputed") {
@@ -373,6 +375,8 @@ fun OrderDetailScreen(
                             OrderMeetingGraceSection(
                                 grace = grace,
                                 appointmentId = apptId,
+                                isBuyer = role == OrderViewerRole.Buyer,
+                                meetingAppointment = meet,
                                 busy = busy,
                                 onCheckIn = { appointmentId ->
                                     when {
@@ -729,28 +733,42 @@ fun OrderDetailScreen(
         detail!!.buyerReview == null
     ) {
         val d = detail!!
+        val app = context.applicationContext as FashApplication
+        val isVi = AppLocale.currentTag(context) != AppLocale.TAG_EN
+        var reviewBadges by remember(d.orderId) { mutableStateOf<List<ReviewBadgeDto>>(emptyList()) }
+        var selectedBadgeIds by remember(d.orderId) { mutableStateOf(setOf<String>()) }
+        var badgesLoading by remember(d.orderId) { mutableStateOf(true) }
+        var badgesLoadFailed by remember(d.orderId) { mutableStateOf(false) }
+        LaunchedEffect(d.orderId) {
+            badgesLoading = true
+            badgesLoadFailed = false
+            withContext(Dispatchers.IO) {
+                app.publicCommonCatalogRepository.getReviewBadges()
+            }.fold(
+                onSuccess = { reviewBadges = it; badgesLoadFailed = it.isEmpty() },
+                onFailure = { reviewBadges = emptyList(); badgesLoadFailed = true },
+            )
+            badgesLoading = false
+        }
         AlertDialog(
             onDismissRequest = { showReviewDialog = false },
             title = { Text(stringResource(R.string.order_detail_review_title)) },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
-                        text = stringResource(R.string.order_detail_review_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Slider(
-                        value = reviewRating,
-                        onValueChange = { reviewRating = it },
-                        valueRange = 1f..5f,
-                        steps = 3,
-                    )
-                    Text(
-                        text = "${reviewRating.roundToInt()} / 5",
+                        text = stringResource(R.string.badge_review_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = FashColors.Primary,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ReviewBadgePicker(
+                        badges = reviewBadges,
+                        selectedIds = selectedBadgeIds,
+                        onSelectionChange = { selectedBadgeIds = it },
+                        isLoading = badgesLoading,
+                        loadFailed = badgesLoadFailed,
+                        enabled = !isBlocking,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
@@ -768,9 +786,18 @@ fun OrderDetailScreen(
                     onClick = {
                         showReviewDialog = false
                         val c = reviewComment.trim().ifBlank { null }
-                        viewModel.submitReview(d.orderId, reviewRating.roundToInt(), c)
+                        val badgePayloads = reviewBadges.filter { selectedBadgeIds.contains(it.id) }.map {
+                            ReviewBadgeRefPayload(
+                                id = it.id,
+                                slug = it.slug,
+                                name = it.displayName(isVi),
+                                emoji = it.emoji,
+                            )
+                        }
+                        val rating = deriveReviewRatingFromBadgeCount(badgePayloads.size)
+                        viewModel.submitReview(d.orderId, rating, c, badgePayloads)
                     },
-                    enabled = !isBlocking,
+                    enabled = !isBlocking && selectedBadgeIds.isNotEmpty(),
                 ) {
                     Text(stringResource(R.string.order_detail_review_submit))
                 }

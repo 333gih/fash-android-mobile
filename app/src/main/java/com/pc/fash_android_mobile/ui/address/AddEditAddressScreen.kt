@@ -28,7 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -47,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAddressDto
-import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -82,11 +80,6 @@ fun AddEditAddressScreen(
     var validationError by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { msg -> snackbarHostState.showSnackbar(msg) }
-    }
 
     LaunchedEffect(Unit) {
         viewModel.loadProvincesIfNeeded()
@@ -157,7 +150,6 @@ fun AddEditAddressScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { FashSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

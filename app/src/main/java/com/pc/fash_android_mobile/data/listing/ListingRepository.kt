@@ -330,6 +330,13 @@ class ListingRepository(
         request.floorPriceVnd?.let { json.put("floor_price", it) }
         request.priceDropPercent?.let { json.put("price_drop_percent", it) }
         request.shippingAddressId?.takeIf { it.isNotBlank() }?.let { json.put("shipping_address_id", it) }
+        request.onsiteInspectionCommitment?.let { json.put("onsite_inspection_commitment", it) }
+        request.conditionScore?.let { json.put("condition_score", it.coerceIn(80, 99)) }
+        if (request.conditionDefects.isNotEmpty()) {
+            val arr = JSONArray()
+            request.conditionDefects.forEach { arr.put(it) }
+            json.put("condition_defects", arr)
+        }
         val payload = json.toString()
         logCreateListingChunked(Log.DEBUG, "createListing request url=$url payload=", payload)
         val body = executePostJsonWithLoggedResponse(url, payload)
@@ -864,6 +871,9 @@ data class CreateListingRequest(
     val floorPriceVnd: Long? = null,
     val priceDropPercent: Int? = null,
     val shippingAddressId: String? = null,
+    val onsiteInspectionCommitment: Boolean? = null,
+    val conditionScore: Int? = null,
+    val conditionDefects: List<String> = emptyList(),
 )
 
 /** Partial update for `PUT /listings/{id}`. */

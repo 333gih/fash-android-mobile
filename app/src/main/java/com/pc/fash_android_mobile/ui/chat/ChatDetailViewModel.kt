@@ -9,6 +9,8 @@ import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.ChatMapsUrlRules
 import com.pc.fash_android_mobile.data.chat.ChatRepository
+import com.pc.fash_android_mobile.data.chat.MeetingAppointmentPayload
+import com.pc.fash_android_mobile.data.chat.MeetingCheckInResult
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.chat.ConversationDetail
 import com.pc.fash_android_mobile.data.chat.MyConversationReport
@@ -126,6 +128,12 @@ class ChatDetailViewModel(
     private val _pendingDealReviewDealId = MutableStateFlow<String?>(null)
     val pendingDealReviewDealId: StateFlow<String?> = _pendingDealReviewDealId.asStateFlow()
 
+    private val _meetingBrowseProvinceId = MutableStateFlow<String?>(null)
+    val meetingBrowseProvinceId: StateFlow<String?> = _meetingBrowseProvinceId.asStateFlow()
+
+    private val _meetingBrowseDistrictId = MutableStateFlow<String?>(null)
+    val meetingBrowseDistrictId: StateFlow<String?> = _meetingBrowseDistrictId.asStateFlow()
+
     private val _isProposingMeeting = MutableStateFlow(false)
     val isProposingMeeting: StateFlow<Boolean> = _isProposingMeeting.asStateFlow()
 
@@ -139,9 +147,6 @@ class ChatDetailViewModel(
     val ackMeetingReverifyInFlight: StateFlow<Boolean> = _ackMeetingReverifyInFlight.asStateFlow()
 
     /** After cancel meeting: server may suggest seller reopen listing (never auto-reopen). */
-    private val _suggestReopenListing = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val suggestReopenListing: SharedFlow<Unit> = _suggestReopenListing.asSharedFlow()
-
     /**
      * Non-null when the conversation has an associated order (deal done — seller accepted).
      * Drives the STATE A → STATE B transition.
@@ -403,27 +408,100 @@ class ChatDetailViewModel(
             .map { (_, rows) -> rows.last() }
             .sortedBy { it.timestamp }
 
+    private fun mergeMeetingAppointmentLive(
+        server: MeetingAppointmentPayload,
+        local: MeetingAppointmentPayload?,
+    ): MeetingAppointmentPayload {
+        if (local == null || !local.id.equals(server.id, ignoreCase = true)) return server
+        return server.copy(
+            buyerCheckInAt = server.buyerCheckInAt.ifBlank { local.buyerCheckInAt },
+            sellerCheckInAt = server.sellerCheckInAt.ifBlank { local.sellerCheckInAt },
+            buyerOnMyWayAt = server.buyerOnMyWayAt.ifBlank { local.buyerOnMyWayAt },
+            sellerOnMyWayAt = server.sellerOnMyWayAt.ifBlank { local.sellerOnMyWayAt },
+            proposerId = server.proposerId.ifBlank { local.proposerId },
+            isProposerMe = local.isProposerMe,
+            safeZoneName = server.safeZoneName.ifBlank { local.safeZoneName },
+        )
+    }
+
+    private fun mergeMeetingProgressFromLocal(
+        server: List<ChatMessage>,
+        local: List<ChatMessage>,
+    ): List<ChatMessage> {
+        if (local.isEmpty()) return server
+        val localById = local.associateBy { it.messageId }
+        return server.map { msg ->
+            val prev = localById[msg.messageId]
+            val sAp = msg.meetingAppointment
+            val pAp = prev?.meetingAppointment
+            if (sAp == null || pAp == null) {
+                msg
+            } else {
+                msg.copy(meetingAppointment = mergeMeetingAppointmentLive(sAp, pAp))
+            }
+        }
+    }
+
+    private fun applyMeetingCheckInToPayload(
+        cur: MeetingAppointmentPayload,
+        ap: MeetingAppointmentPayload,
+        result: MeetingCheckInResult,
+        isBuyer: Boolean,
+    ): MeetingAppointmentPayload {
+        var merged = mergeMeetingAppointmentLive(ap, cur)
+        val yourAt = result.yourCheckInAt?.trim().orEmpty()
+        if (yourAt.isNotEmpty()) {
+            merged = if (isBuyer) {
+                merged.copy(buyerCheckInAt = yourAt)
+            } else {
+                merged.copy(sellerCheckInAt = yourAt)
+            }
+        }
+        return merged
+    }
+
+    private fun patchMeetingAppointmentInMessages(
+        appointmentId: String,
+        transform: (MeetingAppointmentPayload) -> MeetingAppointmentPayload,
+    ) {
+        _messages.value = _messages.value.map { m ->
+            val cur = m.meetingAppointment
+            if (cur == null || !cur.id.equals(appointmentId, ignoreCase = true)) {
+                m
+            } else {
+                m.copy(meetingAppointment = transform(cur))
+            }
+        }
+    }
+
     /**
      * Server list is authoritative. Keeps in-flight optimistic rows (`local-*` ids) until the
      * same text appears from the API (then the duplicate pending row is dropped).
+     * Preserves meetup check-in / on-my-way timestamps when the API message snapshot lags.
      */
     private fun mergeServerWithPendingLocal(
         server: List<ChatMessage>,
         current: List<ChatMessage>,
     ): List<ChatMessage> {
         val pending = current.filter { it.messageId.startsWith("local-") }
-        if (pending.isEmpty()) return dedupeMessagesByIdPreferLast(server)
-        val merged = server.toMutableList()
-        for (p in pending) {
-            val superseded = server.any { s ->
-                s.isFromMe &&
-                    s.messageType == p.messageType &&
-                    s.text == p.text &&
-                    p.messageType == "text"
-            }
-            if (!superseded) merged.add(p)
-        }
-        return dedupeMessagesByIdPreferLast(merged)
+        val deduped = dedupeMessagesByIdPreferLast(
+            if (pending.isEmpty()) {
+                server
+            } else {
+                val merged = server.toMutableList()
+                for (p in pending) {
+                    val superseded = server.any { s ->
+                        s.isFromMe &&
+                            s.messageType == p.messageType &&
+                            s.text == p.text &&
+                            p.messageType == "text"
+                    }
+                    if (!superseded) merged.add(p)
+                }
+                merged
+            },
+        )
+        return mergeMeetingProgressFromLocal(deduped, current)
     }
 
     private suspend fun silentPoll(conversationId: String) {
@@ -1010,6 +1088,15 @@ class ChatDetailViewModel(
         }
     }
 
+    fun loadMeetingBrowseLocation() {
+        viewModelScope.launch(Dispatchers.IO) {
+            userRepository.getMeProfile().onSuccess { profile ->
+                _meetingBrowseProvinceId.value = profile.browseProvinceId
+                _meetingBrowseDistrictId.value = profile.browseDistrictId
+            }
+        }
+    }
+
     /**
      * @param conversationId Conversation opened in this screen (required so the request always targets
      * the correct thread; avoids a silent no-op if [ConversationDetail] is momentarily null).
@@ -1020,6 +1107,8 @@ class ChatDetailViewModel(
         scheduledAtIso: String,
         reminderEnabled: Boolean,
         reminderOffsetMinutes: Int,
+        safeZoneId: String? = null,
+        safeZoneName: String? = null,
         onSuccess: () -> Unit = {},
     ) {
         val fromParam = conversationId.trim()
@@ -1030,7 +1119,8 @@ class ChatDetailViewModel(
             return
         }
         val appEarly = getApplication<Application>()
-        if (!ChatMapsUrlRules.isLenientMeetingMapsUrl(locationUrl)) {
+        val hasSafeZone = !safeZoneId.isNullOrBlank()
+        if (!hasSafeZone && !ChatMapsUrlRules.isLenientMeetingMapsUrl(locationUrl)) {
             _events.tryEmit(appEarly.getString(R.string.chat_meeting_maps_url_invalid))
             return
         }
@@ -1043,6 +1133,8 @@ class ChatDetailViewModel(
                     scheduledAtRfc3339 = scheduledAtIso,
                     reminderEnabled = reminderEnabled,
                     reminderOffsetMinutes = reminderOffsetMinutes,
+                    safeZoneId = safeZoneId,
+                    safeZoneName = safeZoneName,
                 )
             }
             _isProposingMeeting.value = false
@@ -1134,8 +1226,30 @@ class ChatDetailViewModel(
                     _orderId.value?.trim()?.takeIf { it.isNotEmpty() }?.let { fetchOrderStatus(it) }
                     val isSeller = _detail.value?.isBuyer == false
                     if (cancelMeta.suggestSellerReopenListing && isSeller) {
-                        _suggestReopenListing.tryEmit(Unit)
+                        _events.tryEmit(app.getString(R.string.chat_meeting_cancel_suggest_reopen))
                     }
+                },
+                onFailure = {
+                    _events.tryEmit(it.message ?: app.getString(R.string.chat_meeting_error))
+                },
+            )
+        }
+    }
+
+    fun onMyWayMeeting(appointmentId: String) {
+        val convId = _detail.value?.conversationId ?: return
+        viewModelScope.launch {
+            _meetingMutationInFlight.value = true
+            val result = withContext(Dispatchers.IO) { chatRepository.meetingOnMyWay(appointmentId) }
+            _meetingMutationInFlight.value = false
+            val app = getApplication<Application>()
+            result.fold(
+                onSuccess = { ap ->
+                    patchMeetingAppointmentInMessages(appointmentId) { cur ->
+                        mergeMeetingAppointmentLive(ap, cur)
+                    }
+                    _events.tryEmit(app.getString(R.string.meeting_on_my_way_ok))
+                    refreshMessages(convId)
                 },
                 onFailure = {
                     _events.tryEmit(it.message ?: app.getString(R.string.chat_meeting_error))
@@ -1165,20 +1279,12 @@ class ChatDetailViewModel(
                             _events.tryEmit(app.getString(R.string.chat_meeting_check_in_ok))
                     }
                     r.meetingAppointment?.let { ap ->
-                        _messages.value = _messages.value.map { m ->
-                            val cur = m.meetingAppointment
-                            if (cur == null || !cur.id.equals(ap.id, ignoreCase = true)) {
-                                m
-                            } else {
-                                m.copy(
-                                    meetingAppointment = ap.copy(
-                                        buyerCheckInAt = ap.buyerCheckInAt.ifBlank { cur.buyerCheckInAt },
-                                        sellerCheckInAt = ap.sellerCheckInAt.ifBlank { cur.sellerCheckInAt },
-                                        proposerId = ap.proposerId.ifBlank { cur.proposerId },
-                                        isProposerMe = cur.isProposerMe,
-                                    ),
-                                )
-                            }
+                        patchMeetingAppointmentInMessages(appointmentId) { cur ->
+                            applyMeetingCheckInToPayload(cur, ap, r, isBuyer)
+                        }
+                    } ?: r.yourCheckInAt?.let { yourAt ->
+                        patchMeetingAppointmentInMessages(appointmentId) { cur ->
+                            if (isBuyer) cur.copy(buyerCheckInAt = yourAt) else cur.copy(sellerCheckInAt = yourAt)
                         }
                     }
                     refreshMessages(convId)
@@ -1202,6 +1308,9 @@ class ChatDetailViewModel(
                     m.contains("check_in", ignoreCase = true)) &&
                 m.contains("WINDOW", ignoreCase = true) ->
                 app.getString(R.string.chat_meeting_check_in_window_error)
+            m.contains("400", ignoreCase = true) &&
+                (m.contains("validation", ignoreCase = true) || m.contains("VALIDATION", ignoreCase = true)) ->
+                app.getString(R.string.meeting_check_in_requires_on_my_way)
             else -> m.ifBlank { app.getString(R.string.chat_meeting_error) }
         }
     }
@@ -1361,7 +1470,12 @@ class ChatDetailViewModel(
         }
     }
 
-    fun submitOfflineDealReview(dealId: String, rating: Int, comment: String?) {
+    fun submitOfflineDealReview(
+        dealId: String,
+        rating: Int,
+        comment: String?,
+        badgeIds: List<com.pc.fash_android_mobile.data.deal.ReviewBadgeRefPayload> = emptyList(),
+    ) {
         val id = dealId.trim().takeIf { it.isNotEmpty() }
             ?: _pendingDealReviewDealId.value?.trim()?.takeIf { it.isNotEmpty() }
             ?: _activeDeal.value?.dealId?.trim()?.takeIf { it.isNotEmpty() }
@@ -1373,7 +1487,7 @@ class ChatDetailViewModel(
         viewModelScope.launch {
             _isDealWorking.value = true
             val result = withContext(Dispatchers.IO) {
-                dealRepository.submitDealReview(id, rating, comment)
+                dealRepository.submitDealReview(id, rating, comment, badgeIds)
             }
             _isDealWorking.value = false
             result.fold(

@@ -90,7 +90,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
@@ -106,7 +105,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
@@ -134,6 +132,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
@@ -142,6 +141,9 @@ import com.pc.fash_android_mobile.data.chat.ChatMapsUrlRules
 import com.pc.fash_android_mobile.data.chat.ChatMessage
 import com.pc.fash_android_mobile.data.chat.OutboundSendState
 import com.pc.fash_android_mobile.data.deal.DealRecord
+import com.pc.fash_android_mobile.data.deal.ReviewBadgeRefPayload
+import com.pc.fash_android_mobile.data.common.ReviewBadgeDto
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.chat.OrderCancelledChatPayload
 import com.pc.fash_android_mobile.data.chat.parseOrderCancelledPayload
 import com.pc.fash_android_mobile.data.order.OrderCancelReasons
@@ -149,10 +151,9 @@ import com.pc.fash_android_mobile.data.chat.ProductCard
 import com.pc.fash_android_mobile.data.chat.PriceOffer
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAvatar
 import com.pc.fash_android_mobile.ui.components.FashEmptyBulletTipLine
-import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
-import com.pc.fash_android_mobile.ui.components.rememberSerialSnackbarChannel
-import com.pc.fash_android_mobile.ui.main.ChatComposerBarOverlayInset
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.components.ReviewBadgePicker
+import com.pc.fash_android_mobile.ui.components.deriveReviewRatingFromBadgeCount
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.orders.OrderDetailViewModel
 import com.pc.fash_android_mobile.ui.orders.formatOrderDateTime
@@ -160,8 +161,10 @@ import com.pc.fash_android_mobile.ui.orders.normalizeOrderStatus
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 import com.pc.fash_android_mobile.ui.theme.fashShimmer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen entry point
@@ -250,6 +253,8 @@ fun ChatDetailScreen(
     val activeDeal by viewModel.activeDeal.collectAsState()
     val isDealWorking by viewModel.isDealWorking.collectAsState()
     val pendingDealReviewDealId by viewModel.pendingDealReviewDealId.collectAsState()
+    val meetingBrowseProvinceId by viewModel.meetingBrowseProvinceId.collectAsState()
+    val meetingBrowseDistrictId by viewModel.meetingBrowseDistrictId.collectAsState()
 
     /** Escrow order linked to this thread — prefer VM state, fall back to [ConversationDetail.orderId] from API. */
     val conversationOrderId = orderId?.trim()?.takeIf { it.isNotEmpty() }
@@ -257,24 +262,7 @@ fun ChatDetailScreen(
 
     var orderIdPendingCancel by remember { mutableStateOf<String?>(null) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    val enqueueSnackbarSerial = rememberSerialSnackbarChannel(snackbarHostState)
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { msg ->
-            enqueueSnackbarSerial { showSnackbar(msg) }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.suggestReopenListing.collect {
-            enqueueSnackbarSerial {
-                showSnackbar(context.getString(R.string.chat_meeting_cancel_suggest_reopen))
-            }
-        }
-    }
 
     LaunchedEffect(Unit) {
         viewModel.navigateToOrderDetail.collectLatest { oid ->
@@ -300,16 +288,6 @@ fun ChatDetailScreen(
     Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        snackbarHost = {
-            FashSnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 8.dp),
-                additionalBottomInset = ChatComposerBarOverlayInset,
-            )
-        },
         topBar = {
             TopAppBar(
                 title = {
@@ -449,6 +427,10 @@ fun ChatDetailScreen(
             else -> {
                 val d = detail!!
                 var showMeetingSheet by remember { mutableStateOf(false) }
+                LaunchedEffect(conversationId) {
+                    viewModel.loadMeetingBrowseLocation()
+                }
+                val fashApp = remember(context) { context.applicationContext as FashApplication }
                 var showFulfillmentChoiceSheet by remember { mutableStateOf(false) }
                 val maxOffers = BusinessFlowConfig.maxOffersPerConversation
                 val orderStatusNorm = orderStatus?.trim()?.lowercase().orEmpty()
@@ -835,6 +817,11 @@ fun ChatDetailScreen(
                                                         } else {
                                                             null
                                                         },
+                                                        onOnMyWay = if (mtg.status.equals("confirmed", ignoreCase = true)) {
+                                                            { viewModel.onMyWayMeeting(mtg.id) }
+                                                        } else {
+                                                            null
+                                                        },
                                                         onRecordOfflineDeal = if (
                                                             !hasLinkedOrder &&
                                                             mtg.status.equals("confirmed", ignoreCase = true) &&
@@ -1003,9 +990,14 @@ fun ChatDetailScreen(
                         DealReviewBottomSheet(
                             dealId = rid,
                             isLoading = isDealWorking,
+                            loadReviewBadges = {
+                                withContext(Dispatchers.IO) {
+                                    fashApp.publicCommonCatalogRepository.getReviewBadges()
+                                }
+                            },
                             onDismiss = { viewModel.skipOfflineDealReviewPrompt() },
-                            onSubmit = { rating, comment ->
-                                viewModel.submitOfflineDealReview(rid, rating, comment)
+                            onSubmit = { rating, comment, badges ->
+                                viewModel.submitOfflineDealReview(rid, rating, comment, badges)
                             },
                         )
                     }
@@ -1047,6 +1039,18 @@ fun ChatDetailScreen(
                         MeetingProposalBottomSheet(
                             isLoading = isProposingMeeting,
                             linkedOrderId = sheetLinkedOrder,
+                            browseProvinceId = meetingBrowseProvinceId,
+                            browseDistrictId = meetingBrowseDistrictId,
+                            loadSafeZones = { p, d ->
+                                withContext(Dispatchers.IO) {
+                                    fashApp.publicCommonCatalogRepository.getSafeMeetupZones(p, d)
+                                }
+                            },
+                            loadProvinces = {
+                                withContext(Dispatchers.IO) {
+                                    fashApp.commonServiceRepository.getProvincesCatalog()
+                                }
+                            },
                             onViewOrder = if (sheetLinkedOrder != null) {
                                 { id: String ->
                                     showMeetingSheet = false
@@ -1056,13 +1060,15 @@ fun ChatDetailScreen(
                                 null
                             },
                             onDismiss = { if (!isProposingMeeting) showMeetingSheet = false },
-                            onSubmit = { url, iso, en, off ->
+                            onSubmit = { url, iso, en, off, zoneId, zoneName ->
                                 viewModel.proposeMeeting(
                                     conversationId = conversationId,
                                     locationUrl = url,
                                     scheduledAtIso = iso,
                                     reminderEnabled = en,
                                     reminderOffsetMinutes = off,
+                                    safeZoneId = zoneId,
+                                    safeZoneName = zoneName,
                                 ) {
                                     showMeetingSheet = false
                                 }
@@ -3379,11 +3385,26 @@ private fun CounterOfferBottomSheet(
 private fun DealReviewBottomSheet(
     dealId: String,
     isLoading: Boolean,
+    loadReviewBadges: suspend () -> Result<List<ReviewBadgeDto>>,
     onDismiss: () -> Unit,
-    onSubmit: (Int, String?) -> Unit,
+    onSubmit: (Int, String?, List<ReviewBadgeRefPayload>) -> Unit,
 ) {
-    var rating by remember(dealId) { mutableIntStateOf(5) }
     var comment by remember(dealId) { mutableStateOf("") }
+    var badges by remember(dealId) { mutableStateOf<List<ReviewBadgeDto>>(emptyList()) }
+    var selectedBadgeIds by remember(dealId) { mutableStateOf<Set<String>>(emptySet()) }
+    var badgesLoading by remember(dealId) { mutableStateOf(true) }
+    var badgesLoadFailed by remember(dealId) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val isVi = AppLocale.currentTag(context) != AppLocale.TAG_EN
+    LaunchedEffect(dealId) {
+        badgesLoading = true
+        badgesLoadFailed = false
+        loadReviewBadges().fold(
+            onSuccess = { badges = it; badgesLoadFailed = it.isEmpty() },
+            onFailure = { badges = emptyList(); badgesLoadFailed = true },
+        )
+        badgesLoading = false
+    }
     val dismissSheet = rememberSheetDismiss(onDismiss)
     val scheme = MaterialTheme.colorScheme
 
@@ -3434,41 +3455,19 @@ private fun DealReviewBottomSheet(
                         text = stringResource(R.string.chat_offline_deal_review_title),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        for (star in 1..5) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(
-                                        enabled = !isLoading,
-                                        onClick = { rating = star },
-                                    )
-                                    .background(
-                                        if (rating == star) {
-                                            FashColors.Primary.copy(alpha = 0.16f)
-                                        } else {
-                                            Color.Transparent
-                                        },
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = star.toString(),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = if (rating == star) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (rating >= star) {
-                                        FashColors.Primary
-                                    } else {
-                                        scheme.outline
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = stringResource(R.string.badge_review_title),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = FashColors.Primary,
+                    )
+                    ReviewBadgePicker(
+                        badges = badges,
+                        selectedIds = selectedBadgeIds,
+                        onSelectionChange = { selectedBadgeIds = it },
+                        isLoading = badgesLoading,
+                        loadFailed = badgesLoadFailed,
+                        enabled = !isLoading,
+                    )
                     OutlinedTextField(
                         value = comment,
                         onValueChange = { comment = it.take(2000) },
@@ -3488,12 +3487,21 @@ private fun DealReviewBottomSheet(
                         }
                         Button(
                             onClick = {
+                                val badgePayloads = badges.filter { selectedBadgeIds.contains(it.id) }.map {
+                                    ReviewBadgeRefPayload(
+                                        id = it.id,
+                                        slug = it.slug,
+                                        name = it.displayName(isVi),
+                                        emoji = it.emoji,
+                                    )
+                                }
                                 onSubmit(
-                                    rating,
+                                    deriveReviewRatingFromBadgeCount(badgePayloads.size),
                                     comment.trim().takeIf { it.isNotEmpty() },
+                                    badgePayloads,
                                 )
                             },
-                            enabled = !isLoading,
+                            enabled = !isLoading && selectedBadgeIds.isNotEmpty(),
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
                         ) {
