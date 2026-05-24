@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -52,7 +53,7 @@ import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
-import com.pc.fash_android_mobile.ui.feed.ListingMasonryGrid
+import com.pc.fash_android_mobile.ui.feed.listingMasonryFeedRows
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -124,18 +125,27 @@ fun HomeFeedTabHost(
     onFeaturedSellerClick: (UserSearchResult) -> Unit,
     onFeaturedSellersSeeAll: () -> Unit,
     huntTodayItems: List<ListingFeedItem>,
-    huntTodayLoading: Boolean,
     discoveryLoading: Boolean,
+    discoveryLoadError: Boolean,
     forYouItems: List<ListingFeedItem>,
     followingItems: List<ListingFeedItem>,
     followingLoading: Boolean,
     followingLoadError: Boolean,
     followingHasMore: Boolean,
+    followingLoadingMore: Boolean,
     onLoadMoreFollowing: () -> Unit,
     onRetryFollowing: () -> Unit,
+    onRetryDiscovery: () -> Unit,
     stylePickItems: List<ListingFeedItem>,
     similarSavedItems: List<ListingFeedItem>,
     isGuestBrowse: Boolean,
+    showSizingBanner: Boolean,
+    onDismissSizingBanner: () -> Unit,
+    onOpenSizingSetup: (() -> Unit)?,
+    buyerStats: BuyerHomeStats,
+    onDeliveringJourneyClick: () -> Unit,
+    onSavedJourneyClick: () -> Unit,
+    onMessagesJourneyClick: () -> Unit,
     onLikeListing: (ListingFeedItem) -> Unit,
     onSaveListing: (ListingFeedItem) -> Unit,
     onListingClick: (ListingFeedItem, Int, String) -> Unit,
@@ -162,11 +172,13 @@ fun HomeFeedTabHost(
     }
     val isLoading = !showGuestGate && tabLoadingFor(
         tab = safeSelected,
-        huntTodayLoading = huntTodayLoading,
         discoveryLoading = discoveryLoading,
         followingLoading = followingLoading,
     )
-    val loadError = !showGuestGate && safeSelected == HomeFeedTab.Following && followingLoadError
+    val loadError = !showGuestGate && when (safeSelected) {
+        HomeFeedTab.Following -> followingLoadError
+        else -> discoveryLoadError
+    }
     val hasMore = !showGuestGate && safeSelected == HomeFeedTab.Following && followingHasMore
     val listState = rememberLazyListState()
     val edge = FashTheme.spacing.editorialStart
@@ -174,7 +186,13 @@ fun HomeFeedTabHost(
     val scheme = MaterialTheme.colorScheme
     var horizontalDrag by remember { mutableFloatStateOf(0f) }
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
-    val feedLazyIndex = (if (hasFeaturedSellers) 1 else 0) + 1
+    val showJourneyRow = !isGuestBrowse && buyerStats.hasJourneyActivity()
+    val headerItemCount = (if (hasFeaturedSellers) 1 else 0) +
+        (if (showJourneyRow) 1 else 0) +
+        (if (showSizingBanner) 1 else 0)
+    val stickyTabIndex = headerItemCount
+    val feedStartIndex = headerItemCount + 1
+    val feedRowCount = (gridItems.size + 1) / 2
 
     LaunchedEffect(isGuestBrowse, tabs) {
         if (selectedTab !in tabs) {
@@ -188,14 +206,29 @@ fun HomeFeedTabHost(
         }
     }
 
+    var skipInitialTabScroll by remember { mutableStateOf(true) }
+
+    LaunchedEffect(safeSelected) {
+        if (skipInitialTabScroll) {
+            skipInitialTabScroll = false
+            return@LaunchedEffect
+        }
+        val maxIndex = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+        listState.animateScrollToItem(stickyTabIndex.coerceAtMost(maxIndex))
+    }
+
     if (safeSelected == HomeFeedTab.Following && hasMore) {
-        LaunchedEffect(listState, gridItems.size, hasMore, feedLazyIndex) {
+        LaunchedEffect(listState, gridItems.size, hasMore, feedStartIndex, feedRowCount) {
             snapshotFlow {
-                listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisible to gridItems.size
             }
                 .distinctUntilChanged()
-                .collect { lastVisible ->
-                    if (lastVisible >= feedLazyIndex) {
+                .collect { (lastVisible, itemCount) ->
+                    val rowCount = (itemCount + 1) / 2
+                    if (itemCount <= 0 || rowCount <= 0) return@collect
+                    val lastFeedRowIndex = feedStartIndex + rowCount - 1
+                    if (lastVisible >= lastFeedRowIndex - 1) {
                         onLoadMoreFollowing()
                     }
                 }
@@ -229,6 +262,26 @@ fun HomeFeedTabHost(
             bottom = FashTheme.spacing.spacing4 + bottomScrollInset,
         ),
     ) {
+        if (showJourneyRow) {
+            item(key = "home_journey_row") {
+                BuyerHomeJourneyCompactBar(
+                    stats = buyerStats,
+                    onDeliveringClick = onDeliveringJourneyClick,
+                    onSavedClick = onSavedJourneyClick,
+                    onMessagesClick = onMessagesJourneyClick,
+                )
+            }
+        }
+
+        if (showSizingBanner && onOpenSizingSetup != null) {
+            item(key = "home_sizing_banner") {
+                HomeSizingBanner(
+                    onAddSizeClick = onOpenSizingSetup,
+                    onDismiss = onDismissSizingBanner,
+                )
+            }
+        }
+
         if (hasFeaturedSellers) {
             item(key = "home_featured_sellers") {
                 HomeRecommendedSellersSection(
@@ -256,9 +309,9 @@ fun HomeFeedTabHost(
             }
         }
 
-        item(key = "home_feed_${safeSelected.name}") {
-            when {
-                isLoading && gridItems.isEmpty() -> {
+        when {
+            isLoading && gridItems.isEmpty() -> {
+                item(key = "home_feed_loading_${safeSelected.name}") {
                     FashSkeletonGrid(
                         modifier = Modifier.padding(
                             start = edge,
@@ -269,16 +322,20 @@ fun HomeFeedTabHost(
                         staggered = true,
                     )
                 }
-                loadError && gridItems.isEmpty() -> {
+            }
+            loadError && gridItems.isEmpty() -> {
+                item(key = "home_feed_error_${safeSelected.name}") {
                     FeedErrorColumn(
                         message = stringResource(R.string.feed_load_error),
-                        onRetry = onRetryFollowing,
+                        onRetry = if (safeSelected == HomeFeedTab.Following) onRetryFollowing else onRetryDiscovery,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = edge, end = edgeEnd, top = 8.dp),
                     )
                 }
-                gridItems.isEmpty() -> {
+            }
+            gridItems.isEmpty() -> {
+                item(key = "home_feed_empty_${safeSelected.name}") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -294,35 +351,36 @@ fun HomeFeedTabHost(
                         }
                     }
                 }
-                else -> {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ListingMasonryGrid(
-                            items = gridItems,
-                            onLikeListing = onLikeListing,
-                            onSaveListing = onSaveListing,
-                            onListingClick = { item, index ->
-                                onListingClick(item, index, safeSelected.analyticsSurface)
-                            },
-                            onRecordView = { item, index ->
-                                onRecordView(item, index, safeSelected.analyticsSurface)
-                            },
-                            onDwell = { item, index, dwellMs ->
-                                onDwell(item, index, dwellMs, safeSelected.analyticsSurface)
-                            },
-                        )
-                        if (isLoading) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = FashColors.Primary,
-                                    strokeWidth = 2.dp,
-                                )
-                            }
+            }
+            else -> {
+                listingMasonryFeedRows(
+                    items = gridItems,
+                    keyPrefix = "home_feed_${safeSelected.name}",
+                    onLikeListing = onLikeListing,
+                    onSaveListing = onSaveListing,
+                    onListingClick = { item, index ->
+                        onListingClick(item, index, safeSelected.analyticsSurface)
+                    },
+                    onRecordView = { item, index ->
+                        onRecordView(item, index, safeSelected.analyticsSurface)
+                    },
+                    onDwell = { item, index, dwellMs ->
+                        onDwell(item, index, dwellMs, safeSelected.analyticsSurface)
+                    },
+                )
+                if (followingLoadingMore && safeSelected == HomeFeedTab.Following) {
+                    item(key = "home_feed_loading_more") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = FashColors.Primary,
+                                strokeWidth = 2.dp,
+                            )
                         }
                     }
                 }
@@ -469,11 +527,9 @@ private fun tabItemsFor(
 
 private fun tabLoadingFor(
     tab: HomeFeedTab,
-    huntTodayLoading: Boolean,
     discoveryLoading: Boolean,
     followingLoading: Boolean,
 ): Boolean = when (tab) {
-    HomeFeedTab.HuntToday -> huntTodayLoading || discoveryLoading
-    HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved -> discoveryLoading
+    HomeFeedTab.HuntToday, HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved -> discoveryLoading
     HomeFeedTab.Following -> followingLoading
 }

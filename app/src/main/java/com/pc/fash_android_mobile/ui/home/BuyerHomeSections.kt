@@ -15,11 +15,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,6 +54,64 @@ private fun formatJourneyCount(n: Int): String =
         n < 0 -> "0"
         else -> n.toString()
     }
+
+@Composable
+fun HomeSizingBanner(
+    onAddSizeClick: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
+    val dismissCd = stringResource(R.string.home_sizing_banner_dismiss_cd)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = FashTheme.spacing.editorialStart,
+                end = FashTheme.spacing.editorialEnd,
+                top = 4.dp,
+                bottom = 8.dp,
+            )
+            .clip(shape)
+            .background(scheme.primaryContainer.copy(alpha = 0.45f))
+            .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.home_sizing_banner_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.home_sizing_banner_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = onAddSizeClick,
+                modifier = Modifier.padding(top = 4.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FashColors.Primary),
+            ) {
+                Text(stringResource(R.string.home_sizing_banner_cta))
+            }
+        }
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.semantics { contentDescription = dismissCd },
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 fun BuyerHomeJourneyRow(

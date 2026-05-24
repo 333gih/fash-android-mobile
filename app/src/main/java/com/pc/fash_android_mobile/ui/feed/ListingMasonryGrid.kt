@@ -3,8 +3,10 @@ package com.pc.fash_android_mobile.ui.feed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -23,8 +25,55 @@ fun listingMasonryStaggerAspectRatio(listingId: String): Float {
 }
 
 /**
+ * Virtualized two-column feed rows for [androidx.compose.foundation.lazy.LazyColumn].
+ * Each lazy item is one row (up to two tiles) so off-screen cards are not composed.
+ */
+fun LazyListScope.listingMasonryFeedRows(
+    items: List<ListingFeedItem>,
+    keyPrefix: String,
+    onLikeListing: (ListingFeedItem) -> Unit,
+    onSaveListing: (ListingFeedItem) -> Unit,
+    onListingClick: (ListingFeedItem, Int) -> Unit,
+    onRecordView: (ListingFeedItem, Int) -> Unit,
+    onDwell: (ListingFeedItem, Int, Int) -> Unit,
+) {
+    items.chunked(2).forEachIndexed { rowIndex, rowItems ->
+        item(key = "${keyPrefix}_row_${rowItems.first().id}") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = FashTheme.spacing.editorialStart,
+                        end = FashTheme.spacing.editorialEnd,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
+            ) {
+                rowItems.forEachIndexed { colInRow, feedItem ->
+                    val index = rowIndex * 2 + colInRow
+                    ListingMasonryTile(
+                        feedItem = feedItem,
+                        index = index,
+                        onLikeListing = onLikeListing,
+                        onSaveListing = onSaveListing,
+                        onListingClick = onListingClick,
+                        onRecordView = onRecordView,
+                        onDwell = onDwell,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowItems.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+/**
  * Two-column masonry grid for listing feeds. Uses a non-scrollable layout so it can live
  * inside [androidx.compose.foundation.lazy.LazyColumn] without infinite-height constraint crashes.
+ *
+ * Prefer [listingMasonryFeedRows] inside [androidx.compose.foundation.lazy.LazyColumn] for long feeds.
  */
 @Composable
 fun ListingMasonryGrid(

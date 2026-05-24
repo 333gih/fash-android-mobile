@@ -498,7 +498,7 @@ fun MainNavScreen(
                     exploreViewModel.setSearchBarExpanded(false)
                 }
                 when (tab) {
-                    MainTab.Home -> homeViewModel.refresh()
+                    MainTab.Home -> homeViewModel.refreshIfStale()
                     MainTab.Orders -> ordersViewModel.refreshOrders()
                     MainTab.Post -> postViewModel.reloadOnNavReselect()
                     MainTab.Chat -> {

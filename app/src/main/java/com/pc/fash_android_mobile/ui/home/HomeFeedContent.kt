@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.home.HomeEditorialPostStub
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
@@ -29,7 +28,8 @@ import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.theme.FashColors
 
 /**
- * Home tab: featured sellers at scroll top, sticky feed tabs, masonry grid, pinned promo above bottom nav.
+ * Home tab: journey shortcuts, featured sellers, sticky feed tabs, virtualized masonry grid,
+ * pinned promo above bottom nav.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +46,7 @@ fun HomeFeedContent(
     onNavigateToPost: () -> Unit = {},
     onPromoSlideClick: (FashPromoSlideDef, Int) -> Unit = { _, _ -> onNavigateToExplore() },
     promoSlides: List<FashPromoSlideDef> = emptyList(),
+    @Suppress("UNUSED_PARAMETER")
     onHomeEditorialPostClick: (HomeEditorialPostStub) -> Unit = {},
     onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onOpenFeaturedSellersAll: () -> Unit = {},
@@ -53,24 +54,13 @@ fun HomeFeedContent(
     onRequestLogin: (GuestLoginReason) -> Unit = {},
     onOpenSizingSetup: (() -> Unit)? = null,
 ) {
+    val ui by viewModel.feedUiState.collectAsState()
     val onLikeListing: (ListingFeedItem) -> Unit = { item ->
         if (isGuestBrowse) onRequestLogin(GuestLoginReason.Like) else viewModel.toggleLike(item)
     }
     val onSaveListing: (ListingFeedItem) -> Unit = { item ->
         if (isGuestBrowse) onRequestLogin(GuestLoginReason.Saved) else viewModel.toggleSave(item)
     }
-    val items by viewModel.items.collectAsState()
-    val huntTodayItems by viewModel.huntTodayItems.collectAsState()
-    val huntTodayLoading by viewModel.huntTodayLoading.collectAsState()
-    val discoveryLoading by viewModel.discoveryLoading.collectAsState()
-    val discovery by viewModel.discoveryBundle.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val hasMoreItems by viewModel.hasMoreItems.collectAsState()
-    val loadError by viewModel.loadError.collectAsState()
-    val listingPreview by viewModel.listingPreview.collectAsState()
-    val selectedFeedTab by viewModel.selectedFeedTab.collectAsState()
-    val followingIds by viewModel.followingIds.collectAsState()
     val pullState = rememberPullToRefreshState()
     val promoDockInset: Dp = if (promoSlides.isNotEmpty()) FashStickyPromoDockHeight else 0.dp
 
@@ -79,14 +69,14 @@ fun HomeFeedContent(
     }
 
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
+        isRefreshing = ui.isRefreshing,
         onRefresh = { viewModel.refresh() },
         modifier = modifier.fillMaxSize(),
         state = pullState,
         indicator = {
             PullToRefreshDefaults.Indicator(
                 state = pullState,
-                isRefreshing = isRefreshing,
+                isRefreshing = ui.isRefreshing,
                 color = FashColors.Primary,
                 containerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -97,25 +87,34 @@ fun HomeFeedContent(
             HomeFeedTabHost(
                 modifier = Modifier.fillMaxSize(),
                 bottomScrollInset = promoDockInset,
-                selectedTab = selectedFeedTab,
+                selectedTab = ui.selectedFeedTab,
                 onTabSelected = viewModel::setSelectedFeedTab,
-                featuredSellers = discovery.recommendedSellers,
-                followingIds = followingIds,
+                featuredSellers = ui.discovery.recommendedSellers,
+                followingIds = ui.followingIds,
                 onFeaturedSellerClick = onFeaturedSellerClick,
                 onFeaturedSellersSeeAll = onOpenFeaturedSellersAll,
-                huntTodayItems = huntTodayItems,
-                huntTodayLoading = huntTodayLoading,
-                discoveryLoading = discoveryLoading,
-                forYouItems = discovery.forYou,
-                followingItems = items,
-                followingLoading = isLoading,
-                followingLoadError = loadError,
-                followingHasMore = hasMoreItems,
+                huntTodayItems = ui.discovery.huntToday,
+                discoveryLoading = ui.discoveryLoading,
+                discoveryLoadError = ui.discoveryLoadError,
+                forYouItems = ui.discovery.forYou,
+                followingItems = ui.items,
+                followingLoading = ui.isLoading,
+                followingLoadError = ui.loadError,
+                followingHasMore = ui.hasMoreItems,
+                followingLoadingMore = ui.isLoadingMore,
                 onLoadMoreFollowing = { viewModel.loadMoreFollowFeed() },
                 onRetryFollowing = { viewModel.retryLoad() },
-                stylePickItems = discovery.stylePicks,
-                similarSavedItems = discovery.similarToSaved,
+                onRetryDiscovery = { viewModel.retryDiscovery() },
+                stylePickItems = ui.discovery.stylePicks,
+                similarSavedItems = ui.discovery.similarToSaved,
                 isGuestBrowse = isGuestBrowse,
+                showSizingBanner = ui.showSizingBanner && !isGuestBrowse,
+                onDismissSizingBanner = viewModel::dismissSizingBanner,
+                onOpenSizingSetup = onOpenSizingSetup,
+                buyerStats = ui.buyerStats,
+                onDeliveringJourneyClick = onDeliveringJourneyClick,
+                onSavedJourneyClick = onNavigateToSaved,
+                onMessagesJourneyClick = onNavigateToChat,
                 onLikeListing = onLikeListing,
                 onSaveListing = onSaveListing,
                 onListingClick = { item, index, surface ->
@@ -153,7 +152,7 @@ fun HomeFeedContent(
             }
         }
 
-        listingPreview?.let { preview ->
+        ui.listingPreview?.let { preview ->
             ExploreListingPreviewSheet(
                 feedItem = preview.feedItem,
                 detail = preview.detail,

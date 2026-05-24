@@ -21,13 +21,18 @@ import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,7 +56,26 @@ private val BuyerDeliveringStatuses = setOf(
     "shipping",
 )
 
-private const val HomeHuntTodayPreviewLimit = 12
+/** Skip automatic Home refresh when data was loaded within this window (ms). */
+private const val HomeFeedStaleThresholdMs = 60_000L
+
+/** Aggregated Home feed UI state — one collect reduces broad recomposition. */
+data class HomeFeedUiState(
+    val items: List<ListingFeedItem> = emptyList(),
+    val discovery: HomeDiscoveryBundle = HomeDiscoveryBundle(),
+    val selectedFeedTab: HomeFeedTab = HomeFeedTab.HuntToday,
+    val followingIds: Set<String> = emptySet(),
+    val buyerStats: BuyerHomeStats = BuyerHomeStats(),
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val discoveryLoading: Boolean = false,
+    val hasMoreItems: Boolean = true,
+    val loadError: Boolean = false,
+    val discoveryLoadError: Boolean = false,
+    val showSizingBanner: Boolean = false,
+    val listingPreview: ExploreListingPreviewState? = null,
+)
 
 /** Size of one follow-feed page (`GET /api/v1/listings/home`). */
 internal const val HomeFollowFeedPageSize = 20
@@ -95,13 +119,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _items = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val items: StateFlow<List<ListingFeedItem>> = _items.asStateFlow()
 
-    /** Heat-ranked marketplace preview (`GET /search/listings`, browse mode) — same source as Explore. */
-    private val _huntTodayItems = MutableStateFlow<List<ListingFeedItem>>(emptyList())
-    val huntTodayItems: StateFlow<List<ListingFeedItem>> = _huntTodayItems.asStateFlow()
-
-    private val _huntTodayLoading = MutableStateFlow(false)
-    val huntTodayLoading: StateFlow<Boolean> = _huntTodayLoading.asStateFlow()
-
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -111,8 +128,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _discoveryLoading = MutableStateFlow(false)
     val discoveryLoading: StateFlow<Boolean> = _discoveryLoading.asStateFlow()
 
-    /** Follow-feed pagination — guards duplicate in-flight requests (no UI spinner). */
+    /** Follow-feed pagination — guards duplicate in-flight requests. */
     private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
 
     /** Follow-feed pagination — false when last fetch returned < HomeFollowFeedPageSize. */
     private val _hasMoreItems = MutableStateFlow(true)
@@ -136,9 +154,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** True when last load failed (network/server error). User can retry. */
+    /** True when last follow-feed load failed (network/server error). User can retry. */
     private val _loadError = MutableStateFlow(false)
     val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
+
+    /** True when discovery bundle load failed — affects Hunt Today / For You / style rails. */
+    private val _discoveryLoadError = MutableStateFlow(false)
+    val discoveryLoadError: StateFlow<Boolean> = _discoveryLoadError.asStateFlow()
+
+    private var lastSuccessfulRefreshAtMs = 0L
 
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
@@ -154,10 +178,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _discoveryBundle = MutableStateFlow(HomeDiscoveryBundle())
     val discoveryBundle: StateFlow<HomeDiscoveryBundle> = _discoveryBundle.asStateFlow()
 
-    private val _listingPreview = MutableStateFlow<ExploreListingPreviewState?>(null)
-    val listingPreview: StateFlow<ExploreListingPreviewState?> = _listingPreview.asStateFlow()
-    private var listingPreviewDetailJob: Job? = null
-
     /**
      * True when (a) the viewer is signed in, (b) their profile has no reference_size or measurements,
      * and (c) they haven't dismissed the banner. Drives the small "Add my size" prompt at the top of
@@ -167,16 +187,55 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _showSizingBanner = MutableStateFlow(false)
     val showSizingBanner: StateFlow<Boolean> = _showSizingBanner.asStateFlow()
 
+    private val _listingPreview = MutableStateFlow<ExploreListingPreviewState?>(null)
+    val listingPreview: StateFlow<ExploreListingPreviewState?> = _listingPreview.asStateFlow()
+    private var listingPreviewDetailJob: Job? = null
+
+    val feedUiState: StateFlow<HomeFeedUiState> = combine(
+        _items,
+        _discoveryBundle,
+        _selectedFeedTab,
+        _followingIds,
+        _buyerStats,
+        _isLoading,
+        _isRefreshing,
+        _isLoadingMore,
+        _discoveryLoading,
+        _hasMoreItems,
+        _loadError,
+        _discoveryLoadError,
+        _showSizingBanner,
+        _listingPreview,
+    ) { values ->
+        @Suppress("UNCHECKED_CAST")
+        HomeFeedUiState(
+            items = values[0] as List<ListingFeedItem>,
+            discovery = values[1] as HomeDiscoveryBundle,
+            selectedFeedTab = values[2] as HomeFeedTab,
+            followingIds = values[3] as Set<String>,
+            buyerStats = values[4] as BuyerHomeStats,
+            isLoading = values[5] as Boolean,
+            isRefreshing = values[6] as Boolean,
+            isLoadingMore = values[7] as Boolean,
+            discoveryLoading = values[8] as Boolean,
+            hasMoreItems = values[9] as Boolean,
+            loadError = values[10] as Boolean,
+            discoveryLoadError = values[11] as Boolean,
+            showSizingBanner = values[12] as Boolean,
+            listingPreview = values[13] as ExploreListingPreviewState?,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = HomeFeedUiState(),
+    )
+
     init {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
-        }
         viewModelScope.launch {
             AppLocale.localeRevisionFlow.collect {
                 withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
             }
         }
-        viewModelScope.launch(Dispatchers.IO) { refreshSizingBannerState() }
         loadFeed()
         // INTEGRATION.md §5 feed.refresh: server hints that new listings are available
         viewModelScope.launch {
@@ -184,12 +243,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             realtimeManager.events.collect { event ->
                 if (event is RealtimeEvent.FeedRefresh) {
                     withContext(Dispatchers.IO) {
-                        loadBuyerHomeStats()
-                        fetchHuntTodayPreview()
-                        fetchHomeFeedWithRetry()
-                    }.getOrNull()?.let { feed ->
+                        coroutineScope {
+                            val stats = async { loadBuyerHomeStats() }
+                            val discovery = async { reloadDiscoveryBundle() }
+                            val feed = async { fetchHomeFeedWithRetry() }
+                            stats.await()
+                            discovery.await()
+                            feed.await().getOrNull()
+                        }
+                    }?.let { feed ->
                         _items.value = feed
                         syncSellerFollowingFromListings(feed)
+                        syncSellerFollowingFromListings(_discoveryBundle.value.huntToday)
+                        lastSuccessfulRefreshAtMs = System.currentTimeMillis()
                     }
                 }
             }
@@ -201,11 +267,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         homeDiscoveryRepository.loadDiscoveryBundle().fold(
             onSuccess = { bundle ->
                 _discoveryBundle.value = bundle
-                if (bundle.huntToday.isNotEmpty()) {
-                    _huntTodayItems.value = bundle.huntToday
-                }
+                _discoveryLoadError.value = false
+                syncSellerFollowingFromListings(bundle.huntToday)
             },
-            onFailure = { /* keep last good payload; stub should not fail */ },
+            onFailure = {
+                _discoveryLoadError.value = true
+            },
         )
         _discoveryLoading.value = false
     }
@@ -279,18 +346,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = true
             _loadError.value = false
             val result = withContext(Dispatchers.IO) {
-                loadBuyerHomeStats()
-                reloadDiscoveryBundle()
-                fetchHuntTodayPreview()
-                fetchHomeFeedWithRetry()
+                coroutineScope {
+                    val stats = async { loadBuyerHomeStats() }
+                    val discovery = async { reloadDiscoveryBundle() }
+                    val sizing = async { refreshSizingBannerState() }
+                    val feed = async { fetchHomeFeedWithRetry() }
+                    stats.await()
+                    discovery.await()
+                    sizing.await()
+                    feed.await()
+                }
             }
             _isLoading.value = false
             result.fold(
                 onSuccess = {
                     _items.value = it
                     syncSellerFollowingFromListings(it)
-                    syncSellerFollowingFromListings(_huntTodayItems.value)
+                    syncSellerFollowingFromListings(_discoveryBundle.value.huntToday)
                     _loadError.value = false
+                    lastSuccessfulRefreshAtMs = System.currentTimeMillis()
                 },
                 onFailure = {
                     _loadError.value = true
@@ -308,20 +382,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * Empty list is valid when the user follows nobody; use Explore for discovery.
      * One automatic retry on failure to smooth transient network errors.
      */
-    private suspend fun fetchHuntTodayPreview() {
-        _huntTodayLoading.value = true
-        val result = fashApp.recommendationRepository.exploreListings(
-            publicBrowse = isGuestBrowse(),
-            limit = HomeHuntTodayPreviewLimit,
-            offset = 0,
-        )
-        _huntTodayLoading.value = false
-        result.fold(
-            onSuccess = { _huntTodayItems.value = it },
-            onFailure = { /* keep last preview; home still usable */ },
-        )
-    }
-
     private suspend fun fetchHomeFeedWithRetry(): Result<List<ListingFeedItem>> {
         if (isGuestBrowse()) {
             return Result.success(emptyList())
@@ -390,24 +450,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         loadFeed()
     }
 
+    fun retryDiscovery() {
+        viewModelScope.launch {
+            _discoveryLoadError.value = false
+            withContext(Dispatchers.IO) { reloadDiscoveryBundle() }
+        }
+    }
+
     /**
      * Clears user-specific feed state when the session ends so the shell never briefly shows
      * the previous account’s home after logout / account switch.
      */
     fun clearCachesForSignedOutUser() {
         _items.value = emptyList()
-        _huntTodayItems.value = emptyList()
-        _huntTodayLoading.value = false
         _likedIds.value = emptySet()
         _savedIds.value = emptySet()
         _followingIds.value = emptySet()
         _buyerStats.value = BuyerHomeStats()
         _discoveryBundle.value = HomeDiscoveryBundle()
         _loadError.value = false
+        _discoveryLoadError.value = false
+        _showSizingBanner.value = false
         _isLoading.value = false
         _isRefreshing.value = false
         _isLoadingMore.value = false
         _hasMoreItems.value = true
+        lastSuccessfulRefreshAtMs = 0L
     }
 
     /** Bottom nav re-tap on Home — scroll feed to top (pairs with [refresh]). */
@@ -415,22 +483,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { _scrollHomeToTop.emit(Unit) }
     }
 
+    /** Refreshes only when data is older than [HomeFeedStaleThresholdMs]. */
+    fun refreshIfStale() {
+        val now = System.currentTimeMillis()
+        if (now - lastSuccessfulRefreshAtMs < HomeFeedStaleThresholdMs) return
+        refresh()
+    }
+
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
             _loadError.value = false
             val result = withContext(Dispatchers.IO) {
-                loadBuyerHomeStats()
-                reloadDiscoveryBundle()
-                fetchHuntTodayPreview()
-                fetchHomeFeedWithRetry()
+                coroutineScope {
+                    val stats = async { loadBuyerHomeStats() }
+                    val discovery = async { reloadDiscoveryBundle() }
+                    val sizing = async { refreshSizingBannerState() }
+                    val feed = async { fetchHomeFeedWithRetry() }
+                    stats.await()
+                    discovery.await()
+                    sizing.await()
+                    feed.await()
+                }
             }
             _isRefreshing.value = false
             result.fold(
                 onSuccess = {
                     _items.value = it
                     syncSellerFollowingFromListings(it)
-                    syncSellerFollowingFromListings(_huntTodayItems.value)
+                    syncSellerFollowingFromListings(_discoveryBundle.value.huntToday)
+                    _loadError.value = false
+                    lastSuccessfulRefreshAtMs = System.currentTimeMillis()
                 },
                 onFailure = { _loadError.value = true },
             )
@@ -654,9 +737,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun updateListingInFeeds(listingId: String, transform: (ListingFeedItem) -> ListingFeedItem) {
         fun List<ListingFeedItem>.patch() = map { if (it.id == listingId) transform(it) else it }
         _items.update { it.patch() }
-        _huntTodayItems.update { it.patch() }
         _discoveryBundle.update { bundle ->
             bundle.copy(
+                huntToday = bundle.huntToday.patch(),
                 recentlyViewed = bundle.recentlyViewed.patch(),
                 stylePicks = bundle.stylePicks.patch(),
                 similarToSaved = bundle.similarToSaved.patch(),
