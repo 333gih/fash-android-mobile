@@ -12,6 +12,7 @@
     <string name="add_to_cart">Add to cart</string>
     <string name="search_label">Search</string>
     <string name="search_placeholder">Search your style…</string>
+    <string name="home_header_search_placeholder">Search styles, brands…</string>
     <string name="cd_back">Back</string>
     <string name="cd_overflow_menu">More options</string>
     <string name="profile_cd_brief_scroll_to_top">Scroll to profile top</string>

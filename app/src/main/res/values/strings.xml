@@ -12,6 +12,7 @@
     <string name="add_to_cart">Thêm vào giỏ</string>
     <string name="search_label">Tìm kiếm</string>
     <string name="search_placeholder">Tìm kiếm phong cách của bạn…</string>
+    <string name="home_header_search_placeholder">Tìm phong cách, thương hiệu…</string>
     <string name="cd_back">Quay lại</string>
     <string name="cd_overflow_menu">Thêm tùy chọn</string>
     <string name="profile_cd_brief_scroll_to_top">Cuộn lên đầu hồ sơ</string>

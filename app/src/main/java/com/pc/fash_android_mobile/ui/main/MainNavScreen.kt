@@ -72,8 +72,16 @@ import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.graphicsLayer
 import com.pc.fash_android_mobile.ui.components.FashAnimatedSearchIconButton
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.components.FashHomeCollapsedSearchIcon
+import com.pc.fash_android_mobile.ui.components.FashHomeHeaderSearchField
+import com.pc.fash_android_mobile.ui.components.rememberHomeSearchExpandProgress
 import com.pc.fash_android_mobile.ui.components.FashInboxNotificationIconButton
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
@@ -106,6 +114,7 @@ private fun FashScreenTitle(
             text = stringResource(suffixRes),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
         )
     }
 }
@@ -419,8 +428,7 @@ fun MainNavScreen(
                     },
                     isLoggingOut = isLoggingOut,
                 )
-                MainTab.Home -> MainTopBar(
-                    suffixRes = tab.headerSuffixRes,
+                MainTab.Home -> HomeTopBar(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
@@ -878,6 +886,102 @@ private fun ProfileTopBar(
                     )
                 }
             }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeTopBar(
+    inboxUnreadCount: Int,
+    onSearchClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
+    showGuestSignIn: Boolean = false,
+    searchHintAnimation: Boolean = true,
+    tourTopBarAnchorsEnabled: Boolean = false,
+    onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
+) {
+    val animateExpand = searchHintAnimation && !tourTopBarAnchorsEnabled
+    val expandProgress = rememberHomeSearchExpandProgress(animate = animateExpand)
+    val fieldReveal = expandProgress.coerceIn(0f, 1f)
+    val searchTouchSize = 48.dp
+
+    TopAppBar(
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FashScreenTitle(
+                    suffixRes = MainTab.Home.headerSuffixRes,
+                    modifier = Modifier.wrapContentSize(),
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 10.dp)
+                        .then(
+                            if (tourTopBarAnchorsEnabled) {
+                                Modifier.onGloballyPositioned { coords ->
+                                    onTourTopActionsPositioned(coords.takeIf { it.isAttached })
+                                }
+                            } else {
+                                Modifier
+                            },
+                        ),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(searchTouchSize),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            val expandSpace = maxWidth
+                            if (fieldReveal > 0f) {
+                                val fieldWidth = searchTouchSize +
+                                    (expandSpace - searchTouchSize).coerceAtLeast(0.dp) * fieldReveal
+                                FashHomeHeaderSearchField(
+                                    onClick = onSearchClick,
+                                    width = fieldWidth,
+                                    modifier = Modifier.graphicsLayer {
+                                        alpha = 0.6f + 0.4f * fieldReveal
+                                    },
+                                    animateHint = animateExpand && fieldReveal > 0.92f,
+                                    contentReveal = fieldReveal,
+                                )
+                            } else if (animateExpand) {
+                                FashHomeCollapsedSearchIcon(
+                                    onClick = onSearchClick,
+                                    animateHint = true,
+                                )
+                            } else {
+                                IconButton(onClick = onSearchClick) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = stringResource(R.string.search_label),
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                        }
+                        if (!showGuestSignIn) {
+                            FashInboxNotificationIconButton(
+                                unreadCount = inboxUnreadCount,
+                                onClick = onNotificationsClick,
+                            )
+                        }
+                    }
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
