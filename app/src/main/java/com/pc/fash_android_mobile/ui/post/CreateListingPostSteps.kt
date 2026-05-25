@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +45,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CategoryTreeNode
+import com.pc.fash_android_mobile.data.common.displayLabel
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
@@ -212,6 +215,7 @@ fun CreateListingPostStep2(
     val filteredTags = remember(tagQuery, tags) {
         tags.filter { it.matchesTagQuery(tagQuery) }
     }
+    val isVi = AppLocale.currentTag(androidx.compose.ui.platform.LocalContext.current) != AppLocale.TAG_EN
 
     val scrollState = rememberScrollState()
 
@@ -249,6 +253,12 @@ fun CreateListingPostStep2(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(14.dp))
+            if (draft.fillMode == CreateListingFillMode.FROM_PROFILE_STYLE &&
+                draft.selectedAestheticTagIds.isNotEmpty()
+            ) {
+                PostProfilePrefilledBanner()
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             PostListingSearchField(
                 value = tagQuery,
                 onValueChange = { tagQuery = it },
@@ -269,7 +279,7 @@ fun CreateListingPostStep2(
                     filteredTags.forEach { tag ->
                         val selected = draft.selectedAestheticTagIds.contains(tag.id)
                         PostSelectablePill(
-                            text = tag.displayName.ifBlank { tag.name },
+                            text = tag.displayLabel(isVi),
                             selected = selected,
                             onClick = { viewModel.updateDraft { toggleAestheticTag(tag.id) } },
                         )
@@ -763,7 +773,66 @@ fun CreateListingPostStep5(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.post_step_color),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.post_listing_color_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ListingPrimaryColorPicker(
+                selectedColor = draft.color,
+                onColorSelected = { value ->
+                    viewModel.updateDraft {
+                        copy(color = if (color == value) "" else value)
+                    }
+                },
+            )
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun ListingPrimaryColorPicker(
+    selectedColor: String,
+    onColorSelected: (String) -> Unit,
+) {
+    @Suppress("SpellCheckingInspection")
+    val standardColors = listOf(
+        "black" to stringResource(R.string.color_black),
+        "white" to stringResource(R.string.color_white),
+        "grey" to stringResource(R.string.color_gray),
+        "navy" to stringResource(R.string.color_navy),
+        "beige" to stringResource(R.string.color_beige),
+        "brown" to stringResource(R.string.color_brown),
+        "blue" to stringResource(R.string.color_blue),
+        "red" to stringResource(R.string.color_red),
+        "green" to stringResource(R.string.color_green),
+        "pink" to stringResource(R.string.color_pink),
+        "yellow" to stringResource(R.string.color_yellow),
+        "olive" to stringResource(R.string.color_olive),
+        "cream" to stringResource(R.string.color_cream),
+        "orange" to stringResource(R.string.color_orange),
+        "purple" to stringResource(R.string.color_purple),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        standardColors.chunked(4).forEach { rowItems ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowItems.forEach { (value, label) ->
+                    PostSelectablePill(
+                        text = label,
+                        selected = selectedColor == value,
+                        onClick = { onColorSelected(value) },
+                    )
+                }
+            }
         }
     }
 }

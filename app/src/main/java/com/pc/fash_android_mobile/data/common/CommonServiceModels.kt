@@ -88,6 +88,7 @@ data class CommonAestheticTagDto(
     val id: String,
     val name: String,
     val displayName: String,
+    val displayNameVi: String = "",
     val sortOrder: Int,
     val status: String,
     val createdAt: String?,

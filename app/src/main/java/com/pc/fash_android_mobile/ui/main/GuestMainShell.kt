@@ -37,6 +37,8 @@ import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.guest.GuestLoginSheet
 import com.pc.fash_android_mobile.ui.home.HomeEditorialDetailScreen
+import com.pc.fash_android_mobile.ui.home.HomeEditorialListScreen
+import com.pc.fash_android_mobile.ui.home.UserExperienceSurveyScreen
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
@@ -76,6 +78,8 @@ fun GuestMainShell(
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
+    var showEditorialListScreen by rememberSaveable { mutableStateOf(false) }
+    var uxSurveyKey by rememberSaveable { mutableStateOf<String?>(null) }
     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
     var guestLoginReason by remember { mutableStateOf<GuestLoginReason?>(null) }
@@ -106,6 +110,20 @@ fun GuestMainShell(
             "in_app_chat" -> requestLogin(GuestLoginReason.ChatFromHome)
             "in_app_product_packages" -> requestLogin(GuestLoginReason.Post)
             "in_app_invite_friends" -> requestLogin(GuestLoginReason.Profile)
+            "in_app_editorial_guides" -> {
+                val slug = nav?.payload?.trim().orEmpty()
+                if (slug.isNotEmpty()) {
+                    showEditorialListScreen = false
+                    homeEditorialSlug = slug
+                } else {
+                    homeEditorialSlug = null
+                    showEditorialListScreen = true
+                }
+            }
+            "in_app_ux_survey" -> {
+                val key = nav?.payload?.trim().orEmpty().ifBlank { "fash_ux_v1" }
+                uxSurveyKey = key
+            }
             "external_url" -> {
                 val url = nav?.payload?.trim().orEmpty()
                 if (url.isNotEmpty()) {
@@ -210,7 +228,25 @@ fun GuestMainShell(
         )
 
         val editorialSlug = homeEditorialSlug
-        if (editorialSlug != null && selectedListingId == null) {
+        if (uxSurveyKey != null && selectedListingId == null) {
+            UserExperienceSurveyScreen(
+                surveyKey = uxSurveyKey!!,
+                modifier = Modifier.fillMaxSize(),
+                onBack = { uxSurveyKey = null },
+            )
+        } else if (showEditorialListScreen && editorialSlug == null && selectedListingId == null) {
+            HomeEditorialListScreen(
+                modifier = Modifier.fillMaxSize(),
+                onBack = { showEditorialListScreen = false },
+                onPostClick = { post ->
+                    val slug = post.slug.trim().ifBlank { post.id.trim() }
+                    if (slug.isNotEmpty()) {
+                        showEditorialListScreen = false
+                        homeEditorialSlug = slug
+                    }
+                },
+            )
+        } else if (editorialSlug != null && selectedListingId == null) {
             HomeEditorialDetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 slug = editorialSlug,
@@ -218,7 +254,7 @@ fun GuestMainShell(
             )
         }
 
-        if (showFeaturedSellersAll && sellerShopUsername == null && selectedListingId == null && editorialSlug == null) {
+        if (showFeaturedSellersAll && sellerShopUsername == null && selectedListingId == null && editorialSlug == null && !showEditorialListScreen && uxSurveyKey == null) {
             FeaturedSellersScreen(
                 modifier = Modifier.fillMaxSize(),
                 viewModel = featuredSellersViewModel,

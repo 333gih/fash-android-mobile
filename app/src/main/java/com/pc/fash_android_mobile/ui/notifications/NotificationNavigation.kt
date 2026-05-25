@@ -49,7 +49,7 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
 
     val openFollowingTab = nav == "following_tab"
 
-    val openExploreTab = nav == "explore_tab"
+    val openExploreTab = nav == "explore_tab" || nav == "explore"
 
     val openInviteFriends = nav == "in_app_invite_friends" ||
         ptype.equals("marketplace.referral.invite_rewarded", ignoreCase = true)

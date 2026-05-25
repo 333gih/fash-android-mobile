@@ -10,6 +10,16 @@ import com.pc.fash_android_mobile.data.common.ListingImageStepCatalog
 import com.pc.fash_android_mobile.data.listing.CreateListingRequest
 import com.pc.fash_android_mobile.data.listing.ListingImageStepPayload
 import com.pc.fash_android_mobile.data.listing.NamedRefPayload
+import com.pc.fash_android_mobile.data.user.ProfileInfo
+
+/** How the seller chose to fill listing metadata at the start of the flow. */
+enum class CreateListingFillMode {
+    MANUAL,
+    FROM_PROFILE_STYLE,
+}
+
+/** Internal step before category selection — not counted in [TotalPostSteps]. */
+const val CreateListingModeStep = 0
 
 /**
  * One photo slot in the create-listing wizard (definition from common-service + local/uploaded image).
@@ -33,6 +43,7 @@ fun ListingPhotoSlotDraft.hasImageSelected(): Boolean =
  * [listingPhotoSlots] are filled from common-service `listing-image-setup` for the chosen leaf category.
  */
 data class CreateListingDraft(
+    val fillMode: CreateListingFillMode = CreateListingFillMode.MANUAL,
     val categoryId: String = "",
     val categoryName: String = "",
     val parentCategoryId: String? = null,
@@ -370,7 +381,7 @@ fun CommonCountryDto.matchesQuery(q: String): Boolean {
 fun CommonAestheticTagDto.matchesTagQuery(q: String): Boolean {
     if (q.isBlank()) return true
     val n = q.trim().lowercase()
-    return name.lowercase().contains(n) || displayName.lowercase().contains(n)
+    return name.lowercase().contains(n) || displayName.lowercase().contains(n) || displayNameVi.lowercase().contains(n)
 }
 
 /** Builds core-service `image_urls` JSON array after uploads filled [ListingPhotoSlotDraft.uploadedImageUrl]. */
@@ -385,3 +396,94 @@ fun CreateListingDraft.buildListingImageStepPayloads(): List<ListingImageStepPay
             imageUrl = s.uploadedImageUrl?.trim().orEmpty(),
         )
     }
+
+fun ProfileInfo.hasStyleReferenceForListing(): Boolean =
+    aestheticTagSnapshots.isNotEmpty() ||
+        !referenceSize.isNullOrBlank() ||
+        referenceMeasurementChest != null ||
+        referenceMeasurementHem != null ||
+        referenceMeasurementLength != null ||
+        referenceMeasurementShoulders != null ||
+        referenceMeasurementSleeveLength != null ||
+        gender.trim().isNotEmpty()
+
+fun mapProfileGenderToListingTarget(gender: String): String? = when (gender.trim().lowercase()) {
+    "women" -> "women"
+    "men" -> "men"
+    "non_binary" -> "unisex"
+    else -> null
+}
+
+/** Gender key for sizing charts in listing step 6 (women/men charts from onboarding). */
+fun CreateListingDraft.sizingChartGender(profile: ProfileInfo? = null): String {
+    genderTarget.trim().lowercase().takeIf { it == "women" || it == "men" }?.let { return it }
+    mapProfileGenderToListingTarget(profile?.gender.orEmpty())?.takeIf { it == "women" || it == "men" }?.let { return it }
+    return "women"
+}
+
+private fun formatMeasurementDraftValue(value: Double?): String {
+    if (value == null) return ""
+    return if (value % 1.0 == 0.0) {
+        value.toLong().toString()
+    } else {
+        value.toString()
+    }
+}
+
+/**
+ * Pre-fills style/size fields from the signed-in user's profile.
+ * Only writes into empty draft fields (brand, category, photos, etc. stay manual).
+ */
+fun CreateListingDraft.applyProfileStyleIfEmpty(profile: ProfileInfo): CreateListingDraft {
+    var next = copy(fillMode = CreateListingFillMode.FROM_PROFILE_STYLE)
+    if (selectedAestheticTagIds.isEmpty() && profile.aestheticTagSnapshots.isNotEmpty()) {
+        next = next.copy(
+            selectedAestheticTagIds = profile.aestheticTagSnapshots
+                .map { it.id }
+                .filter { it.isNotBlank() }
+                .take(MaxAestheticTags)
+                .toSet(),
+        )
+    }
+    if (size.isBlank() && !profile.referenceSize.isNullOrBlank()) {
+        next = next.copy(size = profile.referenceSize!!.trim().take(20))
+    }
+    val profileUnit = profile.referenceMeasurementUnit?.trim().orEmpty()
+    if (profileUnit.isNotBlank()) {
+        val normalized = if (profileUnit.equals("in", ignoreCase = true)) "in" else "cm"
+        if (measurementUnit.isBlank() || measurementUnit == "cm") {
+            next = next.copy(measurementUnit = normalized)
+        }
+    }
+    if (measurementHem.isBlank()) {
+        formatMeasurementDraftValue(profile.referenceMeasurementHem).takeIf { it.isNotBlank() }?.let {
+            next = next.copy(measurementHem = it)
+        }
+    }
+    if (measurementChest.isBlank()) {
+        formatMeasurementDraftValue(profile.referenceMeasurementChest).takeIf { it.isNotBlank() }?.let {
+            next = next.copy(measurementChest = it)
+        }
+    }
+    if (measurementLength.isBlank()) {
+        formatMeasurementDraftValue(profile.referenceMeasurementLength).takeIf { it.isNotBlank() }?.let {
+            next = next.copy(measurementLength = it)
+        }
+    }
+    if (measurementShoulders.isBlank()) {
+        formatMeasurementDraftValue(profile.referenceMeasurementShoulders).takeIf { it.isNotBlank() }?.let {
+            next = next.copy(measurementShoulders = it)
+        }
+    }
+    if (measurementSleeveLength.isBlank()) {
+        formatMeasurementDraftValue(profile.referenceMeasurementSleeveLength).takeIf { it.isNotBlank() }?.let {
+            next = next.copy(measurementSleeveLength = it)
+        }
+    }
+    if (genderTarget.isBlank()) {
+        mapProfileGenderToListingTarget(profile.gender)?.let { target ->
+            next = next.copy(genderTarget = target)
+        }
+    }
+    return next
+}

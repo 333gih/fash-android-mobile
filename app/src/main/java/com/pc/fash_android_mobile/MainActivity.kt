@@ -67,9 +67,8 @@ import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.home.HomeEditorialDetailScreen
-import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
-import com.pc.fash_android_mobile.ui.home.HomeInReviewViewModel
-import com.pc.fash_android_mobile.ui.home.HomeJourneyHub
+import com.pc.fash_android_mobile.ui.home.HomeEditorialListScreen
+import com.pc.fash_android_mobile.ui.home.UserExperienceSurveyScreen
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.invite.InviteFriendsScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
@@ -239,8 +238,6 @@ class MainActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val onboardingViewModel: OnboardingViewModel by viewModels()
     private val homeViewModel: HomeViewModel by viewModels()
-    private val homeDeliveringViewModel: HomeDeliveringViewModel by viewModels()
-    private val homeInReviewViewModel: HomeInReviewViewModel by viewModels()
     private val exploreViewModel: ExploreViewModel by viewModels()
     private val productDetailViewModel: ProductDetailViewModel by viewModels()
     private val editListingViewModel: EditListingViewModel by viewModels()
@@ -520,8 +517,6 @@ class MainActivity : ComponentActivity() {
                         pendingPaymentViewModel.clearForLogout()
                         profileViewModel.clearCachedProfile()
                         homeViewModel.clearCachesForSignedOutUser()
-                        homeDeliveringViewModel.clearCachesForSignedOutUser()
-                        homeInReviewViewModel.clearCachesForSignedOutUser()
                         exploreViewModel.clearCachesForSignedOutUser()
                         chatViewModel.clearCachesForSignedOutUser()
                         chatDetailViewModel.clearCachesForSignedOutUser()
@@ -1117,16 +1112,9 @@ class MainActivity : ComponentActivity() {
                                     var showShippingAddressList by rememberSaveable { mutableStateOf(false) }
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
-                                    var homeJourneyHubOrdinal by rememberSaveable {
-                                        mutableIntStateOf(HomeJourneyHub.Feed.ordinal)
-                                    }
-                                    val homeJourneyHub = HomeJourneyHub.entries.getOrElse(homeJourneyHubOrdinal) {
-                                        HomeJourneyHub.Feed
-                                    }
-                                    val onHomeJourneyHubChange: (HomeJourneyHub) -> Unit = { hub ->
-                                        homeJourneyHubOrdinal = hub.ordinal
-                                    }
                                     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var showEditorialListScreen by rememberSaveable { mutableStateOf(false) }
+                                    var uxSurveyKey by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
@@ -1187,10 +1175,6 @@ class MainActivity : ComponentActivity() {
                                             SellerShopEntrySource.Orders -> {
                                                 selectedTab = MainTab.Orders.ordinal
                                             }
-                                            SellerShopEntrySource.HomeDelivering -> {
-                                                homeJourneyHubOrdinal = HomeJourneyHub.Delivering.ordinal
-                                                selectedTab = MainTab.Home.ordinal
-                                            }
                                             SellerShopEntrySource.OrderDetail -> {
                                                 restore.orderId?.let { selectedOrderId = it }
                                             }
@@ -1221,13 +1205,14 @@ class MainActivity : ComponentActivity() {
                                         editListingViewModel.events.collect { msg ->
                                             enqueueSnackbarSerial {
                                                 showSnackbar(msg)
-                                                if (msg == context.getString(R.string.edit_listing_saved) ||
-                                                    msg == context.getString(R.string.edit_listing_deleted)
-                                                ) {
-                                                    editListingId = null
-                                                    homeViewModel.loadFeed()
-                                                    exploreViewModel.loadAll()
-                                                    profileViewModel.loadProfile()
+                if (msg == context.getString(R.string.edit_listing_saved) ||
+                    msg == context.getString(R.string.edit_listing_resubmitted) ||
+                    msg == context.getString(R.string.edit_listing_deleted)
+                ) {
+                    editListingId = null
+                    homeViewModel.loadFeed()
+                    exploreViewModel.loadAll()
+                    profileViewModel.loadProfile()
                                                 }
                                             }
                                         }
@@ -1235,16 +1220,6 @@ class MainActivity : ComponentActivity() {
                                     LaunchedEffect(showFollowConnections, followConnectionsInitialTab) {
                                         if (showFollowConnections) {
                                             followConnectionsViewModel.show(followConnectionsInitialTab)
-                                        }
-                                    }
-                                    ReloadWhenVisible(homeJourneyHub == HomeJourneyHub.Delivering, selectedOrderId) {
-                                        if (homeJourneyHub == HomeJourneyHub.Delivering && selectedOrderId == null) {
-                                            homeDeliveringViewModel.refresh(AppEnvironment.shippingEnabled)
-                                        }
-                                    }
-                                    ReloadWhenVisible(homeJourneyHub == HomeJourneyHub.InReview) {
-                                        if (homeJourneyHub == HomeJourneyHub.InReview) {
-                                            homeInReviewViewModel.refresh()
                                         }
                                     }
                                     ReloadWhenVisible(showFeaturedSellersAll, sellerShopUsername, selectedListingId) {
@@ -1309,6 +1284,19 @@ class MainActivity : ComponentActivity() {
                                             "in_app_invite_friends" -> {
                                                 showInviteFriendsScreen = true
                                             }
+                                            "in_app_editorial_guides" -> {
+                                                val slug = nav?.payload?.trim().orEmpty()
+                                                if (slug.isNotEmpty()) {
+                                                    showEditorialListScreen = false
+                                                    homeEditorialSlug = slug
+                                                } else {
+                                                    homeEditorialSlug = null
+                                                    showEditorialListScreen = true
+                                                }
+                                            }
+                                            "in_app_ux_survey" -> {
+                                                uxSurveyKey = nav?.payload?.trim().orEmpty().ifBlank { "fash_ux_v1" }
+                                            }
                                             "external_url" -> {
                                                 val url = nav?.payload?.trim().orEmpty()
                                                 if (url.isNotEmpty()) {
@@ -1352,7 +1340,6 @@ class MainActivity : ComponentActivity() {
                                         showEditProfile,
                                         showShippingAddressList,
                                         showAddAddressScreen,
-                                        homeJourneyHub,
                                         showFollowConnections,
                                         showFeaturedSellersAll,
                                         showInviteFriendsScreen,
@@ -1367,7 +1354,6 @@ class MainActivity : ComponentActivity() {
                                                 showEditProfile ||
                                                 showShippingAddressList ||
                                                 showAddAddressScreen ||
-                                                homeJourneyHub != HomeJourneyHub.Feed ||
                                                 showSellerPackagesScreen ||
                                                 sellerPackageCheckout != null ||
                                                 showFollowConnections ||
@@ -1432,16 +1418,6 @@ class MainActivity : ComponentActivity() {
                                             onLogoutAll = loginViewModel::logoutAll,
                                             isLoggingOut = isLoggingOut,
                                             homeViewModel = homeViewModel,
-                                            homeDeliveringViewModel = homeDeliveringViewModel,
-                                            homeInReviewViewModel = homeInReviewViewModel,
-                                            homeJourneyHub = homeJourneyHub,
-                                            onHomeJourneyHubChange = onHomeJourneyHubChange,
-                                            onHomeDeliveringOrderClick = { order ->
-                                                selectedOrderId = order.orderId
-                                            },
-                                            onHomeInReviewListingClick = { item ->
-                                                editListingId = item.id
-                                            },
                                             exploreViewModel = exploreViewModel,
                                             ordersViewModel = ordersViewModel,
                                             postViewModel = postViewModel,
@@ -1509,12 +1485,6 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onInviteFriendsClick = { showInviteFriendsScreen = true },
                                             onOrdersClick = { selectedTab = MainTab.Orders.ordinal },
-                                            onHomeDeliveringJourneyClick = {
-                                                homeJourneyHubOrdinal = HomeJourneyHub.Delivering.ordinal
-                                            },
-                                            onHomeInReviewJourneyClick = {
-                                                homeJourneyHubOrdinal = HomeJourneyHub.InReview.ordinal
-                                            },
                                             onHomeEditorialPostClick = { post ->
                                                 val slug = post.slug.trim().ifBlank { post.id.trim() }
                                                 if (slug.isNotEmpty()) homeEditorialSlug = slug
@@ -2086,7 +2056,29 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         val editorialSlug = homeEditorialSlug
-                                        if (editorialSlug != null && selectedOrderId == null) {
+                                        if (uxSurveyKey != null && selectedOrderId == null) {
+                                            UserExperienceSurveyScreen(
+                                                surveyKey = uxSurveyKey!!,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                onBack = { uxSurveyKey = null },
+                                            )
+                                        } else if (showEditorialListScreen && editorialSlug == null && selectedOrderId == null) {
+                                            HomeEditorialListScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                onBack = { showEditorialListScreen = false },
+                                                onPostClick = { post ->
+                                                    val slug = post.slug.trim().ifBlank { post.id.trim() }
+                                                    if (slug.isNotEmpty()) {
+                                                        showEditorialListScreen = false
+                                                        homeEditorialSlug = slug
+                                                    }
+                                                },
+                                            )
+                                        } else if (editorialSlug != null && selectedOrderId == null) {
                                             HomeEditorialDetailScreen(
                                                 slug = editorialSlug,
                                                 modifier = Modifier
@@ -2215,9 +2207,11 @@ class MainActivity : ComponentActivity() {
                                             showFeaturedSellersAll,
                                             sellerShopUsername,
                                             showFollowConnections,
-                                            homeJourneyHub,
                                             showSellerPackagesScreen,
                                             showInviteFriendsScreen,
+                                            showEditorialListScreen,
+                                            homeEditorialSlug,
+                                            uxSurveyKey,
                                             sellerPackageCheckout,
                                             selectedCheckoutListingId,
                                             showAddAddressScreen,
@@ -2233,9 +2227,11 @@ class MainActivity : ComponentActivity() {
                                             showFeaturedSellersAll ||
                                                 sellerShopUsername != null ||
                                                 showFollowConnections ||
-                                                homeJourneyHub != HomeJourneyHub.Feed ||
                                                 showSellerPackagesScreen ||
                                                 showInviteFriendsScreen ||
+                                                showEditorialListScreen ||
+                                                homeEditorialSlug != null ||
+                                                uxSurveyKey != null ||
                                                 sellerPackageCheckout != null ||
                                                 selectedCheckoutListingId != null ||
                                                 showAddAddressScreen ||
@@ -2250,6 +2246,15 @@ class MainActivity : ComponentActivity() {
                                         }
                                         BackHandler(enabled = hasMainOverlayBack) {
                                             when {
+                                                uxSurveyKey != null -> {
+                                                    uxSurveyKey = null
+                                                }
+                                                homeEditorialSlug != null -> {
+                                                    homeEditorialSlug = null
+                                                }
+                                                showEditorialListScreen -> {
+                                                    showEditorialListScreen = false
+                                                }
                                                 showFeaturedSellersAll && sellerShopUsername == null -> {
                                                     showFeaturedSellersAll = false
                                                 }
@@ -2258,9 +2263,6 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 showFollowConnections -> {
                                                     showFollowConnections = false
-                                                }
-                                                homeJourneyHub != HomeJourneyHub.Feed -> {
-                                                    onHomeJourneyHubChange(HomeJourneyHub.Feed)
                                                 }
                                                 sellerPackageCheckout != null -> {
                                                     sellerPackageCheckout = null

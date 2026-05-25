@@ -375,7 +375,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             if (tag == null && cat == null && brand == null && q.isNotBlank()) {
                 tag = _aestheticTagsCatalog.value.firstOrNull { t ->
                     t.name.equals(q, ignoreCase = true) ||
-                        t.displayName.equals(q, ignoreCase = true)
+                        t.displayName.equals(q, ignoreCase = true) ||
+                        t.displayNameVi.equals(q, ignoreCase = true)
                 }?.id
             }
             when {
@@ -626,7 +627,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
         val match = _aestheticTagsCatalog.value.firstOrNull { t ->
             t.name.equals(cleaned, ignoreCase = true) ||
-                t.displayName.equals(cleaned, ignoreCase = true)
+                t.displayName.equals(cleaned, ignoreCase = true) ||
+                t.displayNameVi.equals(cleaned, ignoreCase = true)
         }
         if (match != null) {
             _selectedAestheticTagIds.value = setOf(match.id)
@@ -933,7 +935,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val cleaned = tagName.trim()
         if (cleaned.isBlank()) return
         val matchedId = _aestheticTagsCatalog.value.firstOrNull {
-            it.name.equals(cleaned, ignoreCase = true) || it.displayName.equals(cleaned, ignoreCase = true)
+            it.name.equals(cleaned, ignoreCase = true) || it.displayName.equals(cleaned, ignoreCase = true) ||
+                it.displayNameVi.equals(cleaned, ignoreCase = true)
         }?.id
         if (matchedId != null) {
             toggleAestheticTagFilter(matchedId)

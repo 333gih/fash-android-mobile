@@ -106,8 +106,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.explore.BrowseLocationMode
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
@@ -1165,6 +1167,7 @@ private fun exploreFilterSummaryParts(
     maxPriceText: String,
     conditionFilter: String?,
 ): List<String> {
+    val isVi = AppLocale.currentTag(androidx.compose.ui.platform.LocalContext.current) != AppLocale.TAG_EN
     val parts = mutableListOf<String>()
     val categoryName =
         selectedCategoryId?.let { id ->
@@ -1174,7 +1177,7 @@ private fun exploreFilterSummaryParts(
     if (selectedAestheticTagIds.isNotEmpty()) {
         selectedAestheticTagIds.forEach { id ->
             val label = aestheticTagsCatalog.find { it.id == id }?.let { t ->
-                t.displayName.ifBlank { t.name }.trim().takeIf { it.isNotEmpty() }
+                t.displayLabel(isVi).trim().takeIf { it.isNotEmpty() }
             }
             if (!label.isNullOrEmpty()) parts.add(label)
         }

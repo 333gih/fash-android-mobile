@@ -36,8 +36,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.post.PostListingSearchField
 import com.pc.fash_android_mobile.ui.post.PostSelectableListRow
 import com.pc.fash_android_mobile.ui.post.PostSelectablePill
@@ -286,13 +288,14 @@ fun EditListingStyleTagsDropdown(
     var expanded by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
     val tagListScroll = rememberScrollState()
+    val isVi = AppLocale.currentTag(androidx.compose.ui.platform.LocalContext.current) != AppLocale.TAG_EN
     val filtered = remember(filterQuery, catalogTags) {
         catalogTags.filter { it.matchesTagQuery(filterQuery) }
     }
 
-    val summary = remember(selectedTagIds, catalogTags) {
+    val summary = remember(selectedTagIds, catalogTags, isVi) {
         selectedTagIds.mapNotNull { id ->
-            catalogTags.find { it.id == id }?.let { it.displayName.ifBlank { it.name } }
+            catalogTags.find { it.id == id }?.displayLabel(isVi)
         }
     }
     val fieldText = when {
@@ -359,7 +362,7 @@ fun EditListingStyleTagsDropdown(
                         filtered.forEach { tag ->
                             val selected = tag.id in selectedTagIds
                             StyleTagMenuRow(
-                                label = tag.displayName.ifBlank { tag.name },
+                                label = tag.displayLabel(isVi),
                                 selected = selected,
                                 enabled = enabled,
                                 onToggle = { onToggleTag(tag.id) },
@@ -389,7 +392,7 @@ fun EditListingStyleTagsDropdown(
                 selectedTagIds.forEach { id ->
                     val tag = catalogTags.find { it.id == id } ?: return@forEach
                     PostSelectablePill(
-                        text = tag.displayName.ifBlank { tag.name },
+                        text = tag.displayLabel(isVi),
                         selected = true,
                         onClick = {
                             if (enabled) onToggleTag(id)

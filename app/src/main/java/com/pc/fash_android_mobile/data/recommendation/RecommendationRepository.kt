@@ -168,6 +168,83 @@ class RecommendationRepository(
             text
         }
     }
+
+    fun uxPersonalization(clientHour: Int? = null): Result<UxPersonalizationBundle> = runCatching {
+        val path = AppEnvironment.apiPath("api/v1/recommendations/ux-personalization")
+        val url = if (clientHour != null) "$path?client_hour=$clientHour" else path
+        val body = executeGet(url, publicBrowse = false)
+        parseUxPersonalization(body)
+    }
+
+    fun recordUxEvents(events: List<UxEventPayload>): Result<Unit> = runCatching {
+        if (events.isEmpty()) return@runCatching
+        val path = AppEnvironment.apiPath("api/v1/recommendations/ux-events")
+        val arr = JSONArray()
+        for (e in events.take(50)) {
+            arr.put(
+                JSONObject()
+                    .put("scope", e.scope)
+                    .put("tab_key", e.tabKey)
+                    .apply {
+                        e.clientHour?.let { put("client_hour", it) }
+                        e.dwellMs?.let { put("dwell_ms", it) }
+                    },
+            )
+        }
+        val json = JSONObject().put("events", arr)
+        val reqBody = json.toString().toRequestBody("application/json".toMediaType())
+        val req = Request.Builder().url(path).post(reqBody).build()
+        securedClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) error("ux-events HTTP ${resp.code}")
+        }
+    }
+
+    private fun parseUxPersonalization(body: String): UxPersonalizationBundle {
+        val root = JSONObject(body)
+        val data = root.optJSONObject("data") ?: root
+        val home = data.optJSONObject("home") ?: JSONObject()
+        val profile = data.optJSONObject("profile") ?: JSONObject()
+        val shortcutObj = home.optJSONObject("explore_shortcut")
+        val shortcut = shortcutObj?.let {
+            HomeExploreShortcut(
+                labelKey = it.optString("label_key"),
+                aestheticTagId = it.optString("aesthetic_tag_id").takeIf { id -> id.isNotBlank() },
+                aestheticTagName = it.optString("aesthetic_tag_name").takeIf { n -> n.isNotBlank() },
+                categoryId = it.optString("category_id").takeIf { id -> id.isNotBlank() },
+                brandId = it.optString("brand_id").takeIf { id -> id.isNotBlank() },
+            )
+        }
+        val sectionLimits = mutableMapOf<String, Int>()
+        home.optJSONObject("section_limits")?.let { limits ->
+            limits.keys().forEach { key ->
+                sectionLimits[key] = limits.optInt(key)
+            }
+        }
+        return UxPersonalizationBundle(
+            home = HomeUxPersonalization(
+                defaultTabKey = home.optString("default_tab", HomeFeedTabKeys.HUNT_TODAY),
+                tabOrder = home.optJSONArray("tab_order").toStringList(),
+                prefetchTabs = home.optJSONArray("prefetch_tabs").toStringList(),
+                sectionLimits = sectionLimits,
+                exploreShortcut = shortcut,
+            ),
+            profile = ProfileUxPersonalization(
+                defaultTabKey = profile.optString("default_tab_key", ProfileTabKeys.SELLING),
+                tabOrderKeys = profile.optJSONArray("tab_order_keys").toStringList(),
+                primaryMode = profile.optString("primary_mode", "balanced"),
+            ),
+        )
+    }
+
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        return buildList(length()) {
+            for (i in 0 until length()) {
+                val v = optString(i).trim()
+                if (v.isNotEmpty()) add(v)
+            }
+        }
+    }
 }
 
 data class FeedEventPayload(

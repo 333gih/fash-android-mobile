@@ -472,7 +472,7 @@ private fun navTargetDisplay(raw: String): String {
         "chat" -> stringResource(R.string.notification_data_nav_chat)
         "followers_tab" -> stringResource(R.string.notification_data_nav_followers_tab)
         "following_tab" -> stringResource(R.string.notification_data_nav_following_tab)
-        "explore_tab" -> stringResource(R.string.notification_data_nav_explore_tab)
+        "explore_tab", "explore" -> stringResource(R.string.notification_data_nav_explore_tab)
         else -> if (key.isEmpty()) "—" else stringResource(R.string.notification_data_nav_generic, raw.trim())
     }
 }

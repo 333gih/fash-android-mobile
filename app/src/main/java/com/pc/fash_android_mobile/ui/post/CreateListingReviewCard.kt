@@ -37,12 +37,11 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
-import java.text.NumberFormat
-import java.util.Locale
 
 @Composable
 fun CreateListingReviewCard(
@@ -51,15 +50,14 @@ fun CreateListingReviewCard(
     aestheticTagsById: Map<String, CommonAestheticTagDto>,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val isVi = AppLocale.currentTag(LocalContext.current) != AppLocale.TAG_EN
     val coverSlot = draft.listingPhotoSlots
         .sortedBy { it.sortOrder }
         .firstOrNull { it.hasImageSelected() }
     val coverImageUrl = coverSlot?.uploadedImageUrl?.takeIf { it.isNotBlank() }
     val coverImageUri = coverSlot?.localImageUri?.takeIf { it.isNotBlank() && coverImageUrl == null }
     val firstTagDisplay = draft.selectedAestheticTagIds.firstOrNull()?.let { id ->
-        aestheticTagsById[id]?.let { t ->
-            t.displayName.ifBlank { t.name }
-        }
+        aestheticTagsById[id]?.displayLabel(isVi)
     }
 
     Card(
@@ -290,19 +288,6 @@ fun CreateListingReviewFooter() {
             uriHandler.openUri(AppEnvironment.legalPrivacyUrl(AppLocale.currentTag(context)))
         },
     )
-}
-
-private fun formatConditionDisplay(condition: String): String = when (condition.lowercase()) {
-    "new" -> "Mới"
-    "like_new", "like new" -> "Như mới"
-    "good" -> "Tốt"
-    "fair" -> "Khá"
-    else -> condition.ifBlank { "—" }
-}
-
-private fun formatDraftPriceVnd(raw: String): String {
-    val v = raw.trim().replace(".", "").replace(",", "").toLongOrNull() ?: 0L
-    return "₫ ${NumberFormat.getIntegerInstance(Locale.getDefault()).format(v).replace(',', '.')}"
 }
 
 private fun resolveListingImageUrl(path: String): String {

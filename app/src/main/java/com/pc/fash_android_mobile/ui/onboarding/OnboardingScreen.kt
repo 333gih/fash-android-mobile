@@ -43,6 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.components.FashPillFilterChip
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -67,6 +69,7 @@ fun OnboardingScreen(
     onBack: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val isVi = AppLocale.currentTag(androidx.compose.ui.platform.LocalContext.current) != AppLocale.TAG_EN
 
     val topAnim = remember { Animatable(0f) }
     val gridAnim = remember { Animatable(0f) }
@@ -181,7 +184,7 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         tags.forEach { tag ->
-                            val label = tag.displayName.ifBlank { tag.name }
+                            val label = tag.displayLabel(isVi)
                             FashPillFilterChip(
                                 selected = selectedIds.contains(tag.id),
                                 onClick = { onToggleSelection(tag) },

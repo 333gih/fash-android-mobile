@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -60,11 +61,13 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.address.VnAddressDropdown
 import com.pc.fash_android_mobile.data.common.CommonAddressDto
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
 import com.pc.fash_android_mobile.data.common.CommonBrandDto
 import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import java.util.Locale
 
 // —— Design system (aligned with ExploreFiltersBar + ExploreMarketplaceFilters) ——
@@ -416,13 +419,14 @@ fun ExploreAestheticFilterRow(
     modifier: Modifier = Modifier,
 ) {
     val edge = FashTheme.spacing.editorialStart
+    val isVi = AppLocale.currentTag(LocalContext.current) != AppLocale.TAG_EN
     val summary = when {
         selectedIds.isEmpty() ->
             stringResource(R.string.explore_filter_aesthetic_none)
         selectedIds.size == 1 -> {
             val id = selectedIds.first()
             catalog.find { it.id == id }?.let { t ->
-                t.displayName.ifBlank { t.name }.trim().takeIf { it.isNotEmpty() }
+                t.displayLabel(isVi).trim().takeIf { it.isNotEmpty() }
             } ?: stringResource(R.string.explore_filter_aesthetic_selected_count, 1)
         }
         else -> stringResource(R.string.explore_filter_aesthetic_selected_count, selectedIds.size)
@@ -597,12 +601,14 @@ fun ExploreAestheticTagsPickerSheet(
     if (!visible) return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scheme = MaterialTheme.colorScheme
+    val isVi = AppLocale.currentTag(LocalContext.current) != AppLocale.TAG_EN
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val q = searchQuery.trim().lowercase(Locale.getDefault())
     val filtered = remember(catalog, q) {
         if (q.isEmpty()) catalog
         else catalog.filter { t ->
             t.displayName.lowercase(Locale.getDefault()).contains(q) ||
+                t.displayNameVi.lowercase(Locale.getDefault()).contains(q) ||
                 t.name.lowercase(Locale.getDefault()).contains(q)
         }
     }
@@ -662,7 +668,7 @@ fun ExploreAestheticTagsPickerSheet(
                     items(filtered, key = { it.id }) { tag ->
                         val id = tag.id.trim()
                         if (id.isEmpty()) return@items
-                        val label = tag.displayName.ifBlank { tag.name }
+                        val label = tag.displayLabel(isVi)
                         val checked = id in selectedIds
                         ExploreFilterMultiSelectRow(
                             label = label,

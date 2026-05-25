@@ -308,7 +308,7 @@ fun SellerProfileScreen(
                                     }
                                 },
                                 items = items,
-                                wishlistTabVisible = false,
+                                listingTabSet = ProfileListingTabSet.SellerStorefront,
                                 onListingClick = { item ->
                                     onListingClick(item.id, item.sellerId ?: profile?.userId)
                                 },
@@ -353,6 +353,8 @@ private fun SellerListingFocusSection(
     onAestheticTagClick: (tagId: String, name: String) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.pc.fash_android_mobile.FashApplication
+    val catalog by app.aestheticTagCatalog.collectAsState()
     val showContent = focus != null && !focus.isEmpty()
     if (!forbidden && !loading && !showContent) return
 
@@ -411,6 +413,7 @@ private fun SellerListingFocusSection(
                 SellerFocusAestheticRow(
                     label = stringResource(R.string.seller_focus_aesthetics),
                     tags = focus.aestheticTags,
+                    catalog = catalog,
                     onAestheticTagClick = onAestheticTagClick,
                 )
             }
@@ -499,10 +502,13 @@ private fun SellerFocusBrandRow(
 private fun SellerFocusAestheticRow(
     label: String,
     tags: List<SellerFocusTag>,
+    catalog: List<com.pc.fash_android_mobile.data.common.CommonAestheticTagDto>,
     onAestheticTagClick: (tagId: String, name: String) -> Unit,
 ) {
     if (tags.isEmpty()) return
     val scheme = MaterialTheme.colorScheme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isVi = com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(context) != com.pc.fash_android_mobile.data.locale.AppLocale.TAG_EN
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
@@ -518,8 +524,9 @@ private fun SellerFocusAestheticRow(
                 items = tags,
                 key = { i, t -> "${label}_aes_${t.id}_$i" },
             ) { _, t ->
+                val display = com.pc.fash_android_mobile.data.common.resolveAestheticLabel(catalog, t.id, t.name, isVi)
                 Text(
-                    text = t.name,
+                    text = display,
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurface,
                     modifier = Modifier

@@ -59,20 +59,28 @@ class EditorialGuideRepository(
         }
     }
 
-    fun listCarousel(limit: Int = 12): Result<List<HomeEditorialPostStub>> = runCatching {
+    fun listCarousel(limit: Int = 12): Result<List<HomeEditorialPostStub>> =
+        listAll(limit = limit, offset = 0).map { it.items }
+
+    data class EditorialGuideListPage(
+        val items: List<HomeEditorialPostStub>,
+        val hasMore: Boolean,
+    )
+
+    fun listAll(limit: Int = 50, offset: Int = 0): Result<EditorialGuideListPage> = runCatching {
         val locale = localeSegment()
         val base = AppEnvironment.commonServicePath("api/v1/public/editorial-guides")
         val url = base.toHttpUrlOrNull()?.newBuilder()
             ?.addQueryParameter("locale", locale)
             ?.addQueryParameter("limit", limit.coerceIn(1, 50).toString())
-            ?.addQueryParameter("offset", "0")
+            ?.addQueryParameter("offset", offset.coerceAtLeast(0).toString())
             ?.build()
             ?.toString()
             ?: error("invalid editorial guides url")
-        Log.d(TAG, "listCarousel GET $url")
-        val items = parseCarousel(executeGet(url))
-        Log.d(TAG, "listCarousel locale=$locale items=${items.size}")
-        items
+        Log.d(TAG, "listAll GET $url")
+        val page = parseCarouselPage(executeGet(url))
+        Log.d(TAG, "listAll locale=$locale items=${page.items.size}")
+        page
     }
 
     fun getBySlug(slug: String): Result<EditorialGuideDetail> = runCatching {
@@ -88,9 +96,9 @@ class EditorialGuideRepository(
         parseDetail(JSONObject(executeGet(url)).getJSONObject("guide"))
     }
 
-    private fun parseCarousel(raw: String): List<HomeEditorialPostStub> {
+    private fun parseCarouselPage(raw: String): EditorialGuideListPage {
         val root = JSONObject(raw)
-        val items = root.optJSONArray("items") ?: return emptyList()
+        val items = root.optJSONArray("items") ?: return EditorialGuideListPage(emptyList(), false)
         val out = ArrayList<HomeEditorialPostStub>(items.length())
         for (i in 0 until items.length()) {
             val o = items.getJSONObject(i)
@@ -109,8 +117,10 @@ class EditorialGuideRepository(
                 ),
             )
         }
-        return out
+        return EditorialGuideListPage(out, root.optBoolean("has_more", false))
     }
+
+    private fun parseCarousel(raw: String): List<HomeEditorialPostStub> = parseCarouselPage(raw).items
 
     private fun parseDetail(o: JSONObject): EditorialGuideDetail {
         val cover = o.optString("cover_image_url").trim().ifBlank { EDITORIAL_GUIDE_DEFAULT_COVER_URL }

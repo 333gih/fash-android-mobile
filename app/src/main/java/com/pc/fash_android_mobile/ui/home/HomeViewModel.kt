@@ -14,6 +14,13 @@ import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
 import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
+import com.pc.fash_android_mobile.data.recommendation.HomeExploreShortcut
+import com.pc.fash_android_mobile.data.recommendation.HomeUxPersonalization
+import com.pc.fash_android_mobile.data.recommendation.UxPersonalizationLocalStore
+import com.pc.fash_android_mobile.data.recommendation.UxTabTracker
+import com.pc.fash_android_mobile.data.recommendation.homeFeedTabFromKey
+import com.pc.fash_android_mobile.data.recommendation.orderedHomeFeedTabs
+import com.pc.fash_android_mobile.data.recommendation.toUxTabKey
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -74,6 +81,8 @@ data class HomeFeedUiState(
     val hasMoreItems: Boolean = true,
     val showSizingBanner: Boolean = false,
     val listingPreview: ExploreListingPreviewState? = null,
+    val orderedFeedTabs: List<HomeFeedTab> = HomeFeedTab.signedInTabs(),
+    val exploreShortcut: HomeExploreShortcut? = null,
 )
 
 /** Size of one follow-feed page (`GET /api/v1/listings/home`). */
@@ -106,6 +115,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         publicBrowse = { isGuestBrowse() },
         scope = viewModelScope,
     )
+
+    private val uxTabTracker = UxTabTracker(
+        repository = fashApp.recommendationRepository,
+        userIdProvider = { fashApp.authManager.sessionStore.read()?.userId },
+        guestBrowse = { isGuestBrowse() },
+        scope = viewModelScope,
+    )
+
+    private val _homeUxPersonalization = MutableStateFlow(HomeUxPersonalization())
+    val homeUxPersonalization: StateFlow<HomeUxPersonalization> = _homeUxPersonalization.asStateFlow()
+
+    private var homeUxApplied = false
 
     private val homeDiscoveryRepository: HomeDiscoveryRepository = HttpHomeDiscoveryRepository(
         editorialGuideRepository = fashApp.editorialGuideRepository,
@@ -154,9 +175,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSelectedFeedTab(tab: HomeFeedTab) {
         if (_selectedFeedTab.value == tab) return
+        uxTabTracker.onTabOpened("home", tab.toUxTabKey())
         _selectedFeedTab.value = tab
         ensureTabLoaded(tab)
-        prefetchAdjacentTabs(tab)
+        prefetchFromPersonalization(around = tab)
     }
 
     /** Coerce selection when guest mode hides personalized tabs (e.g. after sign-out). */
@@ -211,8 +233,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _hasMoreItems,
         _showSizingBanner,
         _listingPreview,
+        _homeUxPersonalization,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
+        val ux = values[13] as HomeUxPersonalization
         HomeFeedUiState(
             items = values[0] as List<ListingFeedItem>,
             discovery = values[1] as HomeDiscoveryBundle,
@@ -227,6 +251,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             hasMoreItems = values[10] as Boolean,
             showSizingBanner = values[11] as Boolean,
             listingPreview = values[12] as ExploreListingPreviewState?,
+            orderedFeedTabs = orderedHomeFeedTabs(isGuestBrowse(), ux.tabOrder),
+            exploreShortcut = ux.exploreShortcut,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -243,6 +269,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         loadFeed()
+        if (!isGuestBrowse()) {
+            viewModelScope.launch(Dispatchers.IO) { loadUxPersonalization() }
+        }
         viewModelScope.launch {
             if (isGuestBrowse()) return@launch
             realtimeManager.events.collect { event ->
@@ -338,20 +367,70 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun prefetchAdjacentTabs(tab: HomeFeedTab) {
-        val tabs = HomeFeedTab.tabsFor(isGuestBrowse())
-        val idx = tabs.indexOf(tab)
-        if (idx < 0) return
-        listOf(idx - 1, idx + 1).forEach { i ->
-            if (i in tabs.indices) ensureTabLoaded(tabs[i])
+        prefetchFromPersonalization(around = tab)
+    }
+
+    private fun prefetchFromPersonalization(around: HomeFeedTab) {
+        val ux = _homeUxPersonalization.value
+        val tabs = orderedHomeFeedTabs(isGuestBrowse(), ux.tabOrder)
+        val prefetchKeys = ux.prefetchTabs.mapNotNull { homeFeedTabFromKey(it) }.filter { it in tabs }
+        val targets = if (prefetchKeys.isNotEmpty()) {
+            prefetchKeys.filter { it != around }.take(2)
+        } else {
+            val idx = tabs.indexOf(around)
+            if (idx < 0) emptyList() else listOfNotNull(tabs.getOrNull(idx - 1), tabs.getOrNull(idx + 1))
+        }
+        targets.forEach { ensureTabLoaded(it) }
+    }
+
+    private suspend fun loadUxPersonalization() {
+        if (isGuestBrowse()) return
+        val ctx = getApplication<Application>().applicationContext
+        val uid = fashApp.authManager.sessionStore.read()?.userId
+        val localDefault = UxPersonalizationLocalStore.readHomeDefaultTab(ctx, uid)
+        localDefault?.let { key ->
+            homeFeedTabFromKey(key)?.let { tab ->
+                if (!homeUxApplied) applyPreferredHomeTab(tab)
+            }
+        }
+        fashApp.recommendationRepository.uxPersonalization(
+            clientHour = UxPersonalizationLocalStore.currentClientHour(),
+        ).onSuccess { bundle ->
+            _homeUxPersonalization.value = bundle.home
+            UxPersonalizationLocalStore.writeHomeDefaultTab(ctx, uid, bundle.home.defaultTabKey)
+            homeFeedTabFromKey(bundle.home.defaultTabKey)?.let { applyPreferredHomeTab(it) }
+            bundle.home.prefetchTabs.mapNotNull { homeFeedTabFromKey(it) }.forEach { ensureTabLoaded(it) }
         }
     }
+
+    private fun applyPreferredHomeTab(tab: HomeFeedTab) {
+        if (isGuestBrowse() && tab.requiresAuth) return
+        if (tab !in HomeFeedTab.tabsFor(isGuestBrowse())) return
+        if (homeUxApplied && _selectedFeedTab.value == tab) return
+        homeUxApplied = true
+        _selectedFeedTab.value = tab
+        uxTabTracker.onTabOpened("home", tab.toUxTabKey())
+        ensureTabLoaded(tab, force = !loadedTabs.contains(tab))
+    }
+
+    private fun sectionLimitFor(tab: HomeFeedTab, fallback: Int): Int {
+        val key = tab.toUxTabKey()
+        return _homeUxPersonalization.value.sectionLimits[key] ?: fallback
+    }
+
+    private fun huntTodaySizingMode(): String? =
+        com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
+            .read(getApplication())
+            .takeIf { it.equals("match_profile", ignoreCase = true) }
 
     private suspend fun loadHuntTodayTab(force: Boolean): Boolean {
         if (!force && HomeFeedTab.HuntToday in loadedTabs) return true
         return fashApp.recommendationRepository.exploreListings(
             publicBrowse = isGuestBrowse(),
-            limit = HomeHuntTodayLimit,
+            limit = sectionLimitFor(HomeFeedTab.HuntToday, HomeHuntTodayLimit),
             offset = 0,
+            surface = HomeFeedTab.HuntToday.analyticsSurface,
+            sizingMode = huntTodaySizingMode(),
         ).fold(
             onSuccess = { items ->
                 _discoveryBundle.update { it.copy(huntToday = items) }
@@ -376,26 +455,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadRecommendationSections(force: Boolean): Boolean {
         if (!force && recommendationSectionsFetched) return true
-        val sizingMode = com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
-            .read(getApplication())
+        val styleLimit = sectionLimitFor(HomeFeedTab.StylePicks, 12)
+        val similarLimit = sectionLimitFor(HomeFeedTab.SimilarSaved, 12)
         return fashApp.recommendationRepository.homeSections(
             publicBrowse = isGuestBrowse(),
-            huntTodayLimit = 12,
-            forYouLimit = 16,
-            sectionLimit = 12,
-            sizingMode = sizingMode.takeIf { it.equals("match_profile", ignoreCase = true) },
+            huntTodayLimit = sectionLimitFor(HomeFeedTab.HuntToday, 12),
+            forYouLimit = sectionLimitFor(HomeFeedTab.ForYou, 16),
+            sectionLimit = maxOf(styleLimit, similarLimit),
+            sizingMode = huntTodaySizingMode(),
         ).fold(
             onSuccess = { sections ->
                 _discoveryBundle.update { cur ->
                     cur.copy(
+                        huntToday = sections.huntToday.ifEmpty { cur.huntToday },
                         forYou = sections.forYou,
                         stylePicks = sections.stylePicks,
                         similarToSaved = sections.similarToSaved,
                     )
                 }
                 syncSellerFollowingFromListings(
-                    sections.forYou + sections.stylePicks + sections.similarToSaved,
+                    sections.huntToday + sections.forYou + sections.stylePicks + sections.similarToSaved,
                 )
+                if (sections.huntToday.isNotEmpty()) {
+                    loadedTabs.add(HomeFeedTab.HuntToday)
+                }
                 recommendationSectionsFetched = true
                 true
             },
@@ -581,6 +664,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * the previous account’s home after logout / account switch.
      */
     fun clearCachesForSignedOutUser() {
+        uxTabTracker.closeActiveTab()
+        uxTabTracker.flush()
+        homeUxApplied = false
+        _homeUxPersonalization.value = HomeUxPersonalization()
         invalidateAllTabFeeds()
         _likedIds.value = emptySet()
         _savedIds.value = emptySet()
@@ -616,13 +703,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val stats = async { loadBuyerHomeStats() }
                     val shell = async { reloadHomeShell() }
                     val sizing = async { refreshSizingBannerState() }
+                    val ux = async { if (!isGuestBrowse()) loadUxPersonalization() }
                     stats.await()
                     shell.await()
                     sizing.await()
+                    ux.await()
                 }
             }
             ensureTabLoaded(selected, force = true)
-            prefetchAdjacentTabs(selected)
+            prefetchFromPersonalization(selected)
             _isRefreshing.value = false
             lastSuccessfulRefreshAtMs = System.currentTimeMillis()
             requestScrollHomeToTop()
@@ -841,6 +930,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .firstOrNull { it.name.equals(tagName.trim(), ignoreCase = true) }
             ?.id
             .orEmpty()
+    }
+
+    override fun onCleared() {
+        uxTabTracker.closeActiveTab()
+        uxTabTracker.flush()
+        super.onCleared()
+    }
+
+    fun flushUxTabTracker() {
+        uxTabTracker.closeActiveTab()
+        uxTabTracker.flush()
     }
 
     private fun updateListingInFeeds(listingId: String, transform: (ListingFeedItem) -> ListingFeedItem) {

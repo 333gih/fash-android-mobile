@@ -184,10 +184,14 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
     private fun resolveChannelId(message: RemoteMessage): String {
         message.notification?.channelId?.takeIf { it.isNotBlank() }?.let { return it }
         message.data["channel_id"]?.takeIf { it.isNotBlank() }?.let { return it }
-        return when (message.data["type"]?.lowercase()) {
-            "chat", "message", "message.new" -> FashNotificationChannels.CHAT
-            "order", "orders" -> FashNotificationChannels.ORDERS
-            AccountSwitchDeepLinks.FCM_TYPE -> FashNotificationChannels.GENERAL
+        val type = message.data["type"]?.lowercase().orEmpty()
+        return when {
+            type.startsWith("marketplace.recommendation.") -> FashNotificationChannels.RECOMMENDATION
+            type.startsWith("marketplace.chat.") || type == "chat" || type == "message" || type == "message.new" ->
+                FashNotificationChannels.CHAT
+            type.startsWith("marketplace.order.") || type == "order" || type == "orders" ->
+                FashNotificationChannels.ORDERS
+            type == AccountSwitchDeepLinks.FCM_TYPE -> FashNotificationChannels.GENERAL
             else -> FashNotificationChannels.GENERAL
         }
     }

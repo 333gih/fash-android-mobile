@@ -540,6 +540,7 @@ class CommonServiceRepository(
             id = o.optString("id"),
             name = o.optString("name"),
             displayName = o.optString("display_name").ifBlank { o.optString("displayName") },
+            displayNameVi = o.optString("display_name_vi", o.optString("displayNameVi", "")),
             sortOrder = o.optInt("sort_order", 0),
             status = o.optString("status"),
             createdAt = o.optString("created_at").takeIf { it.isNotBlank() },

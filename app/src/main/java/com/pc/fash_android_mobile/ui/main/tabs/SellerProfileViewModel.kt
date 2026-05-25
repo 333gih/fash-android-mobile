@@ -225,8 +225,8 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     private suspend fun loadListings(sellerId: String) {
         withContext(Dispatchers.IO) {
             if (isGuestBrowse()) {
-                listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = null, limit = 50).fold(
-                    onSuccess = { _sellingListings.value = it },
+                listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = "active", limit = 50).fold(
+                    onSuccess = { _sellingListings.value = it.filter { item -> item.isActiveListing() } },
                     onFailure = { _sellingListings.value = emptyList() },
                 )
                 listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = "sold", limit = 50).fold(
@@ -236,10 +236,10 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
             } else {
                 listingRepository.getListingsBySeller(
                     sellerId = sellerId,
-                    status = null,
+                    status = "active",
                     limit = 50,
                 ).fold(
-                    onSuccess = { _sellingListings.value = it },
+                    onSuccess = { _sellingListings.value = it.filter { item -> item.isActiveListing() } },
                     onFailure = { _sellingListings.value = emptyList() },
                 )
                 listingRepository.getListingsBySeller(

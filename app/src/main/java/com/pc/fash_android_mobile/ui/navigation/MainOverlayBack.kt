@@ -15,7 +15,6 @@ enum class SellerShopEntrySource {
     FollowConnections,
     FeaturedSellers,
     Orders,
-    HomeDelivering,
     /** Order detail full screen; keeps [SellerShopRestoreContext.orderId] composed under the shop. */
     OrderDetail,
 }
@@ -29,6 +28,5 @@ data class SellerShopRestoreContext(
     val followConnectionsTab: Int = 0,
     val orderId: String? = null,
     val reopenOrders: Boolean = false,
-    val reopenHomeDelivering: Boolean = false,
     val reopenFeaturedSellers: Boolean = false,
 )

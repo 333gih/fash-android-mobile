@@ -84,6 +84,12 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** Home journey “Đang giao” — Orders tab, buying list, in-transit filter. */
+    fun openBuyingInTransit() {
+        _selectedTab.value = 0
+        selectStatusFilter(OrderStatusFilter.IN_TRANSIT)
+    }
+
     /** Quietly re-fetches both buying and selling orders without showing a loading indicator. */
     private suspend fun silentRefreshOrders() {
         val buyQ = _buyingStatusFilter.value.toApiQuery()

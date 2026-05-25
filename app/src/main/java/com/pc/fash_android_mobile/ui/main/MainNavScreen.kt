@@ -60,12 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.pc.fash_android_mobile.ui.orders.OrdersScreen
 import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.explore.ExploreOverlayHost
-import com.pc.fash_android_mobile.ui.home.HomeDeliveringScreen
-import com.pc.fash_android_mobile.ui.home.HomeDeliveringViewModel
 import com.pc.fash_android_mobile.ui.home.HomeFeedContent
-import com.pc.fash_android_mobile.ui.home.HomeInReviewScreen
-import com.pc.fash_android_mobile.ui.home.HomeInReviewViewModel
-import com.pc.fash_android_mobile.ui.home.HomeJourneyHub
 import com.pc.fash_android_mobile.ui.address.AddressBookViewModel
 import com.pc.fash_android_mobile.ui.post.CreateListingFlowScreen
 import com.pc.fash_android_mobile.data.chat.ConversationItem
@@ -145,12 +140,6 @@ fun MainNavScreen(
     onLogoutAll: () -> Unit,
     isLoggingOut: Boolean,
     homeViewModel: com.pc.fash_android_mobile.ui.home.HomeViewModel,
-    homeDeliveringViewModel: HomeDeliveringViewModel? = null,
-    homeInReviewViewModel: HomeInReviewViewModel? = null,
-    homeJourneyHub: HomeJourneyHub = HomeJourneyHub.Feed,
-    onHomeJourneyHubChange: (HomeJourneyHub) -> Unit = {},
-    onHomeDeliveringOrderClick: (com.pc.fash_android_mobile.data.order.OrderItem) -> Unit = {},
-    onHomeInReviewListingClick: (com.pc.fash_android_mobile.data.listing.ListingFeedItem) -> Unit = {},
     exploreViewModel: com.pc.fash_android_mobile.ui.explore.ExploreViewModel,
     ordersViewModel: OrdersViewModel,
     postViewModel: com.pc.fash_android_mobile.ui.post.PostViewModel,
@@ -167,10 +156,6 @@ fun MainNavScreen(
     onShippingAddressesClick: () -> Unit = {},
     onInviteFriendsClick: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
-    /** Home journey “Đang giao” — opens in-tab hub (keeps bottom nav). */
-    onHomeDeliveringJourneyClick: (() -> Unit)? = null,
-    /** Home journey “Đang duyệt” — opens in-tab hub (keeps bottom nav). */
-    onHomeInReviewJourneyClick: (() -> Unit)? = null,
     /** [initialTab] 0 = people you follow, 1 = followers. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     /** Explore featured sellers “See all” — full list from `GET /search/featured-sellers`. */
@@ -361,6 +346,14 @@ fun MainNavScreen(
         }
     }
     val openOrders: () -> Unit = openOrdersTab
+    val openDeliveringOrders: () -> Unit = {
+        if (isGuestMode) {
+            onRequestLogin(GuestLoginReason.Orders)
+        } else {
+            ordersViewModel.openBuyingInTransit()
+            onTabChange(MainTab.Orders.ordinal)
+        }
+    }
     val openGuestSignIn: () -> Unit = { onRequestLogin(GuestLoginReason.TopBar) }
     val isPostListingFlow = tabs.getOrNull(selectedTab) == MainTab.Post
     val featureTourVisible = featureTourActive && !isGuestMode &&
@@ -558,15 +551,22 @@ fun MainNavScreen(
                             exploreViewModel.toggleInterestChipWithId(chipId, tagName)
                             openExploreOverlay(false)
                         },
-                        onDeliveringJourneyClick = onHomeDeliveringJourneyClick ?: {
-                            onHomeJourneyHubChange(HomeJourneyHub.Delivering)
+                        onNavigateToExploreWithShortcut = { shortcut ->
+                            exploreViewModel.openExploreFromProfileFilter(
+                                categoryId = shortcut.categoryId,
+                                brandId = shortcut.brandId,
+                                aestheticTagId = shortcut.aestheticTagId,
+                                searchQuery = "",
+                            )
+                            openExploreOverlay(false)
                         },
+                        onDeliveringJourneyClick = openDeliveringOrders,
                         onInReviewJourneyClick = {
                             if (isGuestMode) {
                                 onRequestLogin(GuestLoginReason.SellFromHome)
                             } else {
-                                onHomeInReviewJourneyClick?.invoke()
-                                    ?: onHomeJourneyHubChange(HomeJourneyHub.InReview)
+                                profileViewModel.requestInReviewTabFromHome()
+                                onTabChange(MainTab.Profile.ordinal)
                             }
                         },
                         onNavigateToSaved = {
@@ -695,44 +695,6 @@ fun MainNavScreen(
                 AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
                 onFeatureTourFinished()
             },
-        )
-    }
-    if (homeJourneyHub == HomeJourneyHub.Delivering && homeDeliveringViewModel != null) {
-        BackHandler { onHomeJourneyHubChange(HomeJourneyHub.Feed) }
-        LaunchedEffect(Unit) {
-            homeDeliveringViewModel.loadIfShippingEnabled(
-                com.pc.fash_android_mobile.config.AppEnvironment.shippingEnabled,
-            )
-        }
-        HomeDeliveringScreen(
-            modifier = Modifier.fillMaxSize(),
-            viewModel = homeDeliveringViewModel,
-            onBack = { onHomeJourneyHubChange(HomeJourneyHub.Feed) },
-            onOrderClick = onHomeDeliveringOrderClick,
-            onOpenAllOrders = {
-                onHomeJourneyHubChange(HomeJourneyHub.Feed)
-                openOrdersTab()
-            },
-            onDataMutated = { homeViewModel.refresh() },
-            promoSlides = promoSlides,
-            onPromoSlideClick = onPromoSlideClick,
-        )
-    }
-    if (homeJourneyHub == HomeJourneyHub.InReview && homeInReviewViewModel != null) {
-        BackHandler { onHomeJourneyHubChange(HomeJourneyHub.Feed) }
-        LaunchedEffect(Unit) { homeInReviewViewModel.loadIfNeeded() }
-        HomeInReviewScreen(
-            modifier = Modifier.fillMaxSize(),
-            viewModel = homeInReviewViewModel,
-            onBack = { onHomeJourneyHubChange(HomeJourneyHub.Feed) },
-            onListingClick = onHomeInReviewListingClick,
-            onOpenPostListing = {
-                onHomeJourneyHubChange(HomeJourneyHub.Feed)
-                onTabChange(MainTab.Post.ordinal)
-            },
-            onDataMutated = { homeViewModel.refresh() },
-            promoSlides = promoSlides,
-            onPromoSlideClick = onPromoSlideClick,
         )
     }
     if (showNotificationScreen) {

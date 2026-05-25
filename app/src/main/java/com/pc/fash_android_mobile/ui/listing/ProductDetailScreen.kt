@@ -1435,7 +1435,13 @@ private fun DetailAboutCard(
     ) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val aestheticLower = detail.aestheticTagRefs.map { it.label.lowercase(Locale.getDefault()) }.toSet()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isVi = com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(context) != com.pc.fash_android_mobile.data.locale.AppLocale.TAG_EN
+    val app = context.applicationContext as com.pc.fash_android_mobile.FashApplication
+    val catalog by app.aestheticTagCatalog.collectAsState()
+    val aestheticLower = detail.aestheticTagRefs.map { ref ->
+        com.pc.fash_android_mobile.data.common.resolveAestheticLabel(catalog, ref.id, ref.label, isVi).lowercase(Locale.getDefault())
+    }.toSet()
     val extraTags = detail.tags.mapNotNull { normalizeTag(it) }
         .filter { it.lowercase(Locale.getDefault()) !in aestheticLower }
     val hasTags = detail.aestheticTagRefs.isNotEmpty() || extraTags.isNotEmpty()
@@ -1469,8 +1475,9 @@ private fun DetailAboutCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     detail.aestheticTagRefs.forEach { ref ->
+                        val chipLabel = com.pc.fash_android_mobile.data.common.resolveAestheticLabel(catalog, ref.id, ref.label, isVi)
                         DetailDescriptionTagChip(
-                            label = ref.label,
+                            label = chipLabel,
                             onClick = {
                                 onNavigateToExplore(null, null, ref.id, "", null, null)
                             },

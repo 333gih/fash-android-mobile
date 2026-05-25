@@ -595,8 +595,26 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
             _isSaving.value = false
             result.fold(
                 onSuccess = {
-                    snapDetailAndBaselineFromForm()
-                    _events.emit(getApplication<Application>().getString(R.string.edit_listing_saved))
+                    val wasRejected = d.status.trim().lowercase(java.util.Locale.ROOT) == "rejected"
+                    if (wasRejected) {
+                        listingRepository.getListingDetail(activeListingId).fold(
+                            onSuccess = { fresh ->
+                                _detail.value = fresh
+                                val selectedIds = baselineTagIdsFromDetail(fresh, _catalogTags.value)
+                                _baselineTagIds.value = selectedIds
+                            },
+                            onFailure = {
+                                snapDetailAndBaselineFromForm()
+                                _detail.update { cur ->
+                                    cur?.copy(status = "in_review")
+                                }
+                            },
+                        )
+                        _events.emit(getApplication<Application>().getString(R.string.edit_listing_resubmitted))
+                    } else {
+                        snapDetailAndBaselineFromForm()
+                        _events.emit(getApplication<Application>().getString(R.string.edit_listing_saved))
+                    }
                 },
                 onFailure = { e ->
                     val msg = when (e) {

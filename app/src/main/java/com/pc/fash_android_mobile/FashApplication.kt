@@ -12,6 +12,7 @@ import com.pc.fash_android_mobile.data.deal.DealRepository
 import com.pc.fash_android_mobile.data.advertising.AdvertisingRepository
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoInterstitialRepository
+import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.common.PublicCommonCatalogRepository
 import com.pc.fash_android_mobile.data.listing.ListingRepository
@@ -161,6 +162,17 @@ class FashApplication : Application(), ImageLoaderFactory {
         _setupGateRecheckGeneration.value = 0L
     }
 
+    private val _aestheticTagCatalog = MutableStateFlow<List<CommonAestheticTagDto>>(emptyList())
+    val aestheticTagCatalog: StateFlow<List<CommonAestheticTagDto>> = _aestheticTagCatalog.asStateFlow()
+
+    /** Loads/refreshes common-service aesthetic tag catalog (locale via Accept-Language). */
+    fun refreshAestheticTagCatalog() {
+        applicationScope.launch(Dispatchers.IO) {
+            commonServiceRepository.getAestheticTags(all = true)
+                .onSuccess { _aestheticTagCatalog.value = it }
+        }
+    }
+
     /**
      * Must not use [kotlinx.coroutines.runBlocking] in [onCreate]: it blocks the main thread until
      * the coroutine finishes, which defeats IO dispatchers and causes "failed to complete startup"
@@ -246,6 +258,7 @@ class FashApplication : Application(), ImageLoaderFactory {
         AppLocale.applyPersistedOrDefault(this)
         FashNotificationChannels.ensureChannels(this)
         applicationScope.launch(Dispatchers.IO) {
+            refreshAestheticTagCatalog()
             val hasSession = runCatching { authManager.sessionStore.read() != null }.getOrDefault(false)
             authManager.hydrateInitialAuthFromStore(hasSession)
         }
@@ -316,6 +329,24 @@ class FashApplication : Application(), ImageLoaderFactory {
         com.pc.fash_android_mobile.data.editorial.EditorialGuideRepository {
             com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(this@FashApplication)
         }
+    }
+
+    /** In-app UX surveys — secured users + guest public browse with device guest_key. */
+    val uxSurveyRepository: com.pc.fash_android_mobile.data.uxsurvey.UxSurveyRepository by lazy {
+        com.pc.fash_android_mobile.data.uxsurvey.UxSurveyRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+            publicBrowseClient = publicBrowseHttpClient,
+            guestSurveyProvider = {
+                isGuestBrowseActive ||
+                    authManager.sessionStore.read()?.accessToken.isNullOrBlank() != false
+            },
+            guestKeyProvider = { browseSessionStore.sessionId() },
+            localeTagProvider = {
+                com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(this@FashApplication)
+            },
+        )
     }
 
     /** common-service catalog GETs (addresses, brands, categories, aesthetic-tags, countries). */

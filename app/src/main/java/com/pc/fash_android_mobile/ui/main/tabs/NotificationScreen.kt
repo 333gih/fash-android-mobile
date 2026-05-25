@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -425,8 +426,7 @@ fun NotificationScreen(
                             }
                         }
 
-                    FashPromoSliderAdFooter(
-                        modifier = Modifier.fillMaxWidth(),
+                    NotificationPromoFooterDock(
                         slides = promoSlides,
                         onSlideClick = onPromoSlideClick,
                     )
@@ -450,6 +450,37 @@ fun NotificationScreen(
                     onPromoOpenOrders = onPromoOpenOrders,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Full-screen inbox overlay has no bottom nav — lift the shared promo footer above gesture /
+ * display cutout insets while keeping the same [FashPromoSliderAdFooter] chrome as Orders.
+ */
+@Composable
+private fun NotificationPromoFooterDock(
+    slides: List<FashPromoSlideDef>,
+    onSlideClick: (FashPromoSlideDef, Int) -> Unit,
+) {
+    if (slides.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            Modifier.windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
+            ),
+        ) {
+            FashPromoSliderAdFooter(
+                modifier = Modifier.fillMaxWidth(),
+                slides = slides,
+                onSlideClick = onSlideClick,
+            )
         }
     }
 }

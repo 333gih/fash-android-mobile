@@ -16,6 +16,7 @@ object FashNotificationChannels {
 
     const val CHAT = "fash_chat"
     const val ORDERS = "fash_orders"
+    const val RECOMMENDATION = "fash_recommendation"
     const val GENERAL = "fash_general"
 
     private fun applyDefaultAlertStyle(channel: NotificationChannel) {
@@ -48,6 +49,14 @@ object FashNotificationChannels {
             description = context.getString(com.pc.fash_android_mobile.R.string.notification_channel_orders_desc)
             applyDefaultAlertStyle(this)
         }
+        val recommendation = NotificationChannel(
+            RECOMMENDATION,
+            context.getString(com.pc.fash_android_mobile.R.string.notification_channel_recommendation_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = context.getString(com.pc.fash_android_mobile.R.string.notification_channel_recommendation_desc)
+            applyDefaultAlertStyle(this)
+        }
         val general = NotificationChannel(
             GENERAL,
             context.getString(com.pc.fash_android_mobile.R.string.notification_channel_general_name),
@@ -58,6 +67,7 @@ object FashNotificationChannels {
         }
         mgr.createNotificationChannel(chat)
         mgr.createNotificationChannel(orders)
+        mgr.createNotificationChannel(recommendation)
         mgr.createNotificationChannel(general)
     }
 

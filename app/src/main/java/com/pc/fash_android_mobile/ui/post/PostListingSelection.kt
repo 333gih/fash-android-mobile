@@ -201,7 +201,10 @@ fun PostListingOutlinedTextField(
     minLines: Int = 1,
     maxLines: Int = if (singleLine) 1 else 12,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    placeholder: @Composable (() -> Unit)? = null,
+    prefix: @Composable (() -> Unit)? = null,
     suffix: @Composable (() -> Unit)? = null,
+    supportingText: @Composable (() -> Unit)? = null,
     enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
@@ -210,6 +213,8 @@ fun PostListingOutlinedTextField(
         onValueChange = onValueChange,
         modifier = modifier,
         label = label,
+        placeholder = placeholder,
+        prefix = prefix,
         singleLine = singleLine,
         minLines = minLines,
         maxLines = maxLines,
@@ -217,6 +222,7 @@ fun PostListingOutlinedTextField(
         shape = shape,
         keyboardOptions = keyboardOptions,
         suffix = suffix,
+        supportingText = supportingText,
         colors = postListingOutlinedFieldColors(),
     )
 }

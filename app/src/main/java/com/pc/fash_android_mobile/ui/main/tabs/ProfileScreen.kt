@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -186,14 +187,21 @@ private fun ProfileHeroSection(
 @Composable
 private fun ProfileAestheticChipsRow(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
+    catalog: List<com.pc.fash_android_mobile.data.common.CommonAestheticTagDto>,
     onAestheticTagClick: (tagName: String, tagId: String?) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isVi = com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(context) != com.pc.fash_android_mobile.data.locale.AppLocale.TAG_EN
     val aestheticChips = profile?.let { p ->
         if (p.aestheticTagSnapshots.isNotEmpty()) {
-            p.aestheticTagSnapshots.map { it.name to it.id }
+            p.aestheticTagSnapshots.map { snap ->
+                com.pc.fash_android_mobile.data.common.resolveAestheticLabel(catalog, snap.id, snap.name, isVi) to snap.id
+            }
         } else {
-            p.aestheticTags.map { it to null }
+            p.aestheticTags.map { name ->
+                com.pc.fash_android_mobile.data.common.resolveAestheticLabel(catalog, null, name, isVi) to null
+            }
         }
     }.orEmpty()
     if (aestheticChips.isEmpty()) return
@@ -228,6 +236,8 @@ private fun ProfileIdentityBlock(
     onAestheticTagClick: (tagName: String, tagId: String?) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.pc.fash_android_mobile.FashApplication
+    val catalog by app.aestheticTagCatalog.collectAsState()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -289,7 +299,7 @@ private fun ProfileIdentityBlock(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        ProfileAestheticChipsRow(profile = profile, onAestheticTagClick = onAestheticTagClick)
+        ProfileAestheticChipsRow(profile = profile, catalog = catalog, onAestheticTagClick = onAestheticTagClick)
         if (onEditClick != null) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
@@ -335,11 +345,14 @@ fun ProfileScreen(
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
+    val inReviewListings by viewModel.inReviewListings.collectAsState()
+    val rejectedListings by viewModel.rejectedListings.collectAsState()
     val soldListings by viewModel.soldListings.collectAsState()
     val wishlistListings by viewModel.wishlistListings.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val profileTabOrder by viewModel.profileTabOrder.collectAsState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
     val scrollScope = rememberCoroutineScope()
@@ -366,6 +379,15 @@ fun ProfileScreen(
         val req = viewModel.consumeProfileTabOpenRequest() ?: return@LaunchedEffect
         selectedTab = req.tabIndex
         pendingExternalGridScroll = req.scrollToGrid
+        viewModel.onProfileTabSelected(req.tabIndex)
+    }
+
+    LaunchedEffect(profile) {
+        if (profile == null) return@LaunchedEffect
+        viewModel.consumePendingDefaultProfileTab()?.let { tab ->
+            selectedTab = tab
+            viewModel.onProfileTabSelected(tab)
+        }
     }
 
     val scheme = MaterialTheme.colorScheme
@@ -407,8 +429,10 @@ fun ProfileScreen(
             else -> {
                 val pullState = rememberPullToRefreshState()
                 val items = when (selectedTab) {
-                    0 -> sellingListings
-                    1 -> soldListings
+                    ProfileListingTab.ACTIVE -> sellingListings
+                    ProfileListingTab.IN_REVIEW -> inReviewListings
+                    ProfileListingTab.REJECTED -> rejectedListings
+                    ProfileListingTab.SOLD -> soldListings
                     else -> wishlistListings
                 }
                 LaunchedEffect(pendingExternalGridScroll, selectedTab, isRefreshing, items.size) {
@@ -495,18 +519,20 @@ fun ProfileScreen(
                         onTabSelected = { newTab ->
                             if (newTab != selectedTab) {
                                 selectedTab = newTab
+                                viewModel.onProfileTabSelected(newTab)
                                 scrollScope.launch {
                                     listState.scrollProfileToPinnedGrid(initialDelayMs = 80)
                                 }
                             }
                         },
+                        orderedTabIndices = profileTabOrder,
                         items = items,
-                        wishlistTabVisible = true,
+                        listingTabSet = ProfileListingTabSet.OwnProfile,
                         onListingClick = { item -> onListingClick(item.id, item.sellerId) },
                         showListingQuickActions = true,
                         onListingLike = { viewModel.toggleLike(it) },
                         onListingSave = { viewModel.toggleSave(it) },
-                        showListingStatusOverlay = selectedTab == 0 || selectedTab == 1,
+                        showListingStatusOverlay = false,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -1543,50 +1569,6 @@ private fun ProfileStatItemContent(
                 .fillMaxWidth()
                 .heightIn(min = 34.dp),
         )
-    }
-}
-
-@Composable
-internal fun ProfileTabs(
-    tabLabelResIds: List<Int>,
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart),
-    ) {
-        tabLabelResIds.forEachIndexed { index, resId ->
-            val selected = selectedTab == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onTabSelected(index) }
-                    .padding(vertical = 12.dp),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = stringResource(resId),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) scheme.primary else scheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .background(scheme.primary),
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 

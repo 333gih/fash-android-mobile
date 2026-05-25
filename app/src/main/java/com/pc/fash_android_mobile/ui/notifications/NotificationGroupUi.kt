@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.user.InboxNotificationItem
 import com.pc.fash_android_mobile.data.user.NotificationGroupSummaryItem
 
 /** Canonical inbox groups — keep in sync with core-service/internal/domain/notifications/groups.go */
@@ -86,8 +87,49 @@ fun notificationPayloadIcon(payloadType: String?): ImageVector {
         -> Icons.Outlined.ShoppingBag
         "marketplace.review.received" -> Icons.Outlined.StarOutline
         "marketplace.referral.invite_rewarded" -> Icons.Outlined.StarOutline
+        "marketplace.recommendation.daily_digest",
+        "marketplace.recommendation.style_fresh",
+        "marketplace.recommendation.similar_saved",
+        "marketplace.recommendation.continue_browsing",
+        "marketplace.recommendation.inactive_nudge",
+        "marketplace.recommendation.community_quiet",
+        "marketplace.recommendation.style_drought",
+        "marketplace.recommendation.taste_neighbor",
+        "marketplace.recommendation.hunt_today",
+        "marketplace.recommendation.social_style_match",
+        -> Icons.Outlined.Recommend
         "admin.mobile_push.promo", "admin.app_promo_interstitial" -> Icons.Outlined.Campaign
         "admin.mobile_push.ops", "admin.mobile_push.transactional", "admin.mobile_push.announcement", "admin.mobile_push" -> Icons.Outlined.Settings
-        else -> Icons.Outlined.Notifications
+        else -> if (payloadType?.startsWith("marketplace.recommendation.", ignoreCase = true) == true) {
+            Icons.Outlined.Recommend
+        } else {
+            Icons.Outlined.Notifications
+        }
+    }
+}
+
+/** Maps server `notification_group` / payload_type to inbox group — mirrors core-service ResolveGroup. */
+fun resolveInboxNotificationGroup(item: InboxNotificationItem): String {
+    item.notificationGroup?.trim()?.takeIf { it.isNotEmpty() }?.let { return it.uppercase() }
+    val pt = item.payloadType?.trim().orEmpty()
+    if (pt.startsWith("recommendation.", ignoreCase = true) ||
+        pt.startsWith("marketplace.recommendation.", ignoreCase = true)
+    ) {
+        return NotificationGroups.RECOMMENDATION
+    }
+    return when (pt.lowercase()) {
+        "marketplace.follower.new", "marketplace.follower.batch",
+        "marketplace.listing.liked", "marketplace.listing.liked.batch",
+        "marketplace.listing.approved_for_followers",
+        -> NotificationGroups.SOCIAL
+        "marketplace.chat.message" -> NotificationGroups.REALTIME
+        "marketplace.chat.offer_received", "marketplace.chat.offer_accepted", "marketplace.chat.offer_declined",
+        "marketplace.order.created", "marketplace.order.shipped", "marketplace.order.cancelled",
+        "marketplace.order.meetup_aborted", "marketplace.order.funds_released", "marketplace.order.dispute_opened",
+        "marketplace.review.received",
+        -> NotificationGroups.COMMERCE
+        "marketplace.referral.invite_rewarded" -> NotificationGroups.REENGAGEMENT
+        "admin.mobile_push.promo", "admin.app_promo_interstitial" -> NotificationGroups.ADS
+        else -> NotificationGroups.SYSTEM
     }
 }

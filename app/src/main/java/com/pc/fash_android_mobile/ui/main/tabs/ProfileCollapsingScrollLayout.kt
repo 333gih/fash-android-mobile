@@ -26,6 +26,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -34,8 +44,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.text.style.TextOverflow
+import com.pc.fash_android_mobile.ui.theme.FashColors
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -55,12 +69,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
@@ -70,7 +81,7 @@ import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
-import com.pc.fash_android_mobile.ui.theme.FashColors
+import com.pc.fash_android_mobile.ui.listing.listingStatusOverlayLabel
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -113,21 +124,6 @@ suspend fun LazyListState.scrollProfileToPinnedGrid(
 
 /** Scroll distance (first list item) used to derive collapse progress for the hero item only. */
 private val ProfileHeaderCollapseScrollDp: Dp = 280.dp
-
-@Composable
-private fun listingStatusOverlayLabel(wire: String?): String? {
-    if (wire.isNullOrBlank()) return null
-    return when (wire.lowercase(Locale.ROOT)) {
-        "in_review" -> stringResource(R.string.listing_status_in_review)
-        "rejected" -> stringResource(R.string.listing_status_rejected)
-        "active" -> stringResource(R.string.listing_status_active)
-        "inactive" -> stringResource(R.string.listing_status_inactive)
-        "sold" -> stringResource(R.string.listing_status_sold)
-        "reserved" -> stringResource(R.string.listing_status_reserved)
-        "deleted" -> stringResource(R.string.listing_status_deleted)
-        else -> wire
-    }
-}
 
 /**
  * Bottom promo chrome (slider + “Khám phá…” strip) on seller profile — visible only after the hero
@@ -175,8 +171,10 @@ fun ProfileCollapsingScrollLayout(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     items: List<ListingFeedItem>,
-    /** Own profile: Selling / Sold / Saved. Seller storefront: Selling / Sold only. */
-    wishlistTabVisible: Boolean = true,
+    /** Own profile (5 tabs) vs seller storefront (2 tabs). */
+    listingTabSet: ProfileListingTabSet = ProfileListingTabSet.OwnProfile,
+    /** Visual order of logical tab indices; defaults to natural order. */
+    orderedTabIndices: List<Int> = emptyList(),
     onListingClick: (ListingFeedItem) -> Unit,
     /** When true, shows like/save on grid cards (e.g. profile storefronts). */
     showListingQuickActions: Boolean = false,
@@ -188,18 +186,18 @@ fun ProfileCollapsingScrollLayout(
     additionalBottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
-    val tabLabelResIds: List<Int> = if (wishlistTabVisible) {
-        listOf(
-            R.string.profile_tab_selling,
-            R.string.profile_tab_sold,
-            R.string.profile_tab_wishlist,
-        )
-    } else {
-        listOf(
-            R.string.profile_tab_selling,
-            R.string.profile_tab_sold,
-        )
+    val allTabLabelResIds = profileTabLabelResIds(listingTabSet)
+    val tabIndices = remember(listingTabSet, orderedTabIndices) {
+        val base = (0 until allTabLabelResIds.size).toList()
+        orderedTabIndices.filter { it in base.indices }.ifEmpty { base }
     }
+    val tabLabelResIds = remember(tabIndices, allTabLabelResIds) {
+        tabIndices.map { allTabLabelResIds[it] }
+    }
+    val tabCount = tabLabelResIds.size
+    val safeSelectedTab = selectedTab.coerceIn(0, ProfileListingTab.LAST)
+    val gridRows by remember(items, safeSelectedTab) { derivedStateOf { items.chunked(2) } }
+    var horizontalDrag by remember { mutableFloatStateOf(0f) }
     val rawProgress = rememberProfileHeaderCollapseProgress(listState).value
     val progress by animateFloatAsState(
         targetValue = rawProgress,
@@ -221,7 +219,26 @@ fun ProfileCollapsingScrollLayout(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight()
-            .background(listBg),
+            .background(listBg)
+            .pointerInput(tabCount, safeSelectedTab, tabIndices) {
+                if (tabCount <= 1) return@pointerInput
+                val visualIndex = tabIndices.indexOf(safeSelectedTab).coerceAtLeast(0)
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        val threshold = 72f
+                        when {
+                            horizontalDrag <= -threshold && visualIndex < tabCount - 1 -> {
+                                onTabSelected(tabIndices[visualIndex + 1])
+                            }
+                            horizontalDrag >= threshold && visualIndex > 0 -> {
+                                onTabSelected(tabIndices[visualIndex - 1])
+                            }
+                        }
+                        horizontalDrag = 0f
+                    },
+                    onHorizontalDrag = { _, delta -> horizontalDrag += delta },
+                )
+            },
     ) {
         item(key = "profile_header") {
             // Only the expanded hero + stats — never swap to compact here (that was shrinking item 0 and
@@ -235,32 +252,17 @@ fun ProfileCollapsingScrollLayout(
                 listState = listState,
                 progress = progress,
                 compactHeader = compactHeader,
-                selectedTab = selectedTab,
+                selectedTab = safeSelectedTab,
                 onTabSelected = onTabSelected,
                 tabLabelResIds = tabLabelResIds,
+                tabIndices = tabIndices,
             )
         }
         if (items.isEmpty()) {
-            item(key = "empty") {
+            item(key = "empty_$safeSelectedTab") {
                 val scheme = MaterialTheme.colorScheme
                 val tabsPinnedToTop = listState.firstVisibleItemIndex > 0
-                val (emptyIcon, emptyTitle, emptySubtitle) = when (selectedTab) {
-                    0 -> Triple(
-                        Icons.Outlined.Storefront,
-                        R.string.profile_empty_selling_title,
-                        R.string.profile_empty_selling_subtitle,
-                    )
-                    1 -> Triple(
-                        Icons.Outlined.CheckCircle,
-                        R.string.profile_empty_sold_title,
-                        R.string.profile_empty_sold_subtitle,
-                    )
-                    else -> Triple(
-                        Icons.Outlined.BookmarkBorder,
-                        R.string.profile_empty_wishlist_title,
-                        R.string.profile_empty_wishlist_subtitle,
-                    )
-                }
+                val (emptyIcon, emptyTitle, emptySubtitle) = profileTabEmptyCopy(listingTabSet, safeSelectedTab)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -276,12 +278,8 @@ fun ProfileCollapsingScrollLayout(
                             .heightIn(min = 280.dp, max = 560.dp)
                             .padding(vertical = 24.dp),
                     )
-                    if (tabsPinnedToTop && wishlistTabVisible) {
-                        val footerRes = when (selectedTab) {
-                            0 -> R.string.profile_empty_pinned_footer_selling
-                            1 -> R.string.profile_empty_pinned_footer_sold
-                            else -> R.string.profile_empty_pinned_footer_wishlist
-                        }
+                    if (tabsPinnedToTop) {
+                        profileTabPinnedFooterRes(listingTabSet, safeSelectedTab)?.let { footerRes ->
                         HorizontalDivider(
                             color = scheme.outlineVariant.copy(alpha = 0.45f),
                             modifier = Modifier
@@ -297,14 +295,15 @@ fun ProfileCollapsingScrollLayout(
                                 .fillMaxWidth()
                                 .padding(horizontal = FashTheme.spacing.editorialStart, vertical = 8.dp),
                         )
+                        }
                     }
                     Spacer(modifier = Modifier.height(totalBottomPad))
                 }
             }
         } else {
             itemsIndexed(
-                items.chunked(2),
-                key = { index, row -> stableLazyKey(row.firstOrNull()?.id, index, "profrow") },
+                gridRows,
+                key = { index, row -> stableLazyKey(row.firstOrNull()?.id, index, "profrow_$safeSelectedTab") },
             ) { _, pair ->
                 Row(
                     modifier = Modifier
@@ -343,6 +342,127 @@ fun ProfileCollapsingScrollLayout(
     }
 }
 
+private fun profileTabEmptyCopy(
+    tabSet: ProfileListingTabSet,
+    selectedTab: Int,
+): Triple<androidx.compose.ui.graphics.vector.ImageVector, Int, Int> =
+    when (tabSet) {
+        ProfileListingTabSet.OwnProfile -> when (selectedTab) {
+            ProfileListingTab.IN_REVIEW -> Triple(
+                Icons.Outlined.RateReview,
+                R.string.profile_empty_in_review_title,
+                R.string.profile_empty_in_review_subtitle,
+            )
+            ProfileListingTab.REJECTED -> Triple(
+                Icons.Outlined.ErrorOutline,
+                R.string.profile_empty_rejected_title,
+                R.string.profile_empty_rejected_subtitle,
+            )
+            ProfileListingTab.SOLD -> Triple(
+                Icons.Outlined.CheckCircle,
+                R.string.profile_empty_sold_title,
+                R.string.profile_empty_sold_subtitle,
+            )
+            ProfileListingTab.WISHLIST -> Triple(
+                Icons.Outlined.BookmarkBorder,
+                R.string.profile_empty_wishlist_title,
+                R.string.profile_empty_wishlist_subtitle,
+            )
+            else -> Triple(
+                Icons.Outlined.Storefront,
+                R.string.profile_empty_selling_title,
+                R.string.profile_empty_selling_subtitle,
+            )
+        }
+        ProfileListingTabSet.SellerStorefront -> when (selectedTab) {
+            1 -> Triple(
+                Icons.Outlined.CheckCircle,
+                R.string.profile_empty_sold_title,
+                R.string.profile_empty_sold_subtitle,
+            )
+            else -> Triple(
+                Icons.Outlined.Storefront,
+                R.string.profile_empty_selling_title,
+                R.string.profile_empty_selling_subtitle,
+            )
+        }
+    }
+
+private fun profileTabPinnedFooterRes(tabSet: ProfileListingTabSet, selectedTab: Int): Int? =
+    when (tabSet) {
+        ProfileListingTabSet.OwnProfile -> when (selectedTab) {
+            ProfileListingTab.ACTIVE -> R.string.profile_empty_pinned_footer_selling
+            ProfileListingTab.IN_REVIEW -> R.string.profile_empty_pinned_footer_in_review
+            ProfileListingTab.REJECTED -> R.string.profile_empty_pinned_footer_rejected
+            ProfileListingTab.SOLD -> R.string.profile_empty_pinned_footer_sold
+            ProfileListingTab.WISHLIST -> R.string.profile_empty_pinned_footer_wishlist
+            else -> null
+        }
+        ProfileListingTabSet.SellerStorefront -> when (selectedTab) {
+            0 -> R.string.profile_empty_pinned_footer_selling
+            1 -> R.string.profile_empty_pinned_footer_sold
+            else -> null
+        }
+    }
+
+/** Scrollable tab strip — shows up to 3 tabs in the viewport (same pattern as Home feed tabs). */
+@Composable
+internal fun ProfileTabSwitcher(
+    tabLabelResIds: List<Int>,
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    tabIndices: List<Int> = tabLabelResIds.indices.toList(),
+) {
+    if (tabLabelResIds.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    val edgePad = FashTheme.spacing.editorialStart
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val viewportWidth = (screenWidth - edgePad * 2).coerceAtLeast(1.dp)
+    val visibleSlots = minOf(3, tabLabelResIds.size)
+    val tabWidth = viewportWidth / visibleSlots
+    val visualSelected = tabIndices.indexOf(selectedTab).coerceAtLeast(0)
+
+    ScrollableTabRow(
+        selectedTabIndex = visualSelected,
+        modifier = Modifier.fillMaxWidth(),
+        edgePadding = edgePad,
+        containerColor = scheme.surface,
+        contentColor = scheme.onSurface,
+        divider = {},
+        indicator = { positions ->
+            if (visualSelected in positions.indices) {
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier
+                        .tabIndicatorOffset(positions[visualSelected])
+                        .padding(horizontal = 8.dp),
+                    height = 2.dp,
+                    color = FashColors.Primary,
+                )
+            }
+        },
+    ) {
+        tabLabelResIds.forEachIndexed { index, resId ->
+            val selected = index == visualSelected
+            Tab(
+                selected = selected,
+                onClick = { onTabSelected(tabIndices.getOrElse(index) { index }) },
+                modifier = Modifier.width(tabWidth),
+                text = {
+                    Text(
+                        text = stringResource(resId),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (selected) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    )
+                },
+            )
+        }
+    }
+}
+
 /**
  * Sticky block: brief profile (when hero has scrolled away) + tabs + section title.
  * Sticks as one unit under the status bar area once the user scrolls past the tall hero item.
@@ -355,6 +475,7 @@ private fun ProfileStickyProfileChrome(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     tabLabelResIds: List<Int>,
+    tabIndices: List<Int> = tabLabelResIds.indices.toList(),
 ) {
     val scheme = MaterialTheme.colorScheme
     val headerScrolledOff by remember(listState) {
@@ -392,10 +513,11 @@ private fun ProfileStickyProfileChrome(
                     )
                 }
             }
-            ProfileTabs(
+            ProfileTabSwitcher(
                 tabLabelResIds = tabLabelResIds,
                 selectedTab = selectedTab,
                 onTabSelected = onTabSelected,
+                tabIndices = tabIndices,
             )
             AnimatedVisibility(
                 visible = showSectionTitle,

@@ -293,7 +293,7 @@ fun SizingReferenceScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ProfileSetupSizingSection(
+fun ProfileSetupSizingSection(
     referenceSize: String,
     onReferenceSizeChange: (String) -> Unit,
     measurementUnit: String,
@@ -314,6 +314,13 @@ internal fun ProfileSetupSizingSection(
     weightKg: String = "",
     compactDensity: Boolean = false,
     showTitle: Boolean = true,
+    showSubtitle: Boolean = true,
+    titleRes: Int = R.string.profile_setup_sizing_title,
+    subtitleRes: Int = R.string.profile_setup_sizing_subtitle,
+    referenceSizeLabelRes: Int = R.string.profile_setup_reference_size_label,
+    referenceSizeHintRes: Int = R.string.profile_setup_reference_size_hint,
+    referenceSizeCustomLabelRes: Int = R.string.profile_setup_reference_size_custom_label,
+    enableSizeRecommendation: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     val gapTitleToSubtitle = if (compactDensity) 4.dp else 6.dp
@@ -326,8 +333,9 @@ internal fun ProfileSetupSizingSection(
 
     val parsedHeight = remember(heightCm) { parseHeightCmInput(heightCm) }
     val parsedWeight = remember(weightKg) { parseWeightKgInput(weightKg) }
-    val sizeRecommendation = remember(parsedHeight, parsedWeight, genderPreference) {
-        recommendSizeFromBodyMetrics(parsedHeight, parsedWeight, genderPreference)
+    val sizeRecommendation = remember(parsedHeight, parsedWeight, genderPreference, enableSizeRecommendation) {
+        if (!enableSizeRecommendation) null
+        else recommendSizeFromBodyMetrics(parsedHeight, parsedWeight, genderPreference)
     }
     var userDismissedRecommendation by remember { mutableStateOf(false) }
     LaunchedEffect(parsedHeight, parsedWeight) {
@@ -346,7 +354,7 @@ internal fun ProfileSetupSizingSection(
 
     if (showTitle) {
         Text(
-            text = stringResource(R.string.profile_setup_sizing_title),
+            text = stringResource(titleRes),
             style = if (compactDensity) {
                 MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
             } else {
@@ -356,15 +364,17 @@ internal fun ProfileSetupSizingSection(
         )
         Spacer(modifier = Modifier.height(gapTitleToSubtitle))
     }
-    Text(
-        text = stringResource(R.string.profile_setup_sizing_subtitle),
-        style = MaterialTheme.typography.bodySmall,
-        color = scheme.onSurfaceVariant,
-    )
-    Spacer(modifier = Modifier.height(gapSubtitleToRef))
+    if (showSubtitle) {
+        Text(
+            text = stringResource(subtitleRes),
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(gapSubtitleToRef))
+    }
 
     Text(
-        text = stringResource(R.string.profile_setup_reference_size_label),
+        text = stringResource(referenceSizeLabelRes),
         style = MaterialTheme.typography.labelMedium,
         color = scheme.onSurfaceVariant,
     )
@@ -447,8 +457,8 @@ internal fun ProfileSetupSizingSection(
             value = referenceSize,
             onValueChange = onReferenceSizeChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.profile_setup_reference_size_custom_label)) },
-            placeholder = { Text(stringResource(R.string.profile_setup_reference_size_hint)) },
+            label = { Text(stringResource(referenceSizeCustomLabelRes)) },
+            placeholder = { Text(stringResource(referenceSizeHintRes)) },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(

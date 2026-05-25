@@ -27,11 +27,18 @@ fun CreateListingFlowScreen(
     onClose: () -> Unit,
 ) {
     val step by viewModel.step.collectAsState()
+    val draft by viewModel.draft.collectAsState()
     var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
     var showAddAddressFromPost by rememberSaveable { mutableStateOf(false) }
 
+    fun hasDraftProgress(): Boolean =
+        step > CreateListingModeStep ||
+            draft.categoryId.isNotBlank() ||
+            draft.title.isNotBlank() ||
+            draft.listingPhotoSlots.any { it.hasImageSelected() }
+
     fun handleCloseAttempt() {
-        if (step >= 2) {
+        if (hasDraftProgress()) {
             showDiscardDialog = true
         } else {
             onClose()
@@ -48,7 +55,7 @@ fun CreateListingFlowScreen(
             return@BackHandler
         }
         when {
-            step <= 1 -> onClose()
+            step <= CreateListingModeStep -> onClose()
             else -> viewModel.prevStep()
         }
     }
@@ -82,6 +89,10 @@ fun CreateListingFlowScreen(
             .background(PostListingColors.stepCanvas()),
     ) {
         when (step) {
+            CreateListingModeStep -> CreateListingFillModeStep(
+                viewModel = viewModel,
+                onCloseRequest = { handleCloseAttempt() },
+            )
             1 -> CreateListingPostStep1(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
             2 -> CreateListingPostStep2(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
             3 -> CreateListingPostStep3(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
@@ -100,7 +111,10 @@ fun CreateListingFlowScreen(
                 onCloseRequest = { handleCloseAttempt() },
                 onSubmitSuccess = onClose,
             )
-            else -> CreateListingPostStep1(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            else -> CreateListingFillModeStep(
+                viewModel = viewModel,
+                onCloseRequest = { handleCloseAttempt() },
+            )
         }
         if (showAddAddressFromPost) {
             AddEditAddressScreen(

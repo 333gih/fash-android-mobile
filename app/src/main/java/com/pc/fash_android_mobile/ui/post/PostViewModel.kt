@@ -40,7 +40,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     private val _draft = MutableStateFlow(CreateListingDraft())
     val draft: StateFlow<CreateListingDraft> = _draft.asStateFlow()
 
-    private val _step = MutableStateFlow(1)
+    private val _step = MutableStateFlow(CreateListingModeStep)
     val step: StateFlow<Int> = _step.asStateFlow()
 
     private val _categoryTree = MutableStateFlow<List<CategoryTreeNode>>(emptyList())
@@ -138,7 +138,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     /** Clears in-progress listing draft and user-specific preview state after logout. */
     fun clearCachesForSignedOutUser() {
         _draft.value = CreateListingDraft()
-        _step.value = 1
+        _step.value = CreateListingModeStep
         _meProfile.value = null
         _localAddresses.value = emptyList()
         _isUploading.value = false
@@ -159,6 +159,37 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess = { _meProfile.value = it },
                 onFailure = { _meProfile.value = null },
             )
+        }
+    }
+
+    /** Loads profile and applies style/size fields that are still empty in the draft. */
+    fun selectFillMode(mode: CreateListingFillMode) {
+        viewModelScope.launch {
+            if (mode == CreateListingFillMode.FROM_PROFILE_STYLE) {
+                val profile = withContext(Dispatchers.IO) {
+                    userRepository.getMeProfile().fold(
+                        onSuccess = {
+                            _meProfile.value = it
+                            it
+                        },
+                        onFailure = {
+                            _meProfile.value = null
+                            null
+                        },
+                    )
+                }
+                _draft.value = if (profile != null) {
+                    _draft.value.applyProfileStyleIfEmpty(profile)
+                } else {
+                    _draft.value.copy(fillMode = CreateListingFillMode.FROM_PROFILE_STYLE)
+                }
+                if (profile == null || !profile.hasStyleReferenceForListing()) {
+                    publishUi(getApplication<Application>().getString(R.string.post_fill_mode_profile_empty))
+                }
+            } else {
+                _draft.value = _draft.value.copy(fillMode = CreateListingFillMode.MANUAL)
+            }
+            _step.value = 1
         }
     }
 
@@ -266,11 +297,17 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun prevStep() {
-        if (_step.value > 1) _step.value = _step.value - 1
+        when (_step.value) {
+            CreateListingModeStep -> Unit
+            1 -> _step.value = CreateListingModeStep
+            else -> _step.value = _step.value - 1
+        }
     }
 
     fun goToStep(stepNum: Int) {
-        if (stepNum in 1..TotalPostSteps) _step.value = stepNum
+        if (stepNum == CreateListingModeStep || stepNum in 1..TotalPostSteps) {
+            _step.value = stepNum
+        }
     }
 
     fun updateDraft(block: CreateListingDraft.() -> CreateListingDraft) {
@@ -408,6 +445,6 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun resetDraft() {
         _draft.value = CreateListingDraft()
-        _step.value = 1
+        _step.value = CreateListingModeStep
     }
 }

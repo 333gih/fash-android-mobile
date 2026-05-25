@@ -7,6 +7,12 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
+import com.pc.fash_android_mobile.data.recommendation.ProfileUxPersonalization
+import com.pc.fash_android_mobile.data.recommendation.UxPersonalizationLocalStore
+import com.pc.fash_android_mobile.data.recommendation.UxTabTracker
+import com.pc.fash_android_mobile.data.recommendation.orderedProfileTabIndices
+import com.pc.fash_android_mobile.data.recommendation.profileTabIndexFromKey
+import com.pc.fash_android_mobile.data.recommendation.profileTabKeyFromIndex
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserAccessStatus
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -24,21 +30,40 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private fun ListingFeedItem.isSoldListingStatus(): Boolean =
-    listingStatus?.equals("sold", ignoreCase = true) == true
-
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val userRepository: UserRepository =
         (application as FashApplication).userRepository
     private val listingRepository: ListingRepository =
         (application as FashApplication).listingRepository
+    private val fashApp: FashApplication = application as FashApplication
+
+    private val uxTabTracker = UxTabTracker(
+        repository = fashApp.recommendationRepository,
+        userIdProvider = { fashApp.authManager.sessionStore.read()?.userId },
+        guestBrowse = { false },
+        scope = viewModelScope,
+    )
+
+    private val _profileUxPersonalization = MutableStateFlow(ProfileUxPersonalization())
+    val profileUxPersonalization: StateFlow<ProfileUxPersonalization> = _profileUxPersonalization.asStateFlow()
+
+    private val _orderedProfileTabIndices = MutableStateFlow(orderedProfileTabIndices(emptyList()))
+    val profileTabOrder: StateFlow<List<Int>> = _orderedProfileTabIndices.asStateFlow()
+
+    private var profileUxDefaultApplied = false
 
     private val _profile = MutableStateFlow<ProfileInfo?>(null)
     val profile: StateFlow<ProfileInfo?> = _profile.asStateFlow()
 
     private val _sellingListings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val sellingListings: StateFlow<List<ListingFeedItem>> = _sellingListings.asStateFlow()
+
+    private val _inReviewListings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
+    val inReviewListings: StateFlow<List<ListingFeedItem>> = _inReviewListings.asStateFlow()
+
+    private val _rejectedListings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
+    val rejectedListings: StateFlow<List<ListingFeedItem>> = _rejectedListings.asStateFlow()
 
     private val _soldListings = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val soldListings: StateFlow<List<ListingFeedItem>> = _soldListings.asStateFlow()
@@ -84,14 +109,54 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun requestOpenProfileTab(tabIndex: Int, scrollToGrid: Boolean = true) {
         _profileTabOpenRequest.value = ProfileTabOpenRequest(
-            tabIndex = tabIndex.coerceIn(0, 2),
+            tabIndex = tabIndex.coerceIn(0, ProfileListingTab.LAST),
             scrollToGrid = scrollToGrid,
         )
         _profileTabOpenGeneration.update { it + 1L }
     }
 
+    fun onProfileTabSelected(tabIndex: Int) {
+        uxTabTracker.onTabOpened("profile", profileTabKeyFromIndex(tabIndex))
+    }
+
+    private suspend fun loadProfileUxPersonalization() {
+        val ctx = getApplication<Application>().applicationContext
+        val uid = fashApp.authManager.sessionStore.read()?.userId
+        UxPersonalizationLocalStore.readProfileDefaultTab(ctx, uid)?.let { key ->
+            profileTabIndexFromKey(key)?.let { idx ->
+                _profileUxPersonalization.value = _profileUxPersonalization.value.copy(defaultTabKey = key)
+                if (!profileUxDefaultApplied) pendingDefaultProfileTab = idx
+            }
+        }
+        fashApp.recommendationRepository.uxPersonalization(
+            clientHour = UxPersonalizationLocalStore.currentClientHour(),
+        ).onSuccess { bundle ->
+            _profileUxPersonalization.value = bundle.profile
+            _orderedProfileTabIndices.value = orderedProfileTabIndices(bundle.profile.tabOrderKeys)
+            UxPersonalizationLocalStore.writeProfileDefaultTab(ctx, uid, bundle.profile.defaultTabKey)
+            profileTabIndexFromKey(bundle.profile.defaultTabKey)?.let { idx ->
+                if (!profileUxDefaultApplied) pendingDefaultProfileTab = idx
+            }
+        }
+    }
+
+    private var pendingDefaultProfileTab: Int? = null
+
+    fun consumePendingDefaultProfileTab(): Int? {
+        if (profileUxDefaultApplied) return null
+        if (_profileTabOpenGeneration.value != 0L) return null
+        val tab = pendingDefaultProfileTab ?: profileTabIndexFromKey(_profileUxPersonalization.value.defaultTabKey)
+        pendingDefaultProfileTab = null
+        if (tab == null) return null
+        profileUxDefaultApplied = true
+        return tab
+    }
+
     /** Home journey row → Profile Saved tab, scrolled to pinned grid. */
-    fun requestWishlistTabFromHome() = requestOpenProfileTab(tabIndex = 2, scrollToGrid = true)
+    fun requestWishlistTabFromHome() = requestOpenProfileTab(ProfileListingTab.WISHLIST, scrollToGrid = true)
+
+    /** Home journey “Đang duyệt” → Profile in-review tab. */
+    fun requestInReviewTabFromHome() = requestOpenProfileTab(ProfileListingTab.IN_REVIEW, scrollToGrid = true)
 
     fun consumeProfileTabOpenRequest(): ProfileTabOpenRequest? {
         if (_profileTabOpenGeneration.value == 0L) return null
@@ -115,6 +180,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         loadProfileJob?.cancel()
         _profile.value = null
         _sellingListings.value = emptyList()
+        _inReviewListings.value = emptyList()
+        _rejectedListings.value = emptyList()
         _soldListings.value = emptyList()
         _wishlistListings.value = emptyList()
         _loadError.value = false
@@ -128,6 +195,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
      */
     fun clearCachedProfile() {
         lastLoadedProfileForUserId = null
+        profileUxDefaultApplied = false
+        _profileUxPersonalization.value = ProfileUxPersonalization()
+        _orderedProfileTabIndices.value = orderedProfileTabIndices(emptyList())
+        uxTabTracker.closeActiveTab()
+        uxTabTracker.flush()
         _profileTabOpenRequest.value = null
         _profileTabOpenGeneration.value = 0L
         clearProfileCachesOnly()
@@ -228,6 +300,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 },
             )
             userRepository.getUserAccessStatus().getOrNull()?.let { applyMeetingTrustFromStatus(it) }
+            loadProfileUxPersonalization()
         }
         _profile.value?.userId?.let {
             withContext(Dispatchers.IO) {
@@ -239,13 +312,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         listingRepository.getWishlistListings(limit = 50, offset = 0).getOrElse { emptyList() }
                     }
                     val allMine = mine.await()
-                    _sellingListings.value = allMine.filter { !it.isSoldListingStatus() }
+                    _sellingListings.value = allMine.filter { it.isActiveListing() }
+                    _inReviewListings.value = allMine.filter { it.isInReviewListing() }
+                    _rejectedListings.value = allMine.filter { it.isRejectedListing() }
                     _soldListings.value = allMine.filter { it.isSoldListingStatus() }
                     _wishlistListings.value = wish.await()
                 }
             }
         } ?: run {
             _sellingListings.value = emptyList()
+            _inReviewListings.value = emptyList()
+            _rejectedListings.value = emptyList()
             _soldListings.value = emptyList()
             _wishlistListings.value = emptyList()
         }
@@ -312,6 +389,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         )
                     }
                     _sellingListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
+                    _inReviewListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
+                    _rejectedListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
                     _soldListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
                     _wishlistListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
                     _events.tryEmit(
@@ -349,6 +428,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         )
                     }
                     _sellingListings.update { list -> list.map { if (it.id == item.id) basePatch(it) else it } }
+                    _inReviewListings.update { list -> list.map { if (it.id == item.id) basePatch(it) else it } }
+                    _rejectedListings.update { list -> list.map { if (it.id == item.id) basePatch(it) else it } }
                     _soldListings.update { list -> list.map { if (it.id == item.id) basePatch(it) else it } }
                     if (!saved && item.isSaved) {
                         _wishlistListings.update { list -> list.filter { it.id != item.id } }
@@ -376,5 +457,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 },
             )
         }
+    }
+
+    override fun onCleared() {
+        uxTabTracker.closeActiveTab()
+        uxTabTracker.flush()
+        super.onCleared()
     }
 }

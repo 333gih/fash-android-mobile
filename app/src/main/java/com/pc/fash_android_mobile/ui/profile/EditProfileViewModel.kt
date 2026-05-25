@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.user.AestheticTagPutItem
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.ProfilePatch
@@ -209,16 +211,18 @@ class EditProfileViewModel(
             _selectedTagIds.value = catalog.filter { t ->
                 p.aestheticTags.any { n ->
                     n.equals(t.name, ignoreCase = true) ||
-                        n.equals(t.displayName, ignoreCase = true)
+                        n.equals(t.displayName, ignoreCase = true) ||
+                        n.equals(t.displayNameVi, ignoreCase = true)
                 }
             }.map { it.id }.toSet()
         }
     }
 
     fun resolveTagLabel(tagId: String): String {
+        val isVi = AppLocale.currentTag(getApplication()) != AppLocale.TAG_EN
         val fromCatalog = _tags.value.find { it.id == tagId }
         if (fromCatalog != null) {
-            return fromCatalog.displayName.ifBlank { fromCatalog.name }
+            return fromCatalog.displayLabel(isVi)
         }
         return _profile.value?.aestheticTagSnapshots?.find { it.id == tagId }?.name?.ifBlank { tagId }
             ?: tagId
@@ -431,7 +435,8 @@ class EditProfileViewModel(
             .filter { t ->
                 p.aestheticTags.any { n ->
                     n.equals(t.name, ignoreCase = true) ||
-                        n.equals(t.displayName, ignoreCase = true)
+                        n.equals(t.displayName, ignoreCase = true) ||
+                        n.equals(t.displayNameVi, ignoreCase = true)
                 }
             }
             .map { t -> AestheticTagPutItem(t.id, t.name.ifBlank { t.displayName }) }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridS
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Search
+import com.pc.fash_android_mobile.data.recommendation.HomeExploreShortcut
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -49,7 +51,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
@@ -128,6 +133,9 @@ fun HomeFeedTabHost(
     bottomScrollInset: Dp = 0.dp,
     selectedTab: HomeFeedTab,
     onTabSelected: (HomeFeedTab) -> Unit,
+    orderedTabs: List<HomeFeedTab> = HomeFeedTab.signedInTabs(),
+    exploreShortcut: com.pc.fash_android_mobile.data.recommendation.HomeExploreShortcut? = null,
+    onExploreShortcutClick: () -> Unit = {},
     featuredSellers: List<FeaturedSellerItem>,
     followingIds: Set<String>,
     onFeaturedSellerClick: (UserSearchResult) -> Unit,
@@ -161,7 +169,10 @@ fun HomeFeedTabHost(
     onRequestLogin: (GuestLoginReason) -> Unit,
     onScrollToTopRequest: kotlinx.coroutines.flow.SharedFlow<Unit>,
 ) {
-    val tabs = remember(isGuestBrowse) { HomeFeedTab.tabsFor(isGuestBrowse) }
+    val tabs = remember(isGuestBrowse, orderedTabs) {
+        val allowed = HomeFeedTab.tabsFor(isGuestBrowse)
+        orderedTabs.filter { it in allowed }.ifEmpty { allowed }
+    }
     val safeSelected = if (selectedTab in tabs) selectedTab else HomeFeedTab.HuntToday
     val showGuestGate = isGuestBrowse && safeSelected.requiresAuth
     val gridItems = if (showGuestGate) {
@@ -187,9 +198,11 @@ fun HomeFeedTabHost(
     var horizontalDrag by remember { mutableFloatStateOf(0f) }
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
     val showJourneyRow = !isGuestBrowse && buyerStats.hasJourneyActivity()
+    val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
     val tabRowIndex = (if (showJourneyRow) 1 else 0) +
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
-        (if (hasFeaturedSellers) 1 else 0)
+        (if (hasFeaturedSellers) 1 else 0) +
+        (if (showExploreShortcut) 1 else 0)
     val listingStartIndex = tabRowIndex + 1
     val analyticsSurface = safeSelected.analyticsSurface
     val showStickyTabs by remember(tabRowIndex) {
@@ -291,6 +304,16 @@ fun HomeFeedTabHost(
                         followingIds = followingIds,
                         onSellerClick = onFeaturedSellerClick,
                         onSeeAllClick = onFeaturedSellersSeeAll,
+                        includeHorizontalEdgePadding = false,
+                    )
+                }
+            }
+
+            if (showExploreShortcut && exploreShortcut != null) {
+                item(span = StaggeredGridItemSpan.FullLine, key = "home_explore_shortcut") {
+                    HomeExploreShortcutBanner(
+                        shortcut = exploreShortcut,
+                        onClick = onExploreShortcutClick,
                         includeHorizontalEdgePadding = false,
                     )
                 }
@@ -549,4 +572,68 @@ private fun tabItemsFor(
     HomeFeedTab.Following -> followingItems
     HomeFeedTab.StylePicks -> stylePickItems
     HomeFeedTab.SimilarSaved -> similarSavedItems
+}
+
+@Composable
+fun HomeExploreShortcutBanner(
+    shortcut: HomeExploreShortcut,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val edgeStart = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialEnd else 0.dp
+    val labelRes = when (shortcut.labelKey) {
+        "home_explore_shortcut_category" -> R.string.home_explore_shortcut_category
+        else -> R.string.home_explore_shortcut_style
+    }
+    val detail = shortcut.aestheticTagName?.takeIf { it.isNotBlank() }
+        ?: shortcut.aestheticTagId?.takeIf { it.isNotBlank() }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = edgeStart, end = edgeEnd, top = 4.dp, bottom = 8.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = scheme.surfaceVariant.copy(alpha = 0.45f),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(labelRes),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!detail.isNullOrBlank()) {
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.home_explore_shortcut_action),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = FashColors.Primary,
+            )
+        }
+    }
 }

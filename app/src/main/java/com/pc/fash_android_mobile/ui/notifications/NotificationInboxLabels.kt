@@ -25,6 +25,16 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "marketplace.order.dispute_opened" -> R.string.notification_pt_marketplace_order_dispute_opened
         "marketplace.review.received" -> R.string.notification_pt_marketplace_review_received
         "marketplace.referral.invite_rewarded" -> R.string.notification_pt_marketplace_referral_invite_rewarded
+        "marketplace.recommendation.daily_digest" -> R.string.notification_pt_marketplace_recommendation_daily_digest
+        "marketplace.recommendation.style_fresh" -> R.string.notification_pt_marketplace_recommendation_style_fresh
+        "marketplace.recommendation.similar_saved" -> R.string.notification_pt_marketplace_recommendation_similar_saved
+        "marketplace.recommendation.continue_browsing" -> R.string.notification_pt_marketplace_recommendation_continue_browsing
+        "marketplace.recommendation.inactive_nudge" -> R.string.notification_pt_marketplace_recommendation_inactive_nudge
+        "marketplace.recommendation.community_quiet" -> R.string.notification_pt_marketplace_recommendation_community_quiet
+        "marketplace.recommendation.style_drought" -> R.string.notification_pt_marketplace_recommendation_style_drought
+        "marketplace.recommendation.taste_neighbor" -> R.string.notification_pt_marketplace_recommendation_taste_neighbor
+        "marketplace.recommendation.hunt_today" -> R.string.notification_pt_marketplace_recommendation_hunt_today
+        "marketplace.recommendation.social_style_match" -> R.string.notification_pt_marketplace_recommendation_social_style_match
         "admin.mobile_push" -> R.string.notification_pt_admin_mobile_push
         "admin.mobile_push.announcement" -> R.string.notification_pt_admin_mobile_push_announcement
         "admin.mobile_push.promo" -> R.string.notification_pt_admin_mobile_push_promo

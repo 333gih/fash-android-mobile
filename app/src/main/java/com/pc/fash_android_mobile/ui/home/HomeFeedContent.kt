@@ -39,6 +39,7 @@ fun HomeFeedContent(
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     onNavigateToExplore: () -> Unit = {},
     onNavigateToExploreWithTag: (tagName: String) -> Unit = { onNavigateToExplore() },
+    onNavigateToExploreWithShortcut: (com.pc.fash_android_mobile.data.recommendation.HomeExploreShortcut) -> Unit = { onNavigateToExplore() },
     onDeliveringJourneyClick: () -> Unit = {},
     onInReviewJourneyClick: () -> Unit = {},
     onNavigateToSaved: () -> Unit = {},
@@ -87,6 +88,12 @@ fun HomeFeedContent(
                 bottomScrollInset = promoDockInset,
                 selectedTab = ui.selectedFeedTab,
                 onTabSelected = viewModel::setSelectedFeedTab,
+                orderedTabs = ui.orderedFeedTabs,
+                exploreShortcut = ui.exploreShortcut,
+                onExploreShortcutClick = {
+                    val shortcut = ui.exploreShortcut ?: return@HomeFeedTabHost
+                    onNavigateToExploreWithShortcut(shortcut)
+                },
                 featuredSellers = ui.discovery.recommendedSellers,
                 followingIds = ui.followingIds,
                 onFeaturedSellerClick = onFeaturedSellerClick,

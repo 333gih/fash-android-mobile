@@ -69,6 +69,7 @@ object AppLocale {
             .commit()
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
         localeRevisionState.value += 1
+        (context.applicationContext as? com.pc.fash_android_mobile.FashApplication)?.refreshAestheticTagCatalog()
     }
 
     /**

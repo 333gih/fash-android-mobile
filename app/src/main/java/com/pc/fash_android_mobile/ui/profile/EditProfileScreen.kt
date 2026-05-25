@@ -72,6 +72,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.common.CommonAestheticTagDto
+import com.pc.fash_android_mobile.data.common.displayLabel
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAssets
@@ -630,6 +632,7 @@ private fun AestheticTagsPickerSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scheme = MaterialTheme.colorScheme
+    val isVi = AppLocale.currentTag(androidx.compose.ui.platform.LocalContext.current) != AppLocale.TAG_EN
     var searchQuery by remember { mutableStateOf("") }
     val filtered = remember(tags, searchQuery) {
         val q = searchQuery.trim().lowercase(Locale.getDefault())
@@ -638,6 +641,7 @@ private fun AestheticTagsPickerSheet(
         } else {
             tags.filter { t ->
                 t.displayName.lowercase(Locale.getDefault()).contains(q) ||
+                    t.displayNameVi.lowercase(Locale.getDefault()).contains(q) ||
                     t.name.lowercase(Locale.getDefault()).contains(q)
             }
         }
@@ -719,7 +723,7 @@ private fun AestheticTagsPickerSheet(
                             .clickable { onToggle(tag) },
                     ) {
                         Text(
-                            text = tag.displayName.ifBlank { tag.name },
+                            text = tag.displayLabel(isVi),
                             style = MaterialTheme.typography.labelMedium,
                             color = if (selected) FashColors.Primary.fashReadableOn() else scheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),

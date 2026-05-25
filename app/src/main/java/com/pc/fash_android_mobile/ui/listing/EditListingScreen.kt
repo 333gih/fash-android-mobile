@@ -132,6 +132,7 @@ fun EditListingScreen(
         bottomBar = {
             val d = detail
             val saveEnabled = canSave && !isDeleting
+            val isRejectedResubmit = d?.status?.trim()?.lowercase(Locale.ROOT) == "rejected"
             if (d != null && isListingStatusSellerPutAllowed(d.status)) {
                 Surface(
                     tonalElevation = 1.dp,
@@ -159,7 +160,15 @@ fun EditListingScreen(
                                     strokeWidth = 2.dp,
                                 )
                             } else {
-                                Text(stringResource(R.string.edit_listing_save))
+                                Text(
+                                    stringResource(
+                                        if (isRejectedResubmit) {
+                                            R.string.edit_listing_save_resubmit
+                                        } else {
+                                            R.string.edit_listing_save
+                                        },
+                                    ),
+                                )
                             }
                         }
                         OutlinedButton(
@@ -225,7 +234,13 @@ fun EditListingScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalPadding = FashTheme.spacing.editorialStart,
                             bottomNotice = if (editable) {
-                                stringResource(R.string.edit_listing_bottom_hint)
+                                stringResource(
+                                    if (d.status.trim().lowercase(Locale.ROOT) == "rejected") {
+                                        R.string.edit_listing_rejected_bottom_hint
+                                    } else {
+                                        R.string.edit_listing_bottom_hint
+                                    },
+                                )
                             } else {
                                 null
                             },
@@ -240,6 +255,20 @@ fun EditListingScreen(
                                         .fillMaxWidth()
                                         .background(
                                             FashColors.Primary.copy(alpha = 0.12f),
+                                            RoundedCornerShape(12.dp),
+                                        )
+                                        .padding(16.dp),
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            } else if (d.status.trim().lowercase(Locale.ROOT) == "rejected") {
+                                Text(
+                                    text = stringResource(R.string.edit_listing_rejected_banner),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
                                             RoundedCornerShape(12.dp),
                                         )
                                         .padding(16.dp),

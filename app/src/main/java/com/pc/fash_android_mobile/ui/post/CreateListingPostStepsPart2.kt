@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.pc.fash_android_mobile.ui.post
 
 import android.net.Uri
@@ -8,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -63,13 +67,23 @@ import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
+import com.pc.fash_android_mobile.ui.feed.formatListingPriceVnd
+import com.pc.fash_android_mobile.ui.onboarding.ProfileSetupSizingSection
 import com.pc.fash_android_mobile.ui.theme.dashedRoundRectBorder
 
 @Composable
 fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
     val draft by viewModel.draft.collectAsState()
+    val meProfile by viewModel.meProfile.collectAsState()
     val canNext = draft.canProceedFromStep(6)
     val scrollState = rememberScrollState()
+    val sizingGender = remember(draft.genderTarget, meProfile?.gender) {
+        draft.sizingChartGender(meProfile)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadProfileForPreview()
+    }
 
     Column(
         modifier = Modifier
@@ -93,102 +107,45 @@ fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             bottomNotice = stringResource(R.string.post_measure_notice_combined),
             scrollState = scrollState,
         ) {
-            val unitSuffix =
-                if (draft.measurementUnit.equals("cm", ignoreCase = true)) {
-                    stringResource(R.string.post_unit_cm)
-                } else {
-                    stringResource(R.string.post_unit_in)
-                }
             Text(
                 text = stringResource(R.string.post_step_measure),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = stringResource(R.string.post_measure_step_subtitle),
+                text = stringResource(R.string.post_listing_sizing_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(16.dp))
+            if (draft.fillMode == CreateListingFillMode.FROM_PROFILE_STYLE &&
+                (draft.size.isNotBlank() || hasAnyMeasurement(draft) || draft.genderTarget.isNotBlank())
+            ) {
+                PostProfilePrefilledBanner()
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             PostMeasureSectionCard {
-                PostMeasureSectionLabel(stringResource(R.string.post_measure_section_size))
-                PostListingOutlinedTextField(
-                    value = draft.size,
-                    onValueChange = { viewModel.updateDraft { copy(size = it.take(20)) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.create_listing_size_label)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                PostMeasureSectionLabel(
+                    stringResource(
+                        R.string.post_step_gender_target,
+                    ) + " (${stringResource(R.string.post_listing_sizing_gender_recommended)})",
                 )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            PostMeasureSectionCard {
-                PostMeasureSectionLabel(stringResource(R.string.post_measure_section_unit))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PostSelectablePill(
-                        text = stringResource(R.string.post_unit_cm),
-                        selected = draft.measurementUnit.equals("cm", ignoreCase = true),
-                        onClick = { viewModel.updateDraft { copy(measurementUnit = "cm") } },
-                    )
-                    PostSelectablePill(
-                        text = stringResource(R.string.post_unit_in),
-                        selected = draft.measurementUnit.equals("in", ignoreCase = true),
-                        onClick = { viewModel.updateDraft { copy(measurementUnit = "in") } },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            PostMeasureSectionCard {
-                PostMeasureSectionLabel(stringResource(R.string.post_measure_section_details))
-                Column(verticalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing3)) {
-                    MeasurementField(
-                        label = stringResource(R.string.post_measurement_hem),
-                        value = draft.measurementHem,
-                        unitSuffix = unitSuffix,
-                        onChange = { viewModel.updateDraft { copy(measurementHem = it) } },
-                    )
-                    MeasurementField(
-                        label = stringResource(R.string.post_measurement_chest),
-                        value = draft.measurementChest,
-                        unitSuffix = unitSuffix,
-                        onChange = { viewModel.updateDraft { copy(measurementChest = it) } },
-                    )
-                    MeasurementField(
-                        label = stringResource(R.string.post_measurement_length),
-                        value = draft.measurementLength,
-                        unitSuffix = unitSuffix,
-                        onChange = { viewModel.updateDraft { copy(measurementLength = it) } },
-                    )
-                    MeasurementField(
-                        label = stringResource(R.string.post_measurement_shoulders),
-                        value = draft.measurementShoulders,
-                        unitSuffix = unitSuffix,
-                        onChange = { viewModel.updateDraft { copy(measurementShoulders = it) } },
-                    )
-                    MeasurementField(
-                        label = stringResource(R.string.post_measurement_sleeve),
-                        value = draft.measurementSleeveLength,
-                        unitSuffix = unitSuffix,
-                        onChange = { viewModel.updateDraft { copy(measurementSleeveLength = it) } },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // ── Gender Target ──────────────────────────────────────────────────
-            PostMeasureSectionCard {
-                PostMeasureSectionLabel("Đối tượng (Khuyến khích)")
                 Text(
-                    text = "Sản phẩm dành cho ai?",
+                    text = stringResource(R.string.post_listing_sizing_gender_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     listOf(
-                        "women" to "Nữ",
-                        "men" to "Nam",
-                        "unisex" to "Unisex",
-                        "kids" to "Trẻ em",
+                        "women" to stringResource(R.string.gender_target_women),
+                        "men" to stringResource(R.string.gender_target_men),
+                        "unisex" to stringResource(R.string.gender_target_unisex),
+                        "kids" to stringResource(R.string.gender_target_kids),
                     ).forEach { (value, label) ->
                         PostSelectablePill(
                             text = label,
@@ -203,50 +160,31 @@ fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            // ── Primary Color ──────────────────────────────────────────────────
+
             PostMeasureSectionCard {
-                PostMeasureSectionLabel("Màu sắc chính (Tùy chọn)")
-                Text(
-                    text = "Giúp người mua lọc theo màu và cải thiện đề xuất.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
+                ProfileSetupSizingSection(
+                    referenceSize = draft.size,
+                    onReferenceSizeChange = { viewModel.updateDraft { copy(size = it.take(20)) } },
+                    measurementUnit = draft.measurementUnit,
+                    onMeasurementUnitChange = { viewModel.updateDraft { copy(measurementUnit = it) } },
+                    hem = draft.measurementHem,
+                    onHemChange = { viewModel.updateDraft { copy(measurementHem = it) } },
+                    chest = draft.measurementChest,
+                    onChestChange = { viewModel.updateDraft { copy(measurementChest = it) } },
+                    length = draft.measurementLength,
+                    onLengthChange = { viewModel.updateDraft { copy(measurementLength = it) } },
+                    shoulders = draft.measurementShoulders,
+                    onShouldersChange = { viewModel.updateDraft { copy(measurementShoulders = it) } },
+                    sleeve = draft.measurementSleeveLength,
+                    onSleeveChange = { viewModel.updateDraft { copy(measurementSleeveLength = it) } },
+                    genderPreference = sizingGender,
+                    compactDensity = true,
+                    showTitle = false,
+                    showSubtitle = false,
+                    referenceSizeLabelRes = R.string.post_measure_section_size,
+                    referenceSizeHintRes = R.string.profile_setup_reference_size_hint,
+                    enableSizeRecommendation = false,
                 )
-                @Suppress("SpellCheckingInspection")
-                val standardColors = listOf(
-                    "black" to "Đen",
-                    "white" to "Trắng",
-                    "grey" to "Xám",
-                    "navy" to "Navy",
-                    "beige" to "Be",
-                    "brown" to "Nâu",
-                    "blue" to "Xanh dương",
-                    "red" to "Đỏ",
-                    "green" to "Xanh lá",
-                    "pink" to "Hồng",
-                    "yellow" to "Vàng",
-                    "olive" to "Olive",
-                    "cream" to "Kem",
-                    "orange" to "Cam",
-                    "purple" to "Tím",
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    standardColors.chunked(4).forEach { rowItems ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            rowItems.forEach { (value, label) ->
-                                PostSelectablePill(
-                                    text = label,
-                                    selected = draft.color == value,
-                                    onClick = {
-                                        viewModel.updateDraft {
-                                            copy(color = if (color == value) "" else value)
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -279,31 +217,6 @@ private fun PostMeasureSectionLabel(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
         color = MaterialTheme.colorScheme.onSurface,
-    )
-}
-
-@Composable
-private fun MeasurementField(
-    label: String,
-    value: String,
-    unitSuffix: String,
-    onChange: (String) -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    PostListingOutlinedTextField(
-        value = value,
-        onValueChange = { onChange(it) },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        suffix = {
-            Text(
-                text = unitSuffix,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-            )
-        },
     )
 }
 
@@ -563,14 +476,33 @@ fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 text = stringResource(R.string.post_step_price),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.post_price_step_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.post_price_vnd_range_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(
+                    R.string.post_price_vnd_example,
+                    stringResource(R.string.create_listing_price_placeholder),
+                    formatListingPriceVnd(350_000L),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
             Spacer(modifier = Modifier.height(12.dp))
-            PostListingOutlinedTextField(
+            ListingVndPriceField(
                 value = draft.priceVnd,
-                onValueChange = { viewModel.updateDraft { copy(priceVnd = it.filter { ch -> ch.isDigit() }.take(12)) } },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.create_listing_price_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                onValueChange = { viewModel.updateDraft { copy(priceVnd = it) } },
+                labelRes = R.string.create_listing_price_label,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -607,17 +539,11 @@ fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit)
                 )
             }
             if (draft.autoPriceDropEnabled) {
-                PostListingOutlinedTextField(
+                ListingVndPriceField(
                     value = draft.floorPriceVnd,
-                    onValueChange = {
-                        viewModel.updateDraft { copy(floorPriceVnd = it.filter { ch -> ch.isDigit() }.take(12)) }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    label = { Text(stringResource(R.string.post_floor_price)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    onValueChange = { viewModel.updateDraft { copy(floorPriceVnd = it) } },
+                    labelRes = R.string.post_floor_price,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
                 PostListingOutlinedTextField(
                     value = draft.priceDropPercentInput,
@@ -636,6 +562,52 @@ fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+}
+
+@Composable
+private fun ListingVndPriceField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    labelRes: Int,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val digitsOnly = value.filter { it.isDigit() }.take(12)
+    val parsedAmount = digitsOnly.toLongOrNull()
+    PostListingOutlinedTextField(
+        value = digitsOnly,
+        onValueChange = { onValueChange(it.filter { ch -> ch.isDigit() }.take(12)) },
+        modifier = modifier.fillMaxWidth(),
+        label = { Text(stringResource(labelRes)) },
+        placeholder = { Text(stringResource(R.string.create_listing_price_placeholder)) },
+        prefix = {
+            Text(
+                text = stringResource(R.string.post_price_vnd_prefix),
+                style = MaterialTheme.typography.bodyLarge,
+                color = scheme.onSurfaceVariant,
+            )
+        },
+        suffix = {
+            Text(
+                text = stringResource(R.string.post_price_vnd_suffix),
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurfaceVariant,
+            )
+        },
+        supportingText = {
+            if (parsedAmount != null && parsedAmount > 0L) {
+                Text(
+                    text = stringResource(
+                        R.string.post_price_vnd_preview,
+                        formatListingPriceVnd(parsedAmount),
+                    ),
+                    color = FashColors.Primary,
+                )
+            }
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    )
 }
 
 @Composable
@@ -841,6 +813,8 @@ fun CreateListingPostStep10(
             },
             primaryEnabled = !isSubmitting,
             primaryLoading = isSubmitting,
+            centerTitleRes = R.string.post_step_review,
+            showStepCaptionUnderTitle = true,
         )
         Box(
             modifier = Modifier
@@ -855,15 +829,16 @@ fun CreateListingPostStep10(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.create_listing_step3_subtitle),
+                    text = stringResource(R.string.post_review_buyer_page_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                CreateListingReviewCard(
+                CreateListingBuyerPreview(
                     draft = draft,
                     meProfile = meProfile,
                     aestheticTagsById = tagsById,
+                    onEditStep = { targetStep -> viewModel.goToStep(targetStep) },
                 )
             }
         }
