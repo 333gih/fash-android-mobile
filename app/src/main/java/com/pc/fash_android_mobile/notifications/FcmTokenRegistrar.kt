@@ -8,6 +8,7 @@ import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSession
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.auth.AuthTokenRefreshCoordinator
+import com.pc.fash_android_mobile.data.locale.AppLocale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
 class FcmTokenRegistrar(
     private val authRepository: AuthRepository,
     private val sessionStore: AuthSessionStore,
+    private val clientLocaleProvider: () -> String = { AppLocale.TAG_VI },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -53,7 +55,8 @@ class FcmTokenRegistrar(
      * Registers FCM; on **401** refreshes session and retries once (same pattern as [com.pc.fash_android_mobile.data.auth.AppAuthManager.validateOrClearSession]).
      */
     private suspend fun registerFcmWithOptionalRefresh(session: AuthSession, fcmToken: String) {
-        val first = authRepository.registerFcm(session.accessToken, fcmToken)
+        val locale = clientLocaleProvider()
+        val first = authRepository.registerFcm(session.accessToken, fcmToken, clientLocale = locale)
         if (first.isSuccess) {
             logD("registerFcm: backend OK")
             return
@@ -74,7 +77,7 @@ class FcmTokenRegistrar(
             logW("registerFcm: access token expired; refresh failed — ${it.message}")
             return
         }
-        val second = authRepository.registerFcm(newSession.accessToken, fcmToken)
+        val second = authRepository.registerFcm(newSession.accessToken, fcmToken, clientLocale = locale)
         second.fold(
             onSuccess = { logD("registerFcm: backend OK after token refresh") },
             onFailure = { e ->

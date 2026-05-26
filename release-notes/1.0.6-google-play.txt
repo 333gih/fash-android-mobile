@@ -1,0 +1,26 @@
+Fash Android 1.0.6 (versionCode 7)
+=====================================
+
+Build prod release:
+  ./gradlew :app:bundleProdRelease
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Thông báo đẩy và thông báo trong app hiển thị đúng ngôn ngữ bạn chọn (Tiếng Việt / English)
+• Đồng bộ ngôn ngữ lên tài khoản khi bạn đổi VN/EN trong Cài đặt hoặc màn hình đăng nhập
+• Cải thiện đăng ký thiết bị nhận thông báo (FCM) kèm ngôn ngữ ưu tiên
+• Sửa lỗi và cải thiện ổn định
+
+--- Google Play — What's new (English) ---
+
+• Push and in-app notifications now match your chosen language (Vietnamese / English)
+• Language preference syncs to your account when you switch VN/EN in Settings or on the login screen
+• Improved notification device registration with your preferred locale
+• Bug fixes and stability improvements
+
+--- Internal / QA checklist ---
+
+[ ] Đăng nhập → đổi ngôn ngữ VN/EN → kiểm tra API PUT /users/me/locale thành công
+[ ] Sau login, FCM register gửi client_locale đúng (vi hoặc en)
+[ ] Nhận push notification đúng ngôn ngữ tài khoản
+[ ] Cold start với session cũ → locale local được sync lên server

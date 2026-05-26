@@ -1249,11 +1249,6 @@ class UserRepository(
      * Secured GET — onboarding/home gate (path from [AppEnvironment.userAccessStatusPath], e.g. `.../setup-status`).
      * Errors: JSON `{ "code": <http>, "error": "<message>" }` (typical core-service shape).
      */
-    /**
-     * `POST /users/me/meeting-trust/ack-identity-reverify` — call after the user completes out-of-band KYC /
-     * identity re-verification; clears `meeting_scheduling_reverify_required` and `meeting_scheduling_suspended_until`
-     * when the server accepts.
-     */
     fun putBrowseLocation(
         provinceId: String,
         provinceName: String,
@@ -1267,6 +1262,32 @@ class UserRepository(
             .put("district_id", districtId.trim())
             .put("district_name", districtName.trim())
             .toString()
+        securedClient.newCall(
+            Request.Builder()
+                .url(url)
+                .put(json.toRequestBody(JSON_MEDIA))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "FashAndroid/1.0")
+                .build(),
+        ).execute().use { response ->
+            val resBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val msg = try {
+                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                } catch (_: Exception) {
+                    resBody
+                }
+                error("HTTP ${response.code}: $msg")
+            }
+        }
+    }
+
+    /** `PUT /users/me/locale` — syncs push/in-app notification language (`en` or `vi`). */
+    fun syncPreferredLocale(locale: String): Result<Unit> = runCatching {
+        val tag = if (locale.startsWith("en")) "en" else "vi"
+        val url = AppEnvironment.apiPath("api/v1/users/me/locale")
+        val json = JSONObject().put("locale", tag).toString()
         securedClient.newCall(
             Request.Builder()
                 .url(url)

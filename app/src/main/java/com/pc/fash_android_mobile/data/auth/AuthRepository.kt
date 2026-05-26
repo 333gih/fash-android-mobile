@@ -120,17 +120,23 @@ class AuthRepository(
     }
 
     /** Registers FCM token for push notifications. Requires Bearer token. Ignores empty fcmToken. */
-    fun registerFcm(accessToken: String, fcmToken: String, devicePlatform: String = "android"): Result<Unit> = runCatching {
+    fun registerFcm(
+        accessToken: String,
+        fcmToken: String,
+        devicePlatform: String = "android",
+        clientLocale: String? = null,
+    ): Result<Unit> = runCatching {
         if (fcmToken.isBlank()) return@runCatching
         val path = AppEnvironment.authFcmRegisterPath.trim().trimStart('/')
         val url = AppEnvironment.authServicePath(path)
         val json = JSONObject()
             .put("fcm_token", fcmToken.trim())
             .put("device_platform", devicePlatform)
-            .toString()
+        clientLocale?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("client_locale", it) }
+        val payload = json.toString()
         val request = Request.Builder()
             .url(url)
-            .post(json.toRequestBody(JSON_MEDIA))
+            .post(payload.toRequestBody(JSON_MEDIA))
             .header("Accept", "application/json")
             .header("Authorization", "Bearer ${accessToken.trim()}")
             .build()

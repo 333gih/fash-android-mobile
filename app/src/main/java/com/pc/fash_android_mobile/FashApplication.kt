@@ -31,6 +31,7 @@ import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.ui.UiDialogController
 import com.pc.fash_android_mobile.data.locale.AppLocale
+import com.pc.fash_android_mobile.data.locale.PreferredLocaleSync
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
@@ -476,6 +477,15 @@ class FashApplication : Application(), ImageLoaderFactory {
     val fcmTokenRegistrar: FcmTokenRegistrar by lazy {
         FcmTokenRegistrar(
             authRepository = authManager.authRepository,
+            sessionStore = authManager.sessionStore,
+            clientLocaleProvider = { AppLocale.coreApiPathSegment() },
+        )
+    }
+
+    /** Syncs in-app language to `profiles.preferred_locale` when signed in. */
+    val preferredLocaleSync: PreferredLocaleSync by lazy {
+        PreferredLocaleSync(
+            userRepository = userRepository,
             sessionStore = authManager.sessionStore,
         )
     }

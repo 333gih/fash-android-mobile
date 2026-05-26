@@ -656,6 +656,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     withContext(Dispatchers.IO) {
+                        fashApp.preferredLocaleSync.syncIfSessionSuspend(
+                            AppLocale.currentTag(this@MainActivity),
+                        )
                         fashApp.fcmTokenRegistrar.registerCurrentTokenIfSession()
                     }
                 }
