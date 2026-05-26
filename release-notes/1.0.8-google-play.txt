@@ -1,0 +1,24 @@
+Fash Android 1.0.8 (versionCode 9)
+=====================================
+
+Build prod release:
+  ./gradlew :app:bundleProdRelease
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Slider màn đăng nhập cập nhật đúng ngôn ngữ khi đổi VN/EN
+• Cải thiện báo cáo crash/ANR trên Google Play (native debug symbols)
+• Sửa lỗi và cải thiện ổn định
+
+--- Google Play — What's new (English) ---
+
+• Login screen slider refreshes in your selected language (Vietnamese / English)
+• Improved crash/ANR reporting on Google Play (native debug symbols)
+• Bug fixes and stability improvements
+
+--- Play upload notes ---
+
+This build embeds native debug symbols in the AAB (ndk.debugSymbolLevel=FULL).
+After upload, the Play Console warning about missing debug symbols should clear.
+
+Optional: also upload mapping.txt from app/build/outputs/mapping/prodRelease/ for Kotlin stack traces.

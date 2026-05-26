@@ -352,6 +352,10 @@ class MainActivity : ComponentActivity() {
             val usePasswordLogin by loginViewModel.usePasswordLogin.collectAsState()
             val isPasswordLoading by loginViewModel.isPasswordLoading.collectAsState()
             val loginHeroSlides by loginHeroSlidesViewModel.remoteSlides.collectAsState()
+            val localeRev by AppLocale.localeRevisionFlow.collectAsState()
+            LaunchedEffect(localeRev) {
+                loginHeroSlidesViewModel.refresh()
+            }
             val isAuthenticated by authManager.isAuthenticated.collectAsState(initial = false)
             val sessionExpiredMessage by authManager.sessionExpiredMessage.collectAsState()
             // Show snackbar when the server force-expires the session, then navigate to login

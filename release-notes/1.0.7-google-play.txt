@@ -1,0 +1,19 @@
+Fash Android 1.0.7 (versionCode 8)
+=====================================
+
+Build prod release:
+  ./gradlew :app:bundleProdRelease
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Slider màn đăng nhập cập nhật đúng ngôn ngữ khi bạn đổi VN/EN
+• Thông báo đẩy và thông báo trong app hiển thị đúng ngôn ngữ bạn chọn
+• Đồng bộ ngôn ngữ lên tài khoản khi đổi VN/EN
+• Sửa lỗi và cải thiện ổn định
+
+--- Google Play — What's new (English) ---
+
+• Login screen slider now refreshes in your selected language (Vietnamese / English)
+• Push and in-app notifications match your chosen language
+• Language preference syncs to your account when you switch VN/EN
+• Bug fixes and stability improvements

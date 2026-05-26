@@ -285,8 +285,8 @@ android {
         applicationId = "com.pc.fash_android_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 9
+        versionName = "1.0.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Overridden per flavor by [injectFromEnv] (LISTING_SHARE_BASE_URL host).
@@ -328,6 +328,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Embed native debug symbols in the AAB for Play Console crash/ANR symbolication
+            // (Firebase, Facebook SDK, etc. ship .so libraries even without app NDK code).
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
             // Without a release keystore, sign with the debug key so the APK is installable (not *-unsigned).
             // For Play Store / real distribution, set FASH_RELEASE_* in local.properties (see SIGNING.md).
             signingConfig = if (releaseKeystoreFile != null) {

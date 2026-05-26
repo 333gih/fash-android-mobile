@@ -26,6 +26,27 @@ FASH_RELEASE_KEY_PASSWORD=your_key_password
 
 Output: `app\build\outputs\apk\prod\release\app-prod-release.apk` (signed).
 
+## Play Console — native debug symbols & R8 mapping
+
+Release AABs include native libraries (`.so`) from Firebase, Facebook, Google Play Services, etc.
+Gradle embeds **native debug symbols** in the bundle when `release { ndk { debugSymbolLevel = "FULL" } }` is set
+(see `app/build.gradle.kts`). After upload, Play Console should stop warning about missing native symbols.
+
+**App Bundle (recommended for Play):**
+
+```powershell
+.\gradlew :app:bundleProdRelease
+```
+
+Output: `app\build\outputs\bundle\prodRelease\app-prod-release.aab`
+
+**Kotlin/Java crash deobfuscation (separate from native symbols):** upload R8 mapping for each release:
+
+`app\build\outputs\mapping\prodRelease\mapping.txt`
+
+In Play Console: *Release → App bundle explorer → [version] → Downloads → Upload re-mapping file* (or it may
+auto-ingest from the bundle metadata depending on your Play setup).
+
 ## Option B — No keystore (internal / CI quick install)
 
 Leave the `FASH_*` entries unset. The project **signs release with the debug key** automatically — you get a **signed** APK, not `unsigned`, but it’s still the **debug certificate** (don’t ship to Play as production).
