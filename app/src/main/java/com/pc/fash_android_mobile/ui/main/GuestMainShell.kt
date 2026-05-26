@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.ui.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -86,7 +87,7 @@ fun GuestMainShell(
 
     LaunchedEffect(Unit) {
         fashApp.isGuestBrowseActive = true
-        homeViewModel.loadFeed()
+        homeViewModel.onGuestBrowseEntered()
         exploreViewModel.refresh()
         promoSlidesViewModel.refresh()
     }
@@ -347,6 +348,35 @@ fun GuestMainShell(
                     onExitGuestToLogin()
                 },
             )
+        }
+
+        val hasGuestOverlayBack = remember(
+            selectedListingId,
+            sellerShopUsername,
+            homeEditorialSlug,
+            showEditorialListScreen,
+            uxSurveyKey,
+            showFeaturedSellersAll,
+        ) {
+            selectedListingId != null ||
+                sellerShopUsername != null ||
+                homeEditorialSlug != null ||
+                showEditorialListScreen ||
+                uxSurveyKey != null ||
+                showFeaturedSellersAll
+        }
+        BackHandler(enabled = hasGuestOverlayBack) {
+            when {
+                uxSurveyKey != null -> uxSurveyKey = null
+                homeEditorialSlug != null -> homeEditorialSlug = null
+                showEditorialListScreen -> showEditorialListScreen = false
+                showFeaturedSellersAll && sellerShopUsername == null -> showFeaturedSellersAll = false
+                sellerShopUsername != null -> sellerShopUsername = null
+                selectedListingId != null -> {
+                    productDetailViewModel.clearCachesForSignedOutUser()
+                    selectedListingId = null
+                }
+            }
         }
     }
 }

@@ -137,7 +137,7 @@ class AuthRepository(
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
+                throw authHttpException(response, body)
             }
         }
     }
@@ -152,7 +152,7 @@ class AuthRepository(
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
+                throw authHttpException(response, body)
             }
         }
     }
@@ -168,10 +168,19 @@ class AuthRepository(
         return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw AuthHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
+                throw authHttpException(response, body)
             }
             body
         }
+    }
+
+    private fun authHttpException(response: okhttp3.Response, body: String): AuthHttpException {
+        val parsed = CoreServiceErrors.parse(
+            httpCode = response.code,
+            body = body,
+            retryAfterHeader = response.header("Retry-After"),
+        )
+        return AuthHttpException(parsed.httpCode, parsed.message, parsed)
     }
 
     private fun logRefreshTokenResponseSuccess(rawBody: String) {

@@ -9,9 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import com.pc.fash_android_mobile.data.locale.AppLocale
 
 /**
@@ -40,21 +42,26 @@ fun ProvideAppLocale(content: @Composable () -> Unit) {
         baseContext.createConfigurationContext(config)
     }
     val localizedConfiguration = localizedContext.resources.configuration
-    if (activity != null) {
-        CompositionLocalProvider(
-            LocalActivityResultRegistryOwner provides activity,
-            LocalOnBackPressedDispatcherOwner provides activity,
-            LocalContext provides localizedContext,
-            LocalConfiguration provides localizedConfiguration,
-        ) {
-            content()
-        }
-    } else {
-        CompositionLocalProvider(
-            LocalContext provides localizedContext,
-            LocalConfiguration provides localizedConfiguration,
-        ) {
-            content()
+    val localizedResources = localizedContext.resources
+    key(tag, rev) {
+        if (activity != null) {
+            CompositionLocalProvider(
+                LocalActivityResultRegistryOwner provides activity,
+                LocalOnBackPressedDispatcherOwner provides activity,
+                LocalContext provides localizedContext,
+                LocalConfiguration provides localizedConfiguration,
+                LocalResources provides localizedResources,
+            ) {
+                content()
+            }
+        } else {
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalConfiguration provides localizedConfiguration,
+                LocalResources provides localizedResources,
+            ) {
+                content()
+            }
         }
     }
 }

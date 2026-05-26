@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +42,8 @@ import com.pc.fash_android_mobile.ui.theme.fashReadableOn
 @Composable
 fun LoginLanguageToggle(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val isEnglish = AppLocale.currentTag(context) == AppLocale.TAG_EN
+    val localeRev by AppLocale.localeRevisionFlow.collectAsState()
+    val isEnglish = AppLocale.currentTag(context) == AppLocale.TAG_EN && localeRev >= 0
     val trackBg = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f)
     val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     val mutedLabel = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)

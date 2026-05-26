@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+private const val ProfileStaleThresholdMs = 60_000L
+
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val userRepository: UserRepository =
@@ -113,6 +115,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             scrollToGrid = scrollToGrid,
         )
         _profileTabOpenGeneration.update { it + 1L }
+        refresh(force = true)
     }
 
     fun onProfileTabSelected(tabIndex: Int) {
@@ -172,6 +175,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private var loadProfileJob: Job? = null
+    private var lastSuccessfulRefreshAtMs = 0L
 
     /** Session user id we last reconciled [profile] against; used to detect account switch without a full process restart. */
     private var lastLoadedProfileForUserId: String? = null
@@ -273,13 +277,24 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /** Pull-to-refresh — same payload as [loadProfile], with Material indicator (no full-screen blocking). */
-    fun refresh() {
+    fun refreshIfStale() {
+        val now = System.currentTimeMillis()
+        if (now - lastSuccessfulRefreshAtMs < ProfileStaleThresholdMs) return
+        refresh(force = false)
+    }
+
+    fun refresh(force: Boolean = true) {
+        if (!force) {
+            val now = System.currentTimeMillis()
+            if (now - lastSuccessfulRefreshAtMs < ProfileStaleThresholdMs) return
+        }
         loadProfileJob?.cancel()
         _isRefreshing.value = true
         loadProfileJob = viewModelScope.launch {
             try {
                 _loadError.value = false
                 fetchProfileAndListings()
+                lastSuccessfulRefreshAtMs = System.currentTimeMillis()
             } finally {
                 _isRefreshing.value = false
                 _isLoading.value = false

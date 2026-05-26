@@ -190,6 +190,13 @@ class FeedEventReporter(
         }
     }
 
+    /** Drops queued events without sending — use on sign-out before session id changes. */
+    fun clearPending() {
+        synchronized(lock) {
+            pending.clear()
+        }
+    }
+
     private fun flushLocked() {
         if (pending.isEmpty()) return
         val batch = pending.toList()

@@ -183,10 +183,40 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Coerce selection when guest mode hides personalized tabs (e.g. after sign-out). */
     fun normalizeSelectedFeedTab(isGuestBrowse: Boolean) {
-        val allowed = HomeFeedTab.tabsFor(isGuestBrowse)
+        if (isGuestBrowse) {
+            resetToHuntTodayTab(forceReload = false)
+            return
+        }
+        val allowed = HomeFeedTab.tabsFor(false)
         if (_selectedFeedTab.value !in allowed) {
+            resetToHuntTodayTab(forceReload = true)
+        }
+    }
+
+    /**
+     * Guest browse shell: public Hunt Today feed only — drop signed-in tab/personalization state.
+     * Call when entering [FashApplication.isGuestBrowseActive] (cold start guest or after logout → continue browsing).
+     */
+    fun onGuestBrowseEntered() {
+        uxTabTracker.closeActiveTab()
+        feedEventReporter.clearPending()
+        homeUxApplied = false
+        _homeUxPersonalization.value = HomeUxPersonalization()
+        invalidateAllTabFeeds()
+        _buyerStats.value = BuyerHomeStats()
+        _showSizingBanner.value = false
+        resetToHuntTodayTab(forceReload = true)
+        loadFeed()
+    }
+
+    private fun resetToHuntTodayTab(forceReload: Boolean) {
+        val switched = _selectedFeedTab.value != HomeFeedTab.HuntToday
+        if (switched) {
+            uxTabTracker.closeActiveTab()
             _selectedFeedTab.value = HomeFeedTab.HuntToday
-            ensureTabLoaded(HomeFeedTab.HuntToday)
+        }
+        if (forceReload || switched) {
+            ensureTabLoaded(HomeFeedTab.HuntToday, force = true)
         }
     }
 
@@ -666,8 +696,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCachesForSignedOutUser() {
         uxTabTracker.closeActiveTab()
         uxTabTracker.flush()
+        feedEventReporter.clearPending()
         homeUxApplied = false
         _homeUxPersonalization.value = HomeUxPersonalization()
+        _selectedFeedTab.value = HomeFeedTab.HuntToday
         invalidateAllTabFeeds()
         _likedIds.value = emptySet()
         _savedIds.value = emptySet()

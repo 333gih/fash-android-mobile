@@ -519,7 +519,7 @@ fun MainNavScreen(
                         chatViewModel.loadConversations()
                         chatViewModel.refreshUnreadCount()
                     }
-                    MainTab.Profile -> profileViewModel.refresh()
+                    MainTab.Profile -> profileViewModel.refreshIfStale()
                     null -> Unit
                 }
             }

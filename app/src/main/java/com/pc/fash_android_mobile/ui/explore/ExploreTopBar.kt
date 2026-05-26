@@ -82,7 +82,7 @@ fun ExploreTopBar(
                             style = FashBrandTypography.markBoldItalicMedium,
                         )
                         Text(
-                            text = stringResource(R.string.explore_title),
+                            text = stringResource(R.string.brand_header_suffix_explore),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -199,7 +199,7 @@ private fun ExploreSearchPlaceholder() {
             color = muted,
         )
         Text(
-            text = stringResource(R.string.explore_title),
+            text = stringResource(R.string.brand_header_suffix_explore),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
             color = muted,
         )

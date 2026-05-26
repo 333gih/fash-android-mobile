@@ -173,8 +173,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val SPLASH_DISPLAY_MS = 2_500L
+/** Cap cold-start session refresh so splash never blocks on a hung auth refresh. */
+private const val SPLASH_SESSION_VALIDATE_TIMEOUT_MS = 12_000L
+/** Cap setup-status gate so authenticated users are not stuck on [FashWaitingScreen] indefinitely. */
+private const val SETUP_GATE_TOTAL_TIMEOUT_MS = 15_000L
 
 /** Delay between access-status polls after onboard + sizing (eventual consistency on server). */
 private const val ACCESS_STATUS_POLL_MS = 350L
@@ -446,7 +451,11 @@ class MainActivity : ComponentActivity() {
                     // LaunchedEffect(splashFinished, isAuthenticated) below to incorrectly set
                     // isGuestBrowse=true and briefly show the guest shell.
                     val authenticated = if (hasSession) {
-                        withContext(Dispatchers.IO) { authManager.validateOrClearSession() }
+                        withContext(Dispatchers.IO) {
+                            withTimeoutOrNull(SPLASH_SESSION_VALIDATE_TIMEOUT_MS) {
+                                authManager.validateOrClearSession()
+                            } ?: true
+                        }
                     } else {
                         false
                     }
@@ -740,18 +749,20 @@ class MainActivity : ComponentActivity() {
                     needsOnboarding = null
                     val userRepo = (this@MainActivity.application as FashApplication).userRepository
                     val gate = withContext(Dispatchers.IO) {
-                        repeat(SETUP_STATUS_INITIAL_ATTEMPTS) { attempt ->
-                            userRepo.getUserAccessStatus().fold(
-                                onSuccess = { status ->
-                                    return@withContext status to !status.canAccessHome
-                                },
-                                onFailure = { },
-                            )
-                            if (attempt < SETUP_STATUS_INITIAL_ATTEMPTS - 1) {
-                                delay(SETUP_STATUS_INITIAL_RETRY_MS)
+                        withTimeoutOrNull(SETUP_GATE_TOTAL_TIMEOUT_MS) {
+                            repeat(SETUP_STATUS_INITIAL_ATTEMPTS) { attempt ->
+                                userRepo.getUserAccessStatus().fold(
+                                    onSuccess = { status ->
+                                        return@withTimeoutOrNull status to !status.canAccessHome
+                                    },
+                                    onFailure = { },
+                                )
+                                if (attempt < SETUP_STATUS_INITIAL_ATTEMPTS - 1) {
+                                    delay(SETUP_STATUS_INITIAL_RETRY_MS)
+                                }
                             }
+                            null
                         }
-                        null
                     }
                     if (gate == null) {
                         setupGateFetchFailed = true
@@ -1048,6 +1059,14 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         OnboardingStep.Completed -> {
+                                            LaunchedEffect(Unit) {
+                                                needsOnboarding = withContext(Dispatchers.IO) {
+                                                    resolveNeedsOnboardingAfterProfileSubmit(
+                                                        userRepoOnboarding,
+                                                        onboardingViewModel,
+                                                    )
+                                                }
+                                            }
                                             FashWaitingScreen()
                                         }
                                     }

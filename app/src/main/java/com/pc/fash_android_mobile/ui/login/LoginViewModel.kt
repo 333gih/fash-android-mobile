@@ -11,7 +11,10 @@ import com.pc.fash_android_mobile.R
 import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
+import com.pc.fash_android_mobile.data.auth.AuthHttpException
 import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
+import com.pc.fash_android_mobile.data.recommendation.UxPersonalizationLocalStore
+import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -160,10 +163,7 @@ class LoginViewModel(
                     resetAfterVerified()
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
-                        e.message?.takeIf { it.isNotBlank() }
-                            ?: app.getString(R.string.login_password_failed),
-                    )
+                    _events.tryEmit(authFailureMessage(app, e, otpContext = false, fallback = R.string.login_password_failed))
                 },
             )
         }
@@ -197,10 +197,7 @@ class LoginViewModel(
                     restartResendCooldown()
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
-                        e.message?.takeIf { it.isNotBlank() }
-                            ?: app.getString(R.string.login_otp_failed),
-                    )
+                    handleOtpRequestFailure(app, e)
                 },
             )
         }
@@ -228,10 +225,7 @@ class LoginViewModel(
                     resetAfterVerified()
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
-                        e.message?.takeIf { it.isNotBlank() }
-                            ?: app.getString(R.string.otp_verify_failed),
-                    )
+                    _events.tryEmit(authFailureMessage(app, e, otpContext = true, fallback = R.string.otp_verify_failed))
                 },
             )
         }
@@ -276,10 +270,7 @@ class LoginViewModel(
                     resetAfterVerified()
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
-                        e.message?.takeIf { it.isNotBlank() }
-                            ?: app.getString(R.string.login_facebook_error),
-                    )
+                    _events.tryEmit(authFailureMessage(app, e, otpContext = false, fallback = R.string.login_facebook_error))
                 },
             )
         }
@@ -324,10 +315,7 @@ class LoginViewModel(
                     resetAfterVerified()
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
-                        e.message?.takeIf { it.isNotBlank() }
-                            ?: app.getString(R.string.login_google_error),
-                    )
+                    _events.tryEmit(authFailureMessage(app, e, otpContext = false, fallback = R.string.login_google_error))
                 },
             )
         }
@@ -357,8 +345,14 @@ class LoginViewModel(
         return when (status) {
             GoogleSignInStatusCodes.NETWORK_ERROR ->
                 app.getString(R.string.login_google_network_error)
-            GoogleSignInStatusCodes.DEVELOPER_ERROR ->
-                app.getString(R.string.login_google_developer_error)
+            GoogleSignInStatusCodes.DEVELOPER_ERROR -> {
+                val base = app.getString(R.string.login_google_developer_error)
+                if (BuildConfig.DEBUG) {
+                    "$base (${BuildConfig.APPLICATION_ID}, ${BuildConfig.ENVIRONMENT_NAME}, ${BuildConfig.BUILD_TYPE})"
+                } else {
+                    base
+                }
+            }
             else -> app.getString(R.string.login_google_error_code, status, tech)
         }
     }
@@ -376,12 +370,14 @@ class LoginViewModel(
             authManager.onSessionCleared()
             return
         }
+        val signedOutUserId = session.userId
         viewModelScope.launch {
             _isLoggingOut.value = true
             val result = withContext(Dispatchers.IO) {
                 authManager.logout(session.accessToken)
             }
             withContext(Dispatchers.IO) {
+                UxPersonalizationLocalStore.clearForUser(app.applicationContext, signedOutUserId)
                 clearCachedSocialSignInForLogout(app.applicationContext)
             }
             _isLoggingOut.value = false
@@ -405,12 +401,14 @@ class LoginViewModel(
             authManager.onSessionCleared()
             return
         }
+        val signedOutUserId = session.userId
         viewModelScope.launch {
             _isLoggingOut.value = true
             val result = withContext(Dispatchers.IO) {
                 authManager.logoutAll(session.accessToken)
             }
             withContext(Dispatchers.IO) {
+                UxPersonalizationLocalStore.clearForUser(app.applicationContext, signedOutUserId)
                 clearCachedSocialSignInForLogout(app.applicationContext)
             }
             _isLoggingOut.value = false
@@ -425,6 +423,39 @@ class LoginViewModel(
                 },
             )
         }
+    }
+
+    private fun handleOtpRequestFailure(app: Application, e: Throwable) {
+        val authEx = e as? AuthHttpException
+        if (authEx?.isRateLimited == true) {
+            authEx.retryAfterSeconds?.takeIf { it > 0 }?.let { startResendCooldown(it) }
+        }
+        _events.tryEmit(authFailureMessage(app, e, otpContext = true, fallback = R.string.login_otp_failed))
+    }
+
+    private fun startResendCooldown(seconds: Int) {
+        resendCooldownJob?.cancel()
+        _resendCooldownSec.value = seconds.coerceAtLeast(1)
+        resendCooldownJob = viewModelScope.launch {
+            while (_resendCooldownSec.value > 0) {
+                delay(1_000)
+                _resendCooldownSec.update { (it - 1).coerceAtLeast(0) }
+            }
+        }
+    }
+
+    private fun authFailureMessage(
+        app: Application,
+        e: Throwable,
+        otpContext: Boolean,
+        fallback: Int,
+    ): String {
+        val authEx = e as? AuthHttpException
+        val serviceError = authEx?.serviceError
+        if (serviceError != null && serviceError.isRateLimited) {
+            return CoreServiceErrors.localizedMessage(app, serviceError, otpContext)
+        }
+        return e.message?.takeIf { it.isNotBlank() } ?: app.getString(fallback)
     }
 
     companion object {
