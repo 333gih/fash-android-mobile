@@ -36,6 +36,7 @@ import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
 import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
+import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -212,6 +213,10 @@ class FashApplication : Application(), ImageLoaderFactory {
     @Volatile
     var isGuestBrowseActive: Boolean = false
 
+    /** Conversation id while [ChatDetailScreen] is composed — suppresses duplicate in-app chat toasts. */
+    @Volatile
+    var activeChatConversationId: String? = null
+
     val publicBrowseHttpClient: OkHttpClient? by lazy {
         if (PublicBrowseHttp.isConfigured()) PublicBrowseHttp.createClient() else null
     }
@@ -228,6 +233,10 @@ class FashApplication : Application(), ImageLoaderFactory {
         data: Map<String, String>?,
         userNotificationId: String?,
     ) {
+        if (ChatInAppNotificationPolicy.shouldSuppressInApp(data, activeChatConversationId)) {
+            requestInboxUnreadRefreshDebounced()
+            return
+        }
         applicationScope.launch {
             _inAppNotification.value = FashInAppNotificationSession(
                 title = title.trim(),

@@ -112,6 +112,8 @@
     <string name="login_google_error">Đăng nhập Google không thành công.</string>
     <string name="login_google_error_code">Đăng nhập Google thất bại (mã %1$d — %2$s).</string>
     <string name="login_google_network_error">Không kết nối được máy chủ Google (mạng hoặc DNS). Kiểm tra Internet, tắt VPN hoặc DNS riêng (Private DNS), thử Wi‑Fi khác hoặc mạng dữ liệu.</string>
+    <string name="login_google_play_services_error">Google Play Services chưa sẵn sàng. Cập nhật hoặc cài đặt Google Play Services rồi thử lại.</string>
+    <string name="login_google_play_services_error_detail">Google Play Services chưa sẵn sàng: %1$s</string>
     <string name="login_google_developer_error">Cấu hình đăng nhập Google chưa đúng: kiểm tra GOOGLE_WEB_CLIENT_ID (OAuth Web), Android OAuth client (đúng package và SHA‑1 debug/release) trên Google Cloud Console.</string>
     <string name="login_google_not_configured">Thêm GOOGLE_WEB_CLIENT_ID (OAuth Web client) vào env — và Android client + SHA-1 trên Google Cloud.</string>
     <string name="login_social_signing_in">Đang đăng nhập…</string>
@@ -1322,6 +1324,7 @@
     <string name="chat_meeting_withdraw">Thu hồi đề xuất</string>
     <string name="chat_meeting_status_pending">Chờ xác nhận</string>
     <string name="chat_meeting_status_confirmed">Đã xác nhận</string>
+    <string name="chat_new_messages_below">%1$d tin nhắn mới</string>
     <string name="chat_meeting_status_cancelled">Đã hủy</string>
     <string name="chat_meeting_maps_url_invalid">Dán liên kết Google Maps hợp lệ (ví dụ maps.app.goo.gl, google.com/maps).</string>
     <string name="chat_meeting_record_deal">Ghi nhận giao dịch</string>
@@ -1999,4 +2002,20 @@
 
     <!-- Phase 1: Explore interest chips -->
     <string name="explore_interest_chips_label">Lọc nhanh theo style</string>
+
+    <!-- sync_from_android — shared vi -->
+    <string name="error_generic">Đã xảy ra lỗi. Vui lòng thử lại.</string>
+    <string name="error_http_bad_request">Yêu cầu không hợp lệ</string>
+    <string name="error_http_conflict">Không khả dụng</string>
+    <string name="error_http_forbidden">Không có quyền truy cập</string>
+    <string name="error_http_not_found">Không tìm thấy</string>
+    <string name="error_http_server">Lỗi máy chủ</string>
+    <string name="error_http_status">Lỗi HTTP %1$s</string>
+    <string name="error_http_unauthorized">Cần đăng nhập</string>
+    <string name="error_network_unavailable">Không có kết nối mạng. Kiểm tra Internet và thử lại.</string>
+    <string name="home_delivering_coming_soon_body">Tính năng giao hàng với thanh toán trong app sắp ra mắt. Bạn sẽ quản lý giao hàng tại đây khi tính năng mở.</string>
+    <string name="home_delivering_coming_soon_title">Sắp ra mắt</string>
+    <string name="home_delivering_list_intro">Đơn hàng đang giao tới người mua. Theo dõi trạng thái và cập nhật thông tin giao hàng tại đây.</string>
+    <string name="home_delivering_screen_title">Đang giao</string>
+    <string name="session_expired_message">Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.</string>
 </resources>

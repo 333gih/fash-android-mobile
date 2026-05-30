@@ -1501,7 +1501,7 @@ fun MeetingIdentityReverifyDialog(
     )
 }
 
-private fun isWithinMeetingActionWindow(scheduledAtIso: String, windowMinutes: Long = 30): Boolean {
+internal fun isWithinMeetingActionWindow(scheduledAtIso: String, windowMinutes: Long = 30): Boolean {
     if (scheduledAtIso.isBlank()) return false
     return runCatching {
         val instant = Instant.parse(scheduledAtIso.replace(" ", "T"))
@@ -1560,7 +1560,7 @@ private fun meetingStatusChipOnColor(status: String): Color = when (status.lower
     else -> Color(0xFF856404)
 }
 
-private fun formatMeetingWhen(iso: String): String {
+internal fun formatMeetingWhen(iso: String): String {
     if (iso.isBlank()) return ""
     return runCatching {
         val instant = Instant.parse(iso.replace(" ", "T"))

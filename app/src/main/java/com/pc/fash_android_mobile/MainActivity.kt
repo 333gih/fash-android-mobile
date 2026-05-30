@@ -80,6 +80,7 @@ import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
 import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 import com.pc.fash_android_mobile.ui.chat.ChatDetailScreen
 import com.pc.fash_android_mobile.ui.chat.ChatDetailViewModel
 import com.pc.fash_android_mobile.ui.chat.ChatShipFlowArgs
@@ -713,6 +714,14 @@ class MainActivity : ComponentActivity() {
                                 val isAccountSwitchHint =
                                     AccountSwitchDeepLinks.parseFromFcmData(pushData) != null
                                 if (isAccountSwitchHint) return@collect
+                                if (ChatInAppNotificationPolicy.shouldSuppressInApp(
+                                        event.data,
+                                        selectedConversationId,
+                                    )
+                                ) {
+                                    fashApp.requestInboxUnreadRefreshDebounced()
+                                    return@collect
+                                }
                                 if (isAppPromoPushData(pushData)) {
                                     parseAppPromoFromPushData(
                                         data = pushData,
@@ -2345,78 +2354,6 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
-                                        val inApp by fashApp.inAppNotification.collectAsState()
-                                        LaunchedEffect(inApp?.shownAt) {
-                                            val token = inApp?.shownAt ?: return@LaunchedEffect
-                                            delay(4500)
-                                            if (fashApp.inAppNotification.value?.shownAt == token) {
-                                                fashApp.dismissInAppNotification()
-                                            }
-                                        }
-                                        val showInAppBanner = inApp != null &&
-                                            !profileSetupBlocksShellChrome &&
-                                            (inApp?.title?.isNotBlank() == true || inApp?.body?.isNotBlank() == true)
-                                        FashInAppNotificationBanner(
-                                            visible = showInAppBanner,
-                                            title = inApp?.title.orEmpty(),
-                                            body = inApp?.body.orEmpty(),
-                                            modifier = Modifier
-                                                .align(Alignment.TopCenter)
-                                                .zIndex(24f),
-                                            onClick = {
-                                                val s = inApp ?: return@FashInAppNotificationBanner
-                                                val data = s.data
-                                                val deepNid = data?.entries
-                                                    ?.find { it.key.equals("deep_link", ignoreCase = true) }
-                                                    ?.value
-                                                    ?.let { InboxDeepLinks.parseNotificationIdFromDeepLinkString(it) }
-                                                val nid = s.userNotificationId?.takeIf { it.isNotBlank() }
-                                                    ?: data?.get("user_notification_id")?.trim()?.takeIf { it.isNotEmpty() }
-                                                    ?: deepNid
-                                                if (!nid.isNullOrBlank()) {
-                                                    fashApp.pendingInboxNotificationId.value = nid
-                                                    fashApp.requestOpenNotificationInbox()
-                                                    fashApp.dismissInAppNotification()
-                                                    return@FashInAppNotificationBanner
-                                                }
-                                                val navEarly = data?.entries?.find { e ->
-                                                    e.key.equals("nav_target", ignoreCase = true) ||
-                                                        e.key.equals("navTarget", ignoreCase = true)
-                                                }?.value?.trim()?.lowercase()
-                                                val ptypeEarly = data?.get("type")?.trim()?.lowercase().orEmpty()
-                                                if (navEarly == "in_app_invite_friends" ||
-                                                    ptypeEarly.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
-                                                ) {
-                                                    showInviteFriendsScreen = true
-                                                    fashApp.dismissInAppNotification()
-                                                    return@FashInAppNotificationBanner
-                                                }
-                                                val conv = data?.entries?.find { e ->
-                                                    e.key.equals("conversation_id", ignoreCase = true) ||
-                                                        e.key.equals("conversationId", ignoreCase = true)
-                                                }?.value?.trim()?.takeIf { it.isNotEmpty() }
-                                                val nav = data?.entries?.find { e ->
-                                                    e.key.equals("nav_target", ignoreCase = true) ||
-                                                        e.key.equals("navTarget", ignoreCase = true)
-                                                }?.value?.trim()?.lowercase()
-                                                val ptype = data?.get("type")?.trim()?.lowercase().orEmpty()
-                                                val isChat = nav == "chat" ||
-                                                    ptype.contains("chat")
-                                                if (!conv.isNullOrBlank() && isChat) {
-                                                    selectedListingId = null
-                                                    selectedOrderId = null
-                                                    editListingId = null
-                                                    chatOrderDetailOverlayId = null
-                                                    selectedConversationId = conv
-                                                    selectedTab = MainTab.Chat.ordinal
-                                                    fashApp.dismissInAppNotification()
-                                                    return@FashInAppNotificationBanner
-                                                }
-                                                fashApp.requestOpenNotificationInbox()
-                                                fashApp.dismissInAppNotification()
-                                            },
-                                            onDismissClick = { fashApp.dismissInAppNotification() },
-                                        )
                                             }
                                         }
                                     }
@@ -2660,6 +2597,80 @@ class MainActivity : ComponentActivity() {
                             fashApp.clearAccountSwitchPrompt()
                         }
                     }
+                }
+                val inAppNotificationShell by fashApp.inAppNotification.collectAsState()
+                LaunchedEffect(inAppNotificationShell?.shownAt) {
+                    val token = inAppNotificationShell?.shownAt ?: return@LaunchedEffect
+                    delay(4500)
+                    if (fashApp.inAppNotification.value?.shownAt == token) {
+                        fashApp.dismissInAppNotification()
+                    }
+                }
+                val showInAppNotificationShell = splashFinished &&
+                    isAuthenticated &&
+                    needsOnboarding == false &&
+                    !profileSetupBlocksShellChrome &&
+                    inAppNotificationShell?.let { s ->
+                        s.title.isNotBlank() || s.body.isNotBlank()
+                    } == true
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(200f),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    FashInAppNotificationBanner(
+                        visible = showInAppNotificationShell,
+                        title = inAppNotificationShell?.title.orEmpty(),
+                        body = inAppNotificationShell?.body.orEmpty(),
+                        onClick = {
+                            val s = inAppNotificationShell ?: return@FashInAppNotificationBanner
+                            val data = s.data
+                            val deepNid = data?.entries
+                                ?.find { it.key.equals("deep_link", ignoreCase = true) }
+                                ?.value
+                                ?.let { InboxDeepLinks.parseNotificationIdFromDeepLinkString(it) }
+                            val nid = s.userNotificationId?.takeIf { it.isNotBlank() }
+                                ?: data?.get("user_notification_id")?.trim()?.takeIf { it.isNotEmpty() }
+                                ?: deepNid
+                            if (!nid.isNullOrBlank()) {
+                                fashApp.pendingInboxNotificationId.value = nid
+                                fashApp.requestOpenNotificationInbox()
+                                fashApp.dismissInAppNotification()
+                                return@FashInAppNotificationBanner
+                            }
+                            val navEarly = data?.entries?.find { e ->
+                                e.key.equals("nav_target", ignoreCase = true) ||
+                                    e.key.equals("navTarget", ignoreCase = true)
+                            }?.value?.trim()?.lowercase()
+                            val ptypeEarly = data?.get("type")?.trim()?.lowercase().orEmpty()
+                            if (navEarly == "in_app_invite_friends" ||
+                                ptypeEarly.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
+                            ) {
+                                fashApp.pendingOpenInviteFriends.value = true
+                                fashApp.dismissInAppNotification()
+                                return@FashInAppNotificationBanner
+                            }
+                            val conv = data?.entries?.find { e ->
+                                e.key.equals("conversation_id", ignoreCase = true) ||
+                                    e.key.equals("conversationId", ignoreCase = true)
+                            }?.value?.trim()?.takeIf { it.isNotEmpty() }
+                            val nav = data?.entries?.find { e ->
+                                e.key.equals("nav_target", ignoreCase = true) ||
+                                    e.key.equals("navTarget", ignoreCase = true)
+                            }?.value?.trim()?.lowercase()
+                            val ptype = data?.get("type")?.trim()?.lowercase().orEmpty()
+                            val isChat = nav == "chat" || ptype.contains("chat")
+                            if (!conv.isNullOrBlank() && isChat) {
+                                selectedConversationId = conv
+                                fashApp.dismissInAppNotification()
+                                return@FashInAppNotificationBanner
+                            }
+                            fashApp.requestOpenNotificationInbox()
+                            fashApp.dismissInAppNotification()
+                        },
+                        onDismissClick = { fashApp.dismissInAppNotification() },
+                    )
                 }
                 FashGlobalDialogHost(
                     message = if (profileSetupBlocksShellChrome) null else dialogMessage,

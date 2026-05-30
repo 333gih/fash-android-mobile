@@ -223,6 +223,14 @@ class ChatDetailViewModel(
     private val _isOtherTyping = MutableStateFlow(false)
     val isOtherTyping: StateFlow<Boolean> = _isOtherTyping.asStateFlow()
 
+    /** User is pinned to newest messages (reverse list index 0). */
+    private val _isFollowingBottom = MutableStateFlow(true)
+    val isFollowingBottom: StateFlow<Boolean> = _isFollowingBottom.asStateFlow()
+
+    /** Count of new messages received while scrolled up in this thread. */
+    private val _newMessagesBelow = MutableStateFlow(0)
+    val newMessagesBelow: StateFlow<Int> = _newMessagesBelow.asStateFlow()
+
     // ── WebSocket + fallback polling ──────────────────────────────────────────
 
     private var wsJob: Job? = null
@@ -510,11 +518,10 @@ class ChatDetailViewModel(
             val msgDeferred = async(Dispatchers.IO) { chatRepository.getMessages(conversationId) }
             detailDeferred.await().getOrNull()?.let { applyConversationDetail(it) }
             msgDeferred.await().getOrNull()?.let { newMsgs ->
+                val priorCount = _messages.value.size
+                val priorLastId = _messages.value.lastOrNull()?.messageId
                 val merged = mergeServerWithPendingLocal(newMsgs, _messages.value)
-                if (merged != _messages.value) {
-                    _messages.value = merged
-                    syncDetailClosedStateFromMessages(merged)
-                }
+                applyIncomingMessages(merged, priorCount, priorLastId, conversationId)
                 if (_messages.value.isNotEmpty()) {
                     syncPendingOfferFromMessages(_messages.value, conversationId)
                 }
@@ -607,6 +614,50 @@ class ChatDetailViewModel(
         return "₫${formatter.format(amount)}"
     }
 
+    fun setFollowingBottom(following: Boolean, conversationId: String) {
+        val wasFollowing = _isFollowingBottom.value
+        _isFollowingBottom.value = following
+        if (following) {
+            _newMessagesBelow.value = 0
+            if (!wasFollowing) {
+                viewModelScope.launch { markConversationReadAndSyncInbox(conversationId) }
+            }
+        }
+    }
+
+    fun scrollToLatestMessages() {
+        _newMessagesBelow.value = 0
+        _isFollowingBottom.value = true
+    }
+
+    private suspend fun markConversationReadAndSyncInbox(conversationId: String) {
+        withContext(Dispatchers.IO) {
+            chatRepository.markConversationRead(conversationId).onSuccess {
+                ChatUnreadRefreshHub.notifyMarkedRead()
+                InboxNotificationSync.markChatNotificationsRead(conversationId, userRepository)
+            }
+        }
+    }
+
+    private fun applyIncomingMessages(
+        merged: List<ChatMessage>,
+        priorCount: Int,
+        priorLastId: String?,
+        conversationId: String,
+    ) {
+        if (merged == _messages.value) return
+        _messages.value = merged
+        syncDetailClosedStateFromMessages(merged)
+        val gained = maxOf(0, merged.size - priorCount)
+        val lastChanged = merged.lastOrNull()?.messageId != priorLastId
+        if (gained <= 0 && !lastChanged) return
+        if (_isFollowingBottom.value) {
+            viewModelScope.launch { markConversationReadAndSyncInbox(conversationId) }
+        } else if (gained > 0) {
+            _newMessagesBelow.value += gained
+        }
+    }
+
     // ── Entry points ──────────────────────────────────────────────────────
 
     /**
@@ -695,6 +746,7 @@ class ChatDetailViewModel(
                 withContext(Dispatchers.IO) {
                     chatRepository.markConversationRead(item.conversationId).onSuccess {
                         ChatUnreadRefreshHub.notifyMarkedRead()
+                        InboxNotificationSync.markChatNotificationsRead(item.conversationId, userRepository)
                     }
                 }
             }
@@ -766,6 +818,8 @@ class ChatDetailViewModel(
         _showOfferDialog.value = false
         _acceptedOfferForCheckout.value = null
         _isOtherTyping.value = false
+        _isFollowingBottom.value = true
+        _newMessagesBelow.value = 0
     }
 
     /**
@@ -793,6 +847,8 @@ class ChatDetailViewModel(
             _loadError.value = null
             _detail.value = null
             _messages.value = emptyList()
+            _isFollowingBottom.value = true
+            _newMessagesBelow.value = 0
             _orderId.value = null
             _orderStatus.value = null
             _orderMeetupDeadlineAt.value = null
@@ -824,6 +880,7 @@ class ChatDetailViewModel(
                     withContext(Dispatchers.IO) {
                         chatRepository.markConversationRead(conversationId).onSuccess {
                             ChatUnreadRefreshHub.notifyMarkedRead()
+                            InboxNotificationSync.markChatNotificationsRead(conversationId, userRepository)
                         }
                     }
                     _isLoading.value = false

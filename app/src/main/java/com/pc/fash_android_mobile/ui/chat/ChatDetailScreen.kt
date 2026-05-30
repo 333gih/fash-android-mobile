@@ -56,6 +56,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
@@ -98,12 +99,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
@@ -252,6 +256,7 @@ fun ChatDetailScreen(
     val pendingDealReviewDealId by viewModel.pendingDealReviewDealId.collectAsState()
     val meetingBrowseProvinceId by viewModel.meetingBrowseProvinceId.collectAsState()
     val meetingBrowseDistrictId by viewModel.meetingBrowseDistrictId.collectAsState()
+    val newMessagesBelow by viewModel.newMessagesBelow.collectAsState()
 
     /** Escrow order linked to this thread — prefer VM state, fall back to [ConversationDetail.orderId] from API. */
     val conversationOrderId = orderId?.trim()?.takeIf { it.isNotEmpty() }
@@ -416,10 +421,18 @@ fun ChatDetailScreen(
             else -> {
                 val d = detail!!
                 var showMeetingSheet by remember { mutableStateOf(false) }
+                val fashApp = remember(context) { context.applicationContext as FashApplication }
                 LaunchedEffect(conversationId) {
                     viewModel.loadMeetingBrowseLocation()
                 }
-                val fashApp = remember(context) { context.applicationContext as FashApplication }
+                DisposableEffect(conversationId) {
+                    fashApp.activeChatConversationId = conversationId.trim().takeIf { it.isNotEmpty() }
+                    onDispose {
+                        if (fashApp.activeChatConversationId.equals(conversationId, ignoreCase = true)) {
+                            fashApp.activeChatConversationId = null
+                        }
+                    }
+                }
                 var showFulfillmentChoiceSheet by remember { mutableStateOf(false) }
                 val maxOffers = BusinessFlowConfig.maxOffersPerConversation
                 val orderStatusNorm = orderStatus?.trim()?.lowercase().orEmpty()
@@ -569,6 +582,21 @@ fun ChatDetailScreen(
                         )
                     }
 
+                    val stickyMeetup = remember(sortedMessages) {
+                        sortedMessages.mapNotNull { it.meetingAppointment }
+                            .lastOrNull { it.status.equals("confirmed", ignoreCase = true) }
+                    }
+                    stickyMeetup?.let { appt ->
+                        MeetupStickyActionBanner(
+                            appointment = appt,
+                            isBuyer = d.isBuyer,
+                            mutationInFlight = meetingMutationInFlight,
+                            onOnMyWay = { viewModel.onMyWayMeeting(appt.id) },
+                            onCheckIn = { viewModel.checkInMeeting(appt.id) },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
+                    }
+
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
 
                     // Product reference card
@@ -626,6 +654,16 @@ fun ChatDetailScreen(
 
                     // Messages
                     val listState = rememberLazyListState()
+                    val messageScope = rememberCoroutineScope()
+                    val isAtBottom by remember {
+                        derivedStateOf {
+                            listState.firstVisibleItemIndex == 0 &&
+                                listState.firstVisibleItemScrollOffset <= 48
+                        }
+                    }
+                    LaunchedEffect(isAtBottom, conversationId) {
+                        viewModel.setFollowingBottom(isAtBottom, conversationId)
+                    }
 
                     // Only snap to newest when the user is already at the bottom (index 0 in reverse list).
                     // Scrolling on every list update was fighting the user when reading older messages.
@@ -913,6 +951,19 @@ fun ChatDetailScreen(
                                     }
                                 }
                             }
+                        }
+                        if (newMessagesBelow > 0) {
+                            NewMessagesBelowChip(
+                                count = newMessagesBelow,
+                                onClick = {
+                                    viewModel.scrollToLatestMessages()
+                                    viewModel.setFollowingBottom(true, conversationId)
+                                    messageScope.launch { listState.animateScrollToItem(0) }
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 12.dp),
+                            )
                         }
                     }
 
@@ -3611,4 +3662,96 @@ private fun ReportConversationDialog(
             }
         },
     )
+}
+
+@Composable
+private fun MeetupStickyActionBanner(
+    appointment: com.pc.fash_android_mobile.data.chat.MeetingAppointmentPayload,
+    isBuyer: Boolean,
+    mutationInFlight: Boolean,
+    onOnMyWay: () -> Unit,
+    onCheckIn: () -> Unit,
+) {
+    val myOnMyWayAt = if (isBuyer) appointment.buyerOnMyWayAt else appointment.sellerOnMyWayAt
+    val myCheckInAt = if (isBuyer) appointment.buyerCheckInAt else appointment.sellerCheckInAt
+    val showOnMyWay = appointment.status.equals("confirmed", ignoreCase = true) &&
+        myOnMyWayAt.isBlank() &&
+        myCheckInAt.isBlank()
+    val showCheckIn = appointment.status.equals("confirmed", ignoreCase = true) &&
+        myOnMyWayAt.isNotBlank() &&
+        myCheckInAt.isBlank() &&
+        isWithinMeetingActionWindow(appointment.scheduledAt)
+    if (!showOnMyWay && !showCheckIn) return
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Event,
+            contentDescription = null,
+            tint = FashColors.Primary,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.chat_meeting_status_confirmed),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            )
+            if (appointment.scheduledAt.isNotBlank()) {
+                Text(
+                    text = formatMeetingWhen(appointment.scheduledAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (showCheckIn) {
+            Button(
+                onClick = onCheckIn,
+                enabled = !mutationInFlight,
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+            ) {
+                Text(stringResource(R.string.chat_meeting_check_in_cta))
+            }
+        } else if (showOnMyWay) {
+            Button(
+                onClick = onOnMyWay,
+                enabled = !mutationInFlight,
+                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+            ) {
+                Text(stringResource(R.string.meeting_on_my_way))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewMessagesBelowChip(
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (count <= 0) return
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = stringResource(R.string.chat_new_messages_below, count),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+        )
+    }
 }
