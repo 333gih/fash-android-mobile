@@ -61,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.data.listing.ListingImagePixelSize
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.address.ShippingAddressSelectableCard
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
@@ -242,7 +243,13 @@ fun CreateListingPostStep7(
         val key = pickStepKey
         pickStepKey = null
         if (uri != null && key != null) {
-            viewModel.setListingPhotoForStep(key, uri.toString())
+            val size = ListingImagePixelSize.fromUri(context, uri)
+            viewModel.setListingPhotoForStep(
+                stepKey = key,
+                uriString = uri.toString(),
+                width = size?.first,
+                height = size?.second,
+            )
         }
     }
 

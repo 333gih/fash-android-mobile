@@ -438,7 +438,7 @@ class OrderDetailViewModel(application: Application) : AndroidViewModel(applicat
         }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                listingRepository.uploadListingImage(bytes, fileName, mimeType)
+                listingRepository.uploadListingImage(bytes, fileName, mimeType).map { it.url }
             }
             onResult(result)
         }

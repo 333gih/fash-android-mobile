@@ -268,14 +268,14 @@ class ListingRepository(
         Unit
     }
 
-    fun uploadListingImage(file: File): Result<String> =
+    fun uploadListingImage(file: File): Result<ListingImageUploadResult> =
         uploadListingImage(file.readBytes(), file.name, "image/jpeg")
 
     fun uploadListingImage(
         bytes: ByteArray,
         filename: String = "image.jpg",
         mimeType: String = "image/jpeg",
-    ): Result<String> = runCatching {
+    ): Result<ListingImageUploadResult> = runCatching {
         val url = AppEnvironment.apiPath("api/v1/listings/images")
         val safeMime = mimeType.takeIf { it.contains('/') && !it.contains('*') } ?: "image/jpeg"
         val body = MultipartBody.Builder()
@@ -299,7 +299,11 @@ class ListingRepository(
             }
             b
         }
-        JSONObject(bodyStr).optString("image_url", "").ifBlank { error("No image_url in response") }
+        val root = JSONObject(bodyStr)
+        val url = root.optString("image_url", "").ifBlank { error("No image_url in response") }
+        val width = root.optInt("width", 0).takeIf { it > 0 }
+        val height = root.optInt("height", 0).takeIf { it > 0 }
+        ListingImageUploadResult(url = url, width = width, height = height)
     }
 
     fun createListing(request: CreateListingRequest): Result<CreateListingResponse> = runCatching {
@@ -814,6 +818,8 @@ data class ListingImageStepPayload(
     val sortOrder: Int,
     val required: Boolean,
     val imageUrl: String,
+    val width: Int? = null,
+    val height: Int? = null,
 )
 
 /** Core `NamedRef` / `BrandRef` JSON: `{ "id", "name" }` (see listing_request.CreateListingRequest). */
@@ -833,6 +839,8 @@ private fun listingImageStepsToJsonArray(steps: List<ListingImageStepPayload>): 
         o.put("sort_order", s.sortOrder)
         o.put("required", s.required)
         o.put("image_url", s.imageUrl.trim())
+        s.width?.takeIf { it > 0 }?.let { o.put("width", it) }
+        s.height?.takeIf { it > 0 }?.let { o.put("height", it) }
         arr.put(o)
     }
     return arr

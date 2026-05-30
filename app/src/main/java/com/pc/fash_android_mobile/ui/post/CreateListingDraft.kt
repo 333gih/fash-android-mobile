@@ -33,6 +33,8 @@ data class ListingPhotoSlotDraft(
     /** Picked gallery/camera `Uri` string — cleared after successful upload when only server URL is kept. */
     val localImageUri: String? = null,
     val uploadedImageUrl: String? = null,
+    val imageWidth: Int? = null,
+    val imageHeight: Int? = null,
 )
 
 fun ListingPhotoSlotDraft.hasImageSelected(): Boolean =
@@ -117,6 +119,8 @@ fun CreateListingDraft.withListingPhotoSlotsFromCatalog(
             required = c.required,
             localImageUri = o?.localImageUri,
             uploadedImageUrl = o?.uploadedImageUrl,
+            imageWidth = o?.imageWidth,
+            imageHeight = o?.imageHeight,
         )
     }
     return copy(
@@ -386,16 +390,22 @@ fun CommonAestheticTagDto.matchesTagQuery(q: String): Boolean {
 
 /** Builds core-service `image_urls` JSON array after uploads filled [ListingPhotoSlotDraft.uploadedImageUrl]. */
 fun CreateListingDraft.buildListingImageStepPayloads(): List<ListingImageStepPayload> =
-    listingPhotoSlots.sortedBy { it.sortOrder }.map { s ->
-        ListingImageStepPayload(
-            stepKey = s.stepKey.trim(),
-            label = s.label.trim().ifBlank { s.stepKey },
-            labelVi = s.labelVi.trim().takeIf { it.isNotEmpty() },
-            sortOrder = s.sortOrder,
-            required = s.required,
-            imageUrl = s.uploadedImageUrl?.trim().orEmpty(),
-        )
-    }
+    listingPhotoSlots
+        .sortedBy { it.sortOrder }
+        .mapNotNull { s ->
+            val url = s.uploadedImageUrl?.trim().orEmpty()
+            if (url.isEmpty()) return@mapNotNull null
+            ListingImageStepPayload(
+                stepKey = s.stepKey.trim(),
+                label = s.label.trim().ifBlank { s.stepKey },
+                labelVi = s.labelVi.trim().takeIf { it.isNotEmpty() },
+                sortOrder = s.sortOrder,
+                required = s.required,
+                imageUrl = url,
+                width = s.imageWidth,
+                height = s.imageHeight,
+            )
+        }
 
 fun ProfileInfo.hasStyleReferenceForListing(): Boolean =
     aestheticTagSnapshots.isNotEmpty() ||

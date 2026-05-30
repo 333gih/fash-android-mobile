@@ -15,6 +15,7 @@ import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.common.CommonServiceRepository
 import com.pc.fash_android_mobile.data.common.CategoryTreeNode
 import com.pc.fash_android_mobile.data.common.defaultListingImageCatalogSteps
+import com.pc.fash_android_mobile.data.listing.ListingImagePixelSize
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -258,7 +259,12 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setListingPhotoForStep(stepKey: String, uriString: String?) {
+    fun setListingPhotoForStep(
+        stepKey: String,
+        uriString: String?,
+        width: Int? = null,
+        height: Int? = null,
+    ) {
         _draft.value = _draft.value.copy(
             listingPhotoSlots = _draft.value.listingPhotoSlots.map { s ->
                 if (s.stepKey != stepKey) {
@@ -267,6 +273,8 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     s.copy(
                         localImageUri = uriString?.takeIf { it.isNotBlank() },
                         uploadedImageUrl = null,
+                        imageWidth = width,
+                        imageHeight = height,
                     )
                 }
             },
@@ -336,6 +344,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                     return false
                 }
                 val (bytes, mimeType) = data
+                val measured = ListingImagePixelSize.fromBytes(bytes)
                 val ext = mimeTypeToExt(mimeType)
                 val slug = slot.stepKey.replace(Regex("[^a-zA-Z0-9_-]"), "_").take(32).ifBlank { "img" }
                 val result = withContext(Dispatchers.IO) {
@@ -349,12 +358,19 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
                         return false
                     },
                 )
+                val width = uploaded.width ?: measured?.first ?: slot.imageWidth
+                val height = uploaded.height ?: measured?.second ?: slot.imageHeight
                 _draft.value = _draft.value.copy(
                     listingPhotoSlots = _draft.value.listingPhotoSlots.map { s ->
                         if (s.stepKey != slot.stepKey) {
                             s
                         } else {
-                            s.copy(uploadedImageUrl = uploaded, localImageUri = null)
+                            s.copy(
+                                uploadedImageUrl = uploaded.url,
+                                localImageUri = null,
+                                imageWidth = width,
+                                imageHeight = height,
+                            )
                         }
                     },
                 )
