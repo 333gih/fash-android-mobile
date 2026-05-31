@@ -123,6 +123,7 @@ import com.pc.fash_android_mobile.ui.login.LoginStep
 import com.pc.fash_android_mobile.ui.login.LoginViewModel
 import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
+import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
@@ -262,6 +263,7 @@ class MainActivity : ComponentActivity() {
     private val followConnectionsViewModel: FollowConnectionsViewModel by viewModels()
     private val featuredSellersViewModel: FeaturedSellersViewModel by viewModels()
     private val changePasswordViewModel: ChangePasswordViewModel by viewModels()
+    private val notificationPreferencesViewModel: NotificationPreferencesViewModel by viewModels()
     private val notificationsViewModel: com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel by viewModels()
     private val promoSlidesViewModel: PromoSlidesViewModel by viewModels()
     private val loginHeroSlidesViewModel: LoginHeroSlidesViewModel by viewModels()
@@ -1125,6 +1127,7 @@ class MainActivity : ComponentActivity() {
                                         profileViewModel = profileViewModel,
                                         chatViewModel = chatViewModel,
                                         changePasswordViewModel = changePasswordViewModel,
+                                        notificationPreferencesViewModel = notificationPreferencesViewModel,
                                         notificationsViewModel = notificationsViewModel,
                                         productDetailViewModel = productDetailViewModel,
                                         sellerProfileViewModel = sellerProfileViewModel,
@@ -1487,6 +1490,7 @@ class MainActivity : ComponentActivity() {
                                             profileViewModel = profileViewModel,
                                             chatViewModel = chatViewModel,
                                             changePasswordViewModel = changePasswordViewModel,
+                                        notificationPreferencesViewModel = notificationPreferencesViewModel,
                                             notificationsViewModel = notificationsViewModel,
                                             pendingInboxNotificationIdToOpen = pendingInboxOpenId,
                                             onConsumePendingInboxNotificationId = {

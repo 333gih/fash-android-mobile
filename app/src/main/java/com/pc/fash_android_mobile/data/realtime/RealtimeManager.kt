@@ -203,6 +203,26 @@ class RealtimeManager(
         send(JSONObject().put("type", "ping"))
     }
 
+    /** Notifies the server the app is foreground/active (presence v2). */
+    fun sendPresenceActive() {
+        send(
+            JSONObject().apply {
+                put("type", "presence")
+                put("state", "active")
+            },
+        )
+    }
+
+    /** Notifies the server the app is backgrounded so FCM is not suppressed. */
+    fun sendPresenceBackground() {
+        send(
+            JSONObject().apply {
+                put("type", "presence")
+                put("state", "background")
+            },
+        )
+    }
+
     /** Sends `typing.start` for the given conversation. */
     fun sendTypingStart(conversationId: String) {
         val cid = normalizeConversationId(conversationId)

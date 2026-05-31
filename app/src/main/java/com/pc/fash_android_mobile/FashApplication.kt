@@ -34,6 +34,7 @@ import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.ui.UiDialogController
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.locale.PreferredLocaleSync
+import com.pc.fash_android_mobile.data.user.NotificationPreferencesRepository
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
@@ -418,7 +419,11 @@ class FashApplication : Application(), ImageLoaderFactory {
     }
 
     private val appSessionTracker: AppSessionTracker by lazy {
-        AppSessionTracker(feedEventReporter)
+        AppSessionTracker(
+            feedEventReporter = feedEventReporter,
+            onForeground = { realtimeManager.sendPresenceActive() },
+            onBackground = { realtimeManager.sendPresenceBackground() },
+        )
     }
 
     val chatRepository: ChatRepository by lazy {
@@ -460,6 +465,15 @@ class FashApplication : Application(), ImageLoaderFactory {
     /** Core `GET/POST /users/me/shipping-addresses` + set default. */
     val userShippingAddressRepository: UserShippingAddressRepository by lazy {
         UserShippingAddressRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
+
+    /** Core `GET/PUT /users/me/notification-preferences`. */
+    val notificationPreferencesRepository: NotificationPreferencesRepository by lazy {
+        NotificationPreferencesRepository(
             securedClient = authManager
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),

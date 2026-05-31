@@ -161,6 +161,19 @@
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_row_notification_settings">System notification settings</string>
     <string name="settings_row_notification_settings_sub">Enable or disable in Android settings</string>
+    <string name="settings_row_recommendation_notifications">Recommendations &amp; alerts</string>
+    <string name="settings_row_recommendation_notifications_sub">Push, email, and quiet hours</string>
+    <string name="notification_preferences_title">Notification preferences</string>
+    <string name="notification_preferences_subtitle">Manage product recommendations and do-not-disturb hours.</string>
+    <string name="notification_preferences_recommendation_push">Recommendation push</string>
+    <string name="notification_preferences_recommendation_email">Recommendation email</string>
+    <string name="notification_preferences_quiet_hours">Quiet hours</string>
+    <string name="notification_preferences_quiet_hours_hint">You won\'t receive recommendation push during this window.</string>
+    <string name="notification_preferences_quiet_hours_enabled">Enable quiet hours</string>
+    <string name="notification_preferences_quiet_hours_start">Start</string>
+    <string name="notification_preferences_quiet_hours_end">End</string>
+    <string name="notification_preferences_load_error">Could not load notification preferences.</string>
+    <string name="notification_preferences_save_error">Could not save preferences. Please try again.</string>
     <string name="settings_section_account">Account</string>
     <string name="settings_section_about">About</string>
     <string name="settings_about_version_label">Version</string>
@@ -267,6 +280,8 @@
     <string name="listing_card_photo_stack_a11y">Listing has %d photos</string>
     <string name="listing_card_a11y_seller_role">Seller</string>
     <string name="feed_load_error">Could not load feed. Try again.</string>
+    <string name="feed_loading_more">Loading more…</string>
+    <string name="profile_slow_load_hint">Loading profile, please wait a moment…</string>
     <string name="feed_empty_title">No listings yet</string>
     <string name="feed_empty_subtitle">Follow sellers or explore to discover new items.</string>
     <string name="feed_retry">Retry</string>
@@ -307,6 +322,8 @@
     <string name="home_feed_empty_title">Nothing here yet</string>
     <string name="home_feed_empty_subtitle">Follow sellers to see their new listings on Home — or open Explore to browse the full marketplace.</string>
     <string name="home_empty_cta_explore">Go to Explore</string>
+    <string name="home_tab_empty_following_title">Nothing new yet</string>
+    <string name="home_tab_empty_following_subtitle">Follow shops to see their latest listings here.</string>
     <string name="home_tab_empty_hunt_title">Nothing trending yet</string>
     <string name="home_tab_empty_hunt_subtitle">Check back soon — new listings are added all the time.</string>
     <string name="home_tab_empty_for_you_title">No picks yet</string>

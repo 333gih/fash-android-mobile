@@ -72,6 +72,8 @@ import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SettingsScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
+import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesScreen
+import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -156,6 +158,7 @@ fun MainNavScreen(
     profileViewModel: com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel,
     chatViewModel: com.pc.fash_android_mobile.ui.chat.ChatViewModel,
     changePasswordViewModel: ChangePasswordViewModel,
+    notificationPreferencesViewModel: NotificationPreferencesViewModel,
     snackbarHostState: SnackbarHostState,
     /** Total unread messages for chat tab badge ([ChatRepository.getUnreadCount]). */
     chatUnreadCount: Int = 0,
@@ -217,6 +220,7 @@ fun MainNavScreen(
     var wasNotificationOverlayVisible by remember { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
     var showChangePasswordScreen by rememberSaveable { mutableStateOf(false) }
+    var showNotificationPreferencesScreen by rememberSaveable { mutableStateOf(false) }
     var showExploreOverlay by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     var tourStep by remember { mutableStateOf(AppTourStep.Intro) }
@@ -236,6 +240,19 @@ fun MainNavScreen(
             }
         }
     }
+    LaunchedEffect(Unit) {
+        notificationPreferencesViewModel.events.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+    LaunchedEffect(showNotificationPreferencesScreen) {
+        if (showNotificationPreferencesScreen) {
+            notificationPreferencesViewModel.load()
+        }
+    }
+    val notifPrefs by notificationPreferencesViewModel.prefs.collectAsState()
+    val notifPrefsLoading by notificationPreferencesViewModel.isLoading.collectAsState()
+    val notifPrefsSaving by notificationPreferencesViewModel.isSaving.collectAsState()
     val tabs = MainTab.entries
 
     val homeRefreshing by homeViewModel.isRefreshing.collectAsState()
@@ -368,7 +385,8 @@ fun MainNavScreen(
     val featureTourVisible = featureTourActive && !isGuestMode &&
         !showNotificationScreen &&
         !showSettingsScreen &&
-        !showChangePasswordScreen
+        !showChangePasswordScreen &&
+        !showNotificationPreferencesScreen
 
     LaunchedEffect(featureTourActive) {
         if (!featureTourActive) {
@@ -769,6 +787,24 @@ fun MainNavScreen(
                 showSettingsScreen = false
                 showChangePasswordScreen = true
             },
+            onOpenNotificationPreferences = {
+                showSettingsScreen = false
+                showNotificationPreferencesScreen = true
+            },
+        )
+    }
+    if (showNotificationPreferencesScreen) {
+        NotificationPreferencesScreen(
+            modifier = Modifier.fillMaxSize(),
+            prefs = notifPrefs,
+            isLoading = notifPrefsLoading,
+            isSaving = notifPrefsSaving,
+            onRecommendationPushChanged = notificationPreferencesViewModel::onRecommendationPushChanged,
+            onRecommendationEmailChanged = notificationPreferencesViewModel::onRecommendationEmailChanged,
+            onQuietHoursEnabledChanged = notificationPreferencesViewModel::onQuietHoursEnabledChanged,
+            onQuietHoursStartChanged = notificationPreferencesViewModel::onQuietHoursStartChanged,
+            onQuietHoursEndChanged = notificationPreferencesViewModel::onQuietHoursEndChanged,
+            onBack = { showNotificationPreferencesScreen = false },
         )
     }
     if (showChangePasswordScreen) {
@@ -790,6 +826,7 @@ fun MainNavScreen(
     val hasMainNavOverlayBack = remember(
         featureTourVisible,
         showChangePasswordScreen,
+        showNotificationPreferencesScreen,
         showSettingsScreen,
         showNotificationScreen,
         notificationDetailId,
@@ -797,6 +834,7 @@ fun MainNavScreen(
         exploreSearchExpanded,
     ) {
         featureTourVisible ||
+            showNotificationPreferencesScreen ||
             showChangePasswordScreen ||
             showSettingsScreen ||
             showNotificationScreen ||
@@ -804,6 +842,7 @@ fun MainNavScreen(
     }
     BackHandler(enabled = hasMainNavOverlayBack) {
         when {
+            showNotificationPreferencesScreen -> showNotificationPreferencesScreen = false
             showChangePasswordScreen -> showChangePasswordScreen = false
             showSettingsScreen -> showSettingsScreen = false
             showNotificationScreen && notificationDetailId != null -> {

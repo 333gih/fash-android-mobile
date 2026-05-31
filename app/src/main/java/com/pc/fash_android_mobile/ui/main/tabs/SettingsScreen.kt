@@ -79,6 +79,7 @@ fun SettingsScreen(
     onOpenOrders: () -> Unit,
     onOpenEditProfile: () -> Unit,
     onOpenChangePassword: () -> Unit = {},
+    onOpenNotificationPreferences: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -210,6 +211,20 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 SettingsSectionTitle(text = stringResource(R.string.settings_section_notifications))
                 SettingsNavCard {
+                    SettingsClickRow(
+                        icon = {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = FashColors.Primary,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        },
+                        title = stringResource(R.string.settings_row_recommendation_notifications),
+                        subtitle = stringResource(R.string.settings_row_recommendation_notifications_sub),
+                        onClick = onOpenNotificationPreferences,
+                    )
+                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
                     SettingsClickRow(
                         icon = {
                             Icon(
