@@ -2,10 +2,15 @@ package com.pc.fash_android_mobile.data.recommendation
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * Batches feed impressions/clicks and flushes to core recommendation API (Phase 2).
+ *
+ * Server ingest is asynchronous — HTTP returns after validation; we debounce impression/dwell
+ * batches so the UI never waits on analytics and fewer large payloads pile up.
  */
 class FeedEventReporter(
     private val repository: RecommendationRepository,
@@ -15,6 +20,7 @@ class FeedEventReporter(
 ) {
     private val pending = mutableListOf<FeedEventPayload>()
     private val lock = Any()
+    private var debouncedFlushJob: Job? = null
 
     fun impression(listingId: String, surface: String, position: Int = 0, dwellMs: Int? = null) {
         enqueue(
@@ -175,17 +181,51 @@ class FeedEventReporter(
         flush()
     }
 
+    /** One foreground session signal — surface [FeedSurfaces.APP_OPEN]. */
+    fun appOpen() {
+        enqueue(
+            FeedEventPayload(
+                listingId = FeedSurfaces.SESSION_SENTINEL_LISTING_ID,
+                surface = FeedSurfaces.APP_OPEN,
+                eventType = "click",
+            ),
+        )
+        flush()
+    }
+
+    /**
+     * User opened the app from a push or in-app notification banner.
+     * [scenarioId] is sent as `experiment_id` for orchestrator attribution.
+     */
+    fun notificationOpen(listingId: String? = null, scenarioId: String? = null) {
+        val resolvedListingId = listingId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: FeedSurfaces.SESSION_SENTINEL_LISTING_ID
+        enqueue(
+            FeedEventPayload(
+                listingId = resolvedListingId,
+                surface = FeedSurfaces.NOTIFICATION_OPEN,
+                eventType = "click",
+                experimentId = scenarioId?.trim()?.takeIf { it.isNotEmpty() },
+            ),
+        )
+        flush()
+    }
+
     private fun enqueue(event: FeedEventPayload) {
         synchronized(lock) {
             pending.add(event)
             if (pending.size >= 20) {
                 flushLocked()
+            } else {
+                scheduleDebouncedFlushLocked()
             }
         }
     }
 
     fun flush() {
         synchronized(lock) {
+            debouncedFlushJob?.cancel()
+            debouncedFlushJob = null
             flushLocked()
         }
     }
@@ -193,7 +233,17 @@ class FeedEventReporter(
     /** Drops queued events without sending — use on sign-out before session id changes. */
     fun clearPending() {
         synchronized(lock) {
+            debouncedFlushJob?.cancel()
+            debouncedFlushJob = null
             pending.clear()
+        }
+    }
+
+    private fun scheduleDebouncedFlushLocked() {
+        debouncedFlushJob?.cancel()
+        debouncedFlushJob = scope.launch(Dispatchers.IO) {
+            delay(DEBOUNCED_FLUSH_MS)
+            flush()
         }
     }
 
@@ -205,5 +255,9 @@ class FeedEventReporter(
         scope.launch(Dispatchers.IO) {
             repository.recordFeedEvents(publicBrowse(), session, batch)
         }
+    }
+
+    private companion object {
+        const val DEBOUNCED_FLUSH_MS = 4_000L
     }
 }

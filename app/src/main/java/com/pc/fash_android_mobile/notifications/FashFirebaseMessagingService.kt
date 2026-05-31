@@ -16,6 +16,7 @@ import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.data.promo.ADMIN_APP_PROMO_PAYLOAD_TYPE
 import com.pc.fash_android_mobile.data.promo.parseAppPromoFromPushData
+import com.pc.fash_android_mobile.data.recommendation.NotificationEngagementReporter
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 
 /**
@@ -82,8 +83,9 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             deepLink?.let { putExtra("deep_link", it) }
             message.data["user_notification_id"]?.takeIf { it.isNotBlank() }?.let {
-                putExtra("notification_id", it.trim())
+                putExtra(NotificationEngagementReporter.EXTRA_NOTIFICATION_ID, it.trim())
             }
+            NotificationEngagementReporter.attachEngagementExtras(this, message.data)
         }
         val pending = PendingIntent.getActivity(
             this,

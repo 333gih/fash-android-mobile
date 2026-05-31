@@ -26,6 +26,8 @@ import com.pc.fash_android_mobile.data.payment.MockPaymentService
 import com.pc.fash_android_mobile.data.payment.PaymentService
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.recommendation.BrowseSessionStore
+import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
+import com.pc.fash_android_mobile.data.recommendation.AppSessionTracker
 import com.pc.fash_android_mobile.data.recommendation.RecommendationRepository
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
@@ -267,6 +269,7 @@ class FashApplication : Application(), ImageLoaderFactory {
         AppLocale.installApplicationContext(this)
         AppLocale.applyPersistedOrDefault(this)
         FashNotificationChannels.ensureChannels(this)
+        appSessionTracker.install()
         applicationScope.launch(Dispatchers.IO) {
             refreshAestheticTagCatalog()
             val hasSession = runCatching { authManager.sessionStore.read() != null }.getOrDefault(false)
@@ -395,6 +398,27 @@ class FashApplication : Application(), ImageLoaderFactory {
 
     val browseSessionStore: BrowseSessionStore by lazy {
         BrowseSessionStore(applicationContext)
+    }
+
+    val feedEventReporter: FeedEventReporter by lazy {
+        FeedEventReporter(
+            repository = recommendationRepository,
+            sessionIdProvider = {
+                if (isGuestBrowseActive) {
+                    browseSessionStore.sessionId()
+                } else {
+                    val uid = authManager.sessionStore.read()?.userId
+                    if (!uid.isNullOrBlank()) browseSessionStore.sessionIdForUser(uid)
+                    else browseSessionStore.sessionId()
+                }
+            },
+            publicBrowse = { isGuestBrowseActive },
+            scope = applicationScope,
+        )
+    }
+
+    private val appSessionTracker: AppSessionTracker by lazy {
+        AppSessionTracker(feedEventReporter)
     }
 
     val chatRepository: ChatRepository by lazy {

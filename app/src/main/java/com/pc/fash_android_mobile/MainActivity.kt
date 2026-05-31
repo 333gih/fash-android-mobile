@@ -138,6 +138,7 @@ import com.pc.fash_android_mobile.data.promo.isAppPromoPushData
 import com.pc.fash_android_mobile.data.promo.parseAppPromoFromPushData
 import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
 import com.pc.fash_android_mobile.data.promo.toAppPromoCampaign
+import com.pc.fash_android_mobile.data.recommendation.NotificationEngagementReporter
 import com.pc.fash_android_mobile.BuildConfig
 import com.pc.fash_android_mobile.ui.components.FashInAppNotificationBanner
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
@@ -285,6 +286,7 @@ class MainActivity : ComponentActivity() {
         ProfileDeepLinks.parseUsernameFromIntent(intent)?.let { fashApp.pendingDeepLinkSellerUsername.value = it }
         InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
         AccountSwitchDeepLinks.parseFromIntent(intent)?.let { fashApp.requestAccountSwitchPrompt(it) }
+        NotificationEngagementReporter.reportOpenFromIntent(fashApp.feedEventReporter, intent)
     }
 
     private val googleSignInLauncher = registerForActivityResult(
@@ -435,6 +437,8 @@ class MainActivity : ComponentActivity() {
                 var splashFinished by rememberSaveable { mutableStateOf(false) }
                 var splashStartMs by rememberSaveable { mutableStateOf(0L) }
                 var isGuestBrowse by rememberSaveable { mutableStateOf(false) }
+                var shellWarmupComplete by rememberSaveable { mutableStateOf(false) }
+                var shellWarmupInProgress by remember { mutableStateOf(false) }
                 /** One-shot: cold start without session may enter guest shell; logout does not. */
                 var initialGuestShellDecided by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
@@ -561,13 +565,31 @@ class MainActivity : ComponentActivity() {
                     profileViewModel.onAuthenticatedSessionReady()
                 }
 
-                /** After splash + authenticated session, reload tab feeds and inbox (cold start + account switch). */
-                LaunchedEffect(splashFinished, isAuthenticated) {
-                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
-                    homeViewModel.refresh()
-                    exploreViewModel.refresh()
-                    notificationsViewModel.refreshUnreadSummary()
-                    chatViewModel.loadConversations()
+                /** Prefetch Home, Explore, Profile, Orders, and Chat before revealing the main shell. */
+                LaunchedEffect(splashFinished, isAuthenticated, isGuestBrowse, needsOnboarding) {
+                    if (!splashFinished) return@LaunchedEffect
+                    if (isAuthenticated && needsOnboarding != false) return@LaunchedEffect
+                    if (shellWarmupComplete) return@LaunchedEffect
+                    shellWarmupInProgress = true
+                    try {
+                        withTimeoutOrNull(12_000L) {
+                            homeViewModel.refresh()
+                            exploreViewModel.refresh()
+                            if (isAuthenticated) {
+                                profileViewModel.onAuthenticatedSessionReady()
+                                profileViewModel.refresh(force = true)
+                                ordersViewModel.refreshOrders()
+                                chatViewModel.loadConversations()
+                                notificationsViewModel.refreshUnreadSummary()
+                            }
+                            while (homeViewModel.isRefreshing.value) {
+                                delay(50)
+                            }
+                        }
+                    } finally {
+                        shellWarmupInProgress = false
+                        shellWarmupComplete = true
+                    }
                 }
 
                 // Profile setup (loading gate or onboarding screens) blocks welcome promo + feature tour.
@@ -816,6 +838,11 @@ class MainActivity : ComponentActivity() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (splashFinished) {
+                        if (shellWarmupInProgress &&
+                            (isGuestBrowse || (isAuthenticated && needsOnboarding == false))
+                        ) {
+                            FashWaitingScreen()
+                        } else {
                         Box(Modifier.fillMaxSize()) {
                             when {
                                 isLoggingOut -> FashWaitingScreen()
@@ -1781,7 +1808,6 @@ class MainActivity : ComponentActivity() {
                                                         dismissSellerShopOverlay()
                                                         editListingId = lid
                                                     } else {
-                                                        dismissSellerShopOverlay()
                                                         selectedListingId = lid
                                                     }
                                                 },
@@ -2435,6 +2461,7 @@ class MainActivity : ComponentActivity() {
                                 additionalBottomInset = snackbarBottomChromeInset,
                             )
                         }
+                        }
                     } else {
                         FashWaitingScreen()
                     }
@@ -2625,6 +2652,10 @@ class MainActivity : ComponentActivity() {
                         body = inAppNotificationShell?.body.orEmpty(),
                         onClick = {
                             val s = inAppNotificationShell ?: return@FashInAppNotificationBanner
+                            NotificationEngagementReporter.reportOpen(
+                                fashApp.feedEventReporter,
+                                s.data,
+                            )
                             val data = s.data
                             val deepNid = data?.entries
                                 ?.find { it.key.equals("deep_link", ignoreCase = true) }

@@ -147,7 +147,10 @@ class RecommendationRepository(
                     .put("surface", e.surface)
                     .put("event_type", e.eventType)
                     .put("position", e.position)
-                    .apply { e.dwellMs?.let { put("dwell_ms", it) } },
+                    .apply {
+                        e.dwellMs?.let { put("dwell_ms", it) }
+                        e.experimentId?.let { put("experiment_id", it) }
+                    },
             )
         }
         val json = JSONObject()
@@ -253,4 +256,5 @@ data class FeedEventPayload(
     val eventType: String,
     val position: Int = 0,
     val dwellMs: Int? = null,
+    val experimentId: String? = null,
 )
