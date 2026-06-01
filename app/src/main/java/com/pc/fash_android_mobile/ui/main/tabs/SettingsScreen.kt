@@ -406,20 +406,14 @@ private fun ThemeModeSelector(
             .padding(vertical = 4.dp),
     ) {
         ThemeModeRow(
-            label = stringResource(R.string.settings_theme_system),
-            selected = selected == AppThemePreference.Mode.SYSTEM,
-            onClick = { onSelect(AppThemePreference.Mode.SYSTEM) },
-            isSystemDefaultOption = true,
+            label = stringResource(R.string.settings_theme_dark),
+            selected = selected == AppThemePreference.Mode.DARK,
+            onClick = { onSelect(AppThemePreference.Mode.DARK) },
         )
         ThemeModeRow(
             label = stringResource(R.string.settings_theme_light),
             selected = selected == AppThemePreference.Mode.LIGHT,
             onClick = { onSelect(AppThemePreference.Mode.LIGHT) },
-        )
-        ThemeModeRow(
-            label = stringResource(R.string.settings_theme_dark),
-            selected = selected == AppThemePreference.Mode.DARK,
-            onClick = { onSelect(AppThemePreference.Mode.DARK) },
         )
     }
 }
@@ -429,13 +423,12 @@ private fun ThemeModeRow(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    isSystemDefaultOption: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val rowBackground = when {
-        !selected -> Color.Transparent
-        isSystemDefaultOption -> FashColors.SystemDefaultThemeHighlight
-        else -> scheme.surfaceContainerHighest.copy(alpha = 0.85f)
+    val rowBackground = if (selected) {
+        scheme.surfaceContainerHighest.copy(alpha = 0.85f)
+    } else {
+        Color.Transparent
     }
     Row(
         modifier = Modifier

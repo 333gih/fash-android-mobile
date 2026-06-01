@@ -429,11 +429,10 @@ class MainActivity : ComponentActivity() {
             val contextForTheme = LocalContext.current
             val themeRev by AppThemePreference.revision.collectAsState()
             val themeMode = remember(themeRev) { AppThemePreference.readMode(contextForTheme) }
-            val systemDark = isSystemInDarkTheme()
             val useDarkTheme = when (themeMode) {
                 AppThemePreference.Mode.LIGHT -> false
-                AppThemePreference.Mode.DARK -> true
-                AppThemePreference.Mode.SYSTEM -> systemDark
+                AppThemePreference.Mode.DARK,
+                AppThemePreference.Mode.SYSTEM -> true
             }
             val lightAppearance = when (themeMode) {
                 AppThemePreference.Mode.LIGHT -> FashLightAppearance.PureWhite
