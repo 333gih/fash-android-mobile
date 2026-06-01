@@ -1,33 +1,39 @@
 package com.pc.fash_android_mobile.ui.listing
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.feed.ListingMasonryGrid
+import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-/** PDP related listings — Explore-style 2-column masonry with per-card relation badge. */
+/** PDP related listings — one Explore-style 2-column masonry grid with relation badges per card (iOS parity). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DetailProductDiscoveryHub(
@@ -42,12 +48,12 @@ fun DetailProductDiscoveryHub(
     val relationById = remember(entries) {
         entries.associate { it.item.id to it.relationLabel }
     }
-    val columnAssignments = remember { mutableStateMapOf<String, Boolean>() }
+    val columnAssignments = remember(entries) { mutableStateMapOf<String, Boolean>() }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = 8.dp, bottom = 12.dp),
     ) {
         Column(
             Modifier
@@ -70,16 +76,28 @@ fun DetailProductDiscoveryHub(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (entries.any { it.relation == ProductDiscoveryRelation.SELLER }) {
-                    RelationLegendChip(stringResource(R.string.product_relation_legend_seller))
+                    RelationLegendChip(
+                        label = stringResource(R.string.product_relation_legend_seller),
+                        icon = Icons.Outlined.Storefront,
+                    )
                 }
                 if (entries.any { it.relation == ProductDiscoveryRelation.CATEGORY }) {
-                    RelationLegendChip(stringResource(R.string.product_relation_legend_category))
+                    RelationLegendChip(
+                        label = stringResource(R.string.product_relation_legend_category),
+                        icon = Icons.Outlined.Category,
+                    )
                 }
                 if (entries.any { it.relation == ProductDiscoveryRelation.BRAND }) {
-                    RelationLegendChip(stringResource(R.string.product_relation_legend_brand))
+                    RelationLegendChip(
+                        label = stringResource(R.string.product_relation_legend_brand),
+                        icon = Icons.Outlined.LocalOffer,
+                    )
                 }
                 if (entries.any { it.relation == ProductDiscoveryRelation.STYLE }) {
-                    RelationLegendChip(stringResource(R.string.product_relation_legend_style))
+                    RelationLegendChip(
+                        label = stringResource(R.string.product_relation_legend_style),
+                        icon = Icons.Outlined.AutoAwesome,
+                    )
                 }
             }
         }
@@ -98,16 +116,30 @@ fun DetailProductDiscoveryHub(
 }
 
 @Composable
-private fun RelationLegendChip(label: String) {
+private fun RelationLegendChip(
+    label: String,
+    icon: ImageVector,
+) {
     Surface(
         shape = RoundedCornerShape(FashTheme.spacing.radiusPill),
         color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.65f),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

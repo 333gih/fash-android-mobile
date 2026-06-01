@@ -42,6 +42,7 @@ object ProductDiscoveryFeedBuilder {
             for (item in items) {
                 val key = item.id.lowercase()
                 if (!seen.add(key)) continue
+                if ((item.listingStatus ?: "").lowercase() == "sold") continue
                 result.add(ProductDiscoveryFeedEntry(item, relation, badge))
                 if (result.size >= limit) return
             }
