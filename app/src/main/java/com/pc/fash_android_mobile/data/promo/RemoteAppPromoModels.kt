@@ -23,6 +23,8 @@ data class RemoteAppPromoPayload(
     val secondaryAction: AppPromoButtonAction?,
     val priority: Int,
     val scheduleType: String?,
+    val maxShowsPerUser: Int?,
+    val cooldownHours: Int?,
 )
 
 fun parseRemoteAppPromoPayload(json: JSONObject): RemoteAppPromoPayload? {
@@ -66,6 +68,8 @@ fun parseRemoteAppPromoPayload(json: JSONObject): RemoteAppPromoPayload? {
         secondaryAction = secondaryAction,
         priority = json.optInt("priority", 0),
         scheduleType = json.optStringOrNull("schedule_type", "scheduleType"),
+        maxShowsPerUser = json.optIntOrNull("max_shows_per_user", "maxShowsPerUser"),
+        cooldownHours = json.optIntOrNull("cooldown_hours", "cooldownHours"),
     )
 }
 
@@ -73,6 +77,18 @@ fun parseRemoteAppPromoPayload(json: JSONObject): RemoteAppPromoPayload? {
  * [JSONObject.optString] returns the literal `"null"` when the JSON value is `null` ([JSONObject.NULL]).
  * Admin sends `badge_label: null` when optional — must not render that on the promo card.
  */
+internal fun JSONObject.optIntOrNull(vararg keys: String): Int? {
+    for (key in keys) {
+        if (!has(key)) continue
+        when (val raw = opt(key)) {
+            null, JSONObject.NULL -> return null
+            is Number -> return raw.toInt()
+            is String -> return raw.trim().toIntOrNull()
+        }
+    }
+    return null
+}
+
 internal fun JSONObject.optStringOrNull(vararg keys: String): String? {
     for (key in keys) {
         if (!has(key)) continue
@@ -113,6 +129,8 @@ fun RemoteAppPromoPayload.toAppPromoCampaign(): AppPromoCampaign =
         secondaryAction = secondaryAction,
         priority = priority,
         scheduleType = scheduleType,
+        maxShowsPerUser = maxShowsPerUser,
+        cooldownHours = cooldownHours,
     )
 
 private fun JSONArray.toStringList(): List<String> {

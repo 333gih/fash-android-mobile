@@ -35,6 +35,8 @@ data class AppPromoCampaign(
     val secondaryAction: AppPromoButtonAction? = null,
     val priority: Int = 0,
     val scheduleType: String? = null,
+    val maxShowsPerUser: Int? = null,
+    val cooldownHours: Int? = null,
 ) {
     val isRemote: Boolean get() = kind == AppPromoCampaignKind.Remote
 }

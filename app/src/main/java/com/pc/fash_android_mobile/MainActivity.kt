@@ -49,6 +49,9 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.res.stringResource
 import com.pc.fash_android_mobile.R
 import androidx.compose.ui.unit.dp
@@ -134,6 +137,7 @@ import com.pc.fash_android_mobile.data.promo.AppPromoCampaignResolver
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaignStore
 import com.pc.fash_android_mobile.data.promo.AppPromoGateContext
 import com.pc.fash_android_mobile.data.promo.AppPromoNavigation
+import com.pc.fash_android_mobile.data.promo.AppPromoOnAppOpenLoader
 import com.pc.fash_android_mobile.data.promo.AppPromoPendingQueue
 import com.pc.fash_android_mobile.data.promo.isAppPromoPushData
 import com.pc.fash_android_mobile.data.promo.parseAppPromoFromPushData
@@ -510,13 +514,16 @@ class MainActivity : ComponentActivity() {
                 var pendingPromoOpenExplore by remember { mutableStateOf(false) }
                 fun presentAdminPromoIfEligible(promo: AppPromoCampaign) {
                     AppPromoPendingQueue.enqueue(promo)
+                    val appCtx = notificationSnackbarContext.applicationContext
                     if (
                         splashFinished &&
                         isAuthenticated &&
                         !profileSetupBlocksShellChrome &&
-                        selectedConversationId == null
+                        selectedConversationId == null &&
+                        AppPromoCampaignStore.canShow(appCtx, promo)
                     ) {
                         activePromoCampaign = promo
+                        AppPromoCampaignStore.recordShow(appCtx, promo)
                     }
                 }
                 val meetingReverifyRequired by profileViewModel.meetingSchedulingReverifyRequired.collectAsState()
@@ -603,38 +610,46 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Resolve app-open promo only once the setup gate has settled on main shell.
-                LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
+                // Resolve app-open promo once main shell is ready (and again when returning to foreground).
+                val lifecycleOwner = LocalLifecycleOwner.current
+                var promoOpenCountIncremented by remember { mutableStateOf(false) }
+                LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding, lifecycleOwner) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
-                    if (profileSetupBlocksShellChrome) return@LaunchedEffect
-                    if (selectedConversationId != null) return@LaunchedEffect
-
-                    delay(550)
-                    val appCtx = notificationSnackbarContext.applicationContext
-                    val openCount = withContext(Dispatchers.IO) {
-                        AppPromoCampaignStore.incrementAppOpenCount(appCtx)
-                    }
-                    withContext(Dispatchers.IO) {
-                        fashApp.appPromoInterstitialRepository.fetchActiveCampaigns()
-                            .getOrNull()
-                            ?.filter { it.scheduleType == "on_app_open" || it.scheduleType == null }
-                            ?.forEach { AppPromoPendingQueue.enqueue(it) }
-                    }
-                    val gate = AppPromoGateContext(
-                        splashFinished = splashFinished,
-                        isAuthenticated = isAuthenticated,
-                        needsOnboarding = false,
-                        blockPromoBecauseOtherUi = selectedConversationId != null,
-                        meetingKycReverifyRequired = meetingReverifyRequired,
-                        identityVerifyUrlAvailable = AppEnvironment.identityReverifyUrl.isNotBlank(),
-                        sellerPackagePromoEnabled = AppEnvironment.isDev,
-                        appOpenCount = openCount,
-                    )
-                    activePromoCampaign = withContext(Dispatchers.IO) {
-                        AppPromoPendingQueue.pollHighest()?.let { remote ->
-                            if (!AppPromoCampaignStore.isDismissed(appCtx, remote)) return@withContext remote
+                    lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                        if (profileSetupBlocksShellChrome) return@repeatOnLifecycle
+                        if (selectedConversationId != null) return@repeatOnLifecycle
+                        delay(550)
+                        val appCtx = notificationSnackbarContext.applicationContext
+                        val openCount = withContext(Dispatchers.IO) {
+                            if (!promoOpenCountIncremented) {
+                                promoOpenCountIncremented = true
+                                AppPromoCampaignStore.incrementAppOpenCount(appCtx)
+                            } else {
+                                AppPromoCampaignStore.readAppOpenCount(appCtx)
+                            }
                         }
-                        AppPromoCampaignResolver.resolve(gate, appCtx)
+                        withContext(Dispatchers.IO) {
+                            AppPromoOnAppOpenLoader.fetchAndEnqueue(fashApp)
+                        }
+                        val gate = AppPromoGateContext(
+                            splashFinished = splashFinished,
+                            isAuthenticated = isAuthenticated,
+                            needsOnboarding = false,
+                            blockPromoBecauseOtherUi = selectedConversationId != null,
+                            meetingKycReverifyRequired = meetingReverifyRequired,
+                            identityVerifyUrlAvailable = AppEnvironment.identityReverifyUrl.isNotBlank(),
+                            sellerPackagePromoEnabled = AppEnvironment.isDev,
+                            appOpenCount = openCount,
+                        )
+                        if (activePromoCampaign != null) return@repeatOnLifecycle
+                        val resolved = withContext(Dispatchers.IO) {
+                            AppPromoOnAppOpenLoader.resolvePresentable(appCtx)
+                                ?: AppPromoCampaignResolver.resolve(gate, appCtx)
+                        }
+                        if (resolved != null) {
+                            activePromoCampaign = resolved
+                            AppPromoCampaignStore.recordShow(appCtx, resolved)
+                        }
                     }
                 }
 
@@ -646,8 +661,9 @@ class MainActivity : ComponentActivity() {
                     if (!splashFinished || !isAuthenticated || profileSetupBlocksShellChrome) return@LaunchedEffect
                     val appCtx = notificationSnackbarContext.applicationContext
                     AppPromoPendingQueue.peekHighest()?.let { remote ->
-                        if (!AppPromoCampaignStore.isDismissed(appCtx, remote)) {
+                        if (AppPromoCampaignStore.canShow(appCtx, remote)) {
                             activePromoCampaign = remote
+                            AppPromoCampaignStore.recordShow(appCtx, remote)
                         }
                     }
                 }
@@ -2567,10 +2583,6 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSecondaryClick = { campaign ->
-                        AppPromoCampaignStore.markDismissed(
-                            notificationSnackbarContext.applicationContext,
-                            campaign,
-                        )
                         if (campaign.kind == AppPromoCampaignKind.Remote) {
                             AppPromoNavigation.applySecondary(
                                 activity = this@MainActivity,
@@ -2578,6 +2590,11 @@ class MainActivity : ComponentActivity() {
                                 onTab = { tab -> pendingPromoMainTab = tab.ordinal },
                                 onOpenOrders = { pendingPromoOpenOrders = true },
                                 onOpenExplore = { pendingPromoOpenExplore = true },
+                            )
+                        } else {
+                            AppPromoCampaignStore.markDismissed(
+                                notificationSnackbarContext.applicationContext,
+                                campaign,
                             )
                         }
                         activePromoCampaign = null

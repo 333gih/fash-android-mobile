@@ -30,7 +30,7 @@ object AppPromoCampaignResolver {
         AppPromoCampaignProvider { ctx, appCtx ->
             if (!ctx.baseEligible()) return@AppPromoCampaignProvider null
             AppPromoPendingQueue.pollHighest()?.let { remote ->
-                if (!AppPromoCampaignStore.isDismissed(appCtx, remote)) return@AppPromoCampaignProvider remote
+                if (AppPromoCampaignStore.canShow(appCtx, remote)) return@AppPromoCampaignProvider remote
             }
             null
         },
