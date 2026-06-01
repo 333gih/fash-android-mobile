@@ -540,7 +540,7 @@ fun ProfileScreen(
                         items = items,
                         listingTabSet = ProfileListingTabSet.OwnProfile,
                         onListingClick = { item ->
-                            val myId = profile?.id?.trim().orEmpty()
+                            val myId = profile?.userId?.trim().orEmpty()
                             if (myId.isNotEmpty() && item.sellerId?.trim() == myId) {
                                 onOwnListingClick(item.id, selectedTab)
                             } else {

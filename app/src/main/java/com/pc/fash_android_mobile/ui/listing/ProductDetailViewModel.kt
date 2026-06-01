@@ -90,6 +90,9 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _relatedByStyle = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val relatedByStyle: StateFlow<List<ListingFeedItem>> = _relatedByStyle.asStateFlow()
 
+    private val _discoveryFeed = MutableStateFlow<List<ProductDiscoveryFeedEntry>>(emptyList())
+    val discoveryFeed: StateFlow<List<ProductDiscoveryFeedEntry>> = _discoveryFeed.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -140,6 +143,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByCategory.value = emptyList()
         _relatedByBrand.value = emptyList()
         _relatedByStyle.value = emptyList()
+        _discoveryFeed.value = emptyList()
         _isLoading.value = false
         _loadError.value = null
         _isFollowing.value = false
@@ -166,6 +170,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByCategory.value = emptyList()
         _relatedByBrand.value = emptyList()
         _relatedByStyle.value = emptyList()
+        _discoveryFeed.value = emptyList()
             _bottomBarMode.value = ProductBottomBarMode.Normal
             _buyerActiveOrder.value = null
             _showPurchaseGuide.value = false
@@ -326,9 +331,15 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         coroutineScope {
             val sellerRail = async {
                 val moreResult = if (publicBrowse) {
-                    listingRepository.getListingsBySellerPublic(sellerKey, limit = SELLER_RAIL_LIMIT)
+                    listingRepository.getListingsBySellerPublic(
+                        sellerKey,
+                        limit = ProductDiscoveryFeedBuilder.SELLER_RAIL_LIMIT,
+                    )
                 } else {
-                    listingRepository.getListingsBySeller(sellerKey, limit = SELLER_RAIL_LIMIT)
+                    listingRepository.getListingsBySeller(
+                        sellerKey,
+                        limit = ProductDiscoveryFeedBuilder.SELLER_RAIL_LIMIT,
+                    )
                 }
                 moreResult.getOrNull()
                     ?.filter { it.id != excludeListingId }
@@ -361,6 +372,21 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _relatedByCategory.value = categoryRail.await()
             _relatedByBrand.value = brandRail.await()
             _relatedByStyle.value = styleRail.await()
+            val sellerBadge = d.sellerUsername?.trim()?.takeIf { it.isNotEmpty() }?.let { "@$it" }
+                ?: d.sellerDisplayName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: getApplication<Application>().getString(R.string.product_relation_badge_seller)
+            _discoveryFeed.value = ProductDiscoveryFeedBuilder.merge(
+                detail = d,
+                sellerLabel = sellerBadge,
+                sellerItems = _moreFromSeller.value,
+                categoryLabel = d.category?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: d.parentCategoryName?.trim()?.takeIf { it.isNotEmpty() },
+                categoryItems = _relatedByCategory.value,
+                brandLabel = d.brand?.trim()?.takeIf { it.isNotEmpty() },
+                brandItems = _relatedByBrand.value,
+                styleItems = _relatedByStyle.value,
+                styleFallbackLabel = getApplication<Application>().getString(R.string.product_related_style),
+            )
         }
     }
 
@@ -378,7 +404,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 categoryId = categoryId,
                 brandId = brandId,
                 aestheticTagIds = aestheticTagIds,
-                limit = RELATED_RAIL_LIMIT,
+                limit = ProductDiscoveryFeedBuilder.RELATED_RAIL_LIMIT,
                 offset = 0,
             )
         } else {
@@ -387,7 +413,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 brandId = brandId,
                 aestheticTagIds = aestheticTagIds,
                 sort = "recent",
-                limit = RELATED_RAIL_LIMIT,
+                limit = ProductDiscoveryFeedBuilder.RELATED_RAIL_LIMIT,
                 offset = 0,
             )
         }
@@ -404,11 +430,15 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByCategory.update { mapList(it) }
         _relatedByBrand.update { mapList(it) }
         _relatedByStyle.update { mapList(it) }
-    }
-
-    companion object {
-        private const val SELLER_RAIL_LIMIT = 20
-        private const val RELATED_RAIL_LIMIT = 12
+        _discoveryFeed.update { feed ->
+            feed.map { entry ->
+                if (entry.item.id == itemId) {
+                    entry.copy(item = transform(entry.item))
+                } else {
+                    entry
+                }
+            }
+        }
     }
 
     private fun followTargetOrNull(): String? {

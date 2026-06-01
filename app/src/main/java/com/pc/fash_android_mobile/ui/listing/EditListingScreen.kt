@@ -26,7 +26,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Share
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
-import com.pc.fash_android_mobile.data.listing.ListingDeepLinks
+import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults

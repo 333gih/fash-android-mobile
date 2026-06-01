@@ -79,6 +79,8 @@ fun ListingGridCard(
     compactFooter: Boolean = false,
     /** Short marketplace status (e.g. own profile); drawn top-start with the photo-stack badge. */
     statusOverlayLabel: String? = null,
+    /** PDP discovery — why this listing is related (shop, category, brand, style). */
+    relationBadgeLabel: String? = null,
     /** Called when the card leaves composition; provides dwell time in ms (≥ DwellMinMs). */
     onDwell: ((dwellMs: Int) -> Unit)? = null,
     /** When set (masonry grids), used for Coil decode size instead of a screen estimate. */
@@ -204,13 +206,31 @@ fun ListingGridCard(
                 }
             }
             val statusTrimmed = statusOverlayLabel?.trim()?.takeIf { it.isNotEmpty() }
-            if (item.imageUrls.size > 1 || statusTrimmed != null) {
+            val relationTrimmed = relationBadgeLabel?.trim()?.takeIf { it.isNotEmpty() }
+            if (item.imageUrls.size > 1 || statusTrimmed != null || relationTrimmed != null) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    if (relationTrimmed != null) {
+                        val relationA11y = stringResource(R.string.product_relation_badge_a11y, relationTrimmed)
+                        Surface(
+                            modifier = Modifier.semantics { contentDescription = relationA11y },
+                            shape = RoundedCornerShape(6.dp),
+                            color = FashColors.Primary.copy(alpha = 0.88f),
+                        ) {
+                            Text(
+                                text = relationTrimmed,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
                     if (item.imageUrls.size > 1) {
                         val photoStackA11y = stringResource(
                             R.string.listing_card_photo_stack_a11y,
