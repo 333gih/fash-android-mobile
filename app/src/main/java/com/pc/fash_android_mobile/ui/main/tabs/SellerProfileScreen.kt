@@ -83,7 +83,9 @@ import com.pc.fash_android_mobile.data.user.SellerListingFocus
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooterContentHeight
+import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewSheet
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.profile.ProfileShare
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -100,6 +102,8 @@ fun SellerProfileScreen(
     sellerUsername: String,
     onBack: () -> Unit,
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
+    /** When set, grid taps open the half-sheet preview (same as Home / Explore). */
+    listingPreviewViewModel: HomeViewModel? = null,
     /**
      * Category / brand / aesthetic chips (and header aesthetic tags).
      * Host should call [com.pc.fash_android_mobile.ui.explore.ExploreViewModel.openExploreFromProfileFilter],
@@ -329,7 +333,12 @@ fun SellerProfileScreen(
                                 items = items,
                                 listingTabSet = ProfileListingTabSet.SellerStorefront,
                                 onListingClick = { item ->
-                                    onListingClick(item.id, item.sellerId ?: profile?.userId)
+                                    val previewVm = listingPreviewViewModel
+                                    if (previewVm != null) {
+                                        previewVm.openListingPreview(item, surface = "seller_shop")
+                                    } else {
+                                        onListingClick(item.id, item.sellerId ?: profile?.userId)
+                                    }
                                 },
                                 showListingQuickActions = true,
                                 onListingLike = {
@@ -356,6 +365,34 @@ fun SellerProfileScreen(
                             )
                         }
                     }
+                }
+            }
+
+            listingPreviewViewModel?.let { homeVm ->
+                val preview by homeVm.listingPreview.collectAsState()
+                preview?.let { p ->
+                    ExploreListingPreviewSheet(
+                        feedItem = p.feedItem,
+                        detail = p.detail,
+                        isDetailLoading = p.isDetailLoading,
+                        onDismiss = { homeVm.closeListingPreview() },
+                        onViewDetail = {
+                            val nav = homeVm.openListingDetailFromPreview()
+                            if (nav != null) onListingClick(nav.first, nav.second)
+                        },
+                        onLike = { homeVm.toggleLike(p.feedItem) },
+                        onSave = { homeVm.toggleSave(p.feedItem) },
+                        isGuestMode = isGuestMode,
+                        onRequestLogin = onRequestLogin,
+                        onMessageSeller = {
+                            if (isGuestMode) {
+                                onRequestLogin(GuestLoginReason.BuyOrChat)
+                            } else {
+                                val nav = homeVm.openChatFromPreview()
+                                if (nav != null) onListingClick(nav.first, nav.second)
+                            }
+                        },
+                    )
                 }
             }
         }

@@ -279,6 +279,7 @@ fun GuestMainShell(
                     .background(MaterialTheme.colorScheme.surface),
                 viewModel = sellerProfileViewModel,
                 sellerUsername = shopUsername,
+                listingPreviewViewModel = homeViewModel,
                 onBack = { sellerShopUsername = null },
                 onListingClick = { lid, _ -> selectedListingId = lid },
                 onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->

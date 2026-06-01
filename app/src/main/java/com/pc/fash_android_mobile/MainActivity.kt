@@ -1819,6 +1819,7 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 viewModel = sellerProfileViewModel,
                                                 sellerUsername = sellerShopUsername!!,
+                                                listingPreviewViewModel = homeViewModel,
                                                 onBack = dismissSellerShopOverlay,
                                                 onListingClick = { lid, sellerId ->
                                                     val myId =
