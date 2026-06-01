@@ -184,6 +184,9 @@ fun ProductDetailScreen(
     val detail by viewModel.detail.collectAsState()
     val sellerProfile by viewModel.sellerProfile.collectAsState()
     val moreFromSeller by viewModel.moreFromSeller.collectAsState()
+    val relatedByCategory by viewModel.relatedByCategory.collectAsState()
+    val relatedByBrand by viewModel.relatedByBrand.collectAsState()
+    val relatedByStyle by viewModel.relatedByStyle.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val isOpeningChat by viewModel.isOpeningChat.collectAsState()
@@ -345,10 +348,22 @@ fun ProductDetailScreen(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
                                 )
-                                if (moreFromSeller.isNotEmpty()) {
-                                    DetailMoreFromSellerSection(
-                                        username = d.sellerUsername,
-                                        items = moreFromSeller,
+                                val discoverySellerLabel = "@${d.sellerUsername?.trim().orEmpty().ifBlank { "user" }}"
+                                if (
+                                    moreFromSeller.isNotEmpty() ||
+                                    relatedByCategory.isNotEmpty() ||
+                                    relatedByBrand.isNotEmpty() ||
+                                    relatedByStyle.isNotEmpty()
+                                ) {
+                                    DetailProductDiscoveryHub(
+                                        detail = d,
+                                        sellerLabel = discoverySellerLabel,
+                                        sellerItems = moreFromSeller,
+                                        categoryLabel = d.category,
+                                        categoryItems = relatedByCategory,
+                                        brandLabel = d.brand,
+                                        brandItems = relatedByBrand,
+                                        styleItems = relatedByStyle,
                                         excludeId = d.id,
                                         onItemClick = onListingClick,
                                         onLike = { item ->

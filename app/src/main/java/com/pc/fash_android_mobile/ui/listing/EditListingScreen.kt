@@ -23,6 +23,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Share
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import com.pc.fash_android_mobile.data.listing.ListingDeepLinks
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -98,6 +102,7 @@ fun EditListingScreen(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+    val shareContext = LocalContext.current
 
     LaunchedEffect(listingId) {
         viewModel.load(listingId)
@@ -122,6 +127,40 @@ fun EditListingScreen(
                             contentDescription = stringResource(R.string.orders_back),
                             tint = FashColors.Primary,
                         )
+                    }
+                },
+                actions = {
+                    val d = detail
+                    if (d != null) {
+                        IconButton(
+                            onClick = {
+                                val web = AppEnvironment.listingShareUrl(d.id)
+                                val fashUri = ListingDeepLinks.fashListingUri(d.id).toString()
+                                val title = d.title.trim().ifBlank {
+                                    shareContext.getString(R.string.product_detail_title)
+                                }
+                                val text = shareContext.getString(
+                                    R.string.share_listing_text,
+                                    title,
+                                    web,
+                                    fashUri,
+                                )
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, shareContext.getString(R.string.share_listing_subject))
+                                    putExtra(Intent.EXTRA_TEXT, text)
+                                }
+                                shareContext.startActivity(
+                                    Intent.createChooser(send, shareContext.getString(R.string.share)),
+                                )
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.product_action_share),
+                                tint = FashColors.Primary,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

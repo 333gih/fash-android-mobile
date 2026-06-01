@@ -165,6 +165,9 @@ fun MainNavScreen(
     chatUnreadCount: Int = 0,
     /** [sellerId] when known — used to open seller edit vs public detail. */
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
+    onProfileOwnListingClick: (listingId: String, profileTabIndex: Int) -> Unit = { lid, _ ->
+        onListingClick(lid, null)
+    },
     onEditProfile: () -> Unit = {},
     onShippingAddressesClick: () -> Unit = {},
     onInviteFriendsClick: () -> Unit = {},
@@ -739,6 +742,7 @@ fun MainNavScreen(
                             onShippingAddressesClick = onShippingAddressesClick,
                             onInviteFriendsClick = onInviteFriendsClick,
                             onListingClick = onListingClick,
+                            onOwnListingClick = onProfileOwnListingClick,
                             onOpenFollowConnections = onOpenFollowConnections,
                             onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
                                 exploreViewModel.openExploreFromProfileFilter(

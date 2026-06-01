@@ -1178,6 +1178,7 @@ class MainActivity : ComponentActivity() {
                                     /** True briefly after closing seller shop to block PDP from applying Explore filters (pointer replay). */
                                     var suppressPdpExploreNav by remember { mutableStateOf(false) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var profileEditReturnTab by rememberSaveable { mutableIntStateOf(-1) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationItem by remember { mutableStateOf<ConversationItem?>(null) }
                                     var selectedCheckoutListingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1559,6 +1560,11 @@ class MainActivity : ComponentActivity() {
                                                     selectedListingId = lid
                                                 }
                                             },
+                                            onProfileOwnListingClick = { lid, tab ->
+                                                profileEditReturnTab = tab
+                                                selectedListingId = null
+                                                editListingId = lid
+                                            },
                                             onEditProfile = { showEditProfile = true },
                                             onShippingAddressesClick = {
                                                 addressFlowOrderId = null
@@ -1857,7 +1863,14 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 listingId = editListingId!!,
                                                 viewModel = editListingViewModel,
-                                                onBack = { editListingId = null },
+                                                onBack = {
+                                                    val tab = profileEditReturnTab
+                                                    editListingId = null
+                                                    if (tab >= 0 && selectedTab == MainTab.Profile.ordinal) {
+                                                        profileViewModel.completeEditReturn(tab, "")
+                                                    }
+                                                    profileEditReturnTab = -1
+                                                },
                                             )
                                         }
                                         if (showEditProfile) {

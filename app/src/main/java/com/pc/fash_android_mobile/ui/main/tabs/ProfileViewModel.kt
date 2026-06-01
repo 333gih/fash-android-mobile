@@ -174,6 +174,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { _scrollProfileToTop.emit(Unit) }
     }
 
+    private val _scrollProfileToPinnedGrid = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollProfileToPinnedGrid = _scrollProfileToPinnedGrid.asSharedFlow()
+
+    /** After edit listing overlay closes — refresh profile listings and scroll back to the grid. */
+    fun completeEditReturn(tabIndex: Int, listingId: String) {
+        viewModelScope.launch {
+            refresh(force = true)
+            _scrollProfileToPinnedGrid.emit(Unit)
+        }
+    }
+
     private var loadProfileJob: Job? = null
     private var lastSuccessfulRefreshAtMs = 0L
 

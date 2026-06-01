@@ -334,6 +334,8 @@ fun ProfileScreen(
     onShippingAddressesClick: () -> Unit = { },
     onInviteFriendsClick: () -> Unit = { },
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
+    /** Own listings on profile tabs → edit overlay; includes tab index for scroll restore on back. */
+    onOwnListingClick: (listingId: String, profileTabIndex: Int) -> Unit = { _, _ -> },
     /** 0 = Following tab, 1 = Followers — same as [com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen]. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     /** Opens Explore → Posts with filters + optional text search (from aesthetic tag chips). */
@@ -374,6 +376,12 @@ fun ProfileScreen(
     LaunchedEffect(Unit) {
         viewModel.scrollProfileToTop.collect {
             listState.animateScrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollProfileToPinnedGrid.collect {
+            listState.scrollProfileToPinnedGrid(initialDelayMs = 80, instant = true)
         }
     }
 
@@ -531,10 +539,25 @@ fun ProfileScreen(
                         orderedTabIndices = profileTabOrder,
                         items = items,
                         listingTabSet = ProfileListingTabSet.OwnProfile,
-                        onListingClick = { item -> onListingClick(item.id, item.sellerId) },
-                        showListingQuickActions = true,
-                        onListingLike = { viewModel.toggleLike(it) },
-                        onListingSave = { viewModel.toggleSave(it) },
+                        onListingClick = { item ->
+                            val myId = profile?.id?.trim().orEmpty()
+                            if (myId.isNotEmpty() && item.sellerId?.trim() == myId) {
+                                onOwnListingClick(item.id, selectedTab)
+                            } else {
+                                onListingClick(item.id, item.sellerId)
+                            }
+                        },
+                        showListingQuickActions = selectedTab == ProfileListingTab.WISHLIST,
+                        onListingLike = {
+                            if (selectedTab == ProfileListingTab.WISHLIST) {
+                                viewModel.toggleLike(it)
+                            }
+                        },
+                        onListingSave = {
+                            if (selectedTab == ProfileListingTab.WISHLIST) {
+                                viewModel.toggleSave(it)
+                            }
+                        },
                         showListingStatusOverlay = false,
                         modifier = Modifier.fillMaxSize(),
                     )

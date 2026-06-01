@@ -17,6 +17,8 @@ import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,6 +81,15 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _moreFromSeller = MutableStateFlow<List<ListingFeedItem>>(emptyList())
     val moreFromSeller: StateFlow<List<ListingFeedItem>> = _moreFromSeller.asStateFlow()
 
+    private val _relatedByCategory = MutableStateFlow<List<ListingFeedItem>>(emptyList())
+    val relatedByCategory: StateFlow<List<ListingFeedItem>> = _relatedByCategory.asStateFlow()
+
+    private val _relatedByBrand = MutableStateFlow<List<ListingFeedItem>>(emptyList())
+    val relatedByBrand: StateFlow<List<ListingFeedItem>> = _relatedByBrand.asStateFlow()
+
+    private val _relatedByStyle = MutableStateFlow<List<ListingFeedItem>>(emptyList())
+    val relatedByStyle: StateFlow<List<ListingFeedItem>> = _relatedByStyle.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -126,6 +137,9 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _detail.value = null
         _sellerProfile.value = null
         _moreFromSeller.value = emptyList()
+        _relatedByCategory.value = emptyList()
+        _relatedByBrand.value = emptyList()
+        _relatedByStyle.value = emptyList()
         _isLoading.value = false
         _loadError.value = null
         _isFollowing.value = false
@@ -149,6 +163,9 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _detail.value = null
             _sellerProfile.value = null
             _moreFromSeller.value = emptyList()
+        _relatedByCategory.value = emptyList()
+        _relatedByBrand.value = emptyList()
+        _relatedByStyle.value = emptyList()
             _bottomBarMode.value = ProductBottomBarMode.Normal
             _buyerActiveOrder.value = null
             _showPurchaseGuide.value = false
@@ -290,8 +307,8 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         loadBuyerActiveOrder(listingId)
 
     private suspend fun loadSellerAndMore(sellerKey: String, excludeListingId: String, publicBrowse: Boolean = false) {
-        val d = _detail.value
-        val profileId = d?.sellerUsername?.takeIf { it.isNotBlank() } ?: sellerKey
+        val d = _detail.value ?: return
+        val profileId = d.sellerUsername?.takeIf { it.isNotBlank() } ?: sellerKey
         val profileResult = if (publicBrowse) {
             userRepository.getProfilePublic(profileId)
         } else {
@@ -306,17 +323,92 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             },
             onFailure = { },
         )
-        val moreResult = if (publicBrowse) {
-            listingRepository.getListingsBySellerPublic(sellerKey, limit = 5)
-        } else {
-            listingRepository.getListingsBySeller(sellerKey, limit = 5)
+        coroutineScope {
+            val sellerRail = async {
+                val moreResult = if (publicBrowse) {
+                    listingRepository.getListingsBySellerPublic(sellerKey, limit = SELLER_RAIL_LIMIT)
+                } else {
+                    listingRepository.getListingsBySeller(sellerKey, limit = SELLER_RAIL_LIMIT)
+                }
+                moreResult.getOrNull()
+                    ?.filter { it.id != excludeListingId }
+                    ?.filter { (it.listingStatus ?: "").lowercase() != "sold" }
+                    ?: emptyList()
+            }
+            val categoryRail = async {
+                loadRelatedRail(
+                    excludeListingId = excludeListingId,
+                    publicBrowse = publicBrowse,
+                    categoryId = d.categoryId?.trim()?.takeIf { it.isNotEmpty() },
+                )
+            }
+            val brandRail = async {
+                loadRelatedRail(
+                    excludeListingId = excludeListingId,
+                    publicBrowse = publicBrowse,
+                    brandId = d.brandId?.trim()?.takeIf { it.isNotEmpty() },
+                )
+            }
+            val tagIds = d.aestheticTagRefs.mapNotNull { it.id?.trim()?.takeIf { id -> id.isNotEmpty() } }
+            val styleRail = async {
+                loadRelatedRail(
+                    excludeListingId = excludeListingId,
+                    publicBrowse = publicBrowse,
+                    aestheticTagIds = tagIds.takeIf { it.isNotEmpty() },
+                )
+            }
+            _moreFromSeller.value = sellerRail.await()
+            _relatedByCategory.value = categoryRail.await()
+            _relatedByBrand.value = brandRail.await()
+            _relatedByStyle.value = styleRail.await()
         }
-        moreResult.fold(
-            onSuccess = { list ->
-                _moreFromSeller.value = list.filter { it.id != excludeListingId }.take(5)
-            },
-            onFailure = { _moreFromSeller.value = emptyList() },
-        )
+    }
+
+    private suspend fun loadRelatedRail(
+        excludeListingId: String,
+        publicBrowse: Boolean,
+        categoryId: String? = null,
+        brandId: String? = null,
+        aestheticTagIds: List<String>? = null,
+    ): List<ListingFeedItem> {
+        if (categoryId == null && brandId == null && aestheticTagIds.isNullOrEmpty()) return emptyList()
+        val searchRepository = fashApp.searchRepository
+        val result = if (publicBrowse) {
+            searchRepository.browseListings(
+                categoryId = categoryId,
+                brandId = brandId,
+                aestheticTagIds = aestheticTagIds,
+                limit = RELATED_RAIL_LIMIT,
+                offset = 0,
+            )
+        } else {
+            searchRepository.searchListings(
+                categoryId = categoryId,
+                brandId = brandId,
+                aestheticTagIds = aestheticTagIds,
+                sort = "recent",
+                limit = RELATED_RAIL_LIMIT,
+                offset = 0,
+            )
+        }
+        return result.getOrNull()?.filter { it.id != excludeListingId } ?: emptyList()
+    }
+
+    private fun patchDiscoveryRails(
+        itemId: String,
+        transform: (ListingFeedItem) -> ListingFeedItem,
+    ) {
+        fun mapList(list: List<ListingFeedItem>) =
+            list.map { if (it.id == itemId) transform(it) else it }
+        _moreFromSeller.update { mapList(it) }
+        _relatedByCategory.update { mapList(it) }
+        _relatedByBrand.update { mapList(it) }
+        _relatedByStyle.update { mapList(it) }
+    }
+
+    companion object {
+        private const val SELLER_RAIL_LIMIT = 20
+        private const val RELATED_RAIL_LIMIT = 12
     }
 
     private fun followTargetOrNull(): String? {
@@ -464,19 +556,16 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             }
             result.fold(
                 onSuccess = { liked ->
-                    _moreFromSeller.update { list ->
-                        list.map {
-                            if (it.id != item.id) return@map it
-                            val delta = when {
-                                liked && !it.isLiked -> 1
-                                !liked && it.isLiked -> -1
-                                else -> 0
-                            }
-                            it.copy(
-                                isLiked = liked,
-                                likeCount = (it.likeCount + delta).coerceAtLeast(0),
-                            )
+                    patchDiscoveryRails(item.id) {
+                        val delta = when {
+                            liked && !it.isLiked -> 1
+                            !liked && it.isLiked -> -1
+                            else -> 0
                         }
+                        it.copy(
+                            isLiked = liked,
+                            likeCount = (it.likeCount + delta).coerceAtLeast(0),
+                        )
                     }
                     _events.tryEmit(
                         getApplication<Application>().getString(
@@ -501,19 +590,16 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             }
             result.fold(
                 onSuccess = { saved ->
-                    _moreFromSeller.update { list ->
-                        list.map {
-                            if (it.id != item.id) return@map it
-                            val delta = when {
-                                saved && !it.isSaved -> 1
-                                !saved && it.isSaved -> -1
-                                else -> 0
-                            }
-                            it.copy(
-                                isSaved = saved,
-                                saveCount = (it.saveCount + delta).coerceAtLeast(0),
-                            )
+                    patchDiscoveryRails(item.id) {
+                        val delta = when {
+                            saved && !it.isSaved -> 1
+                            !saved && it.isSaved -> -1
+                            else -> 0
                         }
+                        it.copy(
+                            isSaved = saved,
+                            saveCount = (it.saveCount + delta).coerceAtLeast(0),
+                        )
                     }
                     _events.tryEmit(
                         getApplication<Application>().getString(
