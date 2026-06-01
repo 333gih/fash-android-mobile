@@ -58,6 +58,19 @@ internal object ListingFeedJsonParser {
                 ?: o.optString("category_name", "").ifBlank { null }
                 ?: o.optString("CategoryName", "").ifBlank { null }
             val imageUrlsArr = o.optJSONArray("image_urls") ?: o.optJSONArray("ImageURLs")
+            val coverMeta = ListingImageUrlsWire.resolveCoverMeta(
+                o.optString("cover_image_url", "")
+                    .ifBlank { o.optString("CoverImageURL", "") },
+                imageUrlsArr,
+            )
+            val rootCoverW = o.optInt("cover_image_width", 0).takeIf { it > 0 }
+                ?: o.optInt("CoverImageWidth", 0).takeIf { it > 0 }
+                ?: o.optInt("image_width", 0).takeIf { it > 0 }
+                ?: o.optInt("imageWidth", 0).takeIf { it > 0 }
+            val rootCoverH = o.optInt("cover_image_height", 0).takeIf { it > 0 }
+                ?: o.optInt("CoverImageHeight", 0).takeIf { it > 0 }
+                ?: o.optInt("image_height", 0).takeIf { it > 0 }
+                ?: o.optInt("imageHeight", 0).takeIf { it > 0 }
             val listingStatusWire = o.optString("status", "")
                 .ifBlank { o.optString("Status", "") }
                 .ifBlank { null }
@@ -65,11 +78,9 @@ internal object ListingFeedJsonParser {
                 ListingFeedItem(
                     id = o.optString("id", o.optString("ID", "")),
                     title = o.optString("title", o.optString("Title", "")),
-                    coverImageUrl = ListingImageUrlsWire.resolveCoverUrl(
-                        o.optString("cover_image_url", "")
-                            .ifBlank { o.optString("CoverImageURL", "") },
-                        imageUrlsArr,
-                    ),
+                    coverImageUrl = coverMeta.url,
+                    coverImageWidth = rootCoverW ?: coverMeta.width,
+                    coverImageHeight = rootCoverH ?: coverMeta.height,
                     imageUrls = ListingImageUrlsWire.parseUrlStrings(imageUrlsArr),
                     priceVnd = o.optLong("price", o.optLong("Price", 0L)),
                     brand = o.optString("brand", "")

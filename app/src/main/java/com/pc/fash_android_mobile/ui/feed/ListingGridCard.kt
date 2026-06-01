@@ -31,8 +31,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import com.pc.fash_android_mobile.ui.components.LocalFashTabSwipeConsuming
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
@@ -78,6 +81,8 @@ fun ListingGridCard(
     statusOverlayLabel: String? = null,
     /** Called when the card leaves composition; provides dwell time in ms (≥ DwellMinMs). */
     onDwell: ((dwellMs: Int) -> Unit)? = null,
+    /** When set (masonry grids), used for Coil decode size instead of a screen estimate. */
+    columnWidthDp: Float? = null,
 ) {
     if (onDwell != null) {
         DisposableEffect(item.id) {
@@ -94,16 +99,30 @@ fun ListingGridCard(
     } else {
         null
     }
-    val imageUrl = resolveListingImageUrl(item.coverImageUrl)
+    val density = LocalDensity.current
+    val resolvedColumnWidthDp = columnWidthDp
+        ?: rememberListingMasonryColumnWidthDp()
+    val feedImageUrl = item.coverImageUrl.trim().ifEmpty { item.imageUrls.firstOrNull().orEmpty() }
+        .let { raw ->
+            if (raw.isEmpty()) ""
+            else FeedListingImageSizer.urlForFeedGrid(raw, resolvedColumnWidthDp, density.density)
+        }
+    val decodeSize = FeedListingImageSizer.pixelSize(resolvedColumnWidthDp, density.density, imageAspectRatio)
     val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
     val metaUi = listingCardMetaUi(item, compactFooter)
     val sellerLine = listingCardSellerLine(item)
     val cardA11y = listingCardContentDescription(item, metaUi.combinedA11y, statusOverlayLabel)
+    val tabSwipeConsuming = LocalFashTabSwipeConsuming.current
 
-    Box(
-        modifier = modifier
+    val boxModifier = if (columnWidthDp != null) {
+        modifier.fillMaxWidth()
+    } else {
+        modifier
             .fillMaxWidth()
             .aspectRatio(imageAspectRatio)
+    }
+    Box(
+        modifier = boxModifier
             .clip(shape)
             .semantics(mergeDescendants = true) {
                 contentDescription = cardA11y
@@ -112,14 +131,15 @@ fun ListingGridCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onClick),
+                .clickable(enabled = !tabSwipeConsuming, onClick = onClick),
         ) {
-            if (imageUrl.isNotEmpty()) {
+            if (feedImageUrl.isNotEmpty()) {
                 FashAsyncImage(
-                    model = imageUrl,
+                    model = feedImageUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
+                    targetPixelSize = decodeSize,
                 )
             } else {
                 Box(

@@ -1,0 +1,198 @@
+# Build Fash Android on GitHub-hosted Ubuntu runners.
+# Typical flow: push to GitLab → mirror to GitHub → this workflow runs.
+#
+# Branch → flavor (push / PR):
+#   develop  → devDebug
+#   main     → prodRelease (signed with upload key if secrets set, else debug key)
+#   master   → prodRelease
+#
+# Push to release/** or releases/** does NOT run this workflow — use Android Release.
+name: Android Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+      - "release/**"
+      - "releases/**"
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Product flavor to build
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+          - both
+
+concurrency:
+  group: android-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    name: Resolve flavor
+    runs-on: ubuntu-latest
+    outputs:
+      flavors: ${{ steps.matrix.outputs.flavors }}
+      branch: ${{ steps.matrix.outputs.branch }}
+    steps:
+      - id: matrix
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_FLAVOR: ${{ inputs.flavor }}
+          REF_NAME: ${{ github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          branch="manual"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$INPUT_FLAVOR" = "both" ]; then
+              flavors='["dev","prod"]'
+            else
+              flavors=$(printf '%s\n' "$INPUT_FLAVOR" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            fi
+          else
+            if [ "$EVENT" = "pull_request" ]; then
+              branch="$BASE_REF"
+            else
+              branch="$REF_NAME"
+            fi
+
+            case "$branch" in
+              develop)
+                flavors='["dev"]'
+                ;;
+              main|master|release/*|releases/*)
+                flavors='["prod"]'
+                ;;
+              *)
+                flavors='["dev"]'
+                ;;
+            esac
+          fi
+
+          echo "event=$EVENT branch=$branch flavors=$flavors"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          echo "flavors=${flavors}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.flavor }} (${{ needs.resolve.outputs.branch }})
+    runs-on: ubuntu-latest
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: ${{ fromJSON(needs.resolve.outputs.flavors) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Verify env secrets
+        env:
+          DEV_ENV: ${{ secrets.ANDROID_DEV_ENV }}
+          PROD_ENV: ${{ secrets.ANDROID_PROD_ENV }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.flavor }}" = "dev" ]; then
+            test -n "${DEV_ENV:-}" || { echo "::error::Missing secret ANDROID_DEV_ENV (full contents of env/dev.env). See docs/CI.md"; exit 1; }
+          else
+            test -n "${PROD_ENV:-}" || { echo "::error::Missing secret ANDROID_PROD_ENV (full contents of env/prod.env). See docs/CI.md"; exit 1; }
+          fi
+
+      - name: Write env file
+        env:
+          DEV_ENV: ${{ secrets.ANDROID_DEV_ENV }}
+          PROD_ENV: ${{ secrets.ANDROID_PROD_ENV }}
+        run: |
+          set -euo pipefail
+          mkdir -p env
+          if [ "${{ matrix.flavor }}" = "dev" ]; then
+            printf '%s\n' "${DEV_ENV}" > env/dev.env
+          else
+            printf '%s\n' "${PROD_ENV}" > env/prod.env
+          fi
+
+      - name: Prepare release signing (prod, optional)
+        if: matrix.flavor == 'prod'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${KEYSTORE_B64:-}" && -n "${STORE_PW:-}" && -n "${KEY_ALIAS:-}" && -n "${KEY_PW:-}" ]]; then
+            bash scripts/ci_prepare_release_signing.sh
+          else
+            echo "Upload keystore secrets not set — prodRelease will use debug signing (compile check only)."
+          fi
+
+      - name: Read app version
+        id: app_version
+        run: |
+          set -euo pipefail
+          VC="$(grep 'versionCode' app/build.gradle.kts | head -1 | sed -E 's/.*= ([0-9]+).*/\1/')"
+          VN="$(grep 'versionName' app/build.gradle.kts | head -1 | sed -E 's/.*= "([^"]+)".*/\1/')"
+          echo "version_code=${VC}" >> "${GITHUB_OUTPUT}"
+          echo "version_name=${VN}" >> "${GITHUB_OUTPUT}"
+          echo "Build target: ${VN} (${VC}) · flavor ${{ matrix.flavor }}"
+
+      - name: Gradle assembleRelease
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          case "${{ matrix.flavor }}" in
+            dev)  TASK=":app:assembleDevRelease" ;;
+            prod) TASK=":app:assembleProdRelease" ;;
+            *) echo "Unknown flavor"; exit 1 ;;
+          esac
+          ./gradlew "${TASK}" --stacktrace | tee gradle-build.log
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fash-android-${{ matrix.flavor }}-release-${{ github.run_number }}
+          path: app/build/outputs/apk/${{ matrix.flavor }}/release/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload Gradle log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-log-${{ matrix.flavor }}-${{ github.run_number }}
+          path: gradle-build.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Print Gradle errors
+        if: failure()
+        run: grep -E '^(e:|FAILURE:|> Task .* FAILED)' gradle-build.log | tail -80 || true
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "### Android build" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Version: **${{ steps.app_version.outputs.version_name }} (${{ steps.app_version.outputs.version_code }})**" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Flavor: **${{ matrix.flavor }}** · Branch context: **${{ needs.resolve.outputs.branch }}**" >> "${GITHUB_STEP_SUMMARY}"

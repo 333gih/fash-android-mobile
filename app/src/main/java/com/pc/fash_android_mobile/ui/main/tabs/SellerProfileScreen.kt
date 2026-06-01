@@ -88,6 +88,7 @@ import com.pc.fash_android_mobile.ui.profile.ProfileShare
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -205,13 +206,31 @@ fun SellerProfileScreen(
         ) {
             when {
                 isLoading && profile == null -> {
-                    Box(
+                    var showSlowLoadHint by remember { mutableStateOf(false) }
+                    LaunchedEffect(sellerUsername) {
+                        showSlowLoadHint = false
+                        delay(2_500)
+                        if (isLoading && profile == null) {
+                            showSlowLoadHint = true
+                        }
+                    }
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(48.dp),
-                        contentAlignment = Alignment.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         CircularProgressIndicator(color = FashColors.Primary)
+                        if (showSlowLoadHint) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = stringResource(R.string.profile_slow_load_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     }
                 }
                 loadError && profile == null -> {

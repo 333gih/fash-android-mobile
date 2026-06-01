@@ -8,6 +8,10 @@ data class ListingFeedItem(
     val id: String,
     val title: String,
     val coverImageUrl: String,
+    /** Cover slot pixel width from `image_urls` step (Pinterest masonry when set). */
+    val coverImageWidth: Int? = null,
+    /** Cover slot pixel height from `image_urls` step. */
+    val coverImageHeight: Int? = null,
     val imageUrls: List<String>,
     val priceVnd: Long,
     /** When the API omits these, UI falls back to title + condition only. */

@@ -18,6 +18,7 @@ import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
+import coil.size.Size
 import com.pc.fash_android_mobile.ui.theme.fashShimmer
 
 /**
@@ -35,12 +36,20 @@ fun FashAsyncImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     alignment: Alignment = Alignment.Center,
+    /** When set, Coil decodes near display size (faster feed scroll, less memory). */
+    targetPixelSize: Pair<Int, Int>? = null,
 ) {
+    val requestBuilder = ImageRequest.Builder(LocalContext.current)
+        .data(model)
+        .crossfade(true)
+    if (targetPixelSize != null) {
+        val (w, h) = targetPixelSize
+        if (w > 0 && h > 0) {
+            requestBuilder.size(Size(w, h))
+        }
+    }
     SubcomposeAsyncImage(
-        model = ImageRequest.Builder(LocalContext.current)
-            .data(model)
-            .crossfade(true)
-            .build(),
+        model = requestBuilder.build(),
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,

@@ -50,6 +50,7 @@ import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
+import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 
 /**
  * Authenticated-light main shell: Home + Explore + listing PDP + editorial reader + seller shop for guests.
@@ -66,6 +67,7 @@ fun GuestMainShell(
     profileViewModel: ProfileViewModel,
     chatViewModel: ChatViewModel,
     changePasswordViewModel: ChangePasswordViewModel,
+    notificationPreferencesViewModel: NotificationPreferencesViewModel,
     notificationsViewModel: NotificationsViewModel,
     productDetailViewModel: ProductDetailViewModel,
     sellerProfileViewModel: SellerProfileViewModel,
@@ -199,6 +201,7 @@ fun GuestMainShell(
             profileViewModel = profileViewModel,
             chatViewModel = chatViewModel,
             changePasswordViewModel = changePasswordViewModel,
+            notificationPreferencesViewModel = notificationPreferencesViewModel,
             notificationsViewModel = notificationsViewModel,
             snackbarHostState = snackbarHostState,
             chatUnreadCount = 0,
@@ -277,10 +280,7 @@ fun GuestMainShell(
                 viewModel = sellerProfileViewModel,
                 sellerUsername = shopUsername,
                 onBack = { sellerShopUsername = null },
-                onListingClick = { lid, _ ->
-                    sellerShopUsername = null
-                    selectedListingId = lid
-                },
+                onListingClick = { lid, _ -> selectedListingId = lid },
                 onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
                     exploreViewModel.openExploreFromProfileFilter(
                         categoryId = cat,

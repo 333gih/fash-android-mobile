@@ -2,7 +2,12 @@ package com.pc.fash_android_mobile.ui.home
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import com.pc.fash_android_mobile.ui.components.LocalFashTabSwipeConsuming
+import com.pc.fash_android_mobile.ui.components.fashTabSwipe
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -62,8 +67,11 @@ import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
-import com.pc.fash_android_mobile.ui.feed.listingMasonryStaggerAspectRatio
+import com.pc.fash_android_mobile.ui.feed.listingMasonryAspectRatio
+import com.pc.fash_android_mobile.ui.feed.listingMasonryTileSize
+import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
@@ -165,7 +173,6 @@ fun HomeFeedTabHost(
     onListingClick: (ListingFeedItem, Int, String) -> Unit,
     onRecordView: (ListingFeedItem, Int, String) -> Unit,
     onDwell: (ListingFeedItem, Int, Int, String) -> Unit,
-    followingEmptyContent: @Composable () -> Unit,
     onRequestLogin: (GuestLoginReason) -> Unit,
     onScrollToTopRequest: kotlinx.coroutines.flow.SharedFlow<Unit>,
 ) {
@@ -194,9 +201,13 @@ fun HomeFeedTabHost(
     val loadError = !showGuestGate && safeSelected in tabsLoadError
     val hasMore = !showGuestGate && safeSelected == HomeFeedTab.Following && followingHasMore
     val gridState = rememberLazyStaggeredGridState()
+    val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
     val scheme = MaterialTheme.colorScheme
-    var horizontalDrag by remember { mutableFloatStateOf(0f) }
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
+    var tabSwipeConsuming by remember { mutableStateOf(false) }
+    var suppressListingClicks by remember { mutableStateOf(false) }
+    val swipeScope = rememberCoroutineScope()
+    val selectedVisualIndex = tabs.indexOf(safeSelected).coerceAtLeast(0)
     val showJourneyRow = !isGuestBrowse && buyerStats.hasJourneyActivity()
     val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
     val tabRowIndex = (if (showJourneyRow) 1 else 0) +
@@ -225,47 +236,31 @@ fun HomeFeedTabHost(
         }
     }
 
-    if (safeSelected == HomeFeedTab.Following && hasMore) {
-        LaunchedEffect(gridState, gridItems.size, hasMore, listingStartIndex) {
-            snapshotFlow {
-                gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            }
-                .distinctUntilChanged()
-                .collect { lastVisible ->
-                    val itemCount = gridItems.size
-                    if (itemCount <= 0) return@collect
-                    if (lastVisible >= listingStartIndex + itemCount - 3) {
-                        onLoadMoreFollowing()
-                    }
-                }
-        }
-    }
-
+    CompositionLocalProvider(
+        LocalFashTabSwipeConsuming provides (tabSwipeConsuming || suppressListingClicks),
+    ) {
     Box(modifier = modifier.fillMaxSize()) {
         LazyVerticalStaggeredGrid(
             columns = StaggeredGridCells.Fixed(2),
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(tabs, safeSelected) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val threshold = 72f
-                            when {
-                                horizontalDrag <= -threshold -> {
-                                    val idx = tabs.indexOf(safeSelected)
-                                    if (idx < tabs.lastIndex) onTabSelected(tabs[idx + 1])
-                                }
-                                horizontalDrag >= threshold -> {
-                                    val idx = tabs.indexOf(safeSelected)
-                                    if (idx > 0) onTabSelected(tabs[idx - 1])
-                                }
-                            }
-                            horizontalDrag = 0f
-                        },
-                        onHorizontalDrag = { _, delta -> horizontalDrag += delta },
-                    )
-                },
+                .fashTabSwipe(
+                    tabCount = tabs.size,
+                    currentVisualIndex = selectedVisualIndex,
+                    onVisualIndexChanged = { index -> onTabSelected(tabs[index]) },
+                    onConsumingChanged = { active ->
+                        tabSwipeConsuming = active
+                        if (active) suppressListingClicks = true
+                    },
+                    onTabSwipeCommitted = {
+                        suppressListingClicks = true
+                        swipeScope.launch {
+                            delay(320)
+                            suppressListingClicks = false
+                        }
+                    },
+                ),
             contentPadding = PaddingValues(
                 start = FashTheme.spacing.editorialStart,
                 end = FashTheme.spacing.editorialEnd,
@@ -370,7 +365,6 @@ fun HomeFeedTabHost(
                                     tab = safeSelected,
                                     onSignIn = { onRequestLogin(safeSelected.guestLoginReason) },
                                 )
-                                safeSelected == HomeFeedTab.Following -> followingEmptyContent()
                                 else -> HomeFeedTabGenericEmpty(tab = safeSelected)
                             }
                         }
@@ -388,27 +382,21 @@ fun HomeFeedTabHost(
                             item = item,
                             onClick = { onListingClick(item, index, analyticsSurface) },
                             onDwell = { dwellMs -> onDwell(item, index, dwellMs, analyticsSurface) },
-                            imageAspectRatio = listingMasonryStaggerAspectRatio(item.id),
+                            imageAspectRatio = listingMasonryAspectRatio(item),
+                            columnWidthDp = masonryColumnWidthDp,
+                            modifier = Modifier.listingMasonryTileSize(masonryColumnWidthDp, item),
                             showQuickActions = true,
                             onLike = { onLikeListing(item) },
                             onSave = { onSaveListing(item) },
                         )
                     }
-                    if (followingLoadingMore && safeSelected == HomeFeedTab.Following) {
-                        item(span = StaggeredGridItemSpan.FullLine, key = "home_feed_loading_more") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp)
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(28.dp),
-                                    color = FashColors.Primary,
-                                    strokeWidth = 2.dp,
-                                )
-                            }
+                    if (safeSelected == HomeFeedTab.Following && (hasMore || followingLoadingMore)) {
+                        item(span = StaggeredGridItemSpan.FullLine, key = "home_feed_load_more") {
+                            FeedLoadMoreFooter(
+                                enabled = hasMore,
+                                isLoadingMore = followingLoadingMore,
+                                onLoadMore = onLoadMoreFollowing,
+                            )
                         }
                     }
                 }
@@ -441,6 +429,7 @@ fun HomeFeedTabHost(
                 )
             }
         }
+    }
     }
 }
 
@@ -546,7 +535,7 @@ private fun HomeFeedTabGenericEmpty(tab: HomeFeedTab) {
         HomeFeedTab.ForYou -> R.string.home_tab_empty_for_you_title to R.string.home_tab_empty_for_you_subtitle
         HomeFeedTab.StylePicks -> R.string.home_tab_empty_style_title to R.string.home_tab_empty_style_subtitle
         HomeFeedTab.SimilarSaved -> R.string.home_tab_empty_similar_title to R.string.home_tab_empty_similar_subtitle
-        HomeFeedTab.Following -> R.string.home_feed_empty_title to R.string.home_feed_empty_subtitle
+        HomeFeedTab.Following -> R.string.home_tab_empty_following_title to R.string.home_tab_empty_following_subtitle
     }
     FashEmptyState(
         icon = Icons.Outlined.Inventory2,

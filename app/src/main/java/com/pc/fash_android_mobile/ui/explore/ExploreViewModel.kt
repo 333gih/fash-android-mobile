@@ -12,6 +12,7 @@ import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -728,6 +729,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         syncSellerFollowingFromListings(page)
                         _hasMore.value = page.size >= ExploreFeedPageSize
                         _loadError.value = false
+                        prefetchExploreImages(page)
                     },
                     onFailure = {
                         _events.tryEmit(
@@ -1084,6 +1086,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 _hasMore.value = page.size >= ExploreFeedPageSize
                 _loadError.value = false
                 lastSuccessfulExploreRefreshAtMs = System.currentTimeMillis()
+                prefetchExploreImages(page)
             },
             onFailure = {
                 _loadError.value = true
@@ -1596,6 +1599,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     fun recordListingDwell(item: ListingFeedItem, surface: String, position: Int, dwellMs: Int) {
         if (dwellMs < 800) return
         feedEventReporter.dwell(item.id, surface = surface, position = position, dwellMs = dwellMs)
+    }
+
+    private fun prefetchExploreImages(items: List<ListingFeedItem>) {
+        if (items.isEmpty()) return
+        val ctx = getApplication<Application>()
+        val columnWidthDp = (ctx.resources.configuration.screenWidthDp - 24) / 2f
+        FeedListingImagePrefetch.prefetch(ctx, items, columnWidthDp)
     }
 
     /** Applies `seller.is_following` from listing payloads to [followingIds] (viewer batched flags). */

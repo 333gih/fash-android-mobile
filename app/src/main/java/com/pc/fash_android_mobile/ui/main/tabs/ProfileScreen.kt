@@ -32,10 +32,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -104,6 +104,9 @@ import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashDefaultProfileAssets
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.feed.listingMasonryAspectRatio
+import com.pc.fash_android_mobile.ui.feed.listingMasonryTileSize
+import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.profile.ProfileShare
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -1600,15 +1603,18 @@ internal fun ProfileProductGrid(
         )
         return
     }
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+    val columnWidthDp = rememberListingMasonryColumnWidthDp()
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Fixed(2),
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = FashTheme.spacing.editorialStart,
-            vertical = 16.dp,
+            start = FashTheme.spacing.editorialStart,
+            end = FashTheme.spacing.editorialEnd,
+            top = 16.dp,
+            bottom = 16.dp,
         ),
+        horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
+        verticalItemSpacing = FashTheme.spacing.spacing2,
     ) {
         itemsIndexed(
             items,
@@ -1617,6 +1623,9 @@ internal fun ProfileProductGrid(
             ListingGridCard(
                 item = item,
                 onClick = { onItemClick(item.id) },
+                imageAspectRatio = listingMasonryAspectRatio(item),
+                columnWidthDp = columnWidthDp,
+                modifier = Modifier.listingMasonryTileSize(columnWidthDp, item),
             )
         }
     }

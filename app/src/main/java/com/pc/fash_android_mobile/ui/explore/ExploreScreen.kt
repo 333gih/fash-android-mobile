@@ -125,8 +125,11 @@ import com.pc.fash_android_mobile.ui.components.ProfilePreviewEmptySlotPlacehold
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
-import com.pc.fash_android_mobile.ui.feed.listingMasonryStaggerAspectRatio
+import com.pc.fash_android_mobile.ui.feed.listingMasonryAspectRatio
+import com.pc.fash_android_mobile.ui.feed.listingMasonryTileSize
+import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrl
@@ -266,6 +269,7 @@ fun ExploreScreen(
     val sellersLoading by viewModel.sellersLoading.collectAsState()
     val sellersLoadError by viewModel.sellersLoadError.collectAsState()
     val gridState = rememberLazyStaggeredGridState()
+    val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
     val sellersListState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
     val density = LocalDensity.current
@@ -302,19 +306,6 @@ fun ExploreScreen(
             viewModel = viewModel,
         )
     } else {
-        LaunchedEffect(gridState, primarySection) {
-            if (primarySection != ExplorePrimarySection.Listings) return@LaunchedEffect
-            snapshotFlow {
-                val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                lastVisible to listings.size
-            }
-                .distinctUntilChanged()
-                .collect { (lastVisible, n) ->
-                    if (n <= 0 || lastVisible < n - 3) return@collect
-                    viewModel.loadMore()
-                }
-        }
-
         Box(modifier = modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = showStickyExploreChrome,
@@ -503,7 +494,12 @@ fun ExploreScreen(
                                             onDwell = { dwellMs ->
                                                 viewModel.recordListingDwell(item, "explore", index, dwellMs)
                                             },
-                                            imageAspectRatio = listingMasonryStaggerAspectRatio(item.id),
+                                            imageAspectRatio = listingMasonryAspectRatio(item),
+                                            columnWidthDp = masonryColumnWidthDp,
+                                            modifier = Modifier.listingMasonryTileSize(
+                                                masonryColumnWidthDp,
+                                                item,
+                                            ),
                                             showQuickActions = true,
                                             onLike = {
                                                 if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
@@ -515,21 +511,13 @@ fun ExploreScreen(
                                             },
                                         )
                                     }
-                                    if (isLoadingMore) {
-                                        item(span = StaggeredGridItemSpan.FullLine) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(56.dp)
-                                                    .padding(vertical = 8.dp),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(28.dp),
-                                                    color = FashColors.Primary,
-                                                    strokeWidth = 2.dp,
-                                                )
-                                            }
+                                    if (hasMore || isLoadingMore) {
+                                        item(span = StaggeredGridItemSpan.FullLine, key = "explore_load_more") {
+                                            FeedLoadMoreFooter(
+                                                enabled = hasMore,
+                                                isLoadingMore = isLoadingMore,
+                                                onLoadMore = { viewModel.loadMore() },
+                                            )
                                         }
                                     }
                                     if (!hasMore && listings.isNotEmpty()) {

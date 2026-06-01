@@ -129,13 +129,6 @@ fun HomeFeedContent(
                 onDwell = { item, index, dwellMs, surface ->
                     viewModel.recordDwell(item, surface, index, dwellMs)
                 },
-                followingEmptyContent = {
-                    HomePersonalizedFeedEmptyCard(
-                        onExploreClick = onNavigateToExplore,
-                        onFeaturedSellersClick = onOpenFeaturedSellersAll,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                },
                 onRequestLogin = onRequestLogin,
                 onScrollToTopRequest = viewModel.scrollHomeToTop,
             )

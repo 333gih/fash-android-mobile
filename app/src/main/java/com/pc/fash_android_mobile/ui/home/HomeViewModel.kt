@@ -10,6 +10,7 @@ import com.pc.fash_android_mobile.data.home.HomeDiscoveryBundle
 import com.pc.fash_android_mobile.data.home.HomeDiscoveryRepository
 import com.pc.fash_android_mobile.data.home.HttpHomeDiscoveryRepository
 import com.pc.fash_android_mobile.data.locale.AppLocale
+import com.pc.fash_android_mobile.data.listing.ListingEngagementCoordinator
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.order.OrderRepository
@@ -26,6 +27,7 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
+import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -178,7 +180,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         uxTabTracker.onTabOpened("home", tab.toUxTabKey())
         _selectedFeedTab.value = tab
         ensureTabLoaded(tab)
+        prefetchTabImages(tab)
         prefetchFromPersonalization(around = tab)
+    }
+
+    private fun prefetchFeedImages(items: List<ListingFeedItem>) {
+        if (items.isEmpty()) return
+        val ctx = getApplication<Application>()
+        val columnWidthDp = (ctx.resources.configuration.screenWidthDp - 24) / 2f
+        FeedListingImagePrefetch.prefetch(ctx, items, columnWidthDp)
+    }
+
+    private fun prefetchTabImages(tab: HomeFeedTab) {
+        val bundle = _discoveryBundle.value
+        val items = when (tab) {
+            HomeFeedTab.HuntToday -> bundle.huntToday
+            HomeFeedTab.ForYou -> bundle.forYou
+            HomeFeedTab.StylePicks -> bundle.stylePicks
+            HomeFeedTab.SimilarSaved -> bundle.similarToSaved
+            HomeFeedTab.Following -> _items.value
+        }
+        prefetchFeedImages(items)
     }
 
     /** Coerce selection when guest mode hides personalized tabs (e.g. after sign-out). */
@@ -199,6 +221,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun onGuestBrowseEntered() {
         uxTabTracker.closeActiveTab()
+        feedEventReporter.flush()
         feedEventReporter.clearPending()
         homeUxApplied = false
         _homeUxPersonalization.value = HomeUxPersonalization()
@@ -300,7 +323,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         loadFeed()
         if (!isGuestBrowse()) {
-            viewModelScope.launch(Dispatchers.IO) { loadUxPersonalization() }
+            viewModelScope.launch(Dispatchers.IO) {
+                coroutineScope {
+                    launch { loadUxPersonalization() }
+                    launch { loadRecommendationSections(force = false) }
+                }
+            }
         }
         viewModelScope.launch {
             if (isGuestBrowse()) return@launch
@@ -367,6 +395,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (isGuestBrowse() && tab.requiresAuth) return
         if (!force && tab in loadedTabs) return
         if (tab in _tabsLoading.value) return
+        if (!force && tab == HomeFeedTab.HuntToday && recommendationSectionsFetched) {
+            val cached = _discoveryBundle.value.huntToday
+            if (cached.isNotEmpty()) {
+                loadedTabs.add(tab)
+                return
+            }
+        }
         if (!force && tab in HomeFeedTab.recommendationSectionTabs() && recommendationSectionsFetched) {
             loadedTabs.add(tab)
             return
@@ -389,6 +424,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (tab in HomeFeedTab.recommendationSectionTabs()) {
                     HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
                 }
+                prefetchTabImages(tab)
             } else {
                 setTabError(tab, true)
             }
@@ -455,6 +491,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadHuntTodayTab(force: Boolean): Boolean {
         if (!force && HomeFeedTab.HuntToday in loadedTabs) return true
+        if (!isGuestBrowse() && recommendationSectionsFetched) {
+            val cached = _discoveryBundle.value.huntToday
+            if (cached.isNotEmpty()) return true
+        }
         return fashApp.recommendationRepository.exploreListings(
             publicBrowse = isGuestBrowse(),
             limit = sectionLimitFor(HomeFeedTab.HuntToday, HomeHuntTodayLimit),
@@ -477,6 +517,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = { feed ->
                 _items.value = feed
                 syncSellerFollowingFromListings(feed)
+                prefetchFeedImages(feed)
                 true
             },
             onFailure = { false },
@@ -510,6 +551,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     loadedTabs.add(HomeFeedTab.HuntToday)
                 }
                 recommendationSectionsFetched = true
+                prefetchTabImages(_selectedFeedTab.value)
                 true
             },
             onFailure = { false },
@@ -590,9 +632,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val stats = async { loadBuyerHomeStats() }
                     val shell = async { reloadHomeShell() }
                     val sizing = async { refreshSizingBannerState() }
+                    val sections = async {
+                        if (!isGuestBrowse()) loadRecommendationSections(force = false)
+                    }
                     stats.await()
                     shell.await()
                     sizing.await()
+                    sections.await()
                 }
             }
             _isLoading.value = false
@@ -657,6 +703,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             current + page.filter { existingIds.add(it.id) }
                         }
                         syncSellerFollowingFromListings(page)
+                        prefetchFeedImages(page)
                         _hasMoreItems.value = page.size >= HomeFollowFeedPageSize
                     }
                 },
@@ -696,6 +743,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCachesForSignedOutUser() {
         uxTabTracker.closeActiveTab()
         uxTabTracker.flush()
+        feedEventReporter.flush()
         feedEventReporter.clearPending()
         homeUxApplied = false
         _homeUxPersonalization.value = HomeUxPersonalization()
@@ -736,10 +784,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val shell = async { reloadHomeShell() }
                     val sizing = async { refreshSizingBannerState() }
                     val ux = async { if (!isGuestBrowse()) loadUxPersonalization() }
+                    val sections = async {
+                        if (!isGuestBrowse()) loadRecommendationSections(force = false)
+                    }
                     stats.await()
                     shell.await()
                     sizing.await()
                     ux.await()
+                    sections.await()
                 }
             }
             ensureTabLoaded(selected, force = true)
@@ -766,9 +818,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleLike(item: ListingFeedItem) {
+        if (!ListingEngagementCoordinator.beginLikeToggle(item.id)) return
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                listingRepository.toggleLike(item.id)
+            val result = try {
+                withContext(Dispatchers.IO) {
+                    listingRepository.toggleLike(item.id)
+                }
+            } finally {
+                ListingEngagementCoordinator.endLikeToggle(item.id)
             }
             result.fold(
                 onSuccess = { liked ->
@@ -797,9 +854,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleSave(item: ListingFeedItem) {
+        if (!ListingEngagementCoordinator.beginSaveToggle(item.id)) return
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                listingRepository.toggleSave(item.id, item.isSaved)
+            val result = try {
+                withContext(Dispatchers.IO) {
+                    listingRepository.toggleSave(item.id, item.isSaved)
+                }
+            } finally {
+                ListingEngagementCoordinator.endSaveToggle(item.id)
             }
             result.fold(
                 onSuccess = { saved ->
@@ -967,6 +1029,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         uxTabTracker.closeActiveTab()
         uxTabTracker.flush()
+        feedEventReporter.flush()
         super.onCleared()
     }
 

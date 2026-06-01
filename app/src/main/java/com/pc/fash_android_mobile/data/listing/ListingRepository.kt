@@ -276,7 +276,7 @@ class ListingRepository(
         filename: String = "image.jpg",
         mimeType: String = "image/jpeg",
     ): Result<ListingImageUploadResult> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/listings/images")
+        val uploadUrl = AppEnvironment.apiPath("api/v1/listings/images")
         val safeMime = mimeType.takeIf { it.contains('/') && !it.contains('*') } ?: "image/jpeg"
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
@@ -287,7 +287,7 @@ class ListingRepository(
             )
             .build()
         val request = Request.Builder()
-            .url(url)
+            .url(uploadUrl)
             .post(body)
             .header("Accept", "application/json")
             .header("User-Agent", "FashAndroid/1.0")
@@ -300,10 +300,10 @@ class ListingRepository(
             b
         }
         val root = JSONObject(bodyStr)
-        val url = root.optString("image_url", "").ifBlank { error("No image_url in response") }
+        val imageUrl = root.optString("image_url", "").ifBlank { error("No image_url in response") }
         val width = root.optInt("width", 0).takeIf { it > 0 }
         val height = root.optInt("height", 0).takeIf { it > 0 }
-        ListingImageUploadResult(url = url, width = width, height = height)
+        ListingImageUploadResult(url = imageUrl, width = width, height = height)
     }
 
     fun createListing(request: CreateListingRequest): Result<CreateListingResponse> = runCatching {

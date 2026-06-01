@@ -26,14 +26,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import com.pc.fash_android_mobile.ui.components.LocalFashTabSwipeConsuming
+import com.pc.fash_android_mobile.ui.components.fashTabSwipe
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,6 +64,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -80,7 +85,9 @@ import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
-import com.pc.fash_android_mobile.ui.feed.ListingGridCard
+import com.pc.fash_android_mobile.ui.feed.listingMasonryProfileChunkItems
+import com.pc.fash_android_mobile.ui.feed.makeStableColumnLayout
+import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
 import com.pc.fash_android_mobile.ui.listing.listingStatusOverlayLabel
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import java.util.Locale
@@ -196,8 +203,13 @@ fun ProfileCollapsingScrollLayout(
     }
     val tabCount = tabLabelResIds.size
     val safeSelectedTab = selectedTab.coerceIn(0, ProfileListingTab.LAST)
-    val gridRows by remember(items, safeSelectedTab) { derivedStateOf { items.chunked(2) } }
-    var horizontalDrag by remember { mutableFloatStateOf(0f) }
+    val columnAssignments = remember { mutableStateMapOf<String, Boolean>() }
+    val masonryLayout = remember(items) { makeStableColumnLayout(items, columnAssignments) }
+    val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
+    var tabSwipeConsuming by remember { mutableStateOf(false) }
+    var suppressListingClicks by remember { mutableStateOf(false) }
+    val swipeScope = rememberCoroutineScope()
+    val visualSelectedIndex = tabIndices.indexOf(safeSelectedTab).coerceAtLeast(0)
     val rawProgress = rememberProfileHeaderCollapseProgress(listState).value
     val progress by animateFloatAsState(
         targetValue = rawProgress,
@@ -214,31 +226,32 @@ fun ProfileCollapsingScrollLayout(
     val totalBottomPad = bottomScrollPad + additionalBottomInset
 
     val listBg = MaterialTheme.colorScheme.background
+    CompositionLocalProvider(
+        LocalFashTabSwipeConsuming provides (tabSwipeConsuming || suppressListingClicks),
+    ) {
     LazyColumn(
         state = listState,
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight()
             .background(listBg)
-            .pointerInput(tabCount, safeSelectedTab, tabIndices) {
-                if (tabCount <= 1) return@pointerInput
-                val visualIndex = tabIndices.indexOf(safeSelectedTab).coerceAtLeast(0)
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        val threshold = 72f
-                        when {
-                            horizontalDrag <= -threshold && visualIndex < tabCount - 1 -> {
-                                onTabSelected(tabIndices[visualIndex + 1])
-                            }
-                            horizontalDrag >= threshold && visualIndex > 0 -> {
-                                onTabSelected(tabIndices[visualIndex - 1])
-                            }
-                        }
-                        horizontalDrag = 0f
-                    },
-                    onHorizontalDrag = { _, delta -> horizontalDrag += delta },
-                )
-            },
+            .fashTabSwipe(
+                enabled = tabCount > 1,
+                tabCount = tabCount,
+                currentVisualIndex = visualSelectedIndex,
+                onVisualIndexChanged = { index -> onTabSelected(tabIndices[index]) },
+                onConsumingChanged = { active ->
+                    tabSwipeConsuming = active
+                    if (active) suppressListingClicks = true
+                },
+                onTabSwipeCommitted = {
+                    suppressListingClicks = true
+                    swipeScope.launch {
+                        delay(320)
+                        suppressListingClicks = false
+                    }
+                },
+            ),
     ) {
         item(key = "profile_header") {
             // Only the expanded hero + stats — never swap to compact here (that was shrinking item 0 and
@@ -301,44 +314,22 @@ fun ProfileCollapsingScrollLayout(
                 }
             }
         } else {
-            itemsIndexed(
-                gridRows,
-                key = { index, row -> stableLazyKey(row.firstOrNull()?.id, index, "profrow_$safeSelectedTab") },
-            ) { _, pair ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = FashTheme.spacing.editorialStart,
-                            end = FashTheme.spacing.editorialEnd,
-                            top = 4.dp,
-                            bottom = 4.dp,
-                        ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    pair.forEach { item ->
-                        Box(modifier = Modifier.weight(1f)) {
-                            val statusLabel =
-                                if (showListingStatusOverlay) listingStatusOverlayLabel(item.listingStatus) else null
-                            ListingGridCard(
-                                item = item,
-                                onClick = { onListingClick(item) },
-                                showQuickActions = showListingQuickActions,
-                                onLike = { onListingLike(item) },
-                                onSave = { onListingSave(item) },
-                                statusOverlayLabel = statusLabel,
-                            )
-                        }
-                    }
-                    if (pair.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
+            listingMasonryProfileChunkItems(
+                items = items,
+                layout = masonryLayout,
+                keyPrefix = "prof_$safeSelectedTab",
+                columnWidthDp = masonryColumnWidthDp,
+                showQuickActions = showListingQuickActions,
+                showListingStatusOverlay = showListingStatusOverlay,
+                onListingClick = onListingClick,
+                onListingLike = onListingLike,
+                onListingSave = onListingSave,
+            )
             item(key = "list_bottom_pad") {
                 Spacer(modifier = Modifier.height(totalBottomPad))
             }
         }
+    }
     }
 }
 

@@ -79,6 +79,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.graphicsLayer
+import com.pc.fash_android_mobile.ui.components.fashEdgeBackSwipe
 import com.pc.fash_android_mobile.ui.components.FashAnimatedSearchIconButton
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
 import com.pc.fash_android_mobile.ui.components.FashHomeCollapsedSearchIcon
@@ -421,7 +422,72 @@ fun MainNavScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
+    val hasMainNavOverlayBack = remember(
+        featureTourVisible,
+        showChangePasswordScreen,
+        showNotificationPreferencesScreen,
+        showSettingsScreen,
+        showNotificationScreen,
+        showExploreOverlay,
+        exploreSearchExpanded,
+    ) {
+        featureTourVisible ||
+            showNotificationPreferencesScreen ||
+            showChangePasswordScreen ||
+            showSettingsScreen ||
+            showNotificationScreen ||
+            showExploreOverlay
+    }
+
+    val performMainNavOverlayBack: () -> Unit = {
+        when {
+            showNotificationPreferencesScreen -> showNotificationPreferencesScreen = false
+            showChangePasswordScreen -> showChangePasswordScreen = false
+            showSettingsScreen -> showSettingsScreen = false
+            showNotificationScreen -> {
+                if (notificationDetailId != null) {
+                    notificationsViewModel.closeDetail()
+                } else {
+                    showNotificationScreen = false
+                }
+            }
+            showExploreOverlay -> {
+                if (exploreSearchExpanded) {
+                    exploreViewModel.setSearchBarExpanded(false)
+                } else {
+                    closeExploreOverlay()
+                }
+            }
+            featureTourVisible -> {
+                if (tourStep == AppTourStep.Intro) {
+                    AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
+                    onFeatureTourFinished()
+                } else {
+                    val prev = AppTourStep.entries.getOrNull(tourStep.ordinal - 1)
+                    if (prev != null) tourStep = prev
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .fashEdgeBackSwipe(enabled = !isGuestMode) {
+                when {
+                    hasMainNavOverlayBack -> {
+                        performMainNavOverlayBack()
+                        true
+                    }
+                    selectedTab != MainTab.Home.ordinal -> {
+                        onTabChange(MainTab.Home.ordinal)
+                        true
+                    }
+                    else -> false
+                }
+            },
+    ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -822,50 +888,11 @@ fun MainNavScreen(
             onBack = { showChangePasswordScreen = false },
         )
     }
-    val exploreSearchExpanded by exploreViewModel.searchBarExpanded.collectAsState()
-    val hasMainNavOverlayBack = remember(
-        featureTourVisible,
-        showChangePasswordScreen,
-        showNotificationPreferencesScreen,
-        showSettingsScreen,
-        showNotificationScreen,
-        notificationDetailId,
-        showExploreOverlay,
-        exploreSearchExpanded,
-    ) {
-        featureTourVisible ||
-            showNotificationPreferencesScreen ||
-            showChangePasswordScreen ||
-            showSettingsScreen ||
-            showNotificationScreen ||
-            showExploreOverlay
-    }
     BackHandler(enabled = hasMainNavOverlayBack) {
-        when {
-            showNotificationPreferencesScreen -> showNotificationPreferencesScreen = false
-            showChangePasswordScreen -> showChangePasswordScreen = false
-            showSettingsScreen -> showSettingsScreen = false
-            showNotificationScreen && notificationDetailId != null -> {
-                notificationsViewModel.closeDetail()
-            }
-            showNotificationScreen -> showNotificationScreen = false
-            showExploreOverlay -> {
-                if (exploreSearchExpanded) {
-                    exploreViewModel.setSearchBarExpanded(false)
-                } else {
-                    closeExploreOverlay()
-                }
-            }
-            featureTourVisible -> {
-                if (tourStep == AppTourStep.Intro) {
-                    AppFeatureTourStore.markCompletedForCurrentVersion(context.applicationContext)
-                    onFeatureTourFinished()
-                } else {
-                    val prev = AppTourStep.entries.getOrNull(tourStep.ordinal - 1)
-                    if (prev != null) tourStep = prev
-                }
-            }
-        }
+        performMainNavOverlayBack()
+    }
+    BackHandler(enabled = !hasMainNavOverlayBack && selectedTab != MainTab.Home.ordinal) {
+        onTabChange(MainTab.Home.ordinal)
     }
     }
 }

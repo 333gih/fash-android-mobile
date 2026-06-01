@@ -753,6 +753,9 @@
     <string name="share_listing_text">%1$s\n\nOpen in browser:\n%2$s\n\nOpen in app:\n%3$s</string>
     <string name="share_profile_subject">Check out %1$s on Fash</string>
     <string name="share_profile_text">%1$s on Fash — explore their second-hand closet.\n\nOpen in browser:\n%2$s\n\nOpen in app:\n%3$s</string>
+    <string name="share_profile_success">Shop shared.</string>
+    <string name="share_listing_success">Listing shared.</string>
+    <string name="share_invite_success">Invite shared.</string>
     <string name="profile_action_share">Share shop</string>
     <string name="profile_share_shop_title">Share your shop</string>
     <string name="profile_share_shop_subtitle">Send your shop link via chat apps and social networks</string>
@@ -1326,6 +1329,7 @@
     <string name="chat_meeting_withdraw">Withdraw proposal</string>
     <string name="chat_meeting_status_pending">Awaiting response</string>
     <string name="chat_meeting_status_confirmed">Confirmed</string>
+    <string name="chat_new_messages_below">%1$d new messages</string>
     <string name="chat_meeting_status_cancelled">Cancelled</string>
     <string name="chat_meeting_maps_url_invalid">Use a valid Google Maps link (e.g. maps.app.goo.gl, google.com/maps).</string>
     <string name="chat_meeting_record_deal">Record offline deal</string>
@@ -1382,6 +1386,8 @@
     <string name="chat_counter_sheet_buyer_offer">Their offer: %s</string>
     <string name="chat_counter_sheet_submit">Send counter</string>
     <string name="chat_counter_offer_min">Enter at least ₫1,000</string>
+    <string name="chat_offer_must_be_below_listed">Offer must be below listed price (%s)</string>
+    <string name="chat_counter_must_be_above_buyer">Counter must be above the buyer\'s offer (%s)</string>
     <string name="chat_counter_waiting_buyer">Waiting for buyer response…</string>
 
     <string name="chat_offline_deal_sheet_title">Record in-person deal</string>
