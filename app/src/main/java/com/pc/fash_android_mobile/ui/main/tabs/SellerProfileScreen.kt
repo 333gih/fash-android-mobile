@@ -770,8 +770,8 @@ private fun SellerProfileMetricsCard(profile: ProfileInfo?) {
                 SellerProfileStatDivider()
                 SellerProfileStatCell(
                     modifier = Modifier.weight(1f),
-                    value = soldCount.toString(),
-                    label = stringResource(R.string.profile_sold),
+                    value = sellerFormatCount(soldCount),
+                    label = stringResource(R.string.profile_completed_sales),
                     emphasize = soldCount > 0,
                 )
             }
@@ -784,6 +784,7 @@ private fun SellerProfileMetricsCard(profile: ProfileInfo?) {
                 ratingVal = ratingVal,
                 reviewCount = reviewCount,
                 hasShop = productCount > 0,
+                completedSales = soldCount,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             )
         }
@@ -901,6 +902,7 @@ private fun SellerProfileTrustLine(
     ratingVal: Float?,
     reviewCount: Int?,
     hasShop: Boolean,
+    completedSales: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -926,12 +928,27 @@ private fun SellerProfileTrustLine(
                     val sub = when {
                         reviewCount != null && reviewCount >= 0 ->
                             stringResource(R.string.profile_seller_trust_reviews_count, reviewCount)
+                        completedSales > 0 ->
+                            stringResource(R.string.profile_seller_trust_completed_sales, completedSales)
                         else -> stringResource(R.string.profile_seller_trust_subtitle_score_only)
                     }
                     Text(
                         text = sub,
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
+                    )
+                }
+                completedSales > 0 -> {
+                    Text(
+                        text = stringResource(R.string.profile_seller_trust_completed_sales, completedSales),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.profile_seller_trust_completed_sales_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        lineHeight = 18.sp,
                     )
                 }
                 hasShop -> {

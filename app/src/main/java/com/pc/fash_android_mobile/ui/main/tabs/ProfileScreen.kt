@@ -795,7 +795,7 @@ private fun ProfileOwnMetricsCard(
     val soldCount = p.soldCount ?: 0
     val rep = p.reputationPoints?.takeIf { it > 0 }
     val fast = p.hasFastDelivery
-    val showTrustFooter = hasRatingScore || productCount > 0 || rep != null || fast
+    val showTrustFooter = hasRatingScore || productCount > 0 || soldCount > 0 || rep != null || fast
 
     Surface(
         modifier = Modifier
@@ -840,8 +840,8 @@ private fun ProfileOwnMetricsCard(
                 ProfileOwnStatDivider()
                 ProfileStatItem(
                     modifier = Modifier.weight(1f),
-                    value = soldCount.toString(),
-                    label = stringResource(R.string.profile_sold),
+                    value = formatCount(soldCount),
+                    label = stringResource(R.string.profile_completed_sales),
                 )
             }
             if (showTrustFooter) {
@@ -854,6 +854,7 @@ private fun ProfileOwnMetricsCard(
                     ratingVal = ratingVal,
                     reviewCount = reviewCount,
                     hasShop = productCount > 0,
+                    completedSales = soldCount,
                     reputationPoints = rep,
                     hasFastDelivery = fast,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -881,6 +882,7 @@ private fun ProfileOwnTrustFooter(
     ratingVal: Float?,
     reviewCount: Int?,
     hasShop: Boolean,
+    completedSales: Int = 0,
     reputationPoints: Int?,
     hasFastDelivery: Boolean,
     modifier: Modifier = Modifier,
@@ -909,9 +911,24 @@ private fun ProfileOwnTrustFooter(
                         val sub = when {
                             reviewCount != null && reviewCount >= 0 ->
                                 stringResource(R.string.profile_seller_trust_reviews_count, reviewCount)
+                            completedSales > 0 ->
+                                stringResource(R.string.profile_seller_trust_completed_sales, completedSales)
                             else -> stringResource(R.string.profile_seller_trust_subtitle_score_only)
                         }
                         Text(text = sub, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    }
+                    completedSales > 0 -> {
+                        Text(
+                            text = stringResource(R.string.profile_seller_trust_completed_sales, completedSales),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.profile_seller_trust_completed_sales_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            lineHeight = 18.sp,
+                        )
                     }
                     hasShop -> {
                         Text(
@@ -1415,8 +1432,8 @@ internal fun ProfileStats(
             )
             ProfileStatItem(
                 modifier = Modifier.weight(1f),
-                value = (profile?.soldCount ?: 0).toString(),
-                label = stringResource(R.string.profile_sold),
+                value = formatCount(profile?.soldCount ?: 0),
+                label = stringResource(R.string.profile_completed_sales),
             )
         }
     }

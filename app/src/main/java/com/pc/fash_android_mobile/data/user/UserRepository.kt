@@ -1109,6 +1109,15 @@ class UserRepository(
         }
     }
 
+    /** Completed marketplace sales (`delivered_confirmed` orders + deduped completed deals). */
+    private fun parseCompletedSaleCount(o: JSONObject): Int {
+        val keys = listOf("completed_sale_count", "CompletedSaleCount", "sold_count", "SoldCount")
+        for (key in keys) {
+            if (o.has(key)) return o.optInt(key, 0).coerceAtLeast(0)
+        }
+        return 0
+    }
+
     private fun parseProfileInfo(json: String): ProfileInfo {
         val o = JSONObject(json.trim())
         val tagsArr = o.optJSONArray("aesthetic_tags") ?: o.optJSONArray("tags")
@@ -1163,7 +1172,7 @@ class UserRepository(
                 "product_count",
                 o.optInt("ProductCount", o.optInt("listing_count", o.optInt("ListingCount", 0))),
             ),
-            soldCount = o.optInt("sold_count", o.optInt("SoldCount", 0)),
+            soldCount = parseCompletedSaleCount(o),
             aestheticTags = tagList,
             aestheticTagSnapshots = snapshotList,
             referenceSize = o.optString("reference_size", "").trim().takeIf { it.isNotEmpty() },
