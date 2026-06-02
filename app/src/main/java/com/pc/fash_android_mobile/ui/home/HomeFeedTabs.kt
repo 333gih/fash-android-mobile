@@ -119,6 +119,14 @@ enum class HomeFeedTab(
         guestBodyRes = R.string.home_guest_tab_similar_body,
         guestLoginReason = GuestLoginReason.HomeSimilarSaved,
     ),
+    SeasonalNearYou(
+        titleRes = R.string.home_seasonal_near_you_title,
+        analyticsSurface = "seasonal_near_you",
+        requiresAuth = true,
+        guestTitleRes = R.string.home_guest_tab_seasonal_title,
+        guestBodyRes = R.string.home_guest_tab_seasonal_body,
+        guestLoginReason = GuestLoginReason.HomeForYou,
+    ),
     ;
 
     companion object {
@@ -127,7 +135,8 @@ enum class HomeFeedTab(
         fun signedInTabs(): List<HomeFeedTab> = entries.toList()
 
         /** Tabs backed by `home-sections` (one API call covers all three). */
-        fun recommendationSectionTabs(): Set<HomeFeedTab> = setOf(ForYou, StylePicks, SimilarSaved)
+        fun recommendationSectionTabs(): Set<HomeFeedTab> =
+            setOf(ForYou, StylePicks, SimilarSaved, SeasonalNearYou)
 
         fun tabsFor(isGuestBrowse: Boolean): List<HomeFeedTab> =
             if (isGuestBrowse) guestTabs() else signedInTabs()
@@ -160,6 +169,8 @@ fun HomeFeedTabHost(
     onRetryTab: () -> Unit,
     stylePickItems: List<ListingFeedItem>,
     similarSavedItems: List<ListingFeedItem>,
+    seasonalNearYouItems: List<ListingFeedItem>,
+    shoppingContextChip: String? = null,
     isGuestBrowse: Boolean,
     showSizingBanner: Boolean,
     onDismissSizingBanner: () -> Unit,
@@ -192,6 +203,7 @@ fun HomeFeedTabHost(
             followingItems = followingItems,
             stylePickItems = stylePickItems,
             similarSavedItems = similarSavedItems,
+            seasonalNearYouItems = seasonalNearYouItems,
         )
     }
     val isLoading = !showGuestGate && (
@@ -269,6 +281,21 @@ fun HomeFeedTabHost(
             horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
             verticalItemSpacing = FashTheme.spacing.spacing2,
         ) {
+            if (!shoppingContextChip.isNullOrBlank()) {
+                item(span = StaggeredGridItemSpan.FullLine, key = "home_shopping_context_chip") {
+                    Text(
+                        text = stringResource(R.string.shopping_context_chip, shoppingContextChip!!),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
             if (showJourneyRow) {
                 item(span = StaggeredGridItemSpan.FullLine, key = "home_journey_row") {
                     BuyerHomeJourneyCompactBar(
@@ -535,6 +562,7 @@ private fun HomeFeedTabGenericEmpty(tab: HomeFeedTab) {
         HomeFeedTab.ForYou -> R.string.home_tab_empty_for_you_title to R.string.home_tab_empty_for_you_subtitle
         HomeFeedTab.StylePicks -> R.string.home_tab_empty_style_title to R.string.home_tab_empty_style_subtitle
         HomeFeedTab.SimilarSaved -> R.string.home_tab_empty_similar_title to R.string.home_tab_empty_similar_subtitle
+        HomeFeedTab.SeasonalNearYou -> R.string.home_tab_empty_seasonal_title to R.string.home_tab_empty_seasonal_subtitle
         HomeFeedTab.Following -> R.string.home_tab_empty_following_title to R.string.home_tab_empty_following_subtitle
     }
     FashEmptyState(
@@ -555,12 +583,14 @@ private fun tabItemsFor(
     followingItems: List<ListingFeedItem>,
     stylePickItems: List<ListingFeedItem>,
     similarSavedItems: List<ListingFeedItem>,
+    seasonalNearYouItems: List<ListingFeedItem>,
 ): List<ListingFeedItem> = when (tab) {
     HomeFeedTab.HuntToday -> huntTodayItems
     HomeFeedTab.ForYou -> forYouItems
     HomeFeedTab.Following -> followingItems
     HomeFeedTab.StylePicks -> stylePickItems
     HomeFeedTab.SimilarSaved -> similarSavedItems
+    HomeFeedTab.SeasonalNearYou -> seasonalNearYouItems
 }
 
 @Composable

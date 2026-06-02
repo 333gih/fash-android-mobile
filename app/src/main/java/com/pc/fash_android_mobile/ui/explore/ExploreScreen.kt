@@ -413,15 +413,18 @@ fun ExploreScreen(
                                         )
                                     }
                                 }
+                                val shoppingContextChip by viewModel.shoppingContext.collectAsState()
                                 if (
                                     sizingMode.equals("match_profile", ignoreCase = true) ||
-                                    browseLocationMode != BrowseLocationMode.Off
+                                    browseLocationMode != BrowseLocationMode.Off ||
+                                    shoppingContextChip?.chipLabel() != null
                                 ) {
                                     item(span = StaggeredGridItemSpan.FullLine) {
                                         ExploreActivePersonalFilterChips(
                                             sizingActive = sizingMode.equals("match_profile", ignoreCase = true),
                                             browseLocationMode = browseLocationMode,
                                             browseLocationLabel = viewModel.activeBrowseLocationLabel(),
+                                            seasonContextLabel = shoppingContextChip?.chipLabel(),
                                             onClearSizing = { viewModel.setSizingModeFilter("all") },
                                             onClearLocation = { viewModel.clearBrowseLocationFilter() },
                                             onOpenFilters = { showFilterSheet = true },
@@ -1305,6 +1308,7 @@ private fun ExploreActivePersonalFilterChips(
     sizingActive: Boolean,
     browseLocationMode: BrowseLocationMode,
     browseLocationLabel: String,
+    seasonContextLabel: String? = null,
     onClearSizing: () -> Unit,
     onClearLocation: () -> Unit,
     onOpenFilters: () -> Unit,
@@ -1337,6 +1341,11 @@ private fun ExploreActivePersonalFilterChips(
                 )
             }
         }
+        seasonContextLabel?.trim()?.takeIf { it.isNotEmpty() }?.let { seasonLabel ->
+            item {
+                ExploreSeasonContextPill(label = seasonLabel)
+            }
+        }
         item {
             Text(
                 text = stringResource(R.string.explore_personal_filters_edit),
@@ -1349,6 +1358,22 @@ private fun ExploreActivePersonalFilterChips(
             )
         }
     }
+}
+
+@Composable
+private fun ExploreSeasonContextPill(label: String) {
+    val shape = RoundedCornerShape(FashTheme.spacing.radiusPill)
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

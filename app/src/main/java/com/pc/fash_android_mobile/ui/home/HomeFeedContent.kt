@@ -110,6 +110,8 @@ fun HomeFeedContent(
                 onRetryTab = { viewModel.retryTab(ui.selectedFeedTab) },
                 stylePickItems = ui.discovery.stylePicks,
                 similarSavedItems = ui.discovery.similarToSaved,
+                seasonalNearYouItems = ui.discovery.seasonalNearYou,
+                shoppingContextChip = ui.discovery.shoppingContext?.chipLabel(),
                 isGuestBrowse = isGuestBrowse,
                 showSizingBanner = ui.showSizingBanner && !isGuestBrowse,
                 onDismissSizingBanner = viewModel::dismissSizingBanner,

@@ -18,6 +18,8 @@ data class HomeRecommendationSections(
     val stylePicks: List<ListingFeedItem> = emptyList(),
     val continueBrowsing: List<ListingFeedItem> = emptyList(),
     val similarToSaved: List<ListingFeedItem> = emptyList(),
+    val seasonalNearYou: List<ListingFeedItem> = emptyList(),
+    val shoppingContext: ShoppingContext? = null,
 )
 
 // Personalized discovery: /recommendations/... and /public/browse/recommendations/...
@@ -125,7 +127,21 @@ class RecommendationRepository(
             stylePicks = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("style_picks")),
             continueBrowsing = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("continue_browsing")),
             similarToSaved = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("similar_to_saved")),
+            seasonalNearYou = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("seasonal_near_you")),
+            shoppingContext = ShoppingContext.fromJson(data.optJSONObject("shopping_context")),
         )
+    }
+
+    fun shoppingContext(publicBrowse: Boolean): Result<ShoppingContext> = runCatching {
+        val path = if (publicBrowse) {
+            PublicBrowseHttp.publicApiPath("browse/recommendations/context")
+        } else {
+            AppEnvironment.apiPath("api/v1/recommendations/context")
+        }
+        val body = executeGet(path, publicBrowse)
+        val root = JSONObject(body)
+        val data = root.optJSONObject("data") ?: root
+        ShoppingContext.fromJson(data) ?: ShoppingContext()
     }
 
     fun recordFeedEvents(

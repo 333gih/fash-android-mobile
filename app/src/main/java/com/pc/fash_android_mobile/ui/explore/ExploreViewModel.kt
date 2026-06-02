@@ -22,6 +22,7 @@ import com.pc.fash_android_mobile.data.explore.ExploreBrowseLocationPreference
 import com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
+import com.pc.fash_android_mobile.data.recommendation.ShoppingContext
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
@@ -309,6 +310,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /** Default shipping address province/district for nearby mode. */
     private val _defaultAddressLocation = MutableStateFlow(BrowseLocationFilter())
     val defaultAddressLocation: StateFlow<BrowseLocationFilter> = _defaultAddressLocation.asStateFlow()
+
+    private val _shoppingContext = MutableStateFlow<ShoppingContext?>(null)
+    val shoppingContext: StateFlow<ShoppingContext?> = _shoppingContext.asStateFlow()
 
     /** @deprecated Use [manualBrowseLocation] — kept for gradual UI migration. */
     val browseLocation: StateFlow<BrowseLocationFilter> = _manualBrowseLocation.asStateFlow()
@@ -758,6 +762,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 loadCategories()
                 loadQuickInterestChips()
                 refreshProfileSizingState()
+                refreshShoppingContext()
             }
             fetchListingsFirstPage()
             _isLoading.value = false
@@ -772,6 +777,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /** Call after the viewer saves profile sizing so the Explore toggle badge updates immediately. */
     fun refreshProfileSizingStateAfterSave() {
         viewModelScope.launch(Dispatchers.IO) { refreshProfileSizingState() }
+    }
+
+    private suspend fun refreshShoppingContext() {
+        fashApp.recommendationRepository.shoppingContext(isGuestBrowse()).fold(
+            onSuccess = { _shoppingContext.value = it },
+            onFailure = { _shoppingContext.value = null },
+        )
     }
 
     /** Refresh default-address snapshot after shipping address book changes. */

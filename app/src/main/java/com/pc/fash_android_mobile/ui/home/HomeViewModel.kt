@@ -198,6 +198,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             HomeFeedTab.ForYou -> bundle.forYou
             HomeFeedTab.StylePicks -> bundle.stylePicks
             HomeFeedTab.SimilarSaved -> bundle.similarToSaved
+            HomeFeedTab.SeasonalNearYou -> bundle.seasonalNearYou
             HomeFeedTab.Following -> _items.value
         }
         prefetchFeedImages(items)
@@ -386,6 +387,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 forYou = emptyList(),
                 stylePicks = emptyList(),
                 similarToSaved = emptyList(),
+                seasonalNearYou = emptyList(),
+                shoppingContext = null,
                 recentlyViewed = emptyList(),
             )
         }
@@ -415,7 +418,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 when (tab) {
                     HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
                     HomeFeedTab.Following -> loadFollowingTab(force)
-                    HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved ->
+                    HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved, HomeFeedTab.SeasonalNearYou ->
                         loadRecommendationSections(force)
                 }
             }
@@ -542,10 +545,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         forYou = sections.forYou,
                         stylePicks = sections.stylePicks,
                         similarToSaved = sections.similarToSaved,
+                        seasonalNearYou = sections.seasonalNearYou,
+                        shoppingContext = sections.shoppingContext ?: cur.shoppingContext,
                     )
                 }
                 syncSellerFollowingFromListings(
-                    sections.huntToday + sections.forYou + sections.stylePicks + sections.similarToSaved,
+                    sections.huntToday + sections.forYou + sections.stylePicks +
+                        sections.similarToSaved + sections.seasonalNearYou,
                 )
                 if (sections.huntToday.isNotEmpty()) {
                     loadedTabs.add(HomeFeedTab.HuntToday)
