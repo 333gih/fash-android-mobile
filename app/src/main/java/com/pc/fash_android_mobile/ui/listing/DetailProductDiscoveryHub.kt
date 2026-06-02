@@ -29,8 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
 import com.pc.fash_android_mobile.ui.feed.ListingMasonryGrid
-import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
 /** PDP related listings — one Explore-style 2-column masonry grid with relation badges per card (iOS parity). */
@@ -38,12 +38,13 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 @Composable
 fun DetailProductDiscoveryHub(
     entries: List<ProductDiscoveryFeedEntry>,
+    isLoading: Boolean = false,
     onItemClick: (String, String?) -> Unit,
     onLike: (ListingFeedItem) -> Unit,
     onSave: (ListingFeedItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (entries.isEmpty()) return
+    if (!isLoading && entries.isEmpty()) return
 
     val relationById = remember(entries) {
         entries.associate { it.item.id to it.relationLabel }
@@ -71,47 +72,57 @@ fun DetailProductDiscoveryHub(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (entries.any { it.relation == ProductDiscoveryRelation.SELLER }) {
-                    RelationLegendChip(
-                        label = stringResource(R.string.product_relation_legend_seller),
-                        icon = Icons.Outlined.Storefront,
-                    )
-                }
-                if (entries.any { it.relation == ProductDiscoveryRelation.CATEGORY }) {
-                    RelationLegendChip(
-                        label = stringResource(R.string.product_relation_legend_category),
-                        icon = Icons.Outlined.Category,
-                    )
-                }
-                if (entries.any { it.relation == ProductDiscoveryRelation.BRAND }) {
-                    RelationLegendChip(
-                        label = stringResource(R.string.product_relation_legend_brand),
-                        icon = Icons.Outlined.LocalOffer,
-                    )
-                }
-                if (entries.any { it.relation == ProductDiscoveryRelation.STYLE }) {
-                    RelationLegendChip(
-                        label = stringResource(R.string.product_relation_legend_style),
-                        icon = Icons.Outlined.AutoAwesome,
-                    )
+            if (!isLoading) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (entries.any { it.relation == ProductDiscoveryRelation.SELLER }) {
+                        RelationLegendChip(
+                            label = stringResource(R.string.product_relation_legend_seller),
+                            icon = Icons.Outlined.Storefront,
+                        )
+                    }
+                    if (entries.any { it.relation == ProductDiscoveryRelation.CATEGORY }) {
+                        RelationLegendChip(
+                            label = stringResource(R.string.product_relation_legend_category),
+                            icon = Icons.Outlined.Category,
+                        )
+                    }
+                    if (entries.any { it.relation == ProductDiscoveryRelation.BRAND }) {
+                        RelationLegendChip(
+                            label = stringResource(R.string.product_relation_legend_brand),
+                            icon = Icons.Outlined.LocalOffer,
+                        )
+                    }
+                    if (entries.any { it.relation == ProductDiscoveryRelation.STYLE }) {
+                        RelationLegendChip(
+                            label = stringResource(R.string.product_relation_legend_style),
+                            icon = Icons.Outlined.AutoAwesome,
+                        )
+                    }
                 }
             }
         }
 
-        ListingMasonryGrid(
-            items = entries.map { it.item },
-            onLikeListing = onLike,
-            onSaveListing = onSave,
-            onListingClick = { item, _ -> onItemClick(item.id, item.sellerId) },
-            onRecordView = { _, _ -> },
-            onDwell = { _, _, _ -> },
-            columnAssignments = columnAssignments,
-            relationBadgeForItem = { item -> relationById[item.id] },
-        )
+        if (isLoading) {
+            FashSkeletonGrid(
+                modifier = Modifier,
+                rows = 2,
+                staggered = true,
+            )
+        } else {
+            ListingMasonryGrid(
+                items = entries.map { it.item },
+                onLikeListing = onLike,
+                onSaveListing = onSave,
+                onListingClick = { item, _ -> onItemClick(item.id, item.sellerId) },
+                onRecordView = { _, _ -> },
+                onDwell = { _, _, _ -> },
+                columnAssignments = columnAssignments,
+                relationBadgeForItem = { item -> relationById[item.id] },
+            )
+        }
     }
 }
 

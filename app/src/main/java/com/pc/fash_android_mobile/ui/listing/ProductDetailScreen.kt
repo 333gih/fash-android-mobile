@@ -184,6 +184,7 @@ fun ProductDetailScreen(
     val detail by viewModel.detail.collectAsState()
     val sellerProfile by viewModel.sellerProfile.collectAsState()
     val discoveryFeed by viewModel.discoveryFeed.collectAsState()
+    val isDiscoveryLoading by viewModel.isDiscoveryLoading.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val isOpeningChat by viewModel.isOpeningChat.collectAsState()
@@ -345,9 +346,10 @@ fun ProductDetailScreen(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
                                 )
-                                if (discoveryFeed.isNotEmpty()) {
+                                if (discoveryFeed.isNotEmpty() || isDiscoveryLoading) {
                                     DetailProductDiscoveryHub(
                                         entries = discoveryFeed,
+                                        isLoading = isDiscoveryLoading,
                                         onItemClick = onListingClick,
                                         onLike = { item ->
                                             if (isGuestMode) onRequestLogin(GuestLoginReason.Like)

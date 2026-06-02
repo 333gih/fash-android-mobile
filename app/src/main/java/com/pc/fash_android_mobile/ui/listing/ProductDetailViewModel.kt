@@ -93,6 +93,9 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _discoveryFeed = MutableStateFlow<List<ProductDiscoveryFeedEntry>>(emptyList())
     val discoveryFeed: StateFlow<List<ProductDiscoveryFeedEntry>> = _discoveryFeed.asStateFlow()
 
+    private val _isDiscoveryLoading = MutableStateFlow(false)
+    val isDiscoveryLoading: StateFlow<Boolean> = _isDiscoveryLoading.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -144,6 +147,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByBrand.value = emptyList()
         _relatedByStyle.value = emptyList()
         _discoveryFeed.value = emptyList()
+        _isDiscoveryLoading.value = false
         _isLoading.value = false
         _loadError.value = null
         _isFollowing.value = false
@@ -171,6 +175,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByBrand.value = emptyList()
         _relatedByStyle.value = emptyList()
         _discoveryFeed.value = emptyList()
+        _isDiscoveryLoading.value = false
             _bottomBarMode.value = ProductBottomBarMode.Normal
             _buyerActiveOrder.value = null
             _showPurchaseGuide.value = false
@@ -187,12 +192,18 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                         d.sellerIsFollowing?.let { _isFollowing.value = it }
                         val sid = d.sellerId?.takeIf { it.isNotBlank() }
                             ?: d.sellerUsername?.takeIf { it.isNotBlank() }
-                        sid?.let { loadSellerAndMore(it, listingId, guest) }
+                        if (sid != null) {
+                            _isDiscoveryLoading.value = true
+                            loadSellerAndMore(sid, listingId, guest)
+                        } else {
+                            _isDiscoveryLoading.value = false
+                        }
                         if (!guest) {
                             listingRepository.recordView(listingId)
                         }
                     },
                     onFailure = {
+                        _isDiscoveryLoading.value = false
                         _loadError.value = it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.product_detail_error)
                     },
@@ -312,7 +323,12 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         loadBuyerActiveOrder(listingId)
 
     private suspend fun loadSellerAndMore(sellerKey: String, excludeListingId: String, publicBrowse: Boolean = false) {
-        val d = _detail.value ?: return
+        val d = _detail.value
+        if (d == null) {
+            _isDiscoveryLoading.value = false
+            return
+        }
+        _isDiscoveryLoading.value = true
         val profileId = d.sellerUsername?.takeIf { it.isNotBlank() } ?: sellerKey
         val profileResult = if (publicBrowse) {
             userRepository.getProfilePublic(profileId)
@@ -387,6 +403,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 styleItems = _relatedByStyle.value,
                 styleFallbackLabel = getApplication<Application>().getString(R.string.product_related_style),
             )
+            _isDiscoveryLoading.value = false
         }
     }
 

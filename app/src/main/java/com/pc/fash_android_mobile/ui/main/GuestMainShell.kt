@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -80,6 +81,34 @@ fun GuestMainShell(
     var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var listingDetailBackStack by rememberSaveable { mutableStateOf(listOf<String>()) }
+    fun closeListingDetail() {
+        selectedListingId = null
+        listingDetailBackStack = emptyList()
+    }
+    fun openListingDetailFresh(listingId: String) {
+        listingDetailBackStack = emptyList()
+        selectedListingId = listingId
+    }
+    fun pushListingDetail(listingId: String) {
+        val lid = listingId.trim()
+        if (lid.isEmpty()) return
+        val current = selectedListingId?.trim().orEmpty()
+        if (current.equals(lid, ignoreCase = true)) return
+        if (listingDetailBackStack.any { it.equals(lid, ignoreCase = true) }) return
+        if (current.isNotEmpty()) {
+            listingDetailBackStack = listingDetailBackStack + current
+        }
+        selectedListingId = lid
+    }
+    fun popListingDetail() {
+        if (listingDetailBackStack.isNotEmpty()) {
+            selectedListingId = listingDetailBackStack.last()
+            listingDetailBackStack = listingDetailBackStack.dropLast(1)
+        } else {
+            closeListingDetail()
+        }
+    }
     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var showEditorialListScreen by rememberSaveable { mutableStateOf(false) }
     var uxSurveyKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -153,7 +182,7 @@ fun GuestMainShell(
     val pendingDeepLink by fashApp.pendingDeepLinkListingId.collectAsState()
     LaunchedEffect(pendingDeepLink) {
         val id = pendingDeepLink ?: return@LaunchedEffect
-        selectedListingId = id
+        openListingDetailFresh(id)
         fashApp.pendingDeepLinkListingId.value = null
     }
     val pendingSellerDeepLink by fashApp.pendingDeepLinkSellerUsername.collectAsState()
@@ -209,7 +238,7 @@ fun GuestMainShell(
                 homeEditorialSlug = null
                 showFeaturedSellersAll = false
                 sellerShopUsername = null
-                selectedListingId = lid
+                openListingDetailFresh(lid)
             },
             onFeaturedSellerClick = openSellerShop,
             onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
@@ -266,7 +295,7 @@ fun GuestMainShell(
                 onSellerClick = { seller -> openSellerShop(seller.toUserSearchResult()) },
                 onListingClick = { lid, _ ->
                     showFeaturedSellersAll = false
-                    selectedListingId = lid
+                    openListingDetailFresh(lid)
                 },
             )
         }
@@ -281,7 +310,9 @@ fun GuestMainShell(
                 sellerUsername = shopUsername,
                 listingPreviewViewModel = homeViewModel,
                 onBack = { sellerShopUsername = null },
-                onListingClick = { lid, _ -> selectedListingId = lid },
+                onListingClick = { lid, _ ->
+                    if (selectedListingId != null) pushListingDetail(lid) else openListingDetailFresh(lid)
+                },
                 onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
                     exploreViewModel.openExploreFromProfileFilter(
                         categoryId = cat,
@@ -299,43 +330,43 @@ fun GuestMainShell(
             )
         }
 
-        val listingId = selectedListingId
-        if (listingId != null) {
-            ProductDetailScreen(
-                modifier = Modifier.fillMaxSize(),
-                listingId = listingId,
-                viewModel = productDetailViewModel,
-                onBack = {
-                    productDetailViewModel.clearCachesForSignedOutUser()
-                    selectedListingId = null
-                },
-                onChat = { requestLogin(GuestLoginReason.BuyOrChat) },
-                onBuyNow = { requestLogin(GuestLoginReason.BuyOrChat) },
-                onListingClick = { lid, _ -> selectedListingId = lid },
-                onVisitSellerShop = { username ->
-                    val u = username.trim()
-                    if (u.isNotEmpty()) {
-                        selectedListingId = null
-                        sellerShopUsername = u
-                    }
-                },
-                profileExploreNavigationEnabled = true,
-                onNavigateToExploreFromProfile = { categoryId, brandId, aestheticTagId, searchQuery, countryId, countryIso2 ->
-                    exploreViewModel.openExploreFromProfileFilter(
-                        categoryId = categoryId,
-                        brandId = brandId,
-                        aestheticTagId = aestheticTagId,
-                        searchQuery = searchQuery,
-                        countryId = countryId,
-                        countryIso2 = countryIso2,
-                    )
-                    selectedListingId = null
-                    sellerShopUsername = null
-                    exploreOverlayOpenNonce++
-                },
-                isGuestMode = true,
-                onRequestLogin = requestLogin,
-            )
+        selectedListingId?.let { listingId ->
+            key(listingId) {
+                ProductDetailScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    listingId = listingId,
+                    viewModel = productDetailViewModel,
+                    onBack = { popListingDetail() },
+                    onChat = { requestLogin(GuestLoginReason.BuyOrChat) },
+                    onBuyNow = { requestLogin(GuestLoginReason.BuyOrChat) },
+                    onListingClick = { lid, _ ->
+                        if (selectedListingId != null) pushListingDetail(lid) else openListingDetailFresh(lid)
+                    },
+                    onVisitSellerShop = { username ->
+                        val u = username.trim()
+                        if (u.isNotEmpty()) {
+                            closeListingDetail()
+                            sellerShopUsername = u
+                        }
+                    },
+                    profileExploreNavigationEnabled = true,
+                    onNavigateToExploreFromProfile = { categoryId, brandId, aestheticTagId, searchQuery, countryId, countryIso2 ->
+                        exploreViewModel.openExploreFromProfileFilter(
+                            categoryId = categoryId,
+                            brandId = brandId,
+                            aestheticTagId = aestheticTagId,
+                            searchQuery = searchQuery,
+                            countryId = countryId,
+                            countryIso2 = countryIso2,
+                        )
+                        closeListingDetail()
+                        sellerShopUsername = null
+                        exploreOverlayOpenNonce++
+                    },
+                    isGuestMode = true,
+                    onRequestLogin = requestLogin,
+                )
+            }
         }
 
         val reason = guestLoginReason
@@ -374,8 +405,10 @@ fun GuestMainShell(
                 showFeaturedSellersAll && sellerShopUsername == null -> showFeaturedSellersAll = false
                 sellerShopUsername != null -> sellerShopUsername = null
                 selectedListingId != null -> {
-                    productDetailViewModel.clearCachesForSignedOutUser()
-                    selectedListingId = null
+                    if (listingDetailBackStack.isEmpty()) {
+                        productDetailViewModel.clearCachesForSignedOutUser()
+                    }
+                    popListingDetail()
                 }
             }
         }

@@ -1157,12 +1157,8 @@ class MainActivity : ComponentActivity() {
                                 }
                                 isAuthenticated -> {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var listingDetailBackStack by rememberSaveable { mutableStateOf(listOf<String>()) }
                                     val pendingDeepLink by fashApp.pendingDeepLinkListingId.collectAsState()
-                                    LaunchedEffect(pendingDeepLink) {
-                                        val id = pendingDeepLink ?: return@LaunchedEffect
-                                        selectedListingId = id
-                                        fashApp.pendingDeepLinkListingId.value = null
-                                    }
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
                                     val pendingSellerDeepLink by fashApp.pendingDeepLinkSellerUsername.collectAsState()
                                     LaunchedEffect(pendingSellerDeepLink) {
@@ -1178,6 +1174,49 @@ class MainActivity : ComponentActivity() {
                                     /** True briefly after closing seller shop to block PDP from applying Explore filters (pointer replay). */
                                     var suppressPdpExploreNav by remember { mutableStateOf(false) }
                                     var editListingId by rememberSaveable { mutableStateOf<String?>(null) }
+                                    fun closeListingDetail() {
+                                        selectedListingId = null
+                                        listingDetailBackStack = emptyList()
+                                    }
+                                    fun openListingDetailFresh(listingId: String) {
+                                        listingDetailBackStack = emptyList()
+                                        selectedListingId = listingId
+                                    }
+                                    fun pushListingDetail(listingId: String) {
+                                        val lid = listingId.trim()
+                                        if (lid.isEmpty()) return
+                                        val current = selectedListingId?.trim().orEmpty()
+                                        if (current.equals(lid, ignoreCase = true)) return
+                                        if (listingDetailBackStack.any { it.equals(lid, ignoreCase = true) }) return
+                                        if (current.isNotEmpty()) {
+                                            listingDetailBackStack = listingDetailBackStack + current
+                                        }
+                                        selectedListingId = lid
+                                    }
+                                    fun popListingDetail() {
+                                        if (listingDetailBackStack.isNotEmpty()) {
+                                            selectedListingId = listingDetailBackStack.last()
+                                            listingDetailBackStack = listingDetailBackStack.dropLast(1)
+                                        } else {
+                                            closeListingDetail()
+                                        }
+                                    }
+                                    fun openListingDetail(listingId: String, sellerId: String?) {
+                                        val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
+                                        if (!sellerId.isNullOrBlank() && sellerId == myId) {
+                                            closeListingDetail()
+                                            editListingId = listingId
+                                        } else if (selectedListingId != null) {
+                                            pushListingDetail(listingId)
+                                        } else {
+                                            openListingDetailFresh(listingId)
+                                        }
+                                    }
+                                    LaunchedEffect(pendingDeepLink) {
+                                        val id = pendingDeepLink ?: return@LaunchedEffect
+                                        openListingDetailFresh(id)
+                                        fashApp.pendingDeepLinkListingId.value = null
+                                    }
                                     var profileEditReturnTab by rememberSaveable { mutableIntStateOf(-1) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationItem by remember { mutableStateOf<ConversationItem?>(null) }
@@ -1272,7 +1311,7 @@ class MainActivity : ComponentActivity() {
                                      * would otherwise reveal the previous listing screen instead of Explore.
                                      */
                                     val navigateToExploreFromSellerShop: () -> Unit = {
-                                        selectedListingId = null
+                                        closeListingDetail()
                                         dismissSellerShopOverlay()
                                         exploreOverlayOpenNonce++
                                     }
@@ -1520,7 +1559,7 @@ class MainActivity : ComponentActivity() {
                                                 selectedConversationItem = null
                                                 chatViewModel.loadConversations()
                                                 chatViewModel.refreshUnreadCount()
-                                                selectedListingId = null
+                                                closeListingDetail()
                                                 selectedOrderId = oid
                                             },
                                             onOpenListingFromNotification = { lid, sellerId ->
@@ -1532,17 +1571,10 @@ class MainActivity : ComponentActivity() {
                                                 chatViewModel.loadConversations()
                                                 chatViewModel.refreshUnreadCount()
                                                 selectedOrderId = null
-                                                val myId =
-                                                    authManager.sessionStore.read()?.userId?.trim().orEmpty()
-                                                if (!sellerId.isNullOrBlank() && sellerId == myId) {
-                                                    selectedListingId = null
-                                                    editListingId = lid
-                                                } else {
-                                                    selectedListingId = lid
-                                                }
+                                                openListingDetail(lid, sellerId)
                                             },
                                             onNavigateToChatConversation = { conversationId ->
-                                                selectedListingId = null
+                                                closeListingDetail()
                                                 selectedOrderId = null
                                                 editListingId = null
                                                 chatOrderDetailOverlayId = null
@@ -1552,17 +1584,11 @@ class MainActivity : ComponentActivity() {
                                             snackbarHostState = snackbarHostState,
                                             chatUnreadCount = chatUnreadCount,
                                             onListingClick = { lid, sellerId ->
-                                                val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
-                                                if (!sellerId.isNullOrBlank() && sellerId == myId) {
-                                                    selectedListingId = null
-                                                    editListingId = lid
-                                                } else {
-                                                    selectedListingId = lid
-                                                }
+                                                openListingDetail(lid, sellerId)
                                             },
                                             onProfileOwnListingClick = { lid, tab ->
                                                 profileEditReturnTab = tab
-                                                selectedListingId = null
+                                                closeListingDetail()
                                                 editListingId = lid
                                             },
                                             onEditProfile = { showEditProfile = true },
@@ -1606,7 +1632,7 @@ class MainActivity : ComponentActivity() {
                                                     countryId = countryId,
                                                     countryIso2 = countryIso2,
                                                 )
-                                                selectedListingId = null
+                                                closeListingDetail()
                                                 exploreOverlayOpenNonce++
                                                 sellerShopUsername = null
                                                 sellerShopEntrySource = SellerShopEntrySource.None
@@ -1672,23 +1698,24 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                         )
-                                        if (selectedListingId != null) {
+                                        selectedListingId?.let { currentListingId ->
+                                            key(currentListingId) {
                                             ProductDetailScreen(
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surface),
-                                                listingId = selectedListingId!!,
+                                                listingId = currentListingId,
                                                 viewModel = productDetailViewModel,
                                                 profileExploreNavigationEnabled = sellerShopUsername == null &&
                                                     !suppressPdpExploreNav,
-                                                onBack = { selectedListingId = null },
+                                                onBack = { popListingDetail() },
                                                 onChat = { listingId ->
                                                     scope.launch {
                                                         productDetailViewModel.setOpeningChat(true)
                                                         chatViewModel.startConversation(listingId).fold(
                                                             onSuccess = { convId ->
                                                                 productDetailViewModel.setOpeningChat(false)
-                                                                selectedListingId = null
+                                                                closeListingDetail()
                                                                 selectedTab = MainTab.Chat.ordinal
                                                                 selectedConversationItem = null
                                                                 chatOrderDetailOverlayId = null
@@ -1697,7 +1724,7 @@ class MainActivity : ComponentActivity() {
                                                             },
                                                             onFailure = {
                                                                 productDetailViewModel.setOpeningChat(false)
-                                                                selectedListingId = null
+                                                                closeListingDetail()
                                                                 selectedTab = MainTab.Chat.ordinal
                                                                 enqueueSnackbarSerial {
                                                                     showSnackbar(
@@ -1725,7 +1752,7 @@ class MainActivity : ComponentActivity() {
                                                             )
                                                         }
                                                         fun openBuyNowShipFlow(orderId: String, amountVnd: Long) {
-                                                            selectedListingId = null
+                                                            closeListingDetail()
                                                             sellerShopUsername = null
                                                             sellerShopRestoreContext = SellerShopRestoreContext()
                                                             sellerShopEntrySource = SellerShopEntrySource.None
@@ -1785,13 +1812,7 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                 },
                                                 onListingClick = { lid, sellerId ->
-                                                    val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
-                                                    if (!sellerId.isNullOrBlank() && sellerId == myId) {
-                                                        selectedListingId = null
-                                                        editListingId = lid
-                                                    } else {
-                                                        selectedListingId = lid
-                                                    }
+                                                    openListingDetail(lid, sellerId)
                                                 },
                                                 onVisitSellerShop = { username ->
                                                     sellerShopEntrySource = SellerShopEntrySource.ProductDetail
@@ -1807,13 +1828,14 @@ class MainActivity : ComponentActivity() {
                                                         countryId = countryId,
                                                         countryIso2 = countryIso2,
                                                     )
-                                                    selectedListingId = null
+                                                    closeListingDetail()
                                                     exploreOverlayOpenNonce++
                                                     sellerShopUsername = null
                                                     sellerShopEntrySource = SellerShopEntrySource.None
                                                     sellerShopRestoreContext = SellerShopRestoreContext()
                                                 },
                                             )
+                                            }
                                         }
                                         if (sellerShopUsername != null &&
                                             chatShipFlowArgs == null &&
@@ -1834,7 +1856,7 @@ class MainActivity : ComponentActivity() {
                                                         dismissSellerShopOverlay()
                                                         editListingId = lid
                                                     } else {
-                                                        selectedListingId = lid
+                                                        openListingDetail(lid, sellerId)
                                                     }
                                                 },
                                                 onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
@@ -1846,7 +1868,7 @@ class MainActivity : ComponentActivity() {
                                                         countryId = countryId,
                                                         countryIso2 = countryIso2,
                                                     )
-                                                    selectedListingId = null
+                                                    closeListingDetail()
                                                     exploreOverlayOpenNonce++
                                                     sellerShopUsername = null
                                                     sellerShopEntrySource = SellerShopEntrySource.None
@@ -1911,7 +1933,7 @@ class MainActivity : ComponentActivity() {
                                                     selectedConversationId = null
                                                     chatViewModel.loadConversations()
                                                     chatViewModel.refreshUnreadCount()
-                                                    selectedListingId = it
+                                                    openListingDetailFresh(it)
                                                 },
                                                 onCheckout = { listingId, offerAmount ->
                                                     selectedCheckoutListingId = listingId
@@ -2006,14 +2028,7 @@ class MainActivity : ComponentActivity() {
                                                     chatViewModel.refreshUnreadCount()
                                                     val myId =
                                                         authManager.sessionStore.read()?.userId?.trim().orEmpty()
-                                                    if (sellerUserId.isNotBlank() &&
-                                                        sellerUserId.equals(myId, ignoreCase = true)
-                                                    ) {
-                                                        selectedListingId = null
-                                                        editListingId = listingId
-                                                    } else {
-                                                        selectedListingId = listingId
-                                                    }
+                                                    openListingDetail(listingId, sellerUserId.takeIf { it.isNotBlank() })
                                                 },
                                             )
                                         }
@@ -2059,14 +2074,7 @@ class MainActivity : ComponentActivity() {
                                                         selectedOrderId = null
                                                         val myId =
                                                             authManager.sessionStore.read()?.userId?.trim().orEmpty()
-                                                        if (sellerUserId.isNotBlank() &&
-                                                            sellerUserId.equals(myId, ignoreCase = true)
-                                                        ) {
-                                                            selectedListingId = null
-                                                            editListingId = listingId
-                                                        } else {
-                                                            selectedListingId = listingId
-                                                        }
+                                                        openListingDetail(listingId, sellerUserId.takeIf { it.isNotBlank() })
                                                     },
                                                 )
                                             }
@@ -2240,14 +2248,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 },
                                                 onListingClick = { lid, sellerId ->
-                                                    val myId =
-                                                        authManager.sessionStore.read()?.userId?.trim().orEmpty()
-                                                    if (!sellerId.isNullOrBlank() && sellerId == myId) {
-                                                        selectedListingId = null
-                                                        editListingId = lid
-                                                    } else {
-                                                        selectedListingId = lid
-                                                    }
+                                                    openListingDetail(lid, sellerId)
                                                 },
                                             )
                                         }
@@ -2409,7 +2410,7 @@ class MainActivity : ComponentActivity() {
                                                     editListingId = null
                                                 }
                                                 selectedListingId != null -> {
-                                                    selectedListingId = null
+                                                    popListingDetail()
                                                 }
                                             }
                                         }
