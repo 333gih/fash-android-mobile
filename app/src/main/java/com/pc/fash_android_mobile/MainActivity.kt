@@ -615,6 +615,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding, lifecycleOwner) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                        if (promoOpenCountIncremented) return@repeatOnLifecycle
                         if (profileSetupBlocksShellChrome) return@repeatOnLifecycle
                         if (selectedConversationId != null) return@repeatOnLifecycle
                         delay(550)
