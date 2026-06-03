@@ -191,6 +191,8 @@ fun ProfileCollapsingScrollLayout(
     showListingStatusOverlay: Boolean = false,
     /** Extra space at list end (e.g. seller profile bottom promo overlay). */
     additionalBottomInset: Dp = 0.dp,
+    /** First-page listing load under tabs — skeleton grid instead of empty state. */
+    showGridLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val allTabLabelResIds = profileTabLabelResIds(listingTabSet)
@@ -271,7 +273,20 @@ fun ProfileCollapsingScrollLayout(
                 tabIndices = tabIndices,
             )
         }
-        if (items.isEmpty()) {
+        if (showGridLoading) {
+            item(key = "loading_$safeSelectedTab") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    com.pc.fash_android_mobile.ui.components.FashSkeletonGrid(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        rows = 2,
+                        staggered = true,
+                    )
+                    Spacer(modifier = Modifier.height(totalBottomPad))
+                }
+            }
+        } else if (items.isEmpty()) {
             item(key = "empty_$safeSelectedTab") {
                 val scheme = MaterialTheme.colorScheme
                 val tabsPinnedToTop = listState.firstVisibleItemIndex > 0

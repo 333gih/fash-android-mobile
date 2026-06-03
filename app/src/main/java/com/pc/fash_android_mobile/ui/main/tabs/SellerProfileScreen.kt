@@ -258,6 +258,7 @@ fun SellerProfileScreen(
                 }
                 else -> {
                     val items = if (selectedTab == 0) sellingListings else soldListings
+                    val showGridLoading = viewModel.isGridLoading(selectedTab)
                     val pinnedBottomInset = FashPromoSliderAdFooterContentHeight
                     Column(
                         modifier = Modifier
@@ -331,6 +332,7 @@ fun SellerProfileScreen(
                                     }
                                 },
                                 items = items,
+                                showGridLoading = showGridLoading,
                                 listingTabSet = ProfileListingTabSet.SellerStorefront,
                                 onListingClick = { item ->
                                     val previewVm = listingPreviewViewModel

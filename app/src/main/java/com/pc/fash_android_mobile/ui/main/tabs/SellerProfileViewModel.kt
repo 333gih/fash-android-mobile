@@ -73,6 +73,9 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     private val _sellerFocusLoading = MutableStateFlow(false)
     val sellerFocusLoading: StateFlow<Boolean> = _sellerFocusLoading.asStateFlow()
 
+    private val _listingsLoading = MutableStateFlow(false)
+    val listingsLoading: StateFlow<Boolean> = _listingsLoading.asStateFlow()
+
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
@@ -222,7 +225,14 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    fun isGridLoading(selectedTab: Int): Boolean {
+        if (!_listingsLoading.value) return false
+        return if (selectedTab == 0) _sellingListings.value.isEmpty() else _soldListings.value.isEmpty()
+    }
+
     private suspend fun loadListings(sellerId: String) {
+        _listingsLoading.value = true
+        try {
         withContext(Dispatchers.IO) {
             if (isGuestBrowse()) {
                 listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = "active", limit = 50).fold(
@@ -251,6 +261,9 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
                     onFailure = { _soldListings.value = emptyList() },
                 )
             }
+        }
+        } finally {
+            _listingsLoading.value = false
         }
     }
 

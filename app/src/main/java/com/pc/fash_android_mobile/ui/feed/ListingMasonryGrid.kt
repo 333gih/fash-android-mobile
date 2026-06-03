@@ -215,7 +215,7 @@ fun ListingMasonryGrid(
     onDwell: (ListingFeedItem, Int, Int) -> Unit,
     modifier: Modifier = Modifier,
     columnAssignments: MutableMap<String, Boolean> = mutableMapOf(),
-    relationBadgeForItem: (ListingFeedItem) -> String? = { null },
+    relationHighlightForItem: (ListingFeedItem) -> com.pc.fash_android_mobile.ui.listing.ListingRelationHighlight? = { null },
 ) {
     val layout = remember(items, columnAssignments) {
         makeStableColumnLayout(items, columnAssignments)
@@ -241,7 +241,7 @@ fun ListingMasonryGrid(
                     onListingClick = onListingClick,
                     onRecordView = onRecordView,
                     onDwell = onDwell,
-                    relationBadgeLabel = relationBadgeForItem(feedItem),
+                    relationHighlight = relationHighlightForItem(feedItem),
                 )
             }
         }
@@ -256,7 +256,7 @@ fun ListingMasonryGrid(
                     onListingClick = onListingClick,
                     onRecordView = onRecordView,
                     onDwell = onDwell,
-                    relationBadgeLabel = relationBadgeForItem(feedItem),
+                    relationHighlight = relationHighlightForItem(feedItem),
                 )
             }
         }
@@ -375,7 +375,7 @@ fun ListingMasonryTile(
     modifier: Modifier = Modifier,
     showQuickActions: Boolean = true,
     columnWidthDp: Float = rememberListingMasonryColumnWidthDp(),
-    relationBadgeLabel: String? = null,
+    relationHighlight: com.pc.fash_android_mobile.ui.listing.ListingRelationHighlight? = null,
 ) {
     val aspect = listingMasonryAspectRatio(feedItem)
     LaunchedEffect(feedItem.id) {
@@ -393,6 +393,6 @@ fun ListingMasonryTile(
             .padding(bottom = FashTheme.spacing.spacing2),
         imageAspectRatio = aspect,
         columnWidthDp = columnWidthDp,
-        relationBadgeLabel = relationBadgeLabel,
+        relationHighlight = relationHighlight,
     )
 }

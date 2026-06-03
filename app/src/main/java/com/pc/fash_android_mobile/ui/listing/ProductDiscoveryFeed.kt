@@ -16,6 +16,12 @@ data class ProductDiscoveryFeedEntry(
     val relationLabel: String,
 )
 
+/** PDP related cards — highlight matching footer segment (seller / meta), not a top badge. */
+data class ListingRelationHighlight(
+    val relation: ProductDiscoveryRelation,
+    val matchLabel: String,
+)
+
 object ProductDiscoveryFeedBuilder {
     const val MERGED_DISCOVERY_LIMIT = 24
     const val SELLER_RAIL_LIMIT = 10

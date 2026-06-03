@@ -44,8 +44,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import com.pc.fash_android_mobile.ui.listing.ListingRelationHighlight
+import com.pc.fash_android_mobile.ui.listing.ProductDiscoveryRelation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pc.fash_android_mobile.R
@@ -79,8 +84,8 @@ fun ListingGridCard(
     compactFooter: Boolean = false,
     /** Short marketplace status (e.g. own profile); drawn top-start with the photo-stack badge. */
     statusOverlayLabel: String? = null,
-    /** PDP discovery — why this listing is related (shop, category, brand, style). */
-    relationBadgeLabel: String? = null,
+    /** PDP discovery — highlight matching footer field (seller username or meta segment). */
+    relationHighlight: ListingRelationHighlight? = null,
     /** Called when the card leaves composition; provides dwell time in ms (≥ DwellMinMs). */
     onDwell: ((dwellMs: Int) -> Unit)? = null,
     /** When set (masonry grids), used for Coil decode size instead of a screen estimate. */
@@ -206,31 +211,13 @@ fun ListingGridCard(
                 }
             }
             val statusTrimmed = statusOverlayLabel?.trim()?.takeIf { it.isNotEmpty() }
-            val relationTrimmed = relationBadgeLabel?.trim()?.takeIf { it.isNotEmpty() }
-            if (item.imageUrls.size > 1 || statusTrimmed != null || relationTrimmed != null) {
+            if (item.imageUrls.size > 1 || statusTrimmed != null) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    if (relationTrimmed != null) {
-                        val relationA11y = stringResource(R.string.product_relation_badge_a11y, relationTrimmed)
-                        Surface(
-                            modifier = Modifier.semantics { contentDescription = relationA11y },
-                            shape = RoundedCornerShape(6.dp),
-                            color = FashColors.Primary.copy(alpha = 0.88f),
-                        ) {
-                            Text(
-                                text = relationTrimmed,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = Color.White,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
                     if (item.imageUrls.size > 1) {
                         val photoStackA11y = stringResource(
                             R.string.listing_card_photo_stack_a11y,
@@ -352,17 +339,21 @@ fun ListingGridCard(
                 }
 
                 if (!compactFooter && metaUi.hasAny) {
-                    ListingCardMetaRow(metaUi)
+                    ListingCardMetaRow(
+                        parts = metaUi,
+                        relationHighlight = relationHighlight,
+                    )
                 }
 
-                Text(
+                ListingCardHighlightedLine(
                     text = sellerLine,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .listingCardMarquee(),
+                    highlight = if (relationHighlight?.relation == ProductDiscoveryRelation.SELLER) {
+                        relationHighlight.matchLabel
+                    } else {
+                        null
+                    },
                     style = MaterialTheme.typography.labelSmall.copy(lineHeight = 14.sp),
                     color = Color.White.copy(alpha = 0.88f),
-                    maxLines = 1,
                 )
             }
         }
@@ -458,11 +449,19 @@ private fun buildListingCardSecondaryMeta(item: ListingFeedItem): String {
 }
 
 @Composable
-private fun ListingCardMetaRow(parts: ListingMetaUi) {
+private fun ListingCardMetaRow(
+    parts: ListingMetaUi,
+    relationHighlight: ListingRelationHighlight? = null,
+) {
     val labelStyle = MaterialTheme.typography.labelSmall.copy(
         lineHeight = 14.sp,
         letterSpacing = 0.15.sp,
     )
+    val metaHighlight = relationHighlight?.takeIf {
+        it.relation == ProductDiscoveryRelation.CATEGORY ||
+            it.relation == ProductDiscoveryRelation.BRAND ||
+            it.relation == ProductDiscoveryRelation.STYLE
+    }?.matchLabel
     when {
         parts.conditionLabel.isNotBlank() && parts.secondary.isNotBlank() -> Row(
             modifier = Modifier.fillMaxWidth(),
@@ -484,14 +483,12 @@ private fun ListingCardMetaRow(parts: ListingMetaUi) {
                     maxLines = 1,
                 )
             }
-            Text(
+            ListingCardHighlightedLine(
                 text = parts.secondary,
-                modifier = Modifier
-                    .weight(1f)
-                    .listingCardMarquee(),
+                highlight = metaHighlight,
+                modifier = Modifier.weight(1f),
                 style = labelStyle,
                 color = Color.White.copy(alpha = 0.92f),
-                maxLines = 1,
             )
         }
         parts.conditionLabel.isNotBlank() -> Surface(
@@ -509,16 +506,80 @@ private fun ListingCardMetaRow(parts: ListingMetaUi) {
                 maxLines = 1,
             )
         }
-        parts.secondary.isNotBlank() -> Text(
+        parts.secondary.isNotBlank() -> ListingCardHighlightedLine(
             text = parts.secondary,
-            modifier = Modifier
-                .fillMaxWidth()
-                .listingCardMarquee(),
+            highlight = metaHighlight,
+            modifier = Modifier.fillMaxWidth(),
             style = labelStyle,
             color = Color.White.copy(alpha = 0.92f),
-            maxLines = 1,
         )
     }
+}
+
+@Composable
+private fun ListingCardHighlightedLine(
+    text: String,
+    highlight: String?,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color,
+) {
+    val annotated = listingCardHighlightedAnnotated(text, highlight)
+    Text(
+        text = annotated,
+        modifier = modifier.listingCardMarquee(),
+        style = style,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+private fun listingCardHighlightedAnnotated(
+    text: String,
+    highlight: String?,
+): androidx.compose.ui.text.AnnotatedString {
+    val trimmed = highlight?.trim()?.takeIf { it.isNotEmpty() } ?: return androidx.compose.ui.text.AnnotatedString(text)
+    val range = listingCardHighlightRange(text, trimmed) ?: return androidx.compose.ui.text.AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text.substring(0, range.first))
+        withStyle(
+            SpanStyle(
+                fontWeight = FontWeight.SemiBold,
+                background = FashColors.Primary.copy(alpha = 0.42f),
+            ),
+        ) {
+            append(text.substring(range.first, range.last))
+        }
+        if (range.last < text.length) {
+            append(text.substring(range.last))
+        }
+    }
+}
+
+private fun listingCardHighlightRange(text: String, highlight: String): IntRange? {
+    val candidates = buildList {
+        add(highlight)
+        val stripped = highlight.removePrefix("@").trim()
+        if (stripped.isNotEmpty()) {
+            add(stripped)
+            add("@$stripped")
+        }
+    }.distinctBy { it.lowercase(Locale.ROOT) }
+    for (candidate in candidates) {
+        val idx = text.indexOf(candidate, ignoreCase = true)
+        if (idx >= 0) return idx until (idx + candidate.length)
+    }
+    val segments = text.split(" · ")
+    for (segment in segments) {
+        if (segment.equals(highlight, ignoreCase = true) ||
+            segment.removePrefix("@").equals(highlight.removePrefix("@"), ignoreCase = true)
+        ) {
+            val idx = text.indexOf(segment, ignoreCase = true)
+            if (idx >= 0) return idx until (idx + segment.length)
+        }
+    }
+    return null
 }
 
 private fun listingCardSellerLine(item: ListingFeedItem): String {

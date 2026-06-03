@@ -110,13 +110,12 @@ fun CreateListingFillModeStep(
                     onClick = { viewModel.selectFillMode(CreateListingFillMode.MANUAL) },
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            PostFlowNoticeCard(
-                text = stringResource(R.string.post_fill_mode_recommendation_notice),
-                horizontalPadding = 0.dp,
-            )
             Spacer(modifier = Modifier.height(24.dp))
         }
+        PostFlowNoticeCard(
+            text = stringResource(R.string.post_fill_mode_recommendation_notice),
+            horizontalPadding = FashTheme.spacing.editorialStart,
+        )
     }
 }
 

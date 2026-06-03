@@ -46,8 +46,10 @@ fun DetailProductDiscoveryHub(
 ) {
     if (!isLoading && entries.isEmpty()) return
 
-    val relationById = remember(entries) {
-        entries.associate { it.item.id to it.relationLabel }
+    val relationHighlightById = remember(entries) {
+        entries.associate { entry ->
+            entry.item.id to ListingRelationHighlight(entry.relation, entry.relationLabel)
+        }
     }
     val columnAssignments = remember(entries) { mutableStateMapOf<String, Boolean>() }
 
@@ -120,7 +122,7 @@ fun DetailProductDiscoveryHub(
                 onRecordView = { _, _ -> },
                 onDwell = { _, _, _ -> },
                 columnAssignments = columnAssignments,
-                relationBadgeForItem = { item -> relationById[item.id] },
+                relationHighlightForItem = { item -> relationHighlightById[item.id] },
             )
         }
     }
