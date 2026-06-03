@@ -1316,6 +1316,29 @@ class MainActivity : ComponentActivity() {
                                         dismissSellerShopOverlay()
                                         exploreOverlayOpenNonce++
                                     }
+                                    /** Seller shop focus chips (category / brand / style) — PDP-parity Explore + filters. */
+                                    val openExploreFromSellerProfileChips: (
+                                        String?,
+                                        String?,
+                                        String?,
+                                        String,
+                                        String?,
+                                        String?,
+                                    ) -> Unit = { cat, brand, aes, q, countryId, countryIso2 ->
+                                        sellerShopUsername = null
+                                        sellerShopEntrySource = SellerShopEntrySource.None
+                                        sellerShopRestoreContext = SellerShopRestoreContext()
+                                        closeListingDetail()
+                                        exploreViewModel.openExploreFromProfileFilter(
+                                            categoryId = cat,
+                                            brandId = brand,
+                                            aestheticTagId = aes,
+                                            searchQuery = q,
+                                            countryId = countryId,
+                                            countryIso2 = countryIso2,
+                                        )
+                                        exploreOverlayOpenNonce++
+                                    }
                                     /** Bottom nav while seller shop overlay is open — dismiss overlay then land on [tabIndex]. */
                                     val handleMainTabSelectedFromSellerShop: (Int) -> Unit = { tabIndex ->
                                         dismissSellerShopOverlay()
@@ -1624,21 +1647,7 @@ class MainActivity : ComponentActivity() {
                                                 chatDetailViewModel.loadFromItem(item)
                                                 selectedConversationId = item.conversationId
                                             },
-                                            onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
-                                                exploreViewModel.openExploreFromProfileFilter(
-                                                    categoryId = cat,
-                                                    brandId = brand,
-                                                    aestheticTagId = aes,
-                                                    searchQuery = q,
-                                                    countryId = countryId,
-                                                    countryIso2 = countryIso2,
-                                                )
-                                                closeListingDetail()
-                                                exploreOverlayOpenNonce++
-                                                sellerShopUsername = null
-                                                sellerShopEntrySource = SellerShopEntrySource.None
-                                                sellerShopRestoreContext = SellerShopRestoreContext()
-                                            },
+                                            onNavigateToExploreFromProfile = openExploreFromSellerProfileChips,
                                             promoSlides = mappedPromoSlides,
                                             onPromoSlideClick = handlePromoClick,
                                             selectedTab = selectedTab,
@@ -1820,21 +1829,7 @@ class MainActivity : ComponentActivity() {
                                                     sellerShopRestoreContext = SellerShopRestoreContext()
                                                     sellerShopUsername = username
                                                 },
-                                                onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
-                                                    exploreViewModel.openExploreFromProfileFilter(
-                                                        categoryId = cat,
-                                                        brandId = brand,
-                                                        aestheticTagId = aes,
-                                                        searchQuery = q,
-                                                        countryId = countryId,
-                                                        countryIso2 = countryIso2,
-                                                    )
-                                                    closeListingDetail()
-                                                    exploreOverlayOpenNonce++
-                                                    sellerShopUsername = null
-                                                    sellerShopEntrySource = SellerShopEntrySource.None
-                                                    sellerShopRestoreContext = SellerShopRestoreContext()
-                                                },
+                                                onNavigateToExploreFromProfile = openExploreFromSellerProfileChips,
                                             )
                                             }
                                         }
@@ -1860,21 +1855,7 @@ class MainActivity : ComponentActivity() {
                                                         openListingDetail(lid, sellerId)
                                                     }
                                                 },
-                                                onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
-                                                    exploreViewModel.openExploreFromProfileFilter(
-                                                        categoryId = cat,
-                                                        brandId = brand,
-                                                        aestheticTagId = aes,
-                                                        searchQuery = q,
-                                                        countryId = countryId,
-                                                        countryIso2 = countryIso2,
-                                                    )
-                                                    closeListingDetail()
-                                                    exploreOverlayOpenNonce++
-                                                    sellerShopUsername = null
-                                                    sellerShopEntrySource = SellerShopEntrySource.None
-                                                    sellerShopRestoreContext = SellerShopRestoreContext()
-                                                },
+                                                onNavigateToExploreFromProfile = openExploreFromSellerProfileChips,
                                                 onPromoSlideClick = handlePromoClick,
                                                 promoSlides = mappedPromoSlides,
                                             )

@@ -365,6 +365,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _primarySection.value = ExplorePrimarySection.Listings
             setSearchBarExpanded(false)
+            lastSuccessfulExploreRefreshAtMs = 0L
             _isLoading.value = true
             _loadError.value = false
             _listings.value = emptyList()
