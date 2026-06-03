@@ -114,24 +114,19 @@ jobs:
           PROD_ENV: ${{ secrets.ANDROID_PROD_ENV }}
         run: |
           set -euo pipefail
-          if [ "${{ matrix.flavor }}" = "dev" ]; then
-            test -n "${DEV_ENV:-}" || { echo "::error::Missing secret ANDROID_DEV_ENV (full contents of env/dev.env). See docs/CI.md"; exit 1; }
-          else
-            test -n "${PROD_ENV:-}" || { echo "::error::Missing secret ANDROID_PROD_ENV (full contents of env/prod.env). See docs/CI.md"; exit 1; }
-          fi
+          # Gradle loads env/dev.env and env/prod.env for all flavors at configuration time.
+          test -n "${DEV_ENV:-}" || { echo "::error::Missing secret ANDROID_DEV_ENV (full contents of env/dev.env). See docs/CI.md"; exit 1; }
+          test -n "${PROD_ENV:-}" || { echo "::error::Missing secret ANDROID_PROD_ENV (full contents of env/prod.env). See docs/CI.md"; exit 1; }
 
-      - name: Write env file
+      - name: Write env files
         env:
           DEV_ENV: ${{ secrets.ANDROID_DEV_ENV }}
           PROD_ENV: ${{ secrets.ANDROID_PROD_ENV }}
         run: |
           set -euo pipefail
           mkdir -p env
-          if [ "${{ matrix.flavor }}" = "dev" ]; then
-            printf '%s\n' "${DEV_ENV}" > env/dev.env
-          else
-            printf '%s\n' "${PROD_ENV}" > env/prod.env
-          fi
+          printf '%s\n' "${DEV_ENV}" > env/dev.env
+          printf '%s\n' "${PROD_ENV}" > env/prod.env
 
       - name: Prepare release signing (prod, optional)
         if: matrix.flavor == 'prod'
