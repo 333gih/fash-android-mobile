@@ -522,13 +522,19 @@ class MainActivity : ComponentActivity() {
                         !splashFinished ||
                         !isAuthenticated ||
                         profileSetupBlocksShellChrome ||
-                        selectedConversationId != null ||
-                        !AppPromoCampaignStore.canShow(appCtx, promo)
+                        selectedConversationId != null
                     ) {
                         return
                     }
+                    if (AppPromoCampaignStore.isDialogConsumed(appCtx, promo)) {
+                        AppPromoPendingQueue.remove(promo.id)
+                        return
+                    }
+                    if (!AppPromoCampaignStore.canShow(appCtx, promo)) return
                     activePromoCampaign = promo
                     AppPromoCampaignStore.recordShow(appCtx, promo)
+                    AppPromoCampaignStore.markDialogConsumed(appCtx, promo)
+                    AppPromoPendingQueue.remove(promo.id)
                     AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
                         shellCoroutineScope,
                         fashApp,
@@ -656,9 +662,11 @@ class MainActivity : ComponentActivity() {
                             AppPromoOnAppOpenLoader.resolvePresentable(appCtx)
                                 ?: AppPromoCampaignResolver.resolve(gate, appCtx)
                         }
-                        if (resolved != null) {
+                        if (resolved != null && !AppPromoCampaignStore.isDialogConsumed(appCtx, resolved)) {
                             activePromoCampaign = resolved
                             AppPromoCampaignStore.recordShow(appCtx, resolved)
+                            AppPromoCampaignStore.markDialogConsumed(appCtx, resolved)
+                            AppPromoPendingQueue.remove(resolved.id)
                             AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
                                 shellCoroutineScope,
                                 fashApp,
@@ -2524,10 +2532,20 @@ class MainActivity : ComponentActivity() {
                                 notificationSnackbarContext.applicationContext,
                                 campaign,
                             )
+                            AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
+                                shellCoroutineScope,
+                                fashApp,
+                                campaign,
+                            )
                         }
                         activePromoCampaign = null
                     },
                     onPrimaryClick = { campaign ->
+                        AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
+                            shellCoroutineScope,
+                            fashApp,
+                            campaign,
+                        )
                         when (campaign.kind) {
                             AppPromoCampaignKind.Remote -> {
                                 AppPromoCampaignStore.markDismissed(
@@ -2606,6 +2624,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSecondaryClick = { campaign ->
+                        AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
+                            shellCoroutineScope,
+                            fashApp,
+                            campaign,
+                        )
                         if (campaign.kind == AppPromoCampaignKind.Remote) {
                             AppPromoNavigation.applySecondary(
                                 activity = this@MainActivity,

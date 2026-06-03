@@ -34,13 +34,33 @@ fun parseAppPromoFromPushData(
         .orEmpty()
     if (id.isBlank() || title.isBlank() || body.isBlank()) return null
     val version = data["campaign_version"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+    val images = imageUrlsFromPushData(data)
     return AppPromoCampaign(
         id = id,
         version = version,
         kind = AppPromoCampaignKind.Remote,
         remoteTitle = title,
         remoteMessage = body,
+        remoteImageUrls = images,
         remotePrimaryLabel = title,
         primaryAction = AppPromoButtonAction(type = "none", payload = ""),
     )
+}
+
+private fun imageUrlsFromPushData(data: Map<String, String>): List<String> {
+    val raw = data["image_urls"]?.trim().orEmpty().ifBlank { data["imageUrls"]?.trim().orEmpty() }
+    if (raw.isEmpty()) return emptyList()
+    if (raw.startsWith("[")) {
+        return runCatching {
+            org.json.JSONArray(raw).let { arr ->
+                buildList {
+                    for (i in 0 until arr.length()) {
+                        val s = arr.optString(i, "").trim()
+                        if (s.isNotEmpty()) add(s)
+                    }
+                }
+            }
+        }.getOrElse { emptyList() }
+    }
+    return listOf(raw)
 }

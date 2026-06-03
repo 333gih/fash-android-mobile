@@ -12,6 +12,7 @@ object AppPromoCampaignStore {
     private const val KEY_DISMISSED_PREFIX = "app_promo_dismissed_"
     private const val KEY_SHOW_COUNT_PREFIX = "app_promo_shows_"
     private const val KEY_LAST_SHOWN_PREFIX = "app_promo_last_shown_"
+    private const val KEY_DIALOG_CONSUMED_PREFIX = "app_promo_dialog_consumed_"
     private const val KEY_APP_OPEN_COUNT = "app_promo_app_open_count"
     /** Legacy key from the first [WelcomeDialogStore] implementation. */
     private const val LEGACY_WELCOME_DISMISSED_PREFIX = "welcome_center_banner_dismissed_v"
@@ -24,6 +25,9 @@ object AppPromoCampaignStore {
 
     private fun lastShownKey(campaignId: String, version: Int): String =
         "${KEY_LAST_SHOWN_PREFIX}${campaignId}_v$version"
+
+    private fun dialogConsumedKey(campaignId: String, version: Int): String =
+        "${KEY_DIALOG_CONSUMED_PREFIX}${campaignId}_v$version"
 
     fun isDismissed(context: Context, campaign: AppPromoCampaign): Boolean =
         isDismissed(context, campaign.id, campaign.version)
@@ -58,6 +62,22 @@ object AppPromoCampaignStore {
     fun hasRecordedShow(context: Context, campaign: AppPromoCampaign): Boolean {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getInt(showCountKey(campaign.id, campaign.version), 0) > 0
+    }
+
+    fun isDialogConsumed(context: Context, campaign: AppPromoCampaign): Boolean =
+        isDialogConsumed(context, campaign.id, campaign.version) || isDismissed(context, campaign)
+
+    fun isDialogConsumed(context: Context, campaignId: String, version: Int): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(dialogConsumedKey(campaignId, version), false)
+    }
+
+    fun markDialogConsumed(context: Context, campaign: AppPromoCampaign) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(dialogConsumedKey(campaign.id, campaign.version), true)
+            .apply()
     }
 
     fun recordShow(context: Context, campaign: AppPromoCampaign) {

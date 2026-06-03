@@ -1,5 +1,6 @@
 package com.pc.fash_android_mobile.data.promo
 
+import android.content.Context
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.FashInAppNotificationSession
 import com.pc.fash_android_mobile.ui.chat.InboxNotificationSync
@@ -19,7 +20,7 @@ object AppPromoPresentationPolicy {
         return active.isNotEmpty()
     }
 
-    fun shouldSuppressInAppToast(context: android.content.Context, campaign: AppPromoCampaign): Boolean =
+    fun shouldSuppressInAppToast(context: Context, campaign: AppPromoCampaign): Boolean =
         AppPromoCampaignStore.isDismissed(context, campaign) ||
             AppPromoCampaignStore.hasRecordedShow(context, campaign)
 
@@ -40,24 +41,42 @@ object AppPromoPresentationPolicy {
         userNotificationId: String?,
         presentDialog: (AppPromoCampaign) -> Unit,
     ) {
+        val appCtx = app.applicationContext
         AppPromoPendingQueue.enqueue(campaign)
         app.requestInboxUnreadRefreshDebounced()
 
         if (isInChatDetail(openConversationId, app.activeChatConversationId)) {
-            if (shouldSuppressInAppToast(app, campaign)) return
-            val title = campaign.remoteTitle?.trim().orEmpty()
-            val body = campaign.remoteMessage?.trim().orEmpty()
-            if (title.isEmpty() && body.isEmpty()) return
-            app.showInAppNotificationFromRealtime(
-                title = title.ifEmpty { body },
-                body = body,
-                data = promoInAppData(campaign, userNotificationId),
-                userNotificationId = userNotificationId,
-            )
+            presentInChatOnly(app, appCtx, campaign, userNotificationId)
             return
         }
 
         presentDialog(campaign)
+    }
+
+    private fun presentInChatOnly(
+        app: FashApplication,
+        appCtx: Context,
+        campaign: AppPromoCampaign,
+        userNotificationId: String?,
+    ) {
+        if (shouldSuppressInAppToast(appCtx, campaign)) {
+            AppPromoCampaignStore.markDialogConsumed(appCtx, campaign)
+            AppPromoPendingQueue.remove(campaign.id)
+            return
+        }
+        AppPromoCampaignStore.markDialogConsumed(appCtx, campaign)
+        AppPromoPendingQueue.remove(campaign.id)
+        markInboxReadAfterPromoSeen(CoroutineScope(Dispatchers.IO), app, campaign, userNotificationId)
+
+        val title = campaign.remoteTitle?.trim().orEmpty()
+        val body = campaign.remoteMessage?.trim().orEmpty()
+        if (title.isEmpty() && body.isEmpty()) return
+        app.showInAppNotificationFromRealtime(
+            title = title.ifEmpty { body },
+            body = body,
+            data = promoInAppData(campaign, userNotificationId),
+            userNotificationId = userNotificationId,
+        )
     }
 
     fun markInboxReadAfterDialogShown(
@@ -65,10 +84,20 @@ object AppPromoPresentationPolicy {
         app: FashApplication,
         campaign: AppPromoCampaign,
     ) {
+        markInboxReadAfterPromoSeen(scope, app, campaign, userNotificationId = null)
+    }
+
+    fun markInboxReadAfterPromoSeen(
+        scope: CoroutineScope,
+        app: FashApplication,
+        campaign: AppPromoCampaign,
+        userNotificationId: String?,
+    ) {
         scope.launch(Dispatchers.IO) {
             InboxNotificationSync.markAppPromoNotificationsRead(
                 campaignId = campaign.id,
                 version = campaign.version,
+                userNotificationId = userNotificationId,
                 userRepository = app.userRepository,
             )
             app.requestInboxUnreadRefreshDebounced()

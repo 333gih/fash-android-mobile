@@ -23,6 +23,20 @@ fun isAppPromoInboxNotification(item: InboxNotificationItem): Boolean {
  * Rebuilds [AppPromoCampaign] from inbox `data.promo_payload` (FCM / ledger snapshot).
  * Falls back to nested `campaign` JSON or flat keys when present.
  */
+fun matchesPromoCampaign(
+    item: InboxNotificationItem,
+    campaignId: String,
+    @Suppress("UNUSED_PARAMETER") version: Int,
+): Boolean {
+    val cid = campaignId.trim()
+    if (cid.isEmpty()) return false
+    parseAppPromoCampaignFromInbox(item)?.let { promo ->
+        if (promo.id.equals(cid, ignoreCase = true)) return true
+    }
+    val dataId = firstStringFromDataCi(item.dataMap, "campaign_id", "campaignId", "id") ?: return false
+    return dataId.equals(cid, ignoreCase = true)
+}
+
 fun parseAppPromoCampaignFromInbox(item: InboxNotificationItem): AppPromoCampaign? {
     val data = item.dataMap ?: return null
     parsePromoJson(firstStringFromDataCi(data, "promo_payload", "promoPayload"))

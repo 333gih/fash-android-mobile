@@ -61,6 +61,7 @@ import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaignKind
 import com.pc.fash_android_mobile.data.promo.sanitizePromoDisplayString
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
+import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
@@ -314,7 +315,7 @@ private fun PromoHeroSection(
                     ),
             ) { page ->
                 FashAsyncImage(
-                    model = imageUrls[page],
+                    model = resolveListingImageUrl(imageUrls[page]),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                 )

@@ -23,8 +23,11 @@ object AppPromoOnAppOpenLoader {
     }
 
     fun resolvePresentable(appContext: Context): AppPromoCampaign? {
-        val remote = AppPromoPendingQueue.pollHighest() ?: return null
-        return if (AppPromoCampaignStore.canShow(appContext, remote)) remote else null
+        while (true) {
+            val remote = AppPromoPendingQueue.pollHighest() ?: return null
+            if (AppPromoCampaignStore.isDialogConsumed(appContext, remote)) continue
+            return if (AppPromoCampaignStore.canShow(appContext, remote)) remote else null
+        }
     }
 
     suspend fun syncAndResolve(
