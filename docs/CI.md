@@ -131,8 +131,8 @@ CI ghi `local.properties` + `ci-upload.keystore` (gitignored) qua `scripts/ci_pr
 
 | Lỗi | Cách xử lý |
 |---|---|
-| `No key with alias 'upload' found` | Keystore có alias `key0` — set `ANDROID_UPLOAD_KEY_ALIAS=key0`, chạy lại `push_github_android_secrets.ps1`. |
-| `AAB was signed with the wrong key` (expected `5C:E7:3A:...`) | Đang ký bằng alias `upload` (SHA1 `82:9D:...`). Dùng **`key0`** (SHA1 `5C:E7:3A:...`) — xem `keytool -list -keystore secrets/upload.keystore`. |
+| `No key with alias 'upload' found` | Chạy `keytool -list -keystore secrets/upload.keystore` — chọn đúng alias, cập nhật `ANDROID_UPLOAD_KEY_ALIAS`, rồi `push_github_android_secrets.ps1`. |
+| `AAB was signed with the wrong key` | SHA1 AAB không khớp upload key đã đăng ký trên Play. Dùng alias **`upload`** (82:9D:…) thì cần **đổi upload key** trên Play Console (Setup → App signing → Request upload key reset) hoặc dùng alias **`key0`** (5C:E7:…) nếu giữ cert cũ. |
 | `Android Developer API has not been used... or it is disabled` | Bật **Google Play Android Developer API** (mục 4 ở trên). |
 | `Unable to resolve action r0adkll/upload-google-play-action` | Dùng `r0adkll/upload-google-play@v1.1.3` (đã sửa trong workflow). |
 

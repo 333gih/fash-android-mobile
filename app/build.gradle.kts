@@ -314,7 +314,7 @@ android {
             create("release") {
                 storeFile = releaseKeystoreFile
                 storePassword = project.prop("FASH_RELEASE_STORE_PASSWORD").orEmpty()
-                keyAlias = project.prop("FASH_RELEASE_KEY_ALIAS") ?: "key0"
+                keyAlias = project.prop("FASH_RELEASE_KEY_ALIAS") ?: "upload"
                 keyPassword = project.prop("FASH_RELEASE_KEY_PASSWORD").orEmpty()
             }
         }
