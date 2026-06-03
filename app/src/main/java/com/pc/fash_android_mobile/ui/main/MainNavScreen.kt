@@ -293,10 +293,14 @@ fun MainNavScreen(
                 homeViewModel.refresh()
             }
             MainTab.Orders -> {
+                ordersViewModel.requestScrollOrdersToTop()
                 ordersViewModel.refreshOrders()
             }
             MainTab.Post -> postViewModel.reloadOnNavReselect()
-            MainTab.Chat -> chatViewModel.refresh()
+            MainTab.Chat -> {
+                chatViewModel.requestScrollChatToTop()
+                chatViewModel.refresh()
+            }
             MainTab.Profile -> {
                 profileViewModel.requestScrollProfileToTop()
                 profileViewModel.refresh()

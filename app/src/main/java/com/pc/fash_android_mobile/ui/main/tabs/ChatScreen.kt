@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -105,6 +107,13 @@ fun ChatScreen(
 
     val showGroupedInbox =
         sellerHasActiveListings && sellerInboxGroupMode == SellerInboxGroupMode.ByProduct
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollChatToTop.collect {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -187,6 +196,7 @@ fun ChatScreen(
             showGroupedInbox && displayGroups.isEmpty() -> EmptyInboxHint()
             !showGroupedInbox && conversations.isEmpty() -> EmptyInboxHint()
             showGroupedInbox -> LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -219,6 +229,7 @@ fun ChatScreen(
                 }
             }
             else -> LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

@@ -56,6 +56,14 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    private val _scrollOrdersToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollOrdersToTop: SharedFlow<Unit> = _scrollOrdersToTop.asSharedFlow()
+
+    /** Bottom nav re-tap on Orders — scroll list to top (pairs with [refreshOrders]). */
+    fun requestScrollOrdersToTop() {
+        viewModelScope.launch { _scrollOrdersToTop.emit(Unit) }
+    }
+
     init {
         // INTEGRATION.md §5 order.status_changed: payment/shipping updates arrive via WS —
         // silently refresh the list so the buyer/seller sees the new status immediately
@@ -120,6 +128,7 @@ class OrdersViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Pull-to-refresh: reload without full-screen blocking spinner when lists already have data. */
     fun refreshOrders() {
+        requestScrollOrdersToTop()
         viewModelScope.launch {
             val empty = _buyingOrders.value.isEmpty() && _sellingOrders.value.isEmpty()
             if (empty) {

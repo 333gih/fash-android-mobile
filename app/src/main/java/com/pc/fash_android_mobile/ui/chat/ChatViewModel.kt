@@ -105,6 +105,14 @@ class ChatViewModel(
         }
     }
 
+    private val _scrollChatToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollChatToTop: SharedFlow<Unit> = _scrollChatToTop.asSharedFlow()
+
+    /** Bottom nav re-tap on Chat — scroll inbox to top (pairs with [refresh]). */
+    fun requestScrollChatToTop() {
+        viewModelScope.launch { _scrollChatToTop.emit(Unit) }
+    }
+
     /** Full unfiltered list returned by the API (flat). */
     private val _allConversations = MutableStateFlow<List<ConversationItem>>(emptyList())
 
@@ -225,6 +233,7 @@ class ChatViewModel(
     }
 
     fun refresh() {
+        requestScrollChatToTop()
         viewModelScope.launch {
             _isRefreshing.value = true
             silentRefreshConversations()

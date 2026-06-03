@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,6 +54,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -121,6 +123,13 @@ fun OrdersScreen(
     val sourceOrders = if (selectedTab == 0) buyingOrders else sellingOrders
     val filteredOrders = remember(sourceOrders, currentFilter) {
         sourceOrders.filter { currentFilter.matches(it) }
+    }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollOrdersToTop.collect {
+            listState.animateScrollToItem(0)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
@@ -287,6 +296,7 @@ fun OrdersScreen(
                                     }
                                     else -> {
                                         LazyColumn(
+                                            state = listState,
                                             modifier = Modifier.fillMaxSize(),
                                             contentPadding = PaddingValues(
                                                 horizontal = FashTheme.spacing.editorialStart,
