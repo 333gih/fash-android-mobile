@@ -115,9 +115,25 @@ CI ghi `local.properties` + `ci-upload.keystore` (gitignored) qua `scripts/ci_pr
 |---|---|
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Toàn bộ file JSON (multiline) |
 
-4. Lần đầu: upload AAB thủ công một bản để hoàn tất checklist app (content rating, privacy, v.v.) — API upload vẫn cần app đã được tạo trên Play.
+4. **Bật Google Play Android Developer API** trên cùng GCP project đã liên kết Play Console (bắt buộc, nếu không CI fail ở bước Upload to Google Play):
+
+   - [Enable API (project number)](https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview?project=598587496348)
+   - Hoặc GCP Console → project `fash-3526e` → **APIs & Services → Library** → tìm **Google Play Android Developer API** → **Enable**
+   - Đợi 2–5 phút sau khi bật rồi chạy lại **Android Release**.
+
+5. Play Console → **Users and permissions** → invite `play-publisher@fash-3526e.iam.gserviceaccount.com` (quyền release testing).
+
+6. Lần đầu: upload AAB thủ công một bản để hoàn tất checklist app (content rating, privacy, v.v.) — API upload vẫn cần app đã được tạo trên Play.
 
 **Package name (prod):** `com.pc.fash_android_mobile` (không có `.dev`).
+
+### Troubleshooting CI
+
+| Lỗi | Cách xử lý |
+|---|---|
+| `No key with alias 'upload' found` | `ANDROID_UPLOAD_KEY_ALIAS` phải khớp keystore (`keytool -list -keystore secrets/upload.keystore`). Thường là `key0`. Chạy lại `push_github_android_secrets.ps1`. |
+| `Android Developer API has not been used... or it is disabled` | Bật **Google Play Android Developer API** (mục 4 ở trên). |
+| `Unable to resolve action r0adkll/upload-google-play-action` | Dùng `r0adkll/upload-google-play@v1.1.3` (đã sửa trong workflow). |
 
 ## 4. So với iOS
 
