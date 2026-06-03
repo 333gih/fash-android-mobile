@@ -83,7 +83,10 @@ import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
 import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.notifications.InAppNotificationNavigation
+import com.pc.fash_android_mobile.notifications.RealtimeNotificationRouter
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
+import com.pc.fash_android_mobile.ui.chat.ChatNotificationPresence
 import com.pc.fash_android_mobile.ui.chat.ChatDetailScreen
 import com.pc.fash_android_mobile.ui.chat.ChatDetailViewModel
 import com.pc.fash_android_mobile.ui.chat.ChatShipFlowArgs
@@ -502,6 +505,7 @@ class MainActivity : ComponentActivity() {
                 val realtimeManager = (application as FashApplication).realtimeManager
                 val fashApp = application as FashApplication
                 val notificationSnackbarContext = LocalContext.current
+                val shellCoroutineScope = rememberCoroutineScope()
                 val dialogMessage by fashApp.uiDialog.current.collectAsState()
                 /** Hoisted so [FashGlobalDialogHost] can reserve bottom inset for chat composer vs main nav. */
                 var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -526,7 +530,7 @@ class MainActivity : ComponentActivity() {
                     activePromoCampaign = promo
                     AppPromoCampaignStore.recordShow(appCtx, promo)
                     AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
-                        lifecycleScope,
+                        shellCoroutineScope,
                         fashApp,
                         promo,
                     )
@@ -656,7 +660,7 @@ class MainActivity : ComponentActivity() {
                             activePromoCampaign = resolved
                             AppPromoCampaignStore.recordShow(appCtx, resolved)
                             AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
-                                lifecycleScope,
+                                shellCoroutineScope,
                                 fashApp,
                                 resolved,
                             )
@@ -751,42 +755,36 @@ class MainActivity : ComponentActivity() {
                                 fashApp.requestInboxUnreadRefreshDebounced()
                             }
                             is RealtimeEvent.NotificationShow -> {
-                                // Account-switch hint is FCM-only by design; never surface it in-app.
                                 val pushData = event.data ?: emptyMap()
-                                val isAccountSwitchHint =
-                                    AccountSwitchDeepLinks.parseFromFcmData(pushData) != null
-                                if (isAccountSwitchHint) return@collect
-                                if (ChatInAppNotificationPolicy.shouldSuppressInApp(
-                                        event.data,
-                                        selectedConversationId,
-                                    )
-                                ) {
-                                    fashApp.requestInboxUnreadRefreshDebounced()
+                                if (AccountSwitchDeepLinks.parseFromFcmData(pushData) != null) {
                                     return@collect
                                 }
-                                if (isAppPromoPushData(pushData)) {
-                                    parseAppPromoFromPushData(
-                                        data = pushData,
-                                        fallbackTitle = event.title,
-                                        fallbackBody = event.body,
-                                    )?.let { promo ->
-                                        AppPromoPresentationPolicy.handleIncoming(
-                                            app = fashApp,
-                                            campaign = promo,
-                                            openConversationId = selectedConversationId,
-                                            userNotificationId = event.userNotificationId,
-                                            presentDialog = ::presentAdminPromoIfEligible,
-                                        )
-                                    }
-                                    return@collect
-                                }
-                                fashApp.showInAppNotificationFromRealtime(
-                                    title = event.title,
-                                    body = event.body,
-                                    data = event.data,
-                                    userNotificationId = event.userNotificationId,
+                                val openId = ChatNotificationPresence.openConversationId(
+                                    selectedConversationId,
+                                    fashApp.activeChatConversationId,
                                 )
-                                fashApp.requestInboxUnreadRefreshDebounced()
+                                RealtimeNotificationRouter.handleNotificationShow(
+                                    event = event,
+                                    app = fashApp,
+                                    context = notificationSnackbarContext,
+                                    openConversationId = openId,
+                                    chatViewModel = chatViewModel,
+                                    presentAdminPromo = ::presentAdminPromoIfEligible,
+                                )
+                            }
+                            is RealtimeEvent.MessageNew -> {
+                                val openId = ChatNotificationPresence.openConversationId(
+                                    selectedConversationId,
+                                    fashApp.activeChatConversationId,
+                                )
+                                RealtimeNotificationRouter.handleMessageNew(
+                                    event = event,
+                                    app = fashApp,
+                                    context = notificationSnackbarContext,
+                                    openConversationId = openId,
+                                    chatViewModel = chatViewModel,
+                                    isGuestMode = isGuestBrowse,
+                                )
                             }
                             is RealtimeEvent.AppPromoShow -> {
                                 val promo = parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()
@@ -1268,6 +1266,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                     var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
+                                    val pendingOpenOrderId by fashApp.pendingOpenOrderId.collectAsState()
+                                    LaunchedEffect(pendingOpenOrderId) {
+                                        val oid = pendingOpenOrderId ?: return@LaunchedEffect
+                                        chatOrderDetailOverlayId = null
+                                        selectedConversationId = null
+                                        selectedConversationItem = null
+                                        closeListingDetail()
+                                        selectedOrderId = oid
+                                        selectedTab = MainTab.Orders.ordinal
+                                        fashApp.pendingOpenOrderId.value = null
+                                    }
                                     LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders, pendingPromoOpenExplore) {
                                         if (pendingPromoMainTab >= 0) {
                                             selectedTab = pendingPromoMainTab
@@ -2691,49 +2700,41 @@ class MainActivity : ComponentActivity() {
                                 fashApp.feedEventReporter,
                                 s.data,
                             )
-                            val data = s.data
-                            val deepNid = data?.entries
-                                ?.find { it.key.equals("deep_link", ignoreCase = true) }
-                                ?.value
-                                ?.let { InboxDeepLinks.parseNotificationIdFromDeepLinkString(it) }
-                            val nid = s.userNotificationId?.takeIf { it.isNotBlank() }
-                                ?: data?.get("user_notification_id")?.trim()?.takeIf { it.isNotEmpty() }
-                                ?: deepNid
-                            if (!nid.isNullOrBlank()) {
-                                fashApp.pendingInboxNotificationId.value = nid
-                                fashApp.requestOpenNotificationInbox()
-                                fashApp.dismissInAppNotification()
-                                return@FashInAppNotificationBanner
-                            }
-                            val navEarly = data?.entries?.find { e ->
-                                e.key.equals("nav_target", ignoreCase = true) ||
-                                    e.key.equals("navTarget", ignoreCase = true)
-                            }?.value?.trim()?.lowercase()
-                            val ptypeEarly = data?.get("type")?.trim()?.lowercase().orEmpty()
-                            if (navEarly == "in_app_invite_friends" ||
-                                ptypeEarly.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
-                            ) {
+                            val ptypeEarly = s.data?.get("type")?.trim()?.lowercase().orEmpty()
+                            if (ptypeEarly.equals("marketplace.referral.invite_rewarded", ignoreCase = true)) {
                                 fashApp.pendingOpenInviteFriends.value = true
                                 fashApp.dismissInAppNotification()
                                 return@FashInAppNotificationBanner
                             }
-                            val conv = data?.entries?.find { e ->
-                                e.key.equals("conversation_id", ignoreCase = true) ||
-                                    e.key.equals("conversationId", ignoreCase = true)
-                            }?.value?.trim()?.takeIf { it.isNotEmpty() }
-                            val nav = data?.entries?.find { e ->
-                                e.key.equals("nav_target", ignoreCase = true) ||
-                                    e.key.equals("navTarget", ignoreCase = true)
-                            }?.value?.trim()?.lowercase()
-                            val ptype = data?.get("type")?.trim()?.lowercase().orEmpty()
-                            val isChat = nav == "chat" || ptype.contains("chat")
-                            if (!conv.isNullOrBlank() && isChat) {
-                                selectedConversationId = conv
-                                fashApp.dismissInAppNotification()
-                                return@FashInAppNotificationBanner
-                            }
-                            fashApp.requestOpenNotificationInbox()
-                            fashApp.dismissInAppNotification()
+                            InAppNotificationNavigation.handleBannerTap(
+                                session = s,
+                                onOpenChat = { conv ->
+                                    selectedConversationId = conv
+                                    ChatNotificationPresence.registerOpenConversation(fashApp, conv)
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenOrder = { orderId ->
+                                    fashApp.pendingOpenOrderId.value = orderId
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenInviteFriends = {
+                                    fashApp.pendingOpenInviteFriends.value = true
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenNotificationDetail = { nid ->
+                                    fashApp.pendingInboxNotificationId.value = nid
+                                    fashApp.requestOpenNotificationInbox()
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenNotificationInbox = {
+                                    fashApp.requestOpenNotificationInbox()
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenDeepLink = { deepLink ->
+                                    routeInAppBannerDeepLink(fashApp, deepLink)
+                                    fashApp.dismissInAppNotification()
+                                },
+                            )
                         },
                         onDismissClick = { fashApp.dismissInAppNotification() },
                     )
@@ -2747,6 +2748,26 @@ class MainActivity : ComponentActivity() {
             }
             }
         }
+    }
+
+    private fun routeInAppBannerDeepLink(fashApp: FashApplication, deepLink: String) {
+        InboxDeepLinks.parseNotificationIdFromDeepLinkString(deepLink)?.let { nid ->
+            fashApp.pendingInboxNotificationId.value = nid
+            fashApp.requestOpenNotificationInbox()
+            return
+        }
+        runCatching {
+            val uri = Uri.parse(deepLink.trim())
+            ListingDeepLinks.parseListingId(uri)?.let { lid ->
+                fashApp.pendingDeepLinkListingId.value = lid
+                return
+            }
+            ProfileDeepLinks.parseUsername(uri)?.let { handle ->
+                fashApp.pendingDeepLinkSellerUsername.value = handle
+                return
+            }
+        }
+        openUrl(deepLink)
     }
 
     private fun openUrl(url: String) {

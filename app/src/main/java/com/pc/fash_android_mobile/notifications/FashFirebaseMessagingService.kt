@@ -68,13 +68,16 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             if (shouldSuppressTrayForPresence()) return
         }
         if (shouldSuppressTrayForPresence()) {
+            val app = applicationContext as? FashApplication
             val inAppTitle = message.notification?.title ?: message.data["title"]
-            if (!inAppTitle.isNullOrBlank()) {
-                (applicationContext as? FashApplication)?.showInAppNotificationFromRealtime(
+            if (!inAppTitle.isNullOrBlank() && app != null) {
+                app.showInAppNotificationFromRealtime(
                     title = inAppTitle,
                     body = message.notification?.body ?: message.data["body"].orEmpty(),
                     data = message.data,
                     userNotificationId = message.data["user_notification_id"]?.trim()?.takeIf { it.isNotEmpty() },
+                    openConversationId = app.activeChatConversationId,
+                    chatViewModel = null,
                 )
             }
             return

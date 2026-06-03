@@ -19,10 +19,9 @@ object AppPromoPresentationPolicy {
         return active.isNotEmpty()
     }
 
-    fun shouldSuppressInAppToast(context: android.content.Context, campaign: AppPromoCampaign): Boolean {
+    fun shouldSuppressInAppToast(context: android.content.Context, campaign: AppPromoCampaign): Boolean =
         AppPromoCampaignStore.isDismissed(context, campaign) ||
             AppPromoCampaignStore.hasRecordedShow(context, campaign)
-    }
 
     fun promoInAppData(
         campaign: AppPromoCampaign,

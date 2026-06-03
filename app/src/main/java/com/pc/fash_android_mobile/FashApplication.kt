@@ -39,7 +39,12 @@ import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
 import com.pc.fash_android_mobile.notifications.FcmTokenRegistrar
+import com.pc.fash_android_mobile.notifications.InAppNotificationPresentation
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
+import com.pc.fash_android_mobile.ui.chat.ChatNotificationPresence
+import com.pc.fash_android_mobile.ui.chat.ChatUnreadRefreshHub
+import com.pc.fash_android_mobile.ui.chat.ChatViewModel
+import com.pc.fash_android_mobile.ui.chat.InboxNotificationSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -127,6 +132,9 @@ class FashApplication : Application(), ImageLoaderFactory {
      * Cleared after consumption.
      */
     val pendingOpenInviteFriends = MutableStateFlow(false)
+
+    /** In-app banner tap → order detail ([MainActivity] consumes). */
+    val pendingOpenOrderId = MutableStateFlow<String?>(null)
 
     /** Multi-account FCM: user B is active but account A has new inbox rows. */
     val pendingAccountSwitchPrompt = MutableStateFlow<AccountSwitchPrompt?>(null)
@@ -235,18 +243,41 @@ class FashApplication : Application(), ImageLoaderFactory {
         body: String,
         data: Map<String, String>?,
         userNotificationId: String?,
+        openConversationId: String? = null,
+        chatViewModel: ChatViewModel? = null,
     ) {
-        if (ChatInAppNotificationPolicy.shouldSuppressInApp(data, activeChatConversationId)) {
-            requestInboxUnreadRefreshDebounced()
+        val openId = ChatNotificationPresence.openConversationId(
+            openConversationId,
+            activeChatConversationId,
+        )
+        if (ChatInAppNotificationPolicy.shouldSuppressInApp(data, openId)) {
+            runSuppressedChatNotificationSideEffects(data)
             return
         }
-        applicationScope.launch {
-            _inAppNotification.value = FashInAppNotificationSession(
+        val session = InAppNotificationPresentation.enrich(
+            context = this,
+            session = FashInAppNotificationSession(
                 title = title.trim(),
                 body = body.trim(),
                 data = data,
                 userNotificationId = userNotificationId?.trim()?.takeIf { it.isNotEmpty() },
-            )
+            ),
+            chatViewModel = chatViewModel,
+        )
+        applicationScope.launch {
+            _inAppNotification.value = session
+        }
+    }
+
+    fun runSuppressedChatNotificationSideEffects(data: Map<String, String>?) {
+        applicationScope.launch(Dispatchers.IO) {
+            ChatInAppNotificationPolicy.conversationId(data)?.let { cid ->
+                InboxNotificationSync.markChatNotificationsRead(cid, userRepository)
+            }
+            requestInboxUnreadRefreshDebounced()
+            if (ChatInAppNotificationPolicy.isChatRelated(data)) {
+                ChatUnreadRefreshHub.notifyMarkedRead()
+            }
         }
     }
 

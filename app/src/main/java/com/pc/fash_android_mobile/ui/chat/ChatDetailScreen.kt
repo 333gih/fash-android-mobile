@@ -136,6 +136,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.pc.fash_android_mobile.FashApplication
+import com.pc.fash_android_mobile.ui.chat.ChatNotificationPresence
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.ui.commerce.DealAgreedPriceBanner
@@ -425,12 +426,15 @@ fun ChatDetailScreen(
                 LaunchedEffect(conversationId) {
                     viewModel.loadMeetingBrowseLocation()
                 }
+                LaunchedEffect(conversationId) {
+                    ChatNotificationPresence.registerOpenConversation(
+                        fashApp,
+                        conversationId,
+                    )
+                }
                 DisposableEffect(conversationId) {
-                    fashApp.activeChatConversationId = conversationId.trim().takeIf { it.isNotEmpty() }
                     onDispose {
-                        if (fashApp.activeChatConversationId.equals(conversationId, ignoreCase = true)) {
-                            fashApp.activeChatConversationId = null
-                        }
+                        ChatNotificationPresence.clearOpenConversation(fashApp, conversationId)
                     }
                 }
                 var showFulfillmentChoiceSheet by remember { mutableStateOf(false) }

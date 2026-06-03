@@ -242,6 +242,14 @@ class ChatViewModel(
         }
     }
 
+    /** WS `message.new` / read receipts — refresh inbox without pull-to-refresh UI. */
+    fun refreshInboxFromRealtimeSignal() {
+        viewModelScope.launch {
+            silentRefreshConversations()
+            refreshUnreadCount()
+        }
+    }
+
     private suspend fun silentRefreshConversations() {
         if (isGroupedInbox()) {
             val r = withContext(Dispatchers.IO) {
@@ -504,6 +512,41 @@ class ChatViewModel(
         val total = _unreadBadgeCount.value
         val here = unreadCountForConversation(conversationId)
         return maxOf(0, total - here)
+    }
+
+    /** Display label for in-app chat toasts — prefers display name, then @username. */
+    fun peerLabelForConversationId(conversationId: String): String? {
+        val cid = conversationId.trim()
+        if (cid.isEmpty()) return null
+        _allConversations.value.find { it.conversationId.equals(cid, ignoreCase = true) }?.let {
+            return peerLabelFor(it)
+        }
+        return _conversationGroups.value
+            .asSequence()
+            .flatMap { it.conversations }
+            .find { it.conversationId.equals(cid, ignoreCase = true) }
+            ?.let { peerLabelFor(it) }
+    }
+
+    fun peerLabelForOtherUserId(userId: String): String? {
+        val uid = userId.trim()
+        if (uid.isEmpty()) return null
+        _allConversations.value.find { it.otherUserId.equals(uid, ignoreCase = true) }?.let {
+            return peerLabelFor(it)
+        }
+        return _conversationGroups.value
+            .asSequence()
+            .flatMap { it.conversations }
+            .find { it.otherUserId.equals(uid, ignoreCase = true) }
+            ?.let { peerLabelFor(it) }
+    }
+
+    private fun peerLabelFor(item: ConversationItem): String? {
+        val name = item.displayName.trim()
+        if (name.isNotEmpty()) return name
+        val user = item.username.trim()
+        if (user.isEmpty()) return null
+        return if (user.startsWith("@")) user else "@$user"
     }
 
     /** True when the inbox row shows [conversationPreviewLine] placeholder (no real last message). */
