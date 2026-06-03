@@ -32,4 +32,8 @@ data class EditListingFormState(
     val color: String = "",
     /** Intended wearer: women | men | unisex | kids | baby | "" (not set). */
     val genderTarget: String = "",
+    val seasonKeys: Set<String> = emptySet(),
+    val climateZones: Set<String> = emptySet(),
+    val macroRegions: Set<String> = emptySet(),
+    val yearRoundWear: Boolean = false,
 )

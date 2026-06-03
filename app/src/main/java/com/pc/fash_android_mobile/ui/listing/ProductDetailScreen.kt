@@ -113,6 +113,7 @@ import org.json.JSONObject
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.config.BusinessFlowConfig
 import com.pc.fash_android_mobile.data.listing.ListingDetail
+import com.pc.fash_android_mobile.data.listing.ListingWearSeason
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
@@ -1187,6 +1188,29 @@ private fun DetailAtGlanceCard(
                         stringResource(R.string.product_condition_label),
                         cond,
                         valueColor = conditionColor,
+                    )
+                }
+                val localeVi = com.pc.fash_android_mobile.data.locale.AppLocale.currentTag(
+                    androidx.compose.ui.platform.LocalContext.current,
+                ) != com.pc.fash_android_mobile.data.locale.AppLocale.TAG_EN
+                val wearSummary = ListingWearSeason.summary(
+                    seasonKeys = detail.seasonKeys,
+                    climateZones = detail.climateZones,
+                    macroRegions = detail.macroRegions,
+                    yearRoundWear = detail.yearRoundWear,
+                    localeVi = localeVi,
+                )
+                if (!wearSummary.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.product_wear_season_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = wearSummary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurface,
                     )
                 }
             }

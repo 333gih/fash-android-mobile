@@ -85,6 +85,10 @@ data class CreateListingDraft(
     /** 80–99 when set; sent as `condition_score`. */
     val conditionScore: Int = 90,
     val conditionDefects: List<String> = emptyList(),
+    val seasonKeys: Set<String> = emptySet(),
+    val climateZones: Set<String> = emptySet(),
+    val macroRegions: Set<String> = emptySet(),
+    val yearRoundWear: Boolean = false,
 )
 
 /** Known defect keys for Step 5 checklist (wire values). */
@@ -194,6 +198,10 @@ fun CreateListingDraft.toCreateListingRequest(
         onsiteInspectionCommitment = onsiteInspectionCommitment,
         conditionScore = conditionScore.coerceIn(80, 99),
         conditionDefects = conditionDefects,
+        seasonKeys = seasonKeys.toList(),
+        climateZones = climateZones.toList(),
+        macroRegions = macroRegions.toList(),
+        yearRoundWear = yearRoundWear,
     )
 }
 
@@ -206,7 +214,7 @@ const val MaxListingDescriptionLength = 500
 const val MinPriceVnd = 1_000L
 const val MaxPriceVnd = 100_000_000L
 
-const val TotalPostSteps = 10
+const val TotalPostSteps = 11
 
 /** From env `POST_REQUIRE_LISTING_IMAGES` (default true): at least one photo required for listing. */
 fun postRequireListingImages(): Boolean = BuildConfig.POST_REQUIRE_LISTING_IMAGES
@@ -306,11 +314,12 @@ fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
         title.trim().length in MinListingTitleLength..MaxListingTitleLength &&
         description.length <= MaxListingDescriptionLength
     6 -> true
-    7 -> !postRequireListingImages() || (
+    7 -> true
+    8 -> !postRequireListingImages() || (
         listingPhotoSlots.isNotEmpty() &&
             listingPhotoSlots.all { !it.required || it.hasImageSelected() }
         )
-    8 -> {
+    9 -> {
         val p = parsePositiveLong(priceVnd)
         p != null && p in MinPriceVnd..MaxPriceVnd &&
             if (autoPriceDropEnabled) {
@@ -321,8 +330,8 @@ fun CreateListingDraft.canProceedFromStep(step: Int): Boolean = when (step) {
                 true
             }
     }
-    9 -> onsiteInspectionCommitment
-    10 -> true
+    10 -> onsiteInspectionCommitment
+    11 -> true
     else -> false
 }
 
@@ -347,9 +356,9 @@ fun CreateListingDraft.nextStepBlockedReasonRes(step: Int): Int? {
             description.length > MaxListingDescriptionLength -> R.string.post_next_blocked_description_long
             else -> R.string.post_next_blocked_generic
         }
-        7 -> R.string.post_next_blocked_photos
-        8 -> step8NextBlockedReason()
-        9 -> when {
+        8 -> R.string.post_next_blocked_photos
+        9 -> step9NextBlockedReason()
+        10 -> when {
             !onsiteInspectionCommitment -> R.string.post_next_blocked_commitment
             else -> R.string.post_next_blocked_generic
         }
@@ -357,7 +366,7 @@ fun CreateListingDraft.nextStepBlockedReasonRes(step: Int): Int? {
     }
 }
 
-private fun CreateListingDraft.step8NextBlockedReason(): Int {
+private fun CreateListingDraft.step9NextBlockedReason(): Int {
     val p = parsePositiveLong(priceVnd)
     if (p == null) return R.string.post_next_blocked_price
     if (p !in MinPriceVnd..MaxPriceVnd) return R.string.post_next_blocked_price_range

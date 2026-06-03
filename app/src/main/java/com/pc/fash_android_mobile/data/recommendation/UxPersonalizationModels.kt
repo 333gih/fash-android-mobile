@@ -43,6 +43,7 @@ object HomeFeedTabKeys {
     const val FOLLOWING = "following"
     const val STYLE_PICKS = "style_picks"
     const val SIMILAR_SAVED = "similar_saved"
+    const val SEASONAL_NEAR_YOU = "seasonal_near_you"
 }
 
 object ProfileTabKeys {

@@ -9,6 +9,7 @@ fun HomeFeedTab.toUxTabKey(): String = when (this) {
     HomeFeedTab.Following -> HomeFeedTabKeys.FOLLOWING
     HomeFeedTab.StylePicks -> HomeFeedTabKeys.STYLE_PICKS
     HomeFeedTab.SimilarSaved -> HomeFeedTabKeys.SIMILAR_SAVED
+    HomeFeedTab.SeasonalNearYou -> HomeFeedTabKeys.SEASONAL_NEAR_YOU
 }
 
 fun homeFeedTabFromKey(key: String): HomeFeedTab? = when (key.trim().lowercase()) {
@@ -17,6 +18,7 @@ fun homeFeedTabFromKey(key: String): HomeFeedTab? = when (key.trim().lowercase()
     HomeFeedTabKeys.FOLLOWING -> HomeFeedTab.Following
     HomeFeedTabKeys.STYLE_PICKS -> HomeFeedTab.StylePicks
     HomeFeedTabKeys.SIMILAR_SAVED -> HomeFeedTab.SimilarSaved
+    HomeFeedTabKeys.SEASONAL_NEAR_YOU -> HomeFeedTab.SeasonalNearYou
     else -> null
 }
 

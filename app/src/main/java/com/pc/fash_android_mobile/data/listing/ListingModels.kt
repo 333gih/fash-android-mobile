@@ -130,4 +130,8 @@ data class ListingDetail(
     val color: String? = null,
     /** Intended wearer: women | men | unisex | kids | baby. */
     val genderTarget: String? = null,
+    val seasonKeys: List<String> = emptyList(),
+    val climateZones: List<String> = emptyList(),
+    val macroRegions: List<String> = emptyList(),
+    val yearRoundWear: Boolean = false,
 )

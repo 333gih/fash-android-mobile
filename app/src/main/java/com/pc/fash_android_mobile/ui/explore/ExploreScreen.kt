@@ -245,6 +245,7 @@ fun ExploreScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val quickInterestChips by viewModel.quickInterestChips.collectAsState()
+    val shoppingContextChip by viewModel.shoppingContext.collectAsState()
     val selectedInterestChipNames = remember(
         quickInterestChips,
         aestheticTagsCatalog,
@@ -413,7 +414,6 @@ fun ExploreScreen(
                                         )
                                     }
                                 }
-                                val shoppingContextChip by viewModel.shoppingContext.collectAsState()
                                 if (
                                     sizingMode.equals("match_profile", ignoreCase = true) ||
                                     browseLocationMode != BrowseLocationMode.Off ||

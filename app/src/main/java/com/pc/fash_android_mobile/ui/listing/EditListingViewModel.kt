@@ -194,6 +194,10 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
                             priceDropPercentInput = pct,
                             color = normalizeChoice(d.color),
                             genderTarget = normalizeChoice(d.genderTarget),
+                            seasonKeys = d.seasonKeys.toSet(),
+                            climateZones = d.climateZones.toSet(),
+                            macroRegions = d.macroRegions.toSet(),
+                            yearRoundWear = d.yearRoundWear,
                         )
                     },
                     onFailure = {
@@ -373,6 +377,10 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
 
         val colorP = normalizeChoice(f.color).takeIf { it != normalizeChoice(d.color) }
         val genderTargetP = normalizeChoice(f.genderTarget).takeIf { it != normalizeChoice(d.genderTarget) }
+        val seasonP = f.seasonKeys.takeIf { it != d.seasonKeys.toSet() }?.toList()?.sorted()
+        val climateP = f.climateZones.takeIf { it != d.climateZones.toSet() }?.toList()?.sorted()
+        val regionP = f.macroRegions.takeIf { it != d.macroRegions.toSet() }?.toList()?.sorted()
+        val yearRoundP = f.yearRoundWear.takeIf { it != d.yearRoundWear }
 
         return UpdateListingRequest(
             title = titleP,
@@ -398,6 +406,10 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
             measurementSleeveLength = slP,
             color = colorP,
             genderTarget = genderTargetP,
+            seasonKeys = seasonP,
+            climateZones = climateP,
+            macroRegions = regionP,
+            yearRoundWear = yearRoundP,
         )
     }
 
@@ -446,6 +458,10 @@ class EditListingViewModel(application: Application) : AndroidViewModel(applicat
         }
         if (normalizeChoice(f.color) != normalizeChoice(d.color)) return true
         if (normalizeChoice(f.genderTarget) != normalizeChoice(d.genderTarget)) return true
+        if (f.seasonKeys != d.seasonKeys.toSet()) return true
+        if (f.climateZones != d.climateZones.toSet()) return true
+        if (f.macroRegions != d.macroRegions.toSet()) return true
+        if (f.yearRoundWear != d.yearRoundWear) return true
         return false
     }
 

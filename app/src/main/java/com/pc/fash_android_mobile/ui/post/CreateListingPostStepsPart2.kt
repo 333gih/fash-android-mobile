@@ -76,7 +76,7 @@ import com.pc.fash_android_mobile.ui.theme.dashedRoundRectBorder
 fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
     val draft by viewModel.draft.collectAsState()
     val meProfile by viewModel.meProfile.collectAsState()
-    val canNext = draft.canProceedFromStep(6)
+    val canNext = draft.canProceedFromStep(7)
     val scrollState = rememberScrollState()
     val sizingGender = remember(draft.genderTarget, meProfile?.gender) {
         draft.sizingChartGender(meProfile)
@@ -93,14 +93,14 @@ fun CreateListingPostStep6(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
-            step = 6,
+            step = 7,
             totalSteps = TotalPostSteps,
             onBackClick = { viewModel.prevStep() },
             onCloseClick = onCloseRequest,
             primaryLabelRes = R.string.create_listing_next,
             onPrimaryClick = { viewModel.nextStep() },
             primaryEnabled = canNext,
-            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(6),
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(7),
         )
         PostStepScrollWithBottomNotice(
             modifier = Modifier.weight(1f),
@@ -228,7 +228,7 @@ fun CreateListingPostStep7(
 ) {
     val draft by viewModel.draft.collectAsState()
     val setupLoading by viewModel.listingPhotoSetupLoading.collectAsState()
-    val canNext = draft.canProceedFromStep(7)
+    val canNext = draft.canProceedFromStep(8)
     val scrollState = rememberScrollState()
     val context = LocalContext.current
 
@@ -274,14 +274,14 @@ fun CreateListingPostStep7(
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
-            step = 7,
+            step = 8,
             totalSteps = TotalPostSteps,
             onBackClick = { viewModel.prevStep() },
             onCloseClick = onCloseRequest,
             primaryLabelRes = R.string.create_listing_next,
             onPrimaryClick = { viewModel.nextStep() },
             primaryEnabled = canNext,
-            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(7),
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(8),
         )
         PostStepScrollWithBottomNotice(
             modifier = Modifier.weight(1f),
@@ -454,7 +454,7 @@ private fun PostListingPhotoSlotCard(
 @Composable
 fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit) {
     val draft by viewModel.draft.collectAsState()
-    val canNext = draft.canProceedFromStep(8)
+    val canNext = draft.canProceedFromStep(9)
     val scrollState = rememberScrollState()
 
     Column(
@@ -464,14 +464,14 @@ fun CreateListingPostStep8(viewModel: PostViewModel, onCloseRequest: () -> Unit)
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
-            step = 8,
+            step = 9,
             totalSteps = TotalPostSteps,
             onBackClick = { viewModel.prevStep() },
             onCloseClick = onCloseRequest,
             primaryLabelRes = R.string.create_listing_next,
             onPrimaryClick = { viewModel.nextStep() },
             primaryEnabled = canNext,
-            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(8),
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(9),
         )
         PostStepScrollWithBottomNotice(
             modifier = Modifier.weight(1f),
@@ -626,7 +626,7 @@ fun CreateListingPostStep9(
     val scheme = MaterialTheme.colorScheme
     val draft by viewModel.draft.collectAsState()
     val addresses by viewModel.localAddresses.collectAsState()
-    val canNext = draft.canProceedFromStep(9)
+    val canNext = draft.canProceedFromStep(10)
 
     LaunchedEffect(Unit) {
         viewModel.loadShippingAddresses()
@@ -640,14 +640,14 @@ fun CreateListingPostStep9(
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
-            step = 9,
+            step = 10,
             totalSteps = TotalPostSteps,
             onBackClick = { viewModel.prevStep() },
             onCloseClick = onCloseRequest,
             primaryLabelRes = R.string.create_listing_next,
             onPrimaryClick = { viewModel.nextStep() },
             primaryEnabled = canNext,
-            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(9),
+            nextDisabledReasonRes = draft.nextStepBlockedReasonRes(10),
             centerTitleRes = R.string.address_list_title,
             showStepCaptionUnderTitle = true,
         )
@@ -779,7 +779,7 @@ fun CreateListingPostStep9(
 }
 
 @Composable
-fun CreateListingPostStep10(
+fun CreateListingPostStep11(
     viewModel: PostViewModel,
     onCloseRequest: () -> Unit,
     onSubmitSuccess: () -> Unit,
@@ -810,7 +810,7 @@ fun CreateListingPostStep10(
             .navigationBarsPadding(),
     ) {
         CreateListingFlowHeader(
-            step = 10,
+            step = 11,
             totalSteps = TotalPostSteps,
             onBackClick = { viewModel.prevStep() },
             onCloseClick = onCloseRequest,

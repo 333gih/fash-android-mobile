@@ -98,15 +98,16 @@ fun CreateListingFlowScreen(
             3 -> CreateListingPostStep3(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
             4 -> CreateListingPostStep4(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
             5 -> CreateListingPostStep5(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
-            6 -> CreateListingPostStep6(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
-            7 -> CreateListingPostStep7(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
-            8 -> CreateListingPostStep8(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
-            9 -> CreateListingPostStep9(
+            6 -> CreateListingWearSeasonStep(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            7 -> CreateListingPostStep6(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            8 -> CreateListingPostStep7(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            9 -> CreateListingPostStep8(viewModel = viewModel, onCloseRequest = { handleCloseAttempt() })
+            10 -> CreateListingPostStep9(
                 viewModel = viewModel,
                 onCloseRequest = { handleCloseAttempt() },
                 onAddAddressClick = { showAddAddressFromPost = true },
             )
-            10 -> CreateListingPostStep10(
+            11 -> CreateListingPostStep11(
                 viewModel = viewModel,
                 onCloseRequest = { handleCloseAttempt() },
                 onSubmitSuccess = onClose,

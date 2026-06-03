@@ -571,6 +571,53 @@ fun EditListingScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
+                                text = stringResource(R.string.post_step_wear_season),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.post_step_wear_season_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            EditListingSectionCard {
+                                ListingWearSeasonEditor(
+                                    yearRoundWear = form.yearRoundWear,
+                                    seasonKeys = form.seasonKeys,
+                                    climateZones = form.climateZones,
+                                    macroRegions = form.macroRegions,
+                                    enabled = editable && !isSaving,
+                                    onYearRoundChange = { checked ->
+                                        viewModel.updateForm { copy(yearRoundWear = checked) }
+                                    },
+                                    onToggleSeason = { key ->
+                                        viewModel.updateForm {
+                                            val next = seasonKeys.toMutableSet()
+                                            if (next.contains(key)) next.remove(key) else next.add(key)
+                                            copy(seasonKeys = next)
+                                        }
+                                    },
+                                    onToggleClimate = { key ->
+                                        viewModel.updateForm {
+                                            val next = climateZones.toMutableSet()
+                                            if (next.contains(key)) next.remove(key) else next.add(key)
+                                            copy(climateZones = next)
+                                        }
+                                    },
+                                    onToggleRegion = { key ->
+                                        viewModel.updateForm {
+                                            val next = macroRegions.toMutableSet()
+                                            if (next.contains(key)) next.remove(key) else next.add(key)
+                                            copy(macroRegions = next)
+                                        }
+                                    },
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
                                 text = stringResource(R.string.post_step_country),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onSurface,

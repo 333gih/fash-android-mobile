@@ -12,17 +12,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
@@ -59,7 +62,6 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
@@ -283,16 +285,34 @@ fun HomeFeedTabHost(
         ) {
             if (!shoppingContextChip.isNullOrBlank()) {
                 item(span = StaggeredGridItemSpan.FullLine, key = "home_shopping_context_chip") {
-                    Text(
-                        text = stringResource(R.string.shopping_context_chip, shoppingContextChip!!),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    val scheme = MaterialTheme.colorScheme
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 6.dp),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                        shape = RoundedCornerShape(50),
+                        color = scheme.surfaceContainerLow,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Eco,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = com.pc.fash_android_mobile.ui.theme.FashColors.Primary,
+                            )
+                            Text(
+                                text = shoppingContextChip!!,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
 

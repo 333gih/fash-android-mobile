@@ -180,6 +180,10 @@ class ListingRepository(
         update.shippingAddressId?.let { json.put("shipping_address_id", it) }
         update.color?.let { json.put("color", it) }
         update.genderTarget?.let { json.put("gender_target", it) }
+        update.seasonKeys?.let { json.put("season_keys", JSONArray(it)) }
+        update.climateZones?.let { json.put("climate_zones", JSONArray(it)) }
+        update.macroRegions?.let { json.put("macro_regions", JSONArray(it)) }
+        update.yearRoundWear?.let { json.put("year_round_wear", it) }
         if (json.length() == 0) return@runCatching
         executePutJson(url, json.toString())
     }
@@ -348,6 +352,16 @@ class ListingRepository(
             request.conditionDefects.forEach { arr.put(it) }
             json.put("condition_defects", arr)
         }
+        if (request.seasonKeys.isNotEmpty()) {
+            json.put("season_keys", JSONArray(request.seasonKeys))
+        }
+        if (request.climateZones.isNotEmpty()) {
+            json.put("climate_zones", JSONArray(request.climateZones))
+        }
+        if (request.macroRegions.isNotEmpty()) {
+            json.put("macro_regions", JSONArray(request.macroRegions))
+        }
+        json.put("year_round_wear", request.yearRoundWear)
         val payload = json.toString()
         logCreateListingChunked(Log.DEBUG, "createListing request url=$url payload=", payload)
         val body = executePostJsonWithLoggedResponse(url, payload)
@@ -801,6 +815,10 @@ class ListingRepository(
             status = o.optString("status", o.optString("Status", "active")).lowercase().ifBlank { "active" },
             color = o.optString("color", o.optString("Color", "")).trim().lowercase().ifBlank { null },
             genderTarget = o.optString("gender_target", o.optString("GenderTarget", "")).trim().lowercase().ifBlank { null },
+            seasonKeys = parseTagStringArray(o.optJSONArray("season_keys") ?: o.optJSONArray("SeasonKeys")),
+            climateZones = parseTagStringArray(o.optJSONArray("climate_zones") ?: o.optJSONArray("ClimateZones")),
+            macroRegions = parseTagStringArray(o.optJSONArray("macro_regions") ?: o.optJSONArray("MacroRegions")),
+            yearRoundWear = o.optBoolean("year_round_wear", o.optBoolean("YearRoundWear", false)),
         )
     }
 
@@ -889,6 +907,10 @@ data class CreateListingRequest(
     val onsiteInspectionCommitment: Boolean? = null,
     val conditionScore: Int? = null,
     val conditionDefects: List<String> = emptyList(),
+    val seasonKeys: List<String> = emptyList(),
+    val climateZones: List<String> = emptyList(),
+    val macroRegions: List<String> = emptyList(),
+    val yearRoundWear: Boolean = false,
 )
 
 /** Partial update for `PUT /listings/{id}`. */
@@ -921,6 +943,10 @@ data class UpdateListingRequest(
     val color: String? = null,
     /** Intended wearer: women | men | unisex | kids | baby | "" to clear. Null = no change. */
     val genderTarget: String? = null,
+    val seasonKeys: List<String>? = null,
+    val climateZones: List<String>? = null,
+    val macroRegions: List<String>? = null,
+    val yearRoundWear: Boolean? = null,
 )
 
 data class CreateListingResponse(val id: String)
