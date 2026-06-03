@@ -1,27 +1,16 @@
-# Build Fash Android on GitHub-hosted Ubuntu runners.
-# Typical flow: push to GitLab → mirror to GitHub → this workflow runs.
+# Dev APK only — runs on develop (not main / releases).
+# Prod AAB + Google Play: Android Release (main → production, releases/* → closed testing).
 #
-# Branch → flavor (push / PR):
-#   develop  → devDebug
-#   main     → prodRelease (signed with upload key if secrets set, else debug key)
-#   master   → prodRelease
-#
-# Push to release/** or releases/** does NOT run this workflow — use Android Release.
+# GitLab mirror: only mirror/push the branch you intend, or develop will also trigger this workflow.
 name: Android Build
 
 on:
   push:
     branches:
-      - main
-      - master
       - develop
   pull_request:
     branches:
-      - main
-      - master
       - develop
-      - "release/**"
-      - "releases/**"
   workflow_dispatch:
     inputs:
       flavor:
@@ -67,18 +56,7 @@ jobs:
             else
               branch="$REF_NAME"
             fi
-
-            case "$branch" in
-              develop)
-                flavors='["dev"]'
-                ;;
-              main|master|release/*|releases/*)
-                flavors='["prod"]'
-                ;;
-              *)
-                flavors='["dev"]'
-                ;;
-            esac
+            flavors='["dev"]'
           fi
 
           echo "event=$EVENT branch=$branch flavors=$flavors"
@@ -114,9 +92,8 @@ jobs:
           PROD_ENV: ${{ secrets.ANDROID_PROD_ENV }}
         run: |
           set -euo pipefail
-          # Gradle loads env/dev.env and env/prod.env for all flavors at configuration time.
-          test -n "${DEV_ENV:-}" || { echo "::error::Missing secret ANDROID_DEV_ENV (full contents of env/dev.env). See docs/CI.md"; exit 1; }
-          test -n "${PROD_ENV:-}" || { echo "::error::Missing secret ANDROID_PROD_ENV (full contents of env/prod.env). See docs/CI.md"; exit 1; }
+          test -n "${DEV_ENV:-}" || { echo "::error::Missing secret ANDROID_DEV_ENV"; exit 1; }
+          test -n "${PROD_ENV:-}" || { echo "::error::Missing secret ANDROID_PROD_ENV"; exit 1; }
 
       - name: Write env files
         env:
@@ -188,6 +165,6 @@ jobs:
       - name: Build summary
         if: always()
         run: |
-          echo "### Android build" >> "${GITHUB_STEP_SUMMARY}"
+          echo "### Android build (dev)" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Version: **${{ steps.app_version.outputs.version_name }} (${{ steps.app_version.outputs.version_code }})**" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Flavor: **${{ matrix.flavor }}** · Branch context: **${{ needs.resolve.outputs.branch }}**" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Flavor: **${{ matrix.flavor }}** · Branch: **${{ needs.resolve.outputs.branch }}**" >> "${GITHUB_STEP_SUMMARY}"

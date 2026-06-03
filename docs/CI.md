@@ -37,25 +37,25 @@ File workflow nằm tại `.github/workflows/` — chỉ chạy sau khi repo Git
 2. Thêm **Secrets** (mục 4).
 3. Tab **Actions** → **Android Build** / **Android Release**.
 
-### Android Build (`android-build.yml`)
+### Android Build (`android-build.yml`) — chỉ develop
 
-| Branch / PR target | Flavor | Gradle task |
-|---|---|---|
-| `develop` | dev | `assembleDevRelease` |
-| `main` / `master` | prod | `assembleProdRelease` |
-| PR vào `release/**` | prod | `assembleProdRelease` |
-
-Artifact: APK signed (upload key nếu có secrets, không thì debug key).
-
-### Android Release (`android-release.yml`)
-
-| Trigger | Play upload |
+| Trigger | Kết quả |
 |---|---|
-| Push `release/**` / `releases/**` | Có — AAB → Play **Closed testing** (API track `alpha`) |
-| Push `main` / `master` / tag `android/v*` | Chỉ AAB artifact |
-| Run workflow thủ công | Chọn upload + track |
+| Push / PR **`develop`** | APK **dev** (`assembleDevRelease`) |
+| `main`, `releases/**` | **Không** chạy workflow này |
+
+### Android Release (`android-release.yml`) — prod + Play
+
+| Push branch | Play track | Mục đích |
+|---|---|---|
+| `releases/**`, `release/**` | `alpha` | **Closed testing** |
+| `main`, `master` | `production` | **Production** trên Play |
+| Tag `android/v*` | `production` | Release theo tag |
+| Manual | Chọn track | Override |
 
 Output: `app-prod-release.aab` + `mapping.txt` (R8).
+
+> **Mirror GitLab → GitHub:** chỉ mirror/push đúng nhánh cần CI. Mirror đồng thời `develop` khi bạn push `releases/*` vẫn kích hoạt Android Build trên `develop` (nếu nhánh develop thay đổi trên remote).
 
 ## 3. Secrets trên GitHub
 
@@ -134,8 +134,9 @@ Giống iOS:
 
 1. Bump `versionCode` + `versionName` trong `app/build.gradle.kts`.
 2. Push nhánh `releases/x.y.z` (hoặc `release/x.y.z`).
-3. Mirror sang GitHub → **Android Release** build `app-prod-release.aab` và upload **Closed testing** (API track `alpha`).
-4. Play Console → **Testing → Closed testing** → xác nhận bản + testers; promote khi QA xong.
+3. Mirror sang GitHub → **Android Release** (không chạy Android Build trên develop).
+4. Play Console → **Closed testing** → testers / QA.
+5. Merge `main` → push `main` → **Android Release** upload track **production**.
 
 Tag tùy chọn: `android/v1.0.8` → build AAB, không auto-upload (trừ khi đổi workflow).
 
