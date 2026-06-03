@@ -83,6 +83,7 @@ import com.pc.fash_android_mobile.data.user.SellerListingFocus
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooterContentHeight
+import com.pc.fash_android_mobile.ui.components.fashConsumeHorizontalPointerForTabSwipe
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewSheet
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.home.HomeViewModel
@@ -496,7 +497,9 @@ private fun SellerFocusCategoryRow(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fashConsumeHorizontalPointerForTabSwipe(),
         ) {
             itemsIndexed(
                 items = categories,
@@ -535,7 +538,9 @@ private fun SellerFocusBrandRow(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fashConsumeHorizontalPointerForTabSwipe(),
         ) {
             itemsIndexed(
                 items = brands,
@@ -576,7 +581,9 @@ private fun SellerFocusAestheticRow(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fashConsumeHorizontalPointerForTabSwipe(),
         ) {
             itemsIndexed(
                 items = tags,

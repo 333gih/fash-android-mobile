@@ -12,6 +12,34 @@ import kotlin.math.abs
 /** When true, listing cards should ignore taps (horizontal tab swipe in progress or just committed). */
 val LocalFashTabSwipeConsuming = compositionLocalOf { false }
 
+/**
+ * Horizontal chip rows (category / brand / aesthetic) — consume horizontal drags so parent
+ * [fashTabSwipe] on the profile list does not switch listing tabs.
+ */
+fun Modifier.fashConsumeHorizontalPointerForTabSwipe(): Modifier = pointerInput(Unit) {
+    val touchSlopPx = with(density) { 12.dp.toPx() }
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        var totalX = 0f
+        var totalY = 0f
+        var lockedHorizontal = false
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) break
+            val delta = change.positionChange()
+            totalX += delta.x
+            totalY += delta.y
+            if (!lockedHorizontal && (abs(totalX) > touchSlopPx || abs(totalY) > touchSlopPx)) {
+                lockedHorizontal = abs(totalX) > abs(totalY) * HORIZONTAL_DOMINANCE_RATIO
+            }
+            if (lockedHorizontal) {
+                event.changes.forEach { if (it.pressed) it.consume() }
+            }
+        }
+    }
+}
+
 private const val HORIZONTAL_DOMINANCE_RATIO = 1.15f
 private const val VELOCITY_FLING_PX_PER_S = 900f
 

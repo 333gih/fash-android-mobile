@@ -227,6 +227,28 @@ fun ProfileCollapsingScrollLayout(
     }
     val totalBottomPad = bottomScrollPad + additionalBottomInset
 
+    val tabSwipeModifier = if (tabCount > 1) {
+        Modifier.fashTabSwipe(
+            enabled = true,
+            tabCount = tabCount,
+            currentVisualIndex = visualSelectedIndex,
+            onVisualIndexChanged = { index -> onTabSelected(tabIndices[index]) },
+            onConsumingChanged = { active ->
+                tabSwipeConsuming = active
+                if (active) suppressListingClicks = true
+            },
+            onTabSwipeCommitted = {
+                suppressListingClicks = true
+                swipeScope.launch {
+                    delay(320)
+                    suppressListingClicks = false
+                }
+            },
+        )
+    } else {
+        Modifier
+    }
+
     val listBg = MaterialTheme.colorScheme.background
     CompositionLocalProvider(
         LocalFashTabSwipeConsuming provides (tabSwipeConsuming || suppressListingClicks),
@@ -236,24 +258,7 @@ fun ProfileCollapsingScrollLayout(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight()
-            .background(listBg)
-            .fashTabSwipe(
-                enabled = tabCount > 1,
-                tabCount = tabCount,
-                currentVisualIndex = visualSelectedIndex,
-                onVisualIndexChanged = { index -> onTabSelected(tabIndices[index]) },
-                onConsumingChanged = { active ->
-                    tabSwipeConsuming = active
-                    if (active) suppressListingClicks = true
-                },
-                onTabSwipeCommitted = {
-                    suppressListingClicks = true
-                    swipeScope.launch {
-                        delay(320)
-                        suppressListingClicks = false
-                    }
-                },
-            ),
+            .background(listBg),
     ) {
         item(key = "profile_header") {
             // Only the expanded hero + stats — never swap to compact here (that was shrinking item 0 and
@@ -271,11 +276,16 @@ fun ProfileCollapsingScrollLayout(
                 onTabSelected = onTabSelected,
                 tabLabelResIds = tabLabelResIds,
                 tabIndices = tabIndices,
+                modifier = tabSwipeModifier,
             )
         }
         if (showGridLoading) {
             item(key = "loading_$safeSelectedTab") {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(tabSwipeModifier),
+                ) {
                     com.pc.fash_android_mobile.ui.components.FashSkeletonGrid(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -294,6 +304,7 @@ fun ProfileCollapsingScrollLayout(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(tabSwipeModifier)
                         .padding(bottom = 8.dp),
                 ) {
                     FashEmptyState(
@@ -336,6 +347,7 @@ fun ProfileCollapsingScrollLayout(
                 columnWidthDp = masonryColumnWidthDp,
                 showQuickActions = showListingQuickActions,
                 showListingStatusOverlay = showListingStatusOverlay,
+                chunkModifier = tabSwipeModifier,
                 onListingClick = onListingClick,
                 onListingLike = onListingLike,
                 onListingSave = onListingSave,
@@ -482,6 +494,7 @@ private fun ProfileStickyProfileChrome(
     onTabSelected: (Int) -> Unit,
     tabLabelResIds: List<Int>,
     tabIndices: List<Int> = tabLabelResIds.indices.toList(),
+    modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
     val headerScrolledOff by remember(listState) {
@@ -503,7 +516,7 @@ private fun ProfileStickyProfileChrome(
         color = scheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = if (showBriefBar || headerScrolledOff) 3.dp else 1.dp,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             AnimatedVisibility(

@@ -273,6 +273,7 @@ fun LazyListScope.listingMasonryProfileChunkItems(
     columnWidthDp: Float,
     showQuickActions: Boolean,
     showListingStatusOverlay: Boolean,
+    chunkModifier: Modifier = Modifier,
     onListingClick: (ListingFeedItem) -> Unit,
     onListingLike: (ListingFeedItem) -> Unit,
     onListingSave: (ListingFeedItem) -> Unit,
@@ -284,7 +285,7 @@ fun LazyListScope.listingMasonryProfileChunkItems(
     ) { _, chunk ->
         val chunkIds = chunk.entries.map { it.second.id }.toSet()
         Row(
-            modifier = Modifier
+            modifier = chunkModifier
                 .fillMaxWidth()
                 .padding(
                     start = FashTheme.spacing.editorialStart,
