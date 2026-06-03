@@ -51,13 +51,33 @@ Artifact: APK signed (upload key nếu có secrets, không thì debug key).
 
 | Trigger | Play upload |
 |---|---|
-| Push `release/**` / `releases/**` | Có (track `internal`) |
+| Push `release/**` / `releases/**` | Có — AAB → Play **Closed testing** (API track `alpha`) |
 | Push `main` / `master` / tag `android/v*` | Chỉ AAB artifact |
 | Run workflow thủ công | Chọn upload + track |
 
 Output: `app-prod-release.aab` + `mapping.txt` (R8).
 
 ## 3. Secrets trên GitHub
+
+### Đẩy secrets bằng script (giống iOS)
+
+1. Copy `secrets/android-release.env.example` → `secrets/android-release.env`.
+2. Điền đường dẫn `env/dev.env`, `env/prod.env`, upload keystore, Play JSON key.
+3. Cài [GitHub CLI](https://cli.github.com/) → `gh auth login`.
+4. Chạy từ thư mục repo:
+
+```powershell
+.\scripts\push_github_android_secrets.ps1
+# hoặc repo khác:
+.\scripts\push_github_android_secrets.ps1 -Repo phuckhoa33/fash-android-mobile
+```
+
+```bash
+./scripts/push_github_android_secrets.sh
+./scripts/push_github_android_secrets.sh secrets/android-release.env owner/fash-android-mobile
+```
+
+5. Kiểm tra: `gh secret list`.
 
 ### Env (bắt buộc cho build)
 
@@ -114,8 +134,8 @@ Giống iOS:
 
 1. Bump `versionCode` + `versionName` trong `app/build.gradle.kts`.
 2. Push nhánh `releases/x.y.z` (hoặc `release/x.y.z`).
-3. Mirror sang GitHub → **Android Release** upload track **internal**.
-4. Kiểm tra Play Console → promote lên **production** khi QA xong.
+3. Mirror sang GitHub → **Android Release** build `app-prod-release.aab` và upload **Closed testing** (API track `alpha`).
+4. Play Console → **Testing → Closed testing** → xác nhận bản + testers; promote khi QA xong.
 
 Tag tùy chọn: `android/v1.0.8` → build AAB, không auto-upload (trừ khi đổi workflow).
 

@@ -1,9 +1,10 @@
-# Bundle signed prod AAB and upload to Google Play (Internal track by default).
+# Bundle signed prod AAB (.aab) and upload to Google Play.
+# Push release/** or releases/** → upload track alpha (Closed testing in Play Console).
 # Requires upload keystore + Play Console service account (see docs/CI.md).
 #
 # Triggers:
-#   - Push releases/** or release/** : bundle + Play upload (if secrets set)
-#   - Push main/master or tag android/v* : bundle + artifact only
+#   - Push releases/** or release/** : bundle + Play upload → closed testing (alpha)
+#   - Push main/master or tag android/v* : bundle + artifact only (no Play upload)
 #   - Manual: Actions → Android Release → Run workflow
 name: Android Release
 
@@ -16,13 +17,13 @@ on:
         default: true
         type: boolean
       play_track:
-        description: Play track (internal, alpha, beta, production)
+        description: Play track (alpha = Closed testing, beta = Open testing)
         required: true
-        default: internal
+        default: alpha
         type: choice
         options:
-          - internal
           - alpha
+          - internal
           - beta
           - production
   push:
@@ -51,7 +52,15 @@ jobs:
             startsWith(github.ref, 'refs/heads/release/')
           ))
         }}
-      PLAY_TRACK: ${{ github.event_name == 'workflow_dispatch' && inputs.play_track || 'internal' }}
+      PLAY_TRACK: >-
+        ${{
+          github.event_name == 'workflow_dispatch' && inputs.play_track ||
+          (github.event_name == 'push' && (
+            startsWith(github.ref, 'refs/heads/releases/') ||
+            startsWith(github.ref, 'refs/heads/release/')
+          ) && 'alpha') ||
+          'internal'
+        }}
 
     steps:
       - name: Checkout
