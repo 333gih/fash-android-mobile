@@ -139,6 +139,7 @@ import com.pc.fash_android_mobile.data.promo.AppPromoGateContext
 import com.pc.fash_android_mobile.data.promo.AppPromoNavigation
 import com.pc.fash_android_mobile.data.promo.AppPromoOnAppOpenLoader
 import com.pc.fash_android_mobile.data.promo.AppPromoPendingQueue
+import com.pc.fash_android_mobile.data.promo.AppPromoPresentationPolicy
 import com.pc.fash_android_mobile.data.promo.isAppPromoPushData
 import com.pc.fash_android_mobile.data.promo.parseAppPromoFromPushData
 import com.pc.fash_android_mobile.data.promo.parseRemoteAppPromoPayload
@@ -512,18 +513,23 @@ class MainActivity : ComponentActivity() {
                 var pendingPromoOpenOrders by remember { mutableStateOf(false) }
                 var pendingPromoOpenExplore by remember { mutableStateOf(false) }
                 fun presentAdminPromoIfEligible(promo: AppPromoCampaign) {
-                    AppPromoPendingQueue.enqueue(promo)
                     val appCtx = notificationSnackbarContext.applicationContext
                     if (
-                        splashFinished &&
-                        isAuthenticated &&
-                        !profileSetupBlocksShellChrome &&
-                        selectedConversationId == null &&
-                        AppPromoCampaignStore.canShow(appCtx, promo)
+                        !splashFinished ||
+                        !isAuthenticated ||
+                        profileSetupBlocksShellChrome ||
+                        selectedConversationId != null ||
+                        !AppPromoCampaignStore.canShow(appCtx, promo)
                     ) {
-                        activePromoCampaign = promo
-                        AppPromoCampaignStore.recordShow(appCtx, promo)
+                        return
                     }
+                    activePromoCampaign = promo
+                    AppPromoCampaignStore.recordShow(appCtx, promo)
+                    AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
+                        lifecycleScope,
+                        fashApp,
+                        promo,
+                    )
                 }
                 val meetingReverifyRequired by profileViewModel.meetingSchedulingReverifyRequired.collectAsState()
                 /** Guided main-shell tour after welcome (or immediately if welcome already dismissed). */
@@ -649,22 +655,18 @@ class MainActivity : ComponentActivity() {
                         if (resolved != null) {
                             activePromoCampaign = resolved
                             AppPromoCampaignStore.recordShow(appCtx, resolved)
+                            AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
+                                lifecycleScope,
+                                fashApp,
+                                resolved,
+                            )
                         }
                     }
                 }
 
-                LaunchedEffect(selectedConversationId, needsOnboarding, splashFinished, isAuthenticated) {
+                LaunchedEffect(selectedConversationId) {
                     if (selectedConversationId != null) {
                         activePromoCampaign = null
-                        return@LaunchedEffect
-                    }
-                    if (!splashFinished || !isAuthenticated || profileSetupBlocksShellChrome) return@LaunchedEffect
-                    val appCtx = notificationSnackbarContext.applicationContext
-                    AppPromoPendingQueue.peekHighest()?.let { remote ->
-                        if (AppPromoCampaignStore.canShow(appCtx, remote)) {
-                            activePromoCampaign = remote
-                            AppPromoCampaignStore.recordShow(appCtx, remote)
-                        }
                     }
                 }
 
@@ -768,9 +770,14 @@ class MainActivity : ComponentActivity() {
                                         fallbackTitle = event.title,
                                         fallbackBody = event.body,
                                     )?.let { promo ->
-                                        presentAdminPromoIfEligible(promo)
+                                        AppPromoPresentationPolicy.handleIncoming(
+                                            app = fashApp,
+                                            campaign = promo,
+                                            openConversationId = selectedConversationId,
+                                            userNotificationId = event.userNotificationId,
+                                            presentDialog = ::presentAdminPromoIfEligible,
+                                        )
                                     }
-                                    fashApp.requestInboxUnreadRefreshDebounced()
                                     return@collect
                                 }
                                 fashApp.showInAppNotificationFromRealtime(
@@ -784,8 +791,13 @@ class MainActivity : ComponentActivity() {
                             is RealtimeEvent.AppPromoShow -> {
                                 val promo = parseRemoteAppPromoPayload(event.campaignJson)?.toAppPromoCampaign()
                                     ?: return@collect
-                                presentAdminPromoIfEligible(promo)
-                                fashApp.requestInboxUnreadRefreshDebounced()
+                                AppPromoPresentationPolicy.handleIncoming(
+                                    app = fashApp,
+                                    campaign = promo,
+                                    openConversationId = selectedConversationId,
+                                    userNotificationId = null,
+                                    presentDialog = ::presentAdminPromoIfEligible,
+                                )
                             }
                             else -> Unit
                         }
@@ -795,7 +807,13 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     fashApp.appPromoShowSignals.collect { promo ->
-                        presentAdminPromoIfEligible(promo)
+                        AppPromoPresentationPolicy.handleIncoming(
+                            app = fashApp,
+                            campaign = promo,
+                            openConversationId = selectedConversationId,
+                            userNotificationId = null,
+                            presentDialog = ::presentAdminPromoIfEligible,
+                        )
                     }
                 }
 

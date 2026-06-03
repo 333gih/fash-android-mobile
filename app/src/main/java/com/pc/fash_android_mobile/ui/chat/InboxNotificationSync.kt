@@ -1,12 +1,34 @@
 package com.pc.fash_android_mobile.ui.chat
 
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.notifications.isAppPromoInboxNotification
+import com.pc.fash_android_mobile.ui.notifications.parseAppPromoCampaignFromInbox
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Marks inbox rows read when their payload targets an open chat thread. */
 object InboxNotificationSync {
     private val chatGroups = listOf("REALTIME", "REENGAGEMENT")
+    private val promoGroups = listOf("ADS", "SYSTEM", "GENERAL")
+
+    suspend fun markAppPromoNotificationsRead(
+        campaignId: String,
+        version: Int,
+        userRepository: UserRepository,
+    ) = withContext(Dispatchers.IO) {
+        val cid = campaignId.trim()
+        if (cid.isEmpty()) return@withContext
+        for (group in promoGroups) {
+            val page = userRepository.listMyNotifications(limit = 100, group = group).getOrNull() ?: continue
+            for (item in page.items) {
+                if (!item.isUnread) continue
+                if (!isAppPromoInboxNotification(item)) continue
+                val promo = parseAppPromoCampaignFromInbox(item) ?: continue
+                if (!promo.id.equals(cid, ignoreCase = true) || promo.version != version) continue
+                userRepository.markNotificationRead(item.id)
+            }
+        }
+    }
 
     suspend fun markChatNotificationsRead(
         conversationId: String,

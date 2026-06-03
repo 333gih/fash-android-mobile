@@ -55,6 +55,11 @@ object AppPromoCampaignStore {
         return true
     }
 
+    fun hasRecordedShow(context: Context, campaign: AppPromoCampaign): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(showCountKey(campaign.id, campaign.version), 0) > 0
+    }
+
     fun recordShow(context: Context, campaign: AppPromoCampaign) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val key = showCountKey(campaign.id, campaign.version)
