@@ -477,8 +477,13 @@ fun ProfileScreen(
                                 ProfileHeader(
                                     profile = profile,
                                     onEditClick = onEditProfile,
-                                    onAestheticTagClick = { _, id ->
-                                        onNavigateToExploreFromProfile(null, null, id, "", null, null)
+                                    onAestheticTagClick = { tagName, id ->
+                                        val tagId = id?.takeIf { it.isNotBlank() }
+                                        if (tagId != null) {
+                                            onNavigateToExploreFromProfile(null, null, tagId, "", null, null)
+                                        } else {
+                                            onNavigateToExploreFromProfile(null, null, null, tagName, null, null)
+                                        }
                                     },
                                 )
                                 ProfileOwnMetricsCard(

@@ -277,8 +277,13 @@ fun SellerProfileScreen(
                                     Column(modifier = Modifier.fillMaxWidth()) {
                                         SellerProfileHeader(
                                             profile = profile,
-                                            onAestheticTagClick = { _, id ->
-                                                onNavigateToExploreFromProfile(null, null, id, "", null, null)
+                                            onAestheticTagClick = { tagName, id ->
+                                                val tagId = id?.takeIf { it.isNotBlank() }
+                                                if (tagId != null) {
+                                                    onNavigateToExploreFromProfile(null, null, tagId, "", null, null)
+                                                } else {
+                                                    onNavigateToExploreFromProfile(null, null, null, tagName, null, null)
+                                                }
                                             },
                                         )
                                         if (profile != null && viewModel.canShowFollowUi()) {
@@ -307,8 +312,13 @@ fun SellerProfileScreen(
                                             onBrandClick = { brandId, _ ->
                                                 onNavigateToExploreFromProfile(null, brandId, null, "", null, null)
                                             },
-                                            onAestheticTagClick = { tagId, _ ->
-                                                onNavigateToExploreFromProfile(null, null, tagId, "", null, null)
+                                            onAestheticTagClick = { tagId, name ->
+                                                val id = tagId.takeIf { it.isNotBlank() }
+                                                if (id != null) {
+                                                    onNavigateToExploreFromProfile(null, null, id, "", null, null)
+                                                } else {
+                                                    onNavigateToExploreFromProfile(null, null, null, name, null, null)
+                                                }
                                             },
                                         )
                                     }
