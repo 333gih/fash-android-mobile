@@ -542,8 +542,9 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 val meetingReverifyRequired by profileViewModel.meetingSchedulingReverifyRequired.collectAsState()
-                /** Guided main-shell tour after welcome (or immediately if welcome already dismissed). */
+                /** Guided main-shell tour after promo (once per session if not completed). */
                 var showFeatureTour by remember { mutableStateOf(false) }
+                var featureTourPromptedThisSession by remember { mutableStateOf(false) }
                 val notifPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
                 ) { }
@@ -691,15 +692,27 @@ class MainActivity : ComponentActivity() {
                         showFeatureTour = false
                         return@LaunchedEffect
                     }
+                    val appCtx = notificationSnackbarContext.applicationContext
+                    val tourCompleted = withContext(Dispatchers.IO) {
+                        AppFeatureTourStore.isCompletedForCurrentVersion(appCtx)
+                    }
+                    if (tourCompleted || featureTourPromptedThisSession) {
+                        showFeatureTour = false
+                        return@LaunchedEffect
+                    }
                     if (activePromoCampaign != null) {
                         showFeatureTour = false
                         return@LaunchedEffect
                     }
                     delay(400)
-                    val appCtx = notificationSnackbarContext.applicationContext
-                    showFeatureTour = withContext(Dispatchers.IO) {
-                        !AppFeatureTourStore.isCompletedForCurrentVersion(appCtx)
+                    if (withContext(Dispatchers.IO) {
+                            AppFeatureTourStore.isCompletedForCurrentVersion(appCtx)
+                        } || activePromoCampaign != null
+                    ) {
+                        return@LaunchedEffect
                     }
+                    featureTourPromptedThisSession = true
+                    showFeatureTour = true
                 }
 
                 LaunchedEffect(isAuthenticated) {
@@ -853,6 +866,12 @@ class MainActivity : ComponentActivity() {
                         needsOnboarding = null
                     } else {
                         val (status, needOnboarding) = gate
+                        withContext(Dispatchers.IO) {
+                            AppFeatureTourStore.markCompletedIfPreviouslyOnboarded(
+                                notificationSnackbarContext.applicationContext,
+                                status.onboardingDone,
+                            )
+                        }
                         if (needOnboarding) {
                             onboardingViewModel.applyInitialStepFromAccessStatus(status)
                         } else {

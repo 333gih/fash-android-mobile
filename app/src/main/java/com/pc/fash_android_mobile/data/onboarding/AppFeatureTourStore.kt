@@ -13,21 +13,32 @@ object AppFeatureTourStore {
     private const val PREFS_NAME = "fash_app_prefs"
     private const val KEY_COMPLETED_PREFIX = "app_feature_tour_completed_v"
 
-    /** Increment to replay the tour for all users. */
-    const val CURRENT_TOUR_VERSION: Int = 1
+    /** Increment to replay the tour for all users. Keep in sync with iOS [AppFeatureTourStore]. */
+    const val CURRENT_TOUR_VERSION: Int = 2
 
-    private fun key(): String = KEY_COMPLETED_PREFIX + CURRENT_TOUR_VERSION
+    private fun key(version: Int = CURRENT_TOUR_VERSION): String = KEY_COMPLETED_PREFIX + version
 
-    fun isCompletedForCurrentVersion(context: Context): Boolean =
-        context.applicationContext
+    fun isCompletedForCurrentVersion(context: Context): Boolean {
+        val prefs = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(key(), false)
+        for (version in 1..CURRENT_TOUR_VERSION) {
+            if (prefs.getBoolean(key(version), false)) return true
+        }
+        return false
+    }
 
     fun markCompletedForCurrentVersion(context: Context) {
         context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(key(), true)
-            .apply()
+            .commit()
+    }
+
+    /** Returning users who already finished onboarding should not see the shell tour again. */
+    fun markCompletedIfPreviouslyOnboarded(context: Context, onboardingDone: Boolean) {
+        if (onboardingDone) {
+            markCompletedForCurrentVersion(context)
+        }
     }
 }

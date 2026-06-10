@@ -25,8 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.outlined.CloseFullscreen
-import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.WavingHand
@@ -39,19 +37,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -60,23 +55,17 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaignKind
 import com.pc.fash_android_mobile.data.promo.sanitizePromoDisplayString
-import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
-private val PromoCardCompactMaxWidth = 400.dp
-private val PromoCardCompactWidthFraction = 0.86f
-private val PromoCardCompactMaxHeightFraction = 0.72f
-private val PromoHeroCompactHeight = 112.dp
-
-private val PromoCardExpandedMaxWidth = 520.dp
-private val PromoCardExpandedWidthFraction = 0.94f
-private val PromoCardExpandedMaxHeightFraction = 0.88f
-private val PromoHeroExpandedHeight = 160.dp
+private val PromoCardMaxWidth = 380.dp
+private val PromoCardWidthFraction = 0.88f
+private val PromoCardMaxHeightFraction = 0.78f
+private val PromoHeroHeight = 148.dp
 
 /**
- * Blocking app-open promo: full-screen scrim, compact center card with optional expand.
+ * Blocking app-open promo: soft scrim, polished center card.
  * Only the close control and CTAs dismiss — no tap-outside.
  */
 @Composable
@@ -101,28 +90,6 @@ fun FashAppPromoOverlayDialog(
         ?: campaign.secondaryActionRes?.let { stringResource(it) }
     val badgeText = sanitizePromoDisplayString(campaign.remoteBadge)
         ?: campaign.badgeRes?.let { stringResource(it) }
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(campaign.id, campaign.version) {
-        isExpanded = false
-    }
-
-    val cardMaxWidth = if (isExpanded) PromoCardExpandedMaxWidth else PromoCardCompactMaxWidth
-    val cardWidthFraction = if (isExpanded) PromoCardExpandedWidthFraction else PromoCardCompactWidthFraction
-    val cardMaxHeightFraction = if (isExpanded) PromoCardExpandedMaxHeightFraction else PromoCardCompactMaxHeightFraction
-    val heroHeight = if (isExpanded) PromoHeroExpandedHeight else PromoHeroCompactHeight
-    val contentPadding = if (isExpanded) 26.dp else 22.dp
-    val titleStyle = if (isExpanded) {
-        MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-    } else {
-        MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-    }
-    val messageStyle = if (isExpanded) {
-        MaterialTheme.typography.bodyLarge
-    } else {
-        MaterialTheme.typography.bodyMedium
-    }
-    val heroIconSize = if (isExpanded) 36.dp else 28.dp
-    val heroBadgeIconBox = if (isExpanded) 64.dp else 52.dp
 
     Dialog(
         onDismissRequest = { /* must use close / CTA */ },
@@ -136,87 +103,72 @@ fun FashAppPromoOverlayDialog(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(scheme.scrim.copy(alpha = 0.62f)),
+                .background(Color.Black.copy(alpha = 0.52f)),
         ) {
-            val fractionWidth = maxWidth * cardWidthFraction
-            val cardWidth = if (fractionWidth < cardMaxWidth) fractionWidth else cardMaxWidth
-            val cardMaxHeight = maxHeight * cardMaxHeightFraction
+            val fractionWidth = maxWidth * PromoCardWidthFraction
+            val cardWidth = if (fractionWidth < PromoCardMaxWidth) fractionWidth else PromoCardMaxWidth
+            val cardMaxHeight = maxHeight * PromoCardMaxHeightFraction
 
             Surface(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .widthIn(max = cardWidth)
-                    .fillMaxWidth(cardWidthFraction)
+                    .fillMaxWidth(PromoCardWidthFraction)
                     .heightIn(max = cardMaxHeight),
-                shape = RoundedCornerShape(if (isExpanded) 24.dp else 22.dp),
-                color = scheme.surfaceContainerHigh,
-                tonalElevation = 4.dp,
-                shadowElevation = 12.dp,
-                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(20.dp),
+                color = scheme.surface,
+                shadowElevation = 20.dp,
+                tonalElevation = 2.dp,
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 4.dp, end = 4.dp, top = 4.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(
-                            onClick = { isExpanded = !isExpanded },
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Icon(
-                                imageVector = if (isExpanded) {
-                                    Icons.Outlined.CloseFullscreen
-                                } else {
-                                    Icons.Outlined.OpenInFull
-                                },
-                                contentDescription = stringResource(
-                                    if (isExpanded) R.string.app_promo_cd_collapse else R.string.app_promo_cd_expand,
-                                ),
-                                tint = scheme.onSurface,
-                            )
-                        }
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        PromoHeroSection(
+                            kind = campaign.kind,
+                            badge = badgeText,
+                            imageUrls = campaign.remoteImageUrls,
+                            heroHeight = PromoHeroHeight,
+                            iconSize = 32.dp,
+                            iconBoxSize = 60.dp,
+                        )
                         IconButton(
                             onClick = onDismiss,
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(10.dp)
+                                .size(36.dp)
+                                .background(Color.Black.copy(alpha = 0.42f), CircleShape),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.app_promo_cd_close),
-                                tint = scheme.onSurface,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                     }
-                    PromoHeroSection(
-                        kind = campaign.kind,
-                        badge = badgeText,
-                        imageUrls = campaign.remoteImageUrls,
-                        heroHeight = heroHeight,
-                        iconSize = heroIconSize,
-                        iconBoxSize = heroBadgeIconBox,
-                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = contentPadding),
+                            .padding(horizontal = 20.dp),
                     ) {
-                        Spacer(Modifier.height(if (isExpanded) 20.dp else 16.dp))
+                        Spacer(Modifier.height(18.dp))
                         Text(
                             text = titleText,
-                            style = titleStyle,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = MaterialTheme.typography.titleLarge.lineHeight,
+                            ),
                             color = scheme.onSurface,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Spacer(Modifier.height(if (isExpanded) 10.dp else 8.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = messageText,
-                            style = messageStyle,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = scheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -224,21 +176,27 @@ fun FashAppPromoOverlayDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = contentPadding)
-                            .padding(
-                                top = if (isExpanded) 22.dp else 18.dp,
-                                bottom = if (isExpanded) 22.dp else 18.dp,
-                            ),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 20.dp, bottom = 22.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Button(
                             onClick = { onPrimaryClick(campaign) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = if (isExpanded) 52.dp else 48.dp),
+                                .heightIn(min = 50.dp)
+                                .clip(RoundedCornerShape(FashTheme.spacing.radiusCard))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            FashColors.Primary,
+                                            FashColors.Primary.copy(alpha = 0.82f),
+                                        ),
+                                    ),
+                                ),
                             shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = scheme.primary,
+                                containerColor = Color.Transparent,
                                 contentColor = scheme.onPrimary,
                             ),
                         ) {
@@ -247,6 +205,7 @@ fun FashAppPromoOverlayDialog(
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
+                                textAlign = TextAlign.Center,
                             )
                         }
                         secondaryLabel?.let { secondaryText ->
@@ -320,46 +279,28 @@ private fun PromoHeroSection(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            if (multiImage) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.5f),
-                                ),
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(heroHeight)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.18f),
                             ),
+                            startY = heroHeight.value * 0.45f,
                         ),
-                )
+                    ),
+            )
+            if (multiImage) {
                 FashPromoPageIndicator(
                     pageCount = imageUrls.size,
                     currentPage = currentPage,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 10.dp),
+                        .padding(bottom = 12.dp),
                 )
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(10.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color.Black.copy(alpha = 0.55f),
-                ) {
-                    Text(
-                        text = stringResource(
-                            R.string.app_promo_image_page,
-                            currentPage + 1,
-                            imageUrls.size,
-                        ),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White,
-                    )
-                }
             }
             sanitizePromoDisplayString(badge)?.let { label ->
                 Surface(
@@ -367,13 +308,13 @@ private fun PromoHeroSection(
                         .align(Alignment.TopStart)
                         .padding(12.dp),
                     shape = RoundedCornerShape(percent = 50),
-                    color = scheme.primary.copy(alpha = 0.14f),
+                    color = scheme.primary,
                 ) {
                     Text(
                         text = label,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = scheme.primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = scheme.onPrimary,
                     )
                 }
             }
@@ -384,27 +325,27 @@ private fun PromoHeroSection(
         AppPromoCampaignKind.Welcome -> Triple(
             Icons.Outlined.WavingHand,
             FashColors.Success,
-            listOf(FashColors.Success.copy(alpha = 0.2f), scheme.surfaceContainerHigh),
+            listOf(FashColors.Success.copy(alpha = 0.22f), scheme.surfaceContainerHigh),
         )
         AppPromoCampaignKind.AppRating -> Triple(
             Icons.Default.Star,
             FashColors.Primary,
-            listOf(FashColors.Primary.copy(alpha = 0.18f), scheme.surfaceContainerHigh),
+            listOf(FashColors.Primary.copy(alpha = 0.2f), scheme.surfaceContainerHigh),
         )
         AppPromoCampaignKind.SellerPackage -> Triple(
             Icons.Outlined.Storefront,
             FashColors.Primary,
-            listOf(FashColors.Primary.copy(alpha = 0.16f), scheme.surfaceContainerHigh),
+            listOf(FashColors.Primary.copy(alpha = 0.18f), scheme.surfaceContainerHigh),
         )
         AppPromoCampaignKind.KycVerification -> Triple(
             Icons.Outlined.VerifiedUser,
             FashColors.Primary,
-            listOf(FashColors.Primary.copy(alpha = 0.14f), scheme.surfaceContainerHigh),
+            listOf(FashColors.Primary.copy(alpha = 0.16f), scheme.surfaceContainerHigh),
         )
         AppPromoCampaignKind.Remote -> Triple(
             Icons.Outlined.WavingHand,
             FashColors.Primary,
-            listOf(FashColors.Primary.copy(alpha = 0.14f), scheme.surfaceContainerHigh),
+            listOf(FashColors.Primary.copy(alpha = 0.16f), scheme.surfaceContainerHigh),
         )
     }
 
@@ -447,14 +388,13 @@ private fun PromoHeroSection(
                     .align(Alignment.TopStart)
                     .padding(12.dp),
                 shape = RoundedCornerShape(percent = 50),
-                color = tint.copy(alpha = 0.14f),
-                border = BorderStroke(1.dp, tint.copy(alpha = 0.35f)),
+                color = tint,
             ) {
                 Text(
                     text = label,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = tint,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
                 )
             }
         }
