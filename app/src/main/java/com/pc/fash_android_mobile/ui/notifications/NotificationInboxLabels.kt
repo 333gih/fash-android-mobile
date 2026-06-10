@@ -30,6 +30,8 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "marketplace.recommendation.similar_saved" -> R.string.notification_pt_marketplace_recommendation_similar_saved
         "marketplace.recommendation.continue_browsing" -> R.string.notification_pt_marketplace_recommendation_continue_browsing
         "marketplace.recommendation.inactive_nudge" -> R.string.notification_pt_marketplace_recommendation_inactive_nudge
+        "marketplace.recommendation.inactive_ladder" -> R.string.notification_pt_marketplace_recommendation_inactive_ladder
+        "marketplace.recommendation.sustainable_impact" -> R.string.notification_pt_marketplace_recommendation_sustainable_impact
         "marketplace.recommendation.community_quiet" -> R.string.notification_pt_marketplace_recommendation_community_quiet
         "marketplace.recommendation.style_drought" -> R.string.notification_pt_marketplace_recommendation_style_drought
         "marketplace.recommendation.taste_neighbor" -> R.string.notification_pt_marketplace_recommendation_taste_neighbor

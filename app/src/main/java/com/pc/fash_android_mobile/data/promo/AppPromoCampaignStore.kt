@@ -65,19 +65,17 @@ object AppPromoCampaignStore {
     }
 
     fun isDialogConsumed(context: Context, campaign: AppPromoCampaign): Boolean =
-        isDialogConsumed(context, campaign.id, campaign.version) || isDismissed(context, campaign)
+        isDismissed(context, campaign) || AppPromoSessionStore.isDialogConsumed(campaign)
 
     fun isDialogConsumed(context: Context, campaignId: String, version: Int): Boolean {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(dialogConsumedKey(campaignId, version), false)
+        if (isDismissed(context, campaignId, version)) return true
+        return AppPromoSessionStore.isDialogConsumed(
+            AppPromoCampaign(id = campaignId, version = version, kind = AppPromoCampaignKind.Remote),
+        )
     }
 
     fun markDialogConsumed(context: Context, campaign: AppPromoCampaign) {
-        context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(dialogConsumedKey(campaign.id, campaign.version), true)
-            .apply()
+        AppPromoSessionStore.markDialogConsumed(campaign)
     }
 
     fun recordShow(context: Context, campaign: AppPromoCampaign) {

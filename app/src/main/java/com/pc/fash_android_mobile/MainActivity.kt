@@ -631,9 +631,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding, lifecycleOwner) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                        if (promoOpenCountIncremented) return@repeatOnLifecycle
                         if (profileSetupBlocksShellChrome) return@repeatOnLifecycle
                         if (selectedConversationId != null) return@repeatOnLifecycle
+                        if (activePromoCampaign != null) return@repeatOnLifecycle
                         delay(550)
                         val appCtx = notificationSnackbarContext.applicationContext
                         val openCount = withContext(Dispatchers.IO) {
@@ -643,9 +643,6 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 AppPromoCampaignStore.readAppOpenCount(appCtx)
                             }
-                        }
-                        withContext(Dispatchers.IO) {
-                            AppPromoOnAppOpenLoader.fetchAndEnqueue(fashApp)
                         }
                         val gate = AppPromoGateContext(
                             splashFinished = splashFinished,
@@ -658,20 +655,27 @@ class MainActivity : ComponentActivity() {
                             appOpenCount = openCount,
                         )
                         if (activePromoCampaign != null) return@repeatOnLifecycle
-                        val resolved = withContext(Dispatchers.IO) {
-                            AppPromoOnAppOpenLoader.resolvePresentable(appCtx)
-                                ?: AppPromoCampaignResolver.resolve(gate, appCtx)
-                        }
-                        if (resolved != null && !AppPromoCampaignStore.isDialogConsumed(appCtx, resolved)) {
-                            activePromoCampaign = resolved
-                            AppPromoCampaignStore.recordShow(appCtx, resolved)
-                            AppPromoCampaignStore.markDialogConsumed(appCtx, resolved)
-                            AppPromoPendingQueue.remove(resolved.id)
-                            AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
-                                shellCoroutineScope,
-                                fashApp,
-                                resolved,
-                            )
+                        withContext(Dispatchers.IO) {
+                            val resolved = AppPromoOnAppOpenLoader.syncAndResolve(
+                                app = fashApp,
+                                appContext = appCtx,
+                                isGuestMode = false,
+                                blockBecauseOtherUi = selectedConversationId != null,
+                                incrementOpenCount = false,
+                            ) ?: AppPromoCampaignResolver.resolve(gate, appCtx)
+                            if (resolved != null && !AppPromoCampaignStore.isDialogConsumed(appCtx, resolved)) {
+                                withContext(Dispatchers.Main) {
+                                    activePromoCampaign = resolved
+                                }
+                                AppPromoCampaignStore.recordShow(appCtx, resolved)
+                                AppPromoCampaignStore.markDialogConsumed(appCtx, resolved)
+                                AppPromoPendingQueue.remove(resolved.id)
+                                AppPromoPresentationPolicy.markInboxReadAfterDialogShown(
+                                    shellCoroutineScope,
+                                    fashApp,
+                                    resolved,
+                                )
+                            }
                         }
                     }
                 }

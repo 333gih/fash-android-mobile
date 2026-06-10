@@ -26,7 +26,7 @@ object AppPromoOnAppOpenLoader {
         while (true) {
             val remote = AppPromoPendingQueue.pollHighest() ?: return null
             if (AppPromoCampaignStore.isDialogConsumed(appContext, remote)) continue
-            return if (AppPromoCampaignStore.canShow(appContext, remote)) remote else null
+            return if (AppPromoCampaignStore.canShow(appContext, remote)) remote else continue
         }
     }
 
@@ -42,7 +42,16 @@ object AppPromoOnAppOpenLoader {
             AppPromoCampaignStore.incrementAppOpenCount(appContext)
         }
         fetchAndEnqueue(app)
-        return resolvePresentable(appContext)
+        resolvePresentable(appContext)?.let { return it }
+        slideFallback(app, appContext)?.let { return it }
+        return AppPromoDefaultFallback.resolve(appContext)
+    }
+
+    private suspend fun slideFallback(app: FashApplication, appContext: Context): AppPromoCampaign? {
+        val slide = app.advertisingRepository.getSlides("promo_slider_main").getOrNull()?.items?.firstOrNull()
+            ?: return null
+        val campaign = AppPromoSlideFallback.fromSlide(slide) ?: return null
+        return if (AppPromoCampaignStore.canShow(appContext, campaign)) campaign else null
     }
 
     private fun isOnAppOpenSchedule(campaign: AppPromoCampaign): Boolean {

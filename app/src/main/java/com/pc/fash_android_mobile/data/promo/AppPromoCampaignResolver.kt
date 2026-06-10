@@ -36,18 +36,6 @@ object AppPromoCampaignResolver {
         },
         AppPromoCampaignProvider { ctx, appCtx ->
             if (!ctx.baseEligible()) return@AppPromoCampaignProvider null
-            if (AppPromoCampaignStore.isDismissed(appCtx, WELCOME_ID, WELCOME_VERSION)) return@AppPromoCampaignProvider null
-            AppPromoCampaign(
-                id = WELCOME_ID,
-                version = WELCOME_VERSION,
-                kind = AppPromoCampaignKind.Welcome,
-                titleRes = R.string.welcome_banner_dialog_title,
-                messageRes = R.string.welcome_banner_dialog_message,
-                primaryActionRes = R.string.welcome_banner_dialog_action,
-            )
-        },
-        AppPromoCampaignProvider { ctx, appCtx ->
-            if (!ctx.baseEligible()) return@AppPromoCampaignProvider null
             if (!ctx.meetingKycReverifyRequired || !ctx.identityVerifyUrlAvailable) return@AppPromoCampaignProvider null
             val campaign = AppPromoCampaign(
                 id = KYC_ID,
@@ -92,6 +80,18 @@ object AppPromoCampaignResolver {
             )
             if (AppPromoCampaignStore.isDismissed(appCtx, campaign)) return@AppPromoCampaignProvider null
             campaign
+        },
+        AppPromoCampaignProvider { ctx, appCtx ->
+            if (!ctx.baseEligible()) return@AppPromoCampaignProvider null
+            if (AppPromoCampaignStore.isDismissed(appCtx, WELCOME_ID, WELCOME_VERSION)) return@AppPromoCampaignProvider null
+            AppPromoCampaign(
+                id = WELCOME_ID,
+                version = WELCOME_VERSION,
+                kind = AppPromoCampaignKind.Welcome,
+                titleRes = R.string.welcome_banner_dialog_title,
+                messageRes = R.string.welcome_banner_dialog_message,
+                primaryActionRes = R.string.welcome_banner_dialog_action,
+            )
         },
     )
 

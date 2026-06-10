@@ -92,6 +92,8 @@ fun notificationPayloadIcon(payloadType: String?): ImageVector {
         "marketplace.recommendation.similar_saved",
         "marketplace.recommendation.continue_browsing",
         "marketplace.recommendation.inactive_nudge",
+        "marketplace.recommendation.inactive_ladder",
+        "marketplace.recommendation.sustainable_impact",
         "marketplace.recommendation.community_quiet",
         "marketplace.recommendation.style_drought",
         "marketplace.recommendation.taste_neighbor",
@@ -115,7 +117,13 @@ fun resolveInboxNotificationGroup(item: InboxNotificationItem): String {
     if (pt.startsWith("recommendation.", ignoreCase = true) ||
         pt.startsWith("marketplace.recommendation.", ignoreCase = true)
     ) {
-        return NotificationGroups.RECOMMENDATION
+        return when (pt.lowercase()) {
+            "marketplace.recommendation.inactive_nudge",
+            "marketplace.recommendation.inactive_ladder",
+            "marketplace.recommendation.sustainable_impact",
+            -> NotificationGroups.REENGAGEMENT
+            else -> NotificationGroups.RECOMMENDATION
+        }
     }
     return when (pt.lowercase()) {
         "marketplace.follower.new", "marketplace.follower.batch",
