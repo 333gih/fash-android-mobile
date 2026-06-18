@@ -121,9 +121,17 @@ CI ghi `local.properties` + `ci-upload.keystore` (gitignored) qua `scripts/ci_pr
    - Hoặc GCP Console → project `fash-3526e` → **APIs & Services → Library** → tìm **Google Play Android Developer API** → **Enable**
    - Đợi 2–5 phút sau khi bật rồi chạy lại **Android Release**.
 
-5. Play Console → **Users and permissions** → invite `play-publisher@fash-3526e.iam.gserviceaccount.com` (quyền release testing).
+5. **Đổi upload key** (alias `upload`): Play Console → **App signing** → request upload key reset → upload file **`upload-cert.pem`** (export bên dưới). Không commit file `.pem`.
 
-6. Lần đầu: upload AAB thủ công một bản để hoàn tất checklist app (content rating, privacy, v.v.) — API upload vẫn cần app đã được tạo trên Play.
+```powershell
+keytool -export -rfc -alias upload -file upload-cert.pem -keystore secrets/upload.keystore -storepass "YOUR_STORE_PASSWORD"
+keytool -list -v -keystore secrets/upload.keystore -alias upload -storepass "YOUR_STORE_PASSWORD"
+# SHA-256 (đối chiếu trên Play): 49:7D:86:D6:8E:7B:B7:56:B2:CD:95:1E:51:16:C7:F7:13:4C:DA:92:68:46:AA:F3:67:B3:D1:2F:E1:97:56:5F
+```
+
+6. Play Console → **Users and permissions** → invite `play-publisher@fash-3526e.iam.gserviceaccount.com` (quyền release testing).
+
+7. Lần đầu: upload AAB thủ công một bản để hoàn tất checklist app (content rating, privacy, v.v.) — API upload vẫn cần app đã được tạo trên Play.
 
 **Package name (prod):** `com.pc.fash_android_mobile` (không có `.dev`).
 

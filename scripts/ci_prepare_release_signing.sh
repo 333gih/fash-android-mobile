@@ -28,4 +28,3 @@ cp "${KEYSTORE_PATH}" "${ROOT}/${REL_PATH}"
 } >> local.properties
 
 echo "Release signing configured (alias=${KEY_ALIAS}, store=${REL_PATH})"
-# Play upload cert for this project: alias key0 (SHA1 5C:E7:3A:D0:...), not alias upload.
