@@ -19,6 +19,8 @@ Windows / bất kỳ máy nào
 
 ## 1. GitLab mirror → GitHub
 
+**Push nhanh (khuyến nghị):** xem [PUSH-GITHUB.md](./PUSH-GITHUB.md) và chạy `.\scripts\mirror-to-github.ps1`.
+
 Trên GitLab (**Settings → Repository → Mirroring repositories**):
 
 | Field | Giá trị |
@@ -172,3 +174,46 @@ Tag tùy chọn: `android/v1.0.8` → build AAB, không auto-upload (trừ khi �
 ```
 
 Xem thêm [SIGNING.md](../SIGNING.md).
+
+## 7. Jenkins (song song GitHub Actions)
+
+Jenkins build **trực tiếp từ GitLab** — không cần mirror sang GitHub. Giữ nguyên `.github/workflows/` cho team dùng Actions.
+
+| | GitHub Actions | Jenkins |
+|---|---|---|
+| Trigger | Push/mirror GitHub | Manual hoặc webhook GitLab |
+| Agent | `ubuntu-latest` (hosted) | VPS Linux (JDK 17 + Android SDK) |
+| Dev APK | Push `develop` | Job `BUILD_MODE=dev-apk` |
+| Prod AAB + Play | Push `releases/**` | Job `BUILD_MODE=prod-aab` |
+| Store | Artifact trên GitHub | Jenkins **Archive Artifacts** |
+
+### Credential Jenkins
+
+Tạo secret file (xem `secrets/jenkins-android.env.example`):
+
+| Credential ID | Dùng khi |
+|---|---|
+| `env-fash-android-mobile-dev` | `dev-apk` (chỉ cần env base64; keystore optional) |
+| `env-fash-android-mobile-prod` | `prod-aab` + Play (đủ keystore + `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`) |
+
+Nội dung giống GitHub secrets: `ANDROID_*_ENV_B64`, `ANDROID_UPLOAD_*`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`.
+
+### Agent requirements
+
+```bash
+# Ubuntu VPS (one-time)
+sudo apt-get install -y openjdk-17-jdk
+# Android SDK — cài Android Studio command-line tools hoặc sdkmanager; set ANDROID_HOME
+echo 'export ANDROID_HOME=/opt/android-sdk' >> /etc/profile.d/android.sh
+```
+
+Play upload: cài `fastlane` (`gem install fastlane`) **hoặc** dùng Docker (pipeline tự fallback `fastlanetools/fastlane`).
+
+### Chạy job
+
+1. Jenkins → New Item → **Pipeline** → trỏ SCM GitLab repo + `Jenkinsfile`
+2. Build with Parameters:
+   - **dev-apk** + branch `develop` → APK artifact
+   - **prod-aab** + branch `releases/x.y.z` + `UPLOAD_PLAY=true` + track `alpha` → Closed testing trên Play
+
+> **TestFlight là iOS** — Android dùng **Google Play Closed testing** (track `alpha`), không phải TestFlight. Xem `fash-ios-mobile/docs/CI.md` cho TestFlight.
