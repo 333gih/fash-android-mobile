@@ -285,8 +285,8 @@ android {
         applicationId = "com.pc.fash_android_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 11
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Overridden per flavor by [injectFromEnv] (LISTING_SHARE_BASE_URL host).
@@ -314,7 +314,7 @@ android {
             create("release") {
                 storeFile = releaseKeystoreFile
                 storePassword = project.prop("FASH_RELEASE_STORE_PASSWORD").orEmpty()
-                keyAlias = project.prop("FASH_RELEASE_KEY_ALIAS") ?: "upload"
+                keyAlias = project.prop("FASH_RELEASE_KEY_ALIAS") ?: "key0"
                 keyPassword = project.prop("FASH_RELEASE_KEY_PASSWORD").orEmpty()
             }
         }
