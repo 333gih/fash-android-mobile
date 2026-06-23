@@ -116,6 +116,7 @@ CI ghi `local.properties` + `ci-upload.keystore` (gitignored) qua `scripts/ci_pr
 | Secret | Mô tả |
 |---|---|
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Toàn bộ file JSON (multiline) |
+| `PLAY_EXPECTED_UPLOAD_SHA1` | (Khuyến nghị) SHA-1 upload key trên Play — CI verify trước upload |
 
 4. **Bật Google Play Android Developer API** trên cùng GCP project đã liên kết Play Console (bắt buộc, nếu không CI fail ở bước Upload to Google Play):
 
@@ -142,7 +143,7 @@ keytool -list -v -keystore secrets/upload.keystore -alias upload -storepass "YOU
 | Lỗi | Cách xử lý |
 |---|---|
 | `No key with alias 'upload' found` | Chạy `keytool -list -keystore secrets/upload.keystore` — chọn đúng alias, cập nhật `ANDROID_UPLOAD_KEY_ALIAS`, rồi `push_github_android_secrets.ps1`. |
-| `AAB was signed with the wrong key` | SHA1 AAB không khớp upload key đã đăng ký trên Play. Dùng alias **`upload`** (82:9D:…) thì cần **đổi upload key** trên Play Console (Setup → App signing → Request upload key reset) hoặc dùng alias **`key0`** (5C:E7:…) nếu giữ cert cũ. |
+| `AAB was signed with the wrong key` | SHA1 AAB không khớp upload key trên Play. **CI run `ci_verify_aab_signing.sh` trước upload** nếu đặt secret `PLAY_EXPECTED_UPLOAD_SHA1`. Fix: (A) Play Console → App signing → **Request upload key reset** → upload `upload-cert.pem` (`.\scripts\export_upload_cert.ps1`); (B) hoặc dùng keystore/alias cũ **`key0`** (SHA1 `5C:E7:…`) nếu Play chưa đổi key; (C) cập nhật `PLAY_EXPECTED_UPLOAD_SHA1` + `push_github_android_secrets.ps1` sau khi Play chấp nhận key mới (`82:9D:…` alias `upload`). |
 | `Android Developer API has not been used... or it is disabled` | Bật **Google Play Android Developer API** (mục 4 ở trên). |
 | `Unable to resolve action r0adkll/upload-google-play-action` | Dùng `r0adkll/upload-google-play@v1.1.3` (đã sửa trong workflow). |
 

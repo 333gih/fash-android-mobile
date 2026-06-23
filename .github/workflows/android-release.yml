@@ -162,6 +162,12 @@ jobs:
             echo "mapping_path=${MAPPING}" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: Verify AAB upload certificate (SHA-1)
+        if: env.UPLOAD_PLAY == 'true'
+        env:
+          PLAY_EXPECTED_UPLOAD_SHA1: ${{ secrets.PLAY_EXPECTED_UPLOAD_SHA1 }}
+        run: bash scripts/ci_verify_aab_signing.sh "${{ steps.artifacts.outputs.aab_path }}"
+
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
@@ -183,6 +189,7 @@ jobs:
           track: ${{ env.PLAY_TRACK }}
           status: completed
           mappingFile: ${{ steps.artifacts.outputs.mapping_path }}
+          whatsNewDirectory: distribution/whatsnew
 
       - name: Release summary
         if: always() && steps.app_version.outcome == 'success'
