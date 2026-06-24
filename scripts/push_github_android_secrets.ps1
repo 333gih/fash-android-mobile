@@ -114,6 +114,7 @@ if ([string]::IsNullOrWhiteSpace($playJson) -and $envMap["GOOGLE_PLAY_SERVICE_AC
 }
 Set-GhSecret "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" $playJson
 Set-GhSecret "PLAY_EXPECTED_UPLOAD_SHA1" $envMap["PLAY_EXPECTED_UPLOAD_SHA1"]
+Set-GhSecret "PLAY_TRACK" $envMap["PLAY_TRACK"]
 
 Write-Host ""
 Write-Host "Done. Verify: gh secret list @repoArg"

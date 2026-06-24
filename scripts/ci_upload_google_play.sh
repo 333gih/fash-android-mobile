@@ -4,7 +4,7 @@
 # Required env:
 #   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON  — full service account JSON (multiline OK)
 # Optional:
-#   PLAY_TRACK              — alpha | internal | beta | production (default: alpha)
+#   PLAY_TRACK              — FASH-production | alpha | internal | beta | production (default: FASH-production)
 #   PLAY_PACKAGE_NAME       — default com.pc.fash_android_mobile
 #   PLAY_MAPPING_FILE       — R8 mapping.txt path
 #
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 AAB="${1:-}"
-TRACK="${PLAY_TRACK:-alpha}"
+TRACK="${PLAY_TRACK:-FASH-production}"
 PKG="${PLAY_PACKAGE_NAME:-com.pc.fash_android_mobile}"
 MAPPING="${PLAY_MAPPING_FILE:-}"
 

@@ -29,7 +29,7 @@ pipeline {
         )
         choice(
             name: 'PLAY_TRACK',
-            choices: ['alpha', 'internal', 'beta', 'production'],
+            choices: ['FASH-production', 'alpha', 'internal', 'beta', 'production'],
             description: 'Google Play track (prod-aab + UPLOAD_PLAY only)'
         )
         booleanParam(

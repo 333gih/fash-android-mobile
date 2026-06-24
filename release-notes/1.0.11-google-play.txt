@@ -1,0 +1,14 @@
+Fash Android 1.0.11 (versionCode 12)
+======================================
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Slider màn đăng nhập cập nhật đúng ngôn ngữ khi đổi VN/EN
+• Cải thiện báo cáo crash/ANR trên Google Play (native debug symbols)
+• Sửa lỗi thông báo đẩy và cải thiện ổn định
+
+--- Google Play — What's new (English) ---
+
+• Login screen slider refreshes in your selected language (Vietnamese / English)
+• Improved crash/ANR reporting on Google Play (native debug symbols)
+• Push notification fixes and stability improvements

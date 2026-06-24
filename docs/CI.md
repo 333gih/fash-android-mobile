@@ -50,7 +50,7 @@ File workflow nằm tại `.github/workflows/` — chỉ chạy sau khi repo Git
 
 | Push branch | Play track | Mục đích |
 |---|---|---|
-| `releases/**`, `release/**` | `alpha` | **Closed testing** |
+| `releases/**`, `release/**` | `FASH-production` | **Closed testing** (kênh custom trên Play Console) |
 | `main`, `master` | `production` | **Production** trên Play |
 | Tag `android/v*` | `production` | Release theo tag |
 | Manual | Chọn track | Override |
@@ -215,6 +215,6 @@ Play upload: cài `fastlane` (`gem install fastlane`) **hoặc** dùng Docker (p
 1. Jenkins → New Item → **Pipeline** → trỏ SCM GitLab repo + `Jenkinsfile`
 2. Build with Parameters:
    - **dev-apk** + branch `develop` → APK artifact
-   - **prod-aab** + branch `releases/x.y.z` + `UPLOAD_PLAY=true` + track `alpha` → Closed testing trên Play
+   - **prod-aab** + branch `releases/x.y.z` + `UPLOAD_PLAY=true` + track `FASH-production` → Closed testing trên Play
 
-> **TestFlight là iOS** — Android dùng **Google Play Closed testing** (track `alpha`), không phải TestFlight. Xem `fash-ios-mobile/docs/CI.md` cho TestFlight.
+> **TestFlight là iOS** — Android dùng **Google Play Closed testing** (track `FASH-production` trên Console), không phải TestFlight. Xem `fash-ios-mobile/docs/CI.md` cho TestFlight.

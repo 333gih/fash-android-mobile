@@ -74,8 +74,8 @@ gh secret list -R fashandcurious14052026-dotcom/fash-android-mobile
 | Mục đích | Cách |
 |----------|------|
 | Dev APK | Push `develop` → **Android Build** |
-| AAB + Play Closed testing | Push `releases/x.y.z` → **Android Release** (track `alpha`) |
-| Thủ công | `gh workflow run android-release.yml -R fashandcurious14052026-dotcom/fash-android-mobile --ref releases/1.0 -f upload_play=true -f play_track=alpha` |
+| AAB + Play Closed testing | Push `releases/x.y.z` → **Android Release** (track `FASH-production`) |
+| Thủ công | `gh workflow run android-release.yml -R fashandcurious14052026-dotcom/fash-android-mobile --ref releases/1.0 -f upload_play=true -f play_track=FASH-production` |
 
 Theo dõi:
 
