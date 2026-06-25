@@ -1,0 +1,14 @@
+Fash Android 1.0.12 (versionCode 13)
+======================================
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Sửa mở chi tiết thông báo khi bấm push — không còn lỗi tải
+• Link trong nội dung thông báo có thể bấm được
+• Thích / Lưu cố định bên phải màn chi tiết sản phẩm (luôn hiện khi cuộn)
+
+--- Google Play — What's new (English) ---
+
+• Fix opening notification detail from push taps
+• Tap links inside notification content
+• Like / Save pinned on the right of product detail while scrolling

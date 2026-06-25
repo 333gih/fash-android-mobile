@@ -286,22 +286,7 @@ fun ProductDetailScreen(
                                     .fillMaxWidth()
                                     .background(scheme.background),
                             ) {
-                                DetailHeroImage(
-                                    detail = d,
-                                    onLike = {
-                                        if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
-                                        else viewModel.toggleLike()
-                                    },
-                                    onSave = {
-                                        if (isGuestMode) {
-                                            onRequestLogin(GuestLoginReason.Saved)
-                                        } else {
-                                            val aboutToSave = detail?.isSaved == false
-                                            viewModel.toggleSave()
-                                            if (aboutToSave) showSaveNudge = true
-                                        }
-                                    },
-                                )
+                                DetailHeroImage(detail = d)
                                 Box(
                                     Modifier.onGloballyPositioned { coords ->
                                         measuredSellerRowHeightPx = coords.size.height.toFloat()
@@ -509,6 +494,26 @@ fun ProductDetailScreen(
                             }
                         }
                     }
+                    DetailHeroEngagementRail(
+                        detail = d,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 64.dp, end = 14.dp)
+                            .zIndex(2f),
+                        onLike = {
+                            if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
+                            else viewModel.toggleLike()
+                        },
+                        onSave = {
+                            if (isGuestMode) {
+                                onRequestLogin(GuestLoginReason.Saved)
+                            } else {
+                                val aboutToSave = detail?.isSaved == false
+                                viewModel.toggleSave()
+                                if (aboutToSave) showSaveNudge = true
+                            }
+                        },
+                    )
                 }
             }
         }
@@ -705,13 +710,98 @@ private fun DetailSellerRowMini(
 }
 
 @Composable
-private fun DetailHeroImage(
+private fun DetailHeroEngagementRail(
     detail: ListingDetail,
+    modifier: Modifier = Modifier,
     onLike: () -> Unit,
     onSave: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = scheme.surface.copy(alpha = 0.94f),
+        shadowElevation = 6.dp,
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.28f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            DetailEngagementChip(
+                imageVector = if (detail.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                count = formatStat(detail.likeCount),
+                active = detail.isLiked,
+                contentDescription = stringResource(R.string.product_action_like),
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                    onLike()
+                },
+            )
+            DetailEngagementChip(
+                imageVector = if (detail.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                count = formatStat(detail.saveCount),
+                active = detail.isSaved,
+                contentDescription = stringResource(R.string.product_action_save),
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                    onSave()
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailEngagementChip(
+    imageVector: ImageVector,
+    count: String,
+    active: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val tint = if (active) DetailPrimary else scheme.onSurface.copy(alpha = 0.82f)
+    Column(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .then(
+                if (active) {
+                    Modifier.background(DetailPrimary.copy(alpha = 0.12f))
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(18.dp),
+            tint = tint,
+        )
+        Text(
+            text = count,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.sp,
+            ),
+            color = tint,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun DetailHeroImage(
+    detail: ListingDetail,
+) {
+    val scheme = MaterialTheme.colorScheme
     val urls = remember(detail.id, detail.imageUrls) {
         detail.imageUrls.map { resolveImageUrl(it) }.filter { it.isNotEmpty() }
     }
@@ -761,7 +851,7 @@ private fun DetailHeroImage(
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 52.dp),
+                        .padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     repeat(urls.size) { index ->
@@ -778,39 +868,19 @@ private fun DetailHeroImage(
                 }
             }
         }
-        Surface(
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(12.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = scheme.surface.copy(alpha = 0.94f),
-            shadowElevation = 3.dp,
-            border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.25f)),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            Row(
-                Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = scheme.surface.copy(alpha = 0.94f),
+                shadowElevation = 3.dp,
+                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.25f)),
             ) {
                 StatMini(Icons.Default.Visibility, formatStat(detail.viewCount), null, null)
-                StatMini(
-                    imageVector = if (detail.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    value = formatStat(detail.likeCount),
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
-                        onLike()
-                    },
-                    tint = if (detail.isLiked) DetailPrimary else scheme.onSurface,
-                )
-                StatMini(
-                    imageVector = if (detail.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    value = formatStat(detail.saveCount),
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
-                        onSave()
-                    },
-                    tint = if (detail.isSaved) DetailPrimary else scheme.onSurface,
-                )
             }
         }
         Surface(
@@ -840,7 +910,7 @@ private fun StatMini(
     val scheme = MaterialTheme.colorScheme
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     Row(
-        modifier = mod,
+        modifier = mod.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {

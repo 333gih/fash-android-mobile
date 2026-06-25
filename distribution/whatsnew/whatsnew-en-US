@@ -1,3 +1,3 @@
-• Login screen slider refreshes in your selected language (Vietnamese / English)
-• Improved crash/ANR reporting on Google Play (native debug symbols)
-• Push notification fixes and stability improvements
+• Fix opening notification detail from push taps
+• Tap links inside notification content
+• Like / Save pinned on the right of product detail while scrolling

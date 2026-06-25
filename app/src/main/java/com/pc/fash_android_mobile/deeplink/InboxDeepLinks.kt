@@ -11,6 +11,8 @@ object InboxDeepLinks {
         intent ?: return null
         intent.getStringExtra("deep_link")?.let { parseNotificationIdFromDeepLinkString(it) }?.let { return it }
         intent.getStringExtra("notification_id")?.let { parseUuid(it) }?.let { return it }
+        // FCM data payload (background tray tap) uses ledger field name, not our PendingIntent alias.
+        intent.getStringExtra("user_notification_id")?.let { parseUuid(it) }?.let { return it }
         intent.data?.let { parseNotificationIdFromUri(it) }?.let { return it }
         return null
     }

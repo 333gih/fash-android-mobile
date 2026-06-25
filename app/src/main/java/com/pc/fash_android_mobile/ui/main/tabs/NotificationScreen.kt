@@ -121,6 +121,9 @@ fun NotificationScreen(
     val unreadCount by viewModel.unreadCount.collectAsState()
     val markAllReadBusy by viewModel.markAllReadBusy.collectAsState()
     val selectedDetailId by viewModel.selectedDetailId.collectAsState()
+    val pushDetailItem by viewModel.pushDetailItem.collectAsState()
+    val pushDetailLoading by viewModel.pushDetailLoading.collectAsState()
+    val pushDetailNotFound by viewModel.pushDetailNotFound.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroup by viewModel.selectedGroup.collectAsState()
     val pullState = rememberPullToRefreshState()
@@ -136,7 +139,9 @@ fun NotificationScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.refresh()
+        if (!viewModel.pushDetailLoading.value) {
+            viewModel.refresh()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -159,7 +164,11 @@ fun NotificationScreen(
             }
     }
 
-    val detailItem = selectedDetailId?.let { id -> items.find { it.id == id } }
+    val detailItem = selectedDetailId?.let { id ->
+        items.find { it.id == id } ?: pushDetailItem?.takeIf { it.id == id }
+    }
+    val showPushDetailLoading = selectedDetailId != null && detailItem == null && pushDetailLoading
+    val showPushDetailNotFound = selectedDetailId != null && detailItem == null && pushDetailNotFound
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -257,6 +266,34 @@ fun NotificationScreen(
                             .fillMaxWidth(),
                     ) {
                             when {
+                                showPushDetailLoading -> {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = FashColors.Primary)
+                                    }
+                                }
+                                showPushDetailNotFound -> {
+                                    FashEmptyState(
+                                        icon = Icons.Outlined.Notifications,
+                                        title = stringResource(R.string.notification_detail_not_found_title),
+                                        subtitle = stringResource(R.string.notification_detail_not_found_subtitle),
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentDescription = null,
+                                        footer = {
+                                            Spacer(Modifier.height(4.dp))
+                                            OutlinedButton(
+                                                onClick = {
+                                                    selectedDetailId?.let { viewModel.openInboxDetailFromPush(it) }
+                                                },
+                                                colors = ButtonDefaults.outlinedButtonColors(
+                                                    contentColor = FashColors.Primary,
+                                                ),
+                                                shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+                                            ) {
+                                                Text(stringResource(R.string.feed_retry))
+                                            }
+                                        },
+                                    )
+                                }
                                 isLoading && (if (selectedGroup == null) groups.isEmpty() else items.isEmpty()) -> {
                                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         CircularProgressIndicator(color = FashColors.Primary)

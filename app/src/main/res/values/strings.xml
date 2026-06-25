@@ -474,6 +474,8 @@
     <string name="notification_inbox_unavailable_subtitle">Máy chủ chưa cấu hình inbox hoặc bạn không có quyền truy cập. Thử lại sau.</string>
     <string name="notification_detail_title">Chi tiết thông báo</string>
     <string name="notification_detail_no_title">(Không tiêu đề)</string>
+    <string name="notification_detail_not_found_title">Không mở được thông báo</string>
+    <string name="notification_detail_not_found_subtitle">Thông báo có thể đã bị xóa hoặc chưa đồng bộ. Thử lại sau.</string>
     <string name="notification_detail_time">%1$s</string>
     <string name="notification_detail_read_at">Đã đọc: %1$s</string>
     <string name="notification_detail_payload_type">Loại</string>

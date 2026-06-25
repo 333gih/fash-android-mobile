@@ -440,6 +440,8 @@
     <string name="notification_inbox_unavailable_subtitle">The inbox isn\'t configured on the server or you can\'t access it right now. Try again later.</string>
     <string name="notification_detail_title">Notification</string>
     <string name="notification_detail_no_title">(No title)</string>
+    <string name="notification_detail_not_found_title">Couldn\'t open notification</string>
+    <string name="notification_detail_not_found_subtitle">It may have been removed or hasn\'t synced yet. Try again in a moment.</string>
     <string name="notification_detail_time">%1$s</string>
     <string name="notification_detail_read_at">Read: %1$s</string>
     <string name="notification_detail_payload_type">Type</string>

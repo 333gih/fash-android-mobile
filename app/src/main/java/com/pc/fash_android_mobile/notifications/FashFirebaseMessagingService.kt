@@ -98,6 +98,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             deepLink?.let { putExtra("deep_link", it) }
             message.data["user_notification_id"]?.takeIf { it.isNotBlank() }?.let {
                 putExtra(NotificationEngagementReporter.EXTRA_NOTIFICATION_ID, it.trim())
+                putExtra("user_notification_id", it.trim())
             }
             NotificationEngagementReporter.attachEngagementExtras(this, message.data)
         }

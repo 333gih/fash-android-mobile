@@ -169,11 +169,7 @@ fun NotificationDetailScreen(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = scheme.onSurface,
             )
-            Text(
-                text = displayBody,
-                style = MaterialTheme.typography.bodyLarge,
-                color = scheme.onSurface,
-            )
+            NotificationLinkifiedText(text = displayBody)
 
             if (promoCampaign != null) {
                 NotificationPromoCtaSection(
@@ -199,10 +195,9 @@ fun NotificationDetailScreen(
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                             color = scheme.onSurface,
                         )
-                        Text(
+                        NotificationLinkifiedText(
                             text = extra,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = scheme.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }

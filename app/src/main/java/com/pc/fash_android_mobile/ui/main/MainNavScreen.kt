@@ -353,7 +353,7 @@ fun MainNavScreen(
     LaunchedEffect(showNotificationScreen) {
         when {
             showNotificationScreen -> {
-                notificationsViewModel.refresh()
+                // NotificationScreen loads its own list; avoid racing openInboxDetailFromPush.
                 notificationsViewModel.refreshUnreadSummary()
             }
             wasNotificationOverlayVisible -> notificationsViewModel.refreshUnreadSummary()
