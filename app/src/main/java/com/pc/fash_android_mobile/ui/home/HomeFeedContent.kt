@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.Dp
@@ -67,23 +70,32 @@ fun HomeFeedContent(
         viewModel.normalizeSelectedFeedTab(isGuestBrowse)
     }
 
-    PullToRefreshBox(
-        isRefreshing = ui.isRefreshing,
-        onRefresh = { viewModel.refresh() },
-        modifier = modifier.fillMaxSize(),
-        state = pullState,
-        indicator = {
-            PullToRefreshDefaults.Indicator(
-                state = pullState,
-                isRefreshing = ui.isRefreshing,
-                color = FashColors.Primary,
-                containerColor = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        },
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            HomeFeedTabHost(
+    var pendingListingDetail by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    LaunchedEffect(pendingListingDetail) {
+        pendingListingDetail?.let { (listingId, sellerId) ->
+            onListingClick(listingId, sellerId)
+            pendingListingDetail = null
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = ui.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize(),
+            state = pullState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = pullState,
+                    isRefreshing = ui.isRefreshing,
+                    color = FashColors.Primary,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                HomeFeedTabHost(
                 modifier = Modifier.fillMaxSize(),
                 bottomScrollInset = promoDockInset,
                 selectedTab = ui.selectedFeedTab,
@@ -135,17 +147,18 @@ fun HomeFeedContent(
                 onScrollToTopRequest = viewModel.scrollHomeToTop,
             )
 
-            if (promoSlides.isNotEmpty()) {
-                StickyBottomPromoBar(
-                    elevated = false,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                ) {
-                    FashPromoSlider(
-                        modifier = Modifier.fillMaxWidth(),
-                        slides = promoSlides,
-                        onSlideClick = onPromoSlideClick,
-                        reportPendingPaymentAnchor = true,
-                    )
+                if (promoSlides.isNotEmpty()) {
+                    StickyBottomPromoBar(
+                        elevated = false,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    ) {
+                        FashPromoSlider(
+                            modifier = Modifier.fillMaxWidth(),
+                            slides = promoSlides,
+                            onSlideClick = onPromoSlideClick,
+                            reportPendingPaymentAnchor = true,
+                        )
+                    }
                 }
             }
         }
@@ -158,7 +171,7 @@ fun HomeFeedContent(
                 onDismiss = { viewModel.closeListingPreview() },
                 onViewDetail = {
                     val nav = viewModel.openListingDetailFromPreview()
-                    if (nav != null) onListingClick(nav.first, nav.second)
+                    if (nav != null) pendingListingDetail = nav
                 },
                 onLike = { viewModel.toggleLike(preview.feedItem) },
                 onSave = { viewModel.toggleSave(preview.feedItem) },
@@ -169,7 +182,7 @@ fun HomeFeedContent(
                         onRequestLogin(GuestLoginReason.BuyOrChat)
                     } else {
                         val nav = viewModel.openChatFromPreview()
-                        if (nav != null) onListingClick(nav.first, nav.second)
+                        if (nav != null) pendingListingDetail = nav
                     }
                 },
             )

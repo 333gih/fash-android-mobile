@@ -145,6 +145,14 @@ fun SellerProfileScreen(
         viewModel.loadForSeller(sellerUsername)
     }
 
+    var pendingListingDetail by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    LaunchedEffect(pendingListingDetail) {
+        pendingListingDetail?.let { (listingId, sellerId) ->
+            onListingClick(listingId, sellerId)
+            pendingListingDetail = null
+        }
+    }
+
     val listState = rememberLazyListState()
     val scrollScope = rememberCoroutineScope()
     val collapseProgress = rememberProfileHeaderCollapseProgress(listState)
@@ -391,7 +399,7 @@ fun SellerProfileScreen(
                         onDismiss = { homeVm.closeListingPreview() },
                         onViewDetail = {
                             val nav = homeVm.openListingDetailFromPreview()
-                            if (nav != null) onListingClick(nav.first, nav.second)
+                            if (nav != null) pendingListingDetail = nav
                         },
                         onLike = { homeVm.toggleLike(p.feedItem) },
                         onSave = { homeVm.toggleSave(p.feedItem) },
@@ -402,7 +410,7 @@ fun SellerProfileScreen(
                                 onRequestLogin(GuestLoginReason.BuyOrChat)
                             } else {
                                 val nav = homeVm.openChatFromPreview()
-                                if (nav != null) onListingClick(nav.first, nav.second)
+                                if (nav != null) pendingListingDetail = nav
                             }
                         },
                     )

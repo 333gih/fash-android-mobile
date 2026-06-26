@@ -265,6 +265,13 @@ fun ExploreScreen(
     val committedSellerSearchQuery by viewModel.committedSellerSearchQuery.collectAsState()
     val primarySection by viewModel.primarySection.collectAsState()
     val listingPreview by viewModel.listingPreview.collectAsState()
+    var pendingListingDetail by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    LaunchedEffect(pendingListingDetail) {
+        pendingListingDetail?.let { (listingId, sellerId) ->
+            onListingClick(listingId, sellerId)
+            pendingListingDetail = null
+        }
+    }
     val sellerBrowseResults by viewModel.sellerBrowseResults.collectAsState()
     val sellerPreviewPosts by viewModel.sellerPreviewPosts.collectAsState()
     val sellersLoading by viewModel.sellersLoading.collectAsState()
@@ -661,7 +668,7 @@ fun ExploreScreen(
                     onDismiss = { viewModel.closeListingPreview() },
                     onViewDetail = {
                         val nav = viewModel.openListingDetailFromPreview()
-                        if (nav != null) onListingClick(nav.first, nav.second)
+                        if (nav != null) pendingListingDetail = nav
                     },
                     onLike = { viewModel.toggleLike(preview.feedItem) },
                     onSave = { viewModel.toggleSave(preview.feedItem) },
@@ -672,7 +679,7 @@ fun ExploreScreen(
                             onRequestLogin(GuestLoginReason.BuyOrChat)
                         } else {
                             val nav = viewModel.openChatFromPreview()
-                            if (nav != null) onListingClick(nav.first, nav.second)
+                            if (nav != null) pendingListingDetail = nav
                         }
                     },
                 )

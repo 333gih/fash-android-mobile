@@ -1,0 +1,14 @@
+Fash Android 1.0.14 (versionCode 15)
+======================================
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Sửa preview listing trên Home — bấm sản phẩm hiện quick look
+• Sửa Khám phá và shop seller — Xem chi tiết mở đúng trang sản phẩm
+• Cải thiện chuyển từ preview sang chi tiết listing
+
+--- Google Play — What's new (English) ---
+
+• Fix listing preview on Home — tap a product to open quick look
+• Fix Explore and seller shop — View detail opens product page correctly
+• Smoother navigation from preview to listing detail

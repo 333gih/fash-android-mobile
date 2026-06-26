@@ -1892,6 +1892,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                         if (sellerShopUsername != null &&
+                                            selectedListingId == null &&
                                             chatShipFlowArgs == null &&
                                             selectedCheckoutListingId == null
                                         ) {

@@ -280,6 +280,13 @@ fun MainNavScreen(
         exploreViewModel.setSearchBarExpanded(false)
     }
 
+    val navigateToListingDetail: (String, String?) -> Unit = { listingId, sellerId ->
+        if (showExploreOverlay) {
+            closeExploreOverlay()
+        }
+        onListingClick(listingId, sellerId)
+    }
+
     LaunchedEffect(exploreOverlayOpenNonce) {
         if (exploreOverlayOpenNonce > 0L) {
             openExploreOverlay(false)
@@ -643,7 +650,7 @@ fun MainNavScreen(
                 when (tabs.getOrNull(tabIndex) ?: MainTab.Home) {
                     MainTab.Home -> HomeFeedContent(
                         viewModel = homeViewModel,
-                        onListingClick = onListingClick,
+                        onListingClick = navigateToListingDetail,
                         onNavigateToExplore = { openExploreOverlay(false) },
                         onNavigateToExploreWithTag = { tagName ->
                             val chipId = homeViewModel.trendingStyleTagChipIdForName(tagName)
@@ -770,7 +777,7 @@ fun MainNavScreen(
             modifier = Modifier.fillMaxSize(),
             viewModel = exploreViewModel,
             onClose = closeExploreOverlay,
-            onListingClick = onListingClick,
+            onListingClick = navigateToListingDetail,
             onFeaturedSellerClick = onFeaturedSellerClick,
             onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
             onPromoSlideClick = onPromoSlideClick,
