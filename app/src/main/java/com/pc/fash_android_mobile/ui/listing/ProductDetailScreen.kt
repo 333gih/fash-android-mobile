@@ -29,6 +29,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -133,6 +134,11 @@ private val DetailCardShape = RoundedCornerShape(16.dp)
 private val DetailConditionGreenLight = Color(0xFF2E7D32)
 private val DetailConditionGreenDark = Color(0xFF81C784)
 private const val DEFAULT_EST_SHIPPING_VND = 30_000L
+/** Top app bar + pinned seller strip — keep engagement rail below so Visit shop stays tappable. */
+private val DetailTopBarHeight = 64.dp
+private val DetailPinnedStripHeight = 56.dp
+private val DetailEngagementRailEndPadding = 14.dp
+private val DetailEngagementRailWidth = 56.dp
 
 @Composable
 private fun detailConditionValueColor(): Color {
@@ -274,6 +280,15 @@ fun ProductDetailScreen(
                     }
                 }
                 val scrollScope = rememberCoroutineScope()
+                val engagementRailTop by animateDpAsState(
+                    targetValue = if (showPinnedSellerStrip) {
+                        DetailTopBarHeight + DetailPinnedStripHeight + 8.dp
+                    } else {
+                        DetailTopBarHeight
+                    },
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "engagementRailTop",
+                )
                 Box(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize()) {
                         Box(
@@ -488,7 +503,12 @@ fun ProductDetailScreen(
                                                 scrollState.scrollTo(end)
                                             }
                                         },
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier.padding(
+                                            start = 12.dp,
+                                            end = 12.dp + DetailEngagementRailWidth + DetailEngagementRailEndPadding,
+                                            top = 8.dp,
+                                            bottom = 8.dp,
+                                        ),
                                     )
                                 }
                             }
@@ -498,7 +518,10 @@ fun ProductDetailScreen(
                         detail = d,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 64.dp, end = 14.dp)
+                            .padding(
+                                top = engagementRailTop,
+                                end = DetailEngagementRailEndPadding,
+                            )
                             .zIndex(2f),
                         onLike = {
                             if (isGuestMode) onRequestLogin(GuestLoginReason.Like)

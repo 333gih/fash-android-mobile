@@ -1,0 +1,14 @@
+Fash Android 1.0.13 (versionCode 14)
+======================================
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Sửa rail Thích/Lưu không che nút Xem shop khi cuộn xuống
+• Sửa mở chi tiết thông báo khi bấm push
+• Link trong nội dung thông báo có thể bấm được
+
+--- Google Play — What's new (English) ---
+
+• Fix Like/Save rail no longer covering Visit shop on scroll
+• Fix opening notification detail from push taps
+• Tap links inside notification content
