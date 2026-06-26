@@ -1,3 +1,3 @@
-• Fix listing preview on Home — tap a product to open quick look
-• Fix Explore and seller shop — View detail opens product page correctly
-• Smoother navigation from preview to listing detail
+• Fix Like/Save on product detail — no longer covers Share
+• Seller shop supports scroll load-more (smooth paging, efficient on Android)
+• Improved seller storefront browsing

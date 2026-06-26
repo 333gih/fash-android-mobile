@@ -134,6 +134,9 @@ fun SellerProfileScreen(
     val sellerFocus by viewModel.sellerFocus.collectAsState()
     val sellerFocusForbidden by viewModel.sellerFocusForbidden.collectAsState()
     val sellerFocusLoading by viewModel.sellerFocusLoading.collectAsState()
+    val sellingHasMore by viewModel.sellingHasMore.collectAsState()
+    val soldHasMore by viewModel.soldHasMore.collectAsState()
+    val isLoadingMoreListings by viewModel.isLoadingMore.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
 
     val titleHandle = remember(sellerUsername) {
@@ -268,6 +271,7 @@ fun SellerProfileScreen(
                 else -> {
                     val items = if (selectedTab == 0) sellingListings else soldListings
                     val showGridLoading = viewModel.isGridLoading(selectedTab)
+                    val gridHasMore = if (selectedTab == 0) sellingHasMore else soldHasMore
                     val pinnedBottomInset = FashPromoSliderAdFooterContentHeight
                     Column(
                         modifier = Modifier
@@ -352,6 +356,10 @@ fun SellerProfileScreen(
                                 },
                                 items = items,
                                 showGridLoading = showGridLoading,
+                                enableGridPagination = true,
+                                gridHasMore = gridHasMore,
+                                gridIsLoadingMore = isLoadingMoreListings,
+                                onGridLoadMore = { viewModel.loadMoreListings(selectedTab) },
                                 listingTabSet = ProfileListingTabSet.SellerStorefront,
                                 onListingClick = { item ->
                                     val previewVm = listingPreviewViewModel

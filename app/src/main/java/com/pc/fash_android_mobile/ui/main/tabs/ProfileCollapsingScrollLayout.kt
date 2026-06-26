@@ -31,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.pc.fash_android_mobile.ui.components.LocalFashTabSwipeConsuming
 import com.pc.fash_android_mobile.ui.components.fashTabSwipe
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.input.pointer.pointerInput
@@ -59,6 +60,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -85,6 +87,7 @@ import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
 import com.pc.fash_android_mobile.ui.feed.listingMasonryProfileChunkItems
 import com.pc.fash_android_mobile.ui.feed.makeStableColumnLayout
 import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
@@ -193,6 +196,11 @@ fun ProfileCollapsingScrollLayout(
     additionalBottomInset: Dp = 0.dp,
     /** First-page listing load under tabs — skeleton grid instead of empty state. */
     showGridLoading: Boolean = false,
+    /** When set, enables paginated grid (seller storefront). */
+    enableGridPagination: Boolean = false,
+    gridHasMore: Boolean = false,
+    gridIsLoadingMore: Boolean = false,
+    onGridLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val allTabLabelResIds = profileTabLabelResIds(listingTabSet)
@@ -226,6 +234,28 @@ fun ProfileCollapsingScrollLayout(
         (screenHeightDpInt * 0.28f).dp.coerceIn(120.dp, 280.dp)
     }
     val totalBottomPad = bottomScrollPad + additionalBottomInset
+
+    LaunchedEffect(listState, items.size, gridHasMore, gridIsLoadingMore, showGridLoading, enableGridPagination) {
+        if (!enableGridPagination) return@LaunchedEffect
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible to info.totalItemsCount
+        }
+            .distinctUntilChanged()
+            .collect { (lastVisible, totalItems) ->
+                if (
+                    !showGridLoading &&
+                    items.isNotEmpty() &&
+                    gridHasMore &&
+                    !gridIsLoadingMore &&
+                    totalItems > 0 &&
+                    lastVisible >= totalItems - 4
+                ) {
+                    onGridLoadMore()
+                }
+            }
+    }
 
     val tabSwipeModifier = if (tabCount > 1) {
         Modifier.fashTabSwipe(
@@ -352,6 +382,16 @@ fun ProfileCollapsingScrollLayout(
                 onListingLike = onListingLike,
                 onListingSave = onListingSave,
             )
+            if (enableGridPagination && (gridHasMore || gridIsLoadingMore)) {
+                item(key = "profile_grid_load_more_$safeSelectedTab") {
+                    FeedLoadMoreFooter(
+                        enabled = gridHasMore,
+                        isLoadingMore = gridIsLoadingMore,
+                        onLoadMore = onGridLoadMore,
+                        modifier = tabSwipeModifier,
+                    )
+                }
+            }
             item(key = "list_bottom_pad") {
                 Spacer(modifier = Modifier.height(totalBottomPad))
             }

@@ -1,0 +1,14 @@
+Fash Android 1.0.15 (versionCode 16)
+======================================
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Sửa nút Thích/Lưu trên chi tiết sản phẩm — không che nút Chia sẻ
+• Shop seller có tải thêm sản phẩm khi cuộn (load more mượt, hiệu năng tốt)
+• Cải thiện trải nghiệm duyệt storefront seller
+
+--- Google Play — What's new (English) ---
+
+• Fix Like/Save on product detail — no longer covers Share
+• Seller shop supports scroll load-more (smooth paging, efficient on Android)
+• Improved seller storefront browsing

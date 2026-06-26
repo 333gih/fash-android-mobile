@@ -301,7 +301,30 @@ fun ProductDetailScreen(
                                     .fillMaxWidth()
                                     .background(scheme.background),
                             ) {
-                                DetailHeroImage(detail = d)
+                                Box(Modifier.fillMaxWidth()) {
+                                    DetailHeroImage(detail = d)
+                                    if (!showPinnedSellerStrip && scrollY < heroHeightPx) {
+                                        DetailHeroEngagementRail(
+                                            detail = d,
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(end = 12.dp, bottom = 12.dp),
+                                            onLike = {
+                                                if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
+                                                else viewModel.toggleLike()
+                                            },
+                                            onSave = {
+                                                if (isGuestMode) {
+                                                    onRequestLogin(GuestLoginReason.Saved)
+                                                } else {
+                                                    val aboutToSave = detail?.isSaved == false
+                                                    viewModel.toggleSave()
+                                                    if (aboutToSave) showSaveNudge = true
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
                                 Box(
                                     Modifier.onGloballyPositioned { coords ->
                                         measuredSellerRowHeightPx = coords.size.height.toFloat()
@@ -514,29 +537,31 @@ fun ProductDetailScreen(
                             }
                         }
                     }
-                    DetailHeroEngagementRail(
-                        detail = d,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(
-                                top = engagementRailTop,
-                                end = DetailEngagementRailEndPadding,
-                            )
-                            .zIndex(2f),
-                        onLike = {
-                            if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
-                            else viewModel.toggleLike()
-                        },
-                        onSave = {
-                            if (isGuestMode) {
-                                onRequestLogin(GuestLoginReason.Saved)
-                            } else {
-                                val aboutToSave = detail?.isSaved == false
-                                viewModel.toggleSave()
-                                if (aboutToSave) showSaveNudge = true
-                            }
-                        },
-                    )
+                    if (showPinnedSellerStrip || scrollY >= heroHeightPx) {
+                        DetailHeroEngagementRail(
+                            detail = d,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(
+                                    top = engagementRailTop,
+                                    end = DetailEngagementRailEndPadding,
+                                )
+                                .zIndex(2f),
+                            onLike = {
+                                if (isGuestMode) onRequestLogin(GuestLoginReason.Like)
+                                else viewModel.toggleLike()
+                            },
+                            onSave = {
+                                if (isGuestMode) {
+                                    onRequestLogin(GuestLoginReason.Saved)
+                                } else {
+                                    val aboutToSave = detail?.isSaved == false
+                                    viewModel.toggleSave()
+                                    if (aboutToSave) showSaveNudge = true
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

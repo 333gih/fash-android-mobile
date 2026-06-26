@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val SellerListingsPageSize = 20
+
 /**
  * Loads another user's storefront via [UserRepository.getProfile] and seller listings;
  * follow/unfollow via [UserRepository.follow] / [UserRepository.unfollow].
@@ -76,6 +78,18 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     private val _listingsLoading = MutableStateFlow(false)
     val listingsLoading: StateFlow<Boolean> = _listingsLoading.asStateFlow()
 
+    private val _sellingHasMore = MutableStateFlow(true)
+    val sellingHasMore: StateFlow<Boolean> = _sellingHasMore.asStateFlow()
+
+    private val _soldHasMore = MutableStateFlow(true)
+    val soldHasMore: StateFlow<Boolean> = _soldHasMore.asStateFlow()
+
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+
+    private var listingsLoadGeneration = 0
+    private var lastListingsLoadMoreAtMs = 0L
+
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
@@ -95,6 +109,10 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
                 _profile.value = null
                 _sellingListings.value = emptyList()
                 _soldListings.value = emptyList()
+                _sellingHasMore.value = true
+                _soldHasMore.value = true
+                _isLoadingMore.value = false
+                listingsLoadGeneration++
                 _isFollowing.value = false
                 _sellerFocus.value = null
                 _sellerFocusForbidden.value = false
@@ -230,41 +248,111 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
         return if (selectedTab == 0) _sellingListings.value.isEmpty() else _soldListings.value.isEmpty()
     }
 
-    private suspend fun loadListings(sellerId: String) {
-        _listingsLoading.value = true
-        try {
-        withContext(Dispatchers.IO) {
-            if (isGuestBrowse()) {
-                listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = "active", limit = 50).fold(
-                    onSuccess = { _sellingListings.value = it.filter { item -> item.isActiveListing() } },
-                    onFailure = { _sellingListings.value = emptyList() },
-                )
-                listingRepository.getListingsBySellerPublic(sellerId = sellerId, status = "sold", limit = 50).fold(
-                    onSuccess = { _soldListings.value = it },
-                    onFailure = { _soldListings.value = emptyList() },
-                )
-            } else {
-                listingRepository.getListingsBySeller(
-                    sellerId = sellerId,
-                    status = "active",
-                    limit = 50,
-                ).fold(
-                    onSuccess = { _sellingListings.value = it.filter { item -> item.isActiveListing() } },
-                    onFailure = { _sellingListings.value = emptyList() },
-                )
-                listingRepository.getListingsBySeller(
-                    sellerId = sellerId,
-                    status = "sold",
-                    limit = 50,
-                ).fold(
-                    onSuccess = { _soldListings.value = it },
-                    onFailure = { _soldListings.value = emptyList() },
-                )
+    fun hasMoreForTab(tab: Int): Boolean =
+        if (tab == 0) _sellingHasMore.value else _soldHasMore.value
+
+    /**
+     * Paginated storefront grid — 20-item pages, throttled append, de-duped by listing id
+     * (same pattern as Home follow feed / Explore).
+     */
+    fun loadMoreListings(tab: Int) {
+        val sellerId = _profile.value?.userId?.trim().orEmpty()
+        if (sellerId.isBlank()) return
+        if (_isLoadingMore.value || _listingsLoading.value) return
+        if (!hasMoreForTab(tab)) return
+        val now = System.currentTimeMillis()
+        if (now - lastListingsLoadMoreAtMs < 900) return
+        lastListingsLoadMoreAtMs = now
+        val stableGen = listingsLoadGeneration
+        val status = if (tab == 0) "active" else "sold"
+        val offset = if (tab == 0) _sellingListings.value.size else _soldListings.value.size
+        if (offset == 0) return
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            try {
+                val page = withContext(Dispatchers.IO) {
+                    fetchSellerListingsPage(
+                        sellerId = sellerId,
+                        status = status,
+                        limit = SellerListingsPageSize,
+                        offset = offset,
+                    )
+                }
+                if (stableGen != listingsLoadGeneration) return@launch
+                if (tab == 0) {
+                    _sellingListings.update { current -> dedupeAppendSellerListings(current, page) }
+                    _sellingHasMore.value = page.size >= SellerListingsPageSize
+                } else {
+                    _soldListings.update { current -> dedupeAppendSellerListings(current, page) }
+                    _soldHasMore.value = page.size >= SellerListingsPageSize
+                }
+            } finally {
+                _isLoadingMore.value = false
             }
         }
+    }
+
+    private suspend fun loadListings(sellerId: String) {
+        _listingsLoading.value = true
+        val stableGen = listingsLoadGeneration
+        try {
+            withContext(Dispatchers.IO) {
+                val sellingPage = fetchSellerListingsPage(
+                    sellerId = sellerId,
+                    status = "active",
+                    limit = SellerListingsPageSize,
+                    offset = 0,
+                )
+                if (stableGen != listingsLoadGeneration) return@withContext
+                _sellingListings.value = sellingPage.filter { item -> item.isActiveListing() }
+                _sellingHasMore.value = sellingPage.size >= SellerListingsPageSize
+
+                val soldPage = fetchSellerListingsPage(
+                    sellerId = sellerId,
+                    status = "sold",
+                    limit = SellerListingsPageSize,
+                    offset = 0,
+                )
+                if (stableGen != listingsLoadGeneration) return@withContext
+                _soldListings.value = soldPage
+                _soldHasMore.value = soldPage.size >= SellerListingsPageSize
+            }
         } finally {
             _listingsLoading.value = false
         }
+    }
+
+    private suspend fun fetchSellerListingsPage(
+        sellerId: String,
+        status: String,
+        limit: Int,
+        offset: Int,
+    ): List<ListingFeedItem> {
+        val result = if (isGuestBrowse()) {
+            listingRepository.getListingsBySellerPublic(
+                sellerId = sellerId,
+                status = status,
+                limit = limit,
+                offset = offset,
+            )
+        } else {
+            listingRepository.getListingsBySeller(
+                sellerId = sellerId,
+                status = status,
+                limit = limit,
+                offset = offset,
+            )
+        }
+        return result.getOrElse { emptyList() }
+    }
+
+    private fun dedupeAppendSellerListings(
+        existing: List<ListingFeedItem>,
+        page: List<ListingFeedItem>,
+    ): List<ListingFeedItem> {
+        if (page.isEmpty()) return existing
+        val seen = existing.mapTo(HashSet(existing.size)) { it.id }
+        return existing + page.filter { seen.add(it.id) }
     }
 
     fun toggleLike(item: ListingFeedItem) {
