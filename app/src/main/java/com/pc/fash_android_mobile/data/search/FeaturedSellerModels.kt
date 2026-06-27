@@ -52,7 +52,8 @@ internal fun parseFeaturedSellersPage(json: String): FeaturedSellersPage {
     val raw = json.trim()
     val total = if (raw.startsWith("{")) {
         try {
-            JSONObject(raw).optInt("total", items.size)
+            val root = JSONObject(raw)
+            pageTotalFromRoot(root, items.size)
         } catch (_: Exception) {
             items.size
         }
@@ -60,6 +61,17 @@ internal fun parseFeaturedSellersPage(json: String): FeaturedSellersPage {
         items.size
     }
     return FeaturedSellersPage(items = items, total = total)
+}
+
+private fun pageTotalFromRoot(root: JSONObject, itemCount: Int): Int {
+    root.optInt("total", -1).takeIf { it >= 0 }?.let { return it }
+    root.optInt("Total", -1).takeIf { it >= 0 }?.let { return it }
+    val data = root.optJSONObject("data") ?: root.optJSONObject("Data")
+    if (data != null) {
+        data.optInt("total", -1).takeIf { it >= 0 }?.let { return it }
+        data.optInt("Total", -1).takeIf { it >= 0 }?.let { return it }
+    }
+    return itemCount
 }
 
 internal fun parseFeaturedSellersResponse(json: String): List<FeaturedSellerItem> {
@@ -73,25 +85,7 @@ internal fun parseFeaturedSellersResponse(json: String): List<FeaturedSellerItem
             JSONArray("[]")
         }
         else -> try {
-            val obj = JSONObject(raw)
-            val keys = listOf(
-                "data",
-                "items",
-                "featured_sellers",
-                "featuredSellers",
-                "sellers",
-                "results",
-                "users",
-            )
-            var found: JSONArray? = null
-            for (k in keys) {
-                val a = obj.optJSONArray(k)
-                if (a != null) {
-                    found = a
-                    break
-                }
-            }
-            found ?: JSONArray("[]")
+            resolveFeaturedSellerItemsArray(JSONObject(raw))
         } catch (_: Exception) {
             JSONArray("[]")
         }
@@ -109,13 +103,11 @@ internal fun parseFeaturedSellersResponse(json: String): List<FeaturedSellerItem
 
         val avgRating = o.optNullableFloat("average_rating", "AverageRating")
 
-        val userId = listOf("user_id", "UserID", "userId", "userID").firstNotNullOfOrNull { key ->
-            o.optString(key, "").trim().takeIf { it.isNotEmpty() }
-        }.orEmpty()
+        val userId = o.optStringOrNumber("user_id", "UserID", "userId", "userID")
 
         FeaturedSellerItem(
             userId = userId,
-            username = o.optString("username", o.optString("Username", "")).trim(),
+            username = o.optStringOrNumber("username", "Username"),
             displayName = o.optString("display_name", o.optString("DisplayName", "")).trim(),
             bio = o.optString("bio", o.optString("Bio", "")).trim(),
             avatarUrl = o.optString("avatar_url", o.optString("AvatarURL", "")).trim(),
@@ -126,6 +118,42 @@ internal fun parseFeaturedSellersResponse(json: String): List<FeaturedSellerItem
             previewListingIds = previewIds,
         ).takeIf { it.userId.isNotBlank() || it.username.isNotBlank() }
     }
+}
+
+private fun resolveFeaturedSellerItemsArray(root: JSONObject): JSONArray {
+    val itemKeys = listOf(
+        "items",
+        "Items",
+        "featured_sellers",
+        "featuredSellers",
+        "sellers",
+        "results",
+        "users",
+        "data",
+    )
+    for (k in itemKeys) {
+        root.optJSONArray(k)?.let { return it }
+    }
+    val data = root.optJSONObject("data") ?: root.optJSONObject("Data")
+    if (data != null) {
+        for (k in itemKeys) {
+            if (k == "data") continue
+            data.optJSONArray(k)?.let { return it }
+        }
+    }
+    return JSONArray("[]")
+}
+
+private fun JSONObject.optStringOrNumber(vararg keys: String): String {
+    for (key in keys) {
+        if (!has(key) || isNull(key)) continue
+        val asString = optString(key, "").trim()
+        if (asString.isNotEmpty()) return asString
+        when (val raw = opt(key)) {
+            is Number -> return raw.toString().trim()
+        }
+    }
+    return ""
 }
 
 private fun JSONObject.optNullableFloat(vararg keys: String): Float? {

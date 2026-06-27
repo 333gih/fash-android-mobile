@@ -1,3 +1,3 @@
-• Sửa nút Thích/Lưu trên chi tiết sản phẩm — không che nút Chia sẻ
-• Shop seller có tải thêm sản phẩm khi cuộn (load more mượt, hiệu năng tốt)
-• Cải thiện trải nghiệm duyệt storefront seller
+• Sửa lỗi không tải được mục Shop nên ghé trên Home
+• Cải thiện gọi API featured sellers (giống iOS, tự thử lại khi lỗi mạng)
+• Skeleton loading khi đang tải seller nổi bật

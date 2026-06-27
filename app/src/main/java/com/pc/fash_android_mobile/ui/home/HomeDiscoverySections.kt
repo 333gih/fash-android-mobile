@@ -421,6 +421,77 @@ private fun HomeEditorialPostCard(
 }
 
 @Composable
+fun HomeRecommendedSellersSkeleton(
+    modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
+) {
+    val spacing = FashTheme.spacing
+    val edgeStart = if (includeHorizontalEdgePadding) spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) spacing.editorialEnd else 0.dp
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = edgeStart,
+                    end = edgeEnd,
+                    top = spacing.spacing2,
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
+                    modifier = Modifier
+                        .width(160.dp)
+                        .height(16.dp),
+                )
+                com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
+                    modifier = Modifier
+                        .width(220.dp)
+                        .height(12.dp),
+                )
+            }
+            com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(14.dp),
+            )
+        }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(
+                start = edgeStart,
+                end = edgeEnd,
+                bottom = spacing.spacing4,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing.spacing3),
+            userScrollEnabled = false,
+        ) {
+            items(6) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
+                        modifier = Modifier.size(60.dp),
+                        shape = CircleShape,
+                    )
+                    com.pc.fash_android_mobile.ui.components.FashSkeletonBox(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(10.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun HomeRecommendedSellersSection(
     sellers: List<FeaturedSellerItem>,
     followingIds: Set<String>,

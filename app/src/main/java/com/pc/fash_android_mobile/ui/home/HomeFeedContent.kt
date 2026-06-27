@@ -106,7 +106,8 @@ fun HomeFeedContent(
                     val shortcut = ui.exploreShortcut ?: return@HomeFeedTabHost
                     onNavigateToExploreWithShortcut(shortcut)
                 },
-                featuredSellers = ui.discovery.recommendedSellers,
+                featuredSellers = ui.featuredSellers,
+                featuredSellersLoading = ui.featuredSellersLoading,
                 followingIds = ui.followingIds,
                 onFeaturedSellerClick = onFeaturedSellerClick,
                 onFeaturedSellersSeeAll = onOpenFeaturedSellersAll,

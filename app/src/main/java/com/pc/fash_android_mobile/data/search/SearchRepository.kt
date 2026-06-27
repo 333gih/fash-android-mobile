@@ -228,9 +228,19 @@ class SearchRepository(
     fun getFeaturedSellersPage(limit: Int = 50, offset: Int = 0): Result<FeaturedSellersPage> = runCatching {
         val cappedLimit = limit.coerceIn(1, 50)
         val safeOffset = offset.coerceAtLeast(0)
-        val url = "${AppEnvironment.apiPath("api/v1/search/featured-sellers")}?limit=$cappedLimit&offset=$safeOffset"
-        val body = executeGet(url, publicBrowse = false)
-        parseFeaturedSellersPage(body)
+        val relative =
+            "api/v1/search/featured-sellers?limit=$cappedLimit&offset=$safeOffset"
+        val urls = AppEnvironment.coreApiCandidateUrls(relative)
+        var last: Exception? = null
+        for (url in urls) {
+            try {
+                val body = executeGet(url, publicBrowse = false)
+                return@runCatching parseFeaturedSellersPage(body)
+            } catch (e: Exception) {
+                last = e
+            }
+        }
+        throw last ?: IllegalStateException("featured-sellers: no candidate URL")
     }
 
     private fun executeGet(url: String, publicBrowse: Boolean): String {

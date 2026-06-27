@@ -22,6 +22,7 @@ import com.pc.fash_android_mobile.data.recommendation.UxTabTracker
 import com.pc.fash_android_mobile.data.recommendation.homeFeedTabFromKey
 import com.pc.fash_android_mobile.data.recommendation.orderedHomeFeedTabs
 import com.pc.fash_android_mobile.data.recommendation.toUxTabKey
+import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
@@ -83,6 +84,8 @@ data class HomeFeedUiState(
     val hasMoreItems: Boolean = true,
     val showSizingBanner: Boolean = false,
     val listingPreview: ExploreListingPreviewState? = null,
+    val featuredSellers: List<FeaturedSellerItem> = emptyList(),
+    val featuredSellersLoading: Boolean = false,
     val orderedFeedTabs: List<HomeFeedTab> = HomeFeedTab.signedInTabs(),
     val exploreShortcut: HomeExploreShortcut? = null,
 )
@@ -91,6 +94,9 @@ data class HomeFeedUiState(
 internal const val HomeFollowFeedPageSize = 20
 
 private const val HomeHuntTodayLimit = 12
+
+/** Home “Shop nên ghé” rail — matches iOS [HomeViewModel.loadFeaturedSellers]. */
+private const val HomeFeaturedSellersLimit = 12
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -273,6 +279,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val listingPreview: StateFlow<ExploreListingPreviewState?> = _listingPreview.asStateFlow()
     private var listingPreviewDetailJob: Job? = null
 
+    private val _featuredSellers = MutableStateFlow<List<FeaturedSellerItem>>(emptyList())
+    private val _featuredSellersLoading = MutableStateFlow(false)
+
     val feedUiState: StateFlow<HomeFeedUiState> = combine(
         _items,
         _discoveryBundle,
@@ -288,6 +297,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _showSizingBanner,
         _listingPreview,
         _homeUxPersonalization,
+        _featuredSellers,
+        _featuredSellersLoading,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val ux = values[13] as HomeUxPersonalization
@@ -307,6 +318,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             listingPreview = values[12] as ExploreListingPreviewState?,
             orderedFeedTabs = orderedHomeFeedTabs(isGuestBrowse(), ux.tabOrder),
             exploreShortcut = ux.exploreShortcut,
+            featuredSellers = values[14] as List<FeaturedSellerItem>,
+            featuredSellersLoading = values[15] as Boolean,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -350,7 +363,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _discoveryBundle.update { cur ->
                     cur.copy(
                         editorialPosts = shell.editorialPosts,
-                        recommendedSellers = shell.recommendedSellers,
                         trendingStyleTagChips = shell.trendingStyleTagChips,
                         trendingStyleTags = shell.trendingStyleTags,
                     )
@@ -358,6 +370,44 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             },
             onFailure = { /* shell sections degrade to empty */ },
         )
+    }
+
+    /**
+     * Curated seller rail — same path as iOS [loadFeaturedSellers]: direct search API,
+     * stale-while-revalidate, one automatic retry on transient failures.
+     */
+    private suspend fun loadFeaturedSellers() {
+        val showLoadingShell = _featuredSellers.value.isEmpty()
+        if (showLoadingShell) {
+            _featuredSellersLoading.value = true
+        }
+        try {
+            suspend fun fetchOnce(): Result<List<FeaturedSellerItem>> {
+                return if (isGuestBrowse()) {
+                    searchRepository.browseFeaturedSellersPage(
+                        limit = HomeFeaturedSellersLimit,
+                        offset = 0,
+                    ).map { it.items }
+                } else {
+                    searchRepository.getFeaturedSellers(
+                        limit = HomeFeaturedSellersLimit,
+                        offset = 0,
+                    )
+                }
+            }
+            var result = fetchOnce()
+            if (result.isFailure) {
+                delay(400)
+                result = fetchOnce()
+            }
+            result.onSuccess { sellers ->
+                _featuredSellers.value = sellers
+            }
+        } finally {
+            if (showLoadingShell) {
+                _featuredSellersLoading.value = false
+            }
+        }
     }
 
     private fun setTabLoading(tab: HomeFeedTab, loading: Boolean) {
@@ -637,12 +687,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 coroutineScope {
                     val stats = async { loadBuyerHomeStats() }
                     val shell = async { reloadHomeShell() }
+                    val sellers = async { loadFeaturedSellers() }
                     val sizing = async { refreshSizingBannerState() }
                     val sections = async {
                         if (!isGuestBrowse()) loadRecommendationSections(force = false)
                     }
                     stats.await()
                     shell.await()
+                    sellers.await()
                     sizing.await()
                     sections.await()
                 }
@@ -760,6 +812,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _followingIds.value = emptySet()
         _buyerStats.value = BuyerHomeStats()
         _discoveryBundle.value = HomeDiscoveryBundle()
+        _featuredSellers.value = emptyList()
+        _featuredSellersLoading.value = false
         _showSizingBanner.value = false
         _isLoading.value = false
         _isRefreshing.value = false
@@ -775,7 +829,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Refreshes only when data is older than [HomeFeedStaleThresholdMs]. */
     fun refreshIfStale() {
         val now = System.currentTimeMillis()
-        if (now - lastSuccessfulRefreshAtMs < HomeFeedStaleThresholdMs) return
+        if (now - lastSuccessfulRefreshAtMs < HomeFeedStaleThresholdMs) {
+            if (_featuredSellers.value.isEmpty() && !_featuredSellersLoading.value) {
+                viewModelScope.launch(Dispatchers.IO) { loadFeaturedSellers() }
+            }
+            return
+        }
         refresh()
     }
 
@@ -788,6 +847,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 coroutineScope {
                     val stats = async { loadBuyerHomeStats() }
                     val shell = async { reloadHomeShell() }
+                    val sellers = async { loadFeaturedSellers() }
                     val sizing = async { refreshSizingBannerState() }
                     val ux = async { if (!isGuestBrowse()) loadUxPersonalization() }
                     val sections = async {
@@ -795,6 +855,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     stats.await()
                     shell.await()
+                    sellers.await()
                     sizing.await()
                     ux.await()
                     sections.await()

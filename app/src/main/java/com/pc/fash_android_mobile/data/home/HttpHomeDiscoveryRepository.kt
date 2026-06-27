@@ -49,19 +49,8 @@ class HttpHomeDiscoveryRepository(
         }
         val guest = guestBrowseProvider()
         val sellersAsync = async {
-            if (guest) {
-                searchRepository.browseFeaturedSellersPage(limit = homeFeaturedSellersLimit, offset = 0)
-                    .map { it.items }
-                    .getOrElse {
-                        Log.w(TAG, "public featured sellers failed: ${it.message}")
-                        emptyList()
-                    }
-            } else {
-                searchRepository.getFeaturedSellers(limit = homeFeaturedSellersLimit, offset = 0).getOrElse {
-                    Log.w(TAG, "featured sellers failed: ${it.message}")
-                    emptyList<FeaturedSellerItem>()
-                }
-            }
+            // Featured sellers load on HomeViewModel (iOS parity — dedicated fetch + retry).
+            emptyList<FeaturedSellerItem>()
         }
         val trendingTagsAsync = async {
             searchRepository.getTrendingTagsWithIds(limit = 10).getOrElse {
@@ -89,19 +78,8 @@ class HttpHomeDiscoveryRepository(
         }
         val guest = guestBrowseProvider()
         val sellersAsync = async {
-            if (guest) {
-                searchRepository.browseFeaturedSellersPage(limit = homeFeaturedSellersLimit, offset = 0)
-                    .map { it.items }
-                    .getOrElse {
-                        Log.w(TAG, "public featured sellers failed: ${it.message}")
-                        emptyList()
-                    }
-            } else {
-                searchRepository.getFeaturedSellers(limit = homeFeaturedSellersLimit, offset = 0).getOrElse {
-                    Log.w(TAG, "featured sellers failed: ${it.message}")
-                    emptyList<FeaturedSellerItem>()
-                }
-            }
+            // Featured sellers load on HomeViewModel (iOS parity — dedicated fetch + retry).
+            emptyList<FeaturedSellerItem>()
         }
         val recentlyViewedAsync = async {
             if (guest) {

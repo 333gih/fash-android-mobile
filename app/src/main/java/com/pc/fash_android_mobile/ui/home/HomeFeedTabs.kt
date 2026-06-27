@@ -156,6 +156,7 @@ fun HomeFeedTabHost(
     exploreShortcut: com.pc.fash_android_mobile.data.recommendation.HomeExploreShortcut? = null,
     onExploreShortcutClick: () -> Unit = {},
     featuredSellers: List<FeaturedSellerItem>,
+    featuredSellersLoading: Boolean = false,
     followingIds: Set<String>,
     onFeaturedSellerClick: (UserSearchResult) -> Unit,
     onFeaturedSellersSeeAll: () -> Unit,
@@ -218,6 +219,8 @@ fun HomeFeedTabHost(
     val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
     val scheme = MaterialTheme.colorScheme
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
+    val showFeaturedSellersSkeleton = featuredSellersLoading && featuredSellers.isEmpty()
+    val hasFeaturedSellersBlock = hasFeaturedSellers || showFeaturedSellersSkeleton
     var tabSwipeConsuming by remember { mutableStateOf(false) }
     var suppressListingClicks by remember { mutableStateOf(false) }
     val swipeScope = rememberCoroutineScope()
@@ -226,7 +229,7 @@ fun HomeFeedTabHost(
     val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
     val tabRowIndex = (if (showJourneyRow) 1 else 0) +
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
-        (if (hasFeaturedSellers) 1 else 0) +
+        (if (hasFeaturedSellersBlock) 1 else 0) +
         (if (showExploreShortcut) 1 else 0)
     val listingStartIndex = tabRowIndex + 1
     val analyticsSurface = safeSelected.analyticsSurface
@@ -348,6 +351,10 @@ fun HomeFeedTabHost(
                         onSeeAllClick = onFeaturedSellersSeeAll,
                         includeHorizontalEdgePadding = false,
                     )
+                }
+            } else if (showFeaturedSellersSkeleton) {
+                item(span = StaggeredGridItemSpan.FullLine, key = "home_featured_sellers_skeleton") {
+                    HomeRecommendedSellersSkeleton(includeHorizontalEdgePadding = false)
                 }
             }
 

@@ -1,0 +1,14 @@
+Fash Android 1.0.16 (versionCode 17)
+======================================
+
+--- Google Play — What's new (Tiếng Việt) ---
+
+• Sửa lỗi không tải được mục Shop nên ghé trên Home
+• Cải thiện gọi API featured sellers (giống iOS, tự thử lại khi lỗi mạng)
+• Skeleton loading khi đang tải seller nổi bật
+
+--- Google Play — What's new (English) ---
+
+• Fix Home “Shop nên ghé” featured sellers not loading
+• Featured sellers API matches iOS (locale URL fallback + retry)
+• Skeleton while featured sellers load

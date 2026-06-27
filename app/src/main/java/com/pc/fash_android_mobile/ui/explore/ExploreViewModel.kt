@@ -1032,17 +1032,22 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFeaturedSellers() {
-        if (isGuestBrowse()) {
-            searchRepository.browseFeaturedSellersPage(limit = 10, offset = 0).fold(
-                onSuccess = { _featuredSellers.value = it.items },
-                onFailure = { _featuredSellers.value = emptyList() },
-            )
-        } else {
-            searchRepository.getFeaturedSellers(limit = 10).fold(
-                onSuccess = { _featuredSellers.value = it },
-                onFailure = { _featuredSellers.value = emptyList() },
-            )
+        suspend fun fetchOnce(): Result<List<FeaturedSellerItem>> {
+            return if (isGuestBrowse()) {
+                searchRepository.browseFeaturedSellersPage(limit = 10, offset = 0).map { it.items }
+            } else {
+                searchRepository.getFeaturedSellers(limit = 10)
+            }
         }
+        var result = fetchOnce()
+        if (result.isFailure) {
+            delay(400)
+            result = fetchOnce()
+        }
+        result.fold(
+            onSuccess = { _featuredSellers.value = it },
+            onFailure = { /* keep stale rail */ },
+        )
     }
 
     fun setBrowseLocationFilter(

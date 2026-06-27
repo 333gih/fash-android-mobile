@@ -1,3 +1,3 @@
-• Fix Like/Save on product detail — no longer covers Share
-• Seller shop supports scroll load-more (smooth paging, efficient on Android)
-• Improved seller storefront browsing
+• Fix Home “Shop nên ghé” featured sellers not loading
+• Featured sellers API matches iOS (locale URL fallback + retry)
+• Skeleton while featured sellers load
