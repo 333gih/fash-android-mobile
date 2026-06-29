@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive icon foreground (API 26+): app-list / launcher only — magenta field + white hanger (ic_launcher_brand.png).
-  Entry splash uses ic_fash_splash_entry.png via ic_fash_splash_logo.xml (API 31+ theme).
+  Adaptive icon foreground (API 26+): magenta field lives in ic_launcher_background;
+  brand mark centered inside the 66% safe zone (not fill — fill over-zooms in app list).
 -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:gravity="fill"
-    android:src="@drawable/ic_launcher_brand" />
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground_image"
+    android:insetLeft="18dp"
+    android:insetTop="18dp"
+    android:insetRight="18dp"
+    android:insetBottom="18dp" />
