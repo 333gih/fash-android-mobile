@@ -1,0 +1,5 @@
+<en-US>
+• Fix app icon appearing zoomed or cropped on the home screen and app drawer
+• Launcher icon now matches iOS proportions with proper safe-zone padding on all devices
+• Fix notification status bar icon showing a cropped logo until expanded
+</en-US>

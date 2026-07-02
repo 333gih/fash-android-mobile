@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar / collapsed notification: white alpha-only silhouette (not the launcher adaptive layer). -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:gravity="center"
+    android:src="@drawable/ic_stat_fash" />
