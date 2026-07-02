@@ -84,6 +84,7 @@ import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
 import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
 import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.notifications.InAppNotificationNavigation
+import com.pc.fash_android_mobile.notifications.PushNotificationRouter
 import com.pc.fash_android_mobile.notifications.RealtimeNotificationRouter
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 import com.pc.fash_android_mobile.ui.chat.ChatNotificationPresence
@@ -294,8 +295,9 @@ class MainActivity : ComponentActivity() {
         InviteDeepLinks.parseReferrerFromIntent(intent)?.let { fashApp.pendingReferrerUsername.value = it }
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
         ProfileDeepLinks.parseUsernameFromIntent(intent)?.let { fashApp.pendingDeepLinkSellerUsername.value = it }
-        InboxDeepLinks.parseNotificationIdFromIntent(intent)?.let { fashApp.pendingInboxNotificationId.value = it }
-        AccountSwitchDeepLinks.parseFromIntent(intent)?.let { fashApp.requestAccountSwitchPrompt(it) }
+        AccountSwitchDeepLinks.parseFromIntent(intent)?.let {
+            fashApp.requestAccountSwitchPrompt(it)
+        } ?: PushNotificationRouter.routeFromTrayTap(fashApp, intent)
         NotificationEngagementReporter.reportOpenFromIntent(fashApp.feedEventReporter, intent)
     }
 
@@ -1307,6 +1309,22 @@ class MainActivity : ComponentActivity() {
                                         selectedOrderId = oid
                                         selectedTab = MainTab.Orders.ordinal
                                         fashApp.pendingOpenOrderId.value = null
+                                    }
+                                    val pendingOpenChatId by fashApp.pendingOpenChatConversationId.collectAsState()
+                                    LaunchedEffect(pendingOpenChatId) {
+                                        val cid = pendingOpenChatId?.trim()?.takeIf { it.isNotEmpty() }
+                                            ?: return@LaunchedEffect
+                                        chatOrderDetailOverlayId = null
+                                        selectedOrderId = null
+                                        closeListingDetail()
+                                        editListingId = null
+                                        selectedConversationItem = null
+                                        selectedConversationId = cid
+                                        selectedTab = MainTab.Chat.ordinal
+                                        chatViewModel.loadConversations()
+                                        chatViewModel.refreshUnreadCount()
+                                        ChatNotificationPresence.registerOpenConversation(fashApp, cid)
+                                        fashApp.pendingOpenChatConversationId.value = null
                                     }
                                     LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders, pendingPromoOpenExplore) {
                                         if (pendingPromoMainTab >= 0) {
@@ -2756,8 +2774,7 @@ class MainActivity : ComponentActivity() {
                             InAppNotificationNavigation.handleBannerTap(
                                 session = s,
                                 onOpenChat = { conv ->
-                                    selectedConversationId = conv
-                                    ChatNotificationPresence.registerOpenConversation(fashApp, conv)
+                                    fashApp.pendingOpenChatConversationId.value = conv.trim()
                                     fashApp.dismissInAppNotification()
                                 },
                                 onOpenOrder = { orderId ->

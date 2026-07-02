@@ -1,6 +1,7 @@
 package com.pc.fash_android_mobile.ui.notifications
 
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
+import com.pc.fash_android_mobile.notifications.InAppNotificationNavigation
 import java.util.Locale
 
 /** Parsed from inbox `data` / FCM data map for primary actions on the detail screen. */
@@ -64,7 +65,11 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
     )
 
     val wantsChat = nav == "chat" || screen == "chat"
-    val chatId = conversationId?.takeIf { wantsChat && it.isNotBlank() }
+    val stringData = data?.mapNotNull { (k, v) ->
+        v?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { k to it }
+    }?.toMap().orEmpty()
+    val chatId = InAppNotificationNavigation.chatConversationId(stringData)
+        ?: conversationId?.takeIf { wantsChat && it.isNotBlank() }
 
     return NotificationDetailActions(
         orderId = orderId,

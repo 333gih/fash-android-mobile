@@ -101,10 +101,17 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
                 putExtra("user_notification_id", it.trim())
             }
             NotificationEngagementReporter.attachEngagementExtras(this, message.data)
+            PushNotificationRouter.attachFcmDataToIntent(this, message.data)
         }
+        val pendingRequestCode = (
+            message.data["user_notification_id"]
+                ?: message.data["conversation_id"]
+                ?: deepLink
+                ?: title
+            ).hashCode() and 0x7FFFFFFF
         val pending = PendingIntent.getActivity(
             this,
-            (title + body).hashCode(),
+            pendingRequestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

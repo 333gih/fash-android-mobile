@@ -136,6 +136,9 @@ class FashApplication : Application(), ImageLoaderFactory {
     /** In-app banner tap → order detail ([MainActivity] consumes). */
     val pendingOpenOrderId = MutableStateFlow<String?>(null)
 
+    /** FCM tray / banner tap → chat thread ([MainActivity] consumes). */
+    val pendingOpenChatConversationId = MutableStateFlow<String?>(null)
+
     /** Multi-account FCM: user B is active but account A has new inbox rows. */
     val pendingAccountSwitchPrompt = MutableStateFlow<AccountSwitchPrompt?>(null)
 

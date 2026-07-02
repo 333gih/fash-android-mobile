@@ -1,0 +1,6 @@
+<en-US>
+• Fix push notification taps opening the wrong screen or failing to load chat
+• Chat notifications from the tray now open the conversation directly (aligned with in-app banner behavior)
+• Notification detail shows “Open chat” when the payload includes a conversation id
+• More reliable tray tap routing by passing full FCM payload to the app
+</en-US>
