@@ -1,0 +1,5 @@
+<en-US>
+• Fix app icon looking zoomed in or cropped on the home screen (Samsung and other launchers)
+• Hanger logo now sits inside the adaptive icon safe zone with balanced padding like iOS
+• Improved notification status bar icon proportions
+</en-US>

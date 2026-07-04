@@ -11,10 +11,10 @@ if (-not (Test-Path $iosIconPath)) {
 }
 $resNodpi = Join-Path $repoRoot "app\src\main\res\drawable-nodpi"
 $magenta = [System.Drawing.Color]::FromArgb(255, 250, 51, 92) # #FA335C
-$white = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
 
 function Test-IsWhiteMarkPixel([System.Drawing.Color]$c) {
-    return $c.A -gt 128 -and $c.R -gt 185 -and $c.G -gt 185 -and $c.B -gt 185
+    # Strict threshold — ignore magenta anti-alias fringe so bounds match visible hanger only.
+    return $c.A -gt 160 -and $c.R -ge 235 -and $c.G -ge 235 -and $c.B -ge 235
 }
 
 function Get-MarkBounds([System.Drawing.Bitmap]$bmp) {
@@ -109,32 +109,31 @@ function Save-LegacyMipmap {
 Write-Host "Source icon: $iosIconPath"
 $source = [System.Drawing.Bitmap]::FromFile($iosIconPath)
 $bounds = Get-MarkBounds $source
-Write-Host "Mark bounds: $($bounds.Width)x$($bounds.Height) on $($source.Width)x$($source.Height)"
+Write-Host "Mark bounds: $($bounds.Width)x$($bounds.Height) on $($source.Width)x$($source.Height) ($([math]::Round($bounds.Width/$source.Width*100,1))% wide)"
 
-# Adaptive foreground: white mark only, ~48% of canvas (inside 66% safe zone on OEM masks).
-$foregroundMark = New-TransparentMarkCanvas -source $source -bounds $bounds -size 432 -markScale 0.48
+# PNG mark fills ~72% of asset; final on-screen size is capped by ic_launcher_foreground_image (48dp).
+$foregroundMark = New-TransparentMarkCanvas -source $source -bounds $bounds -size 432 -markScale 0.72
 Save-Png $foregroundMark (Join-Path $resNodpi "ic_launcher_foreground_mark.png")
-Write-Host "Wrote ic_launcher_foreground_mark.png (432, transparent, scale 0.48)"
+Write-Host "Wrote ic_launcher_foreground_mark.png (432, transparent)"
 
-# Legacy composite + notification stat share the same mark proportions.
 $brandComposite = New-CompositeBrand -markCanvas $foregroundMark
 Save-Png $brandComposite (Join-Path $resNodpi "ic_launcher_brand.png")
 Write-Host "Wrote ic_launcher_brand.png (432, composite)"
 
-$statIcon = New-TransparentMarkCanvas -source $source -bounds $bounds -size 96 -markScale 0.62
+$statIcon = New-TransparentMarkCanvas -source $source -bounds $bounds -size 96 -markScale 0.58
 Save-Png $statIcon (Join-Path $resNodpi "ic_stat_fash.png")
 Write-Host "Wrote ic_stat_fash.png (96, notification status bar)"
 
-$monochrome = New-TransparentMarkCanvas -source $source -bounds $bounds -size 432 -markScale 0.48
+$monochrome = New-TransparentMarkCanvas -source $source -bounds $bounds -size 432 -markScale 0.72
 Save-Png $monochrome (Join-Path $resNodpi "ic_launcher_monochrome.png")
 Write-Host "Wrote ic_launcher_monochrome.png (432, themed icon)"
 
 foreach ($entry in @(
-        @{ folder = "mdpi"; px = 48; scale = 0.54 },
-        @{ folder = "hdpi"; px = 72; scale = 0.54 },
-        @{ folder = "xhdpi"; px = 96; scale = 0.54 },
-        @{ folder = "xxhdpi"; px = 144; scale = 0.54 },
-        @{ folder = "xxxhdpi"; px = 192; scale = 0.54 }
+        @{ folder = "mdpi"; px = 48; scale = 0.44 },
+        @{ folder = "hdpi"; px = 72; scale = 0.44 },
+        @{ folder = "xhdpi"; px = 96; scale = 0.44 },
+        @{ folder = "xxhdpi"; px = 144; scale = 0.44 },
+        @{ folder = "xxxhdpi"; px = 192; scale = 0.44 }
     )) {
     Save-LegacyMipmap -source $source -bounds $bounds -folder $entry.folder -px $entry.px -markScale $entry.scale
     Write-Host "Updated mipmap-$($entry.folder)"

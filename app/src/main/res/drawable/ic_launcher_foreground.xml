@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Adaptive icon foreground (API 26+): transparent layer with white hanger mark only.
-  Magenta field lives in ic_launcher_background. Extra inset keeps wide hanger inside OEM masks.
+  Magenta field lives in ic_launcher_background. Size is controlled in ic_launcher_foreground_image.
 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_launcher_foreground_image"
-    android:insetLeft="22dp"
-    android:insetTop="22dp"
-    android:insetRight="22dp"
-    android:insetBottom="22dp" />
+    android:insetLeft="4dp"
+    android:insetTop="4dp"
+    android:insetRight="4dp"
+    android:insetBottom="4dp" />
