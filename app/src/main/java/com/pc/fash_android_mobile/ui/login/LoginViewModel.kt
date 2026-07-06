@@ -1,6 +1,9 @@
 package com.pc.fash_android_mobile.ui.login
 
 import android.app.Application
+import android.content.Intent
+import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.facebook.FacebookException
@@ -12,6 +15,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthHttpException
+import com.pc.fash_android_mobile.data.auth.GoogleSignInFlow
 import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
 import com.pc.fash_android_mobile.data.recommendation.UxPersonalizationLocalStore
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
@@ -347,10 +351,15 @@ class LoginViewModel(
                 app.getString(R.string.login_google_network_error)
             GoogleSignInStatusCodes.DEVELOPER_ERROR -> {
                 val base = app.getString(R.string.login_google_developer_error)
-                if (BuildConfig.DEBUG) {
-                    "$base (${BuildConfig.APPLICATION_ID}, ${BuildConfig.ENVIRONMENT_NAME}, ${BuildConfig.BUILD_TYPE})"
+                val playHint = if (BuildConfig.FLAVOR == "prod" && !BuildConfig.DEBUG) {
+                    " " + app.getString(R.string.login_google_play_signing_hint)
                 } else {
-                    base
+                    ""
+                }
+                if (BuildConfig.DEBUG) {
+                    "$base (${BuildConfig.APPLICATION_ID}, ${BuildConfig.ENVIRONMENT_NAME}, ${BuildConfig.BUILD_TYPE})$playHint"
+                } else {
+                    base + playHint
                 }
             }
             else -> app.getString(R.string.login_google_error_code, status, tech)
@@ -359,6 +368,23 @@ class LoginViewModel(
 
     fun warnGoogleNotConfigured() {
         _events.tryEmit(getApplication<Application>().getString(R.string.login_google_not_configured))
+    }
+
+    fun launchGoogleSignIn(
+        activity: ComponentActivity,
+        launcher: ActivityResultLauncher<Intent>,
+    ) {
+        if (!isGoogleConfigured()) {
+            warnGoogleNotConfigured()
+            return
+        }
+        viewModelScope.launch {
+            when (val result = GoogleSignInFlow.launchSignIn(activity, launcher)) {
+                GoogleSignInFlow.LaunchResult.Launched -> Unit
+                GoogleSignInFlow.LaunchResult.NotConfigured -> warnGoogleNotConfigured()
+                is GoogleSignInFlow.LaunchResult.Blocked -> _events.tryEmit(result.message)
+            }
+        }
     }
 
     private val _isLoggingOut = MutableStateFlow(false)

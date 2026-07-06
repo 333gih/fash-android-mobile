@@ -63,7 +63,7 @@ import com.facebook.login.LoginManager
 import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
-import com.pc.fash_android_mobile.data.auth.buildGoogleSignInClient
+import com.pc.fash_android_mobile.data.auth.GoogleSignInFlow
 import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
 import com.pc.fash_android_mobile.ui.explore.ExplorePrimarySection
 import com.pc.fash_android_mobile.ui.explore.ExploreViewModel
@@ -2495,16 +2495,10 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onSendOtp = loginViewModel::requestEmailOtp,
                                     onGoogleClick = {
-                                        if (!googleOk) {
-                                            loginViewModel.warnGoogleNotConfigured()
-                                        } else {
-                                            runCatching {
-                                                val client = buildGoogleSignInClient(this@MainActivity)
-                                                googleSignInLauncher.launch(client.signInIntent)
-                                            }.onFailure {
-                                                loginViewModel.warnGoogleNotConfigured()
-                                            }
-                                        }
+                                        loginViewModel.launchGoogleSignIn(
+                                            this@MainActivity,
+                                            googleSignInLauncher,
+                                        )
                                     },
                                     onFacebookClick = {
                                         if (!facebookLoginEnabled) return@LoginScreen

@@ -145,6 +145,7 @@
     <string name="login_google_play_services_error">Google Play Services is not available. Update or install Google Play Services and try again.</string>
     <string name="login_google_play_services_error_detail">Google Play Services is not available: %1$s</string>
     <string name="login_google_developer_error">Google Sign-In is misconfigured: verify GOOGLE_WEB_CLIENT_ID (Web OAuth client) and an Android OAuth client (correct package name and debug/release SHA‑1) in Google Cloud Console.</string>
+    <string name="login_google_play_signing_hint">If installed from Google Play: add the App signing key SHA‑1 (Play Console → Setup → App signing) to Firebase → Project settings → Android app.</string>
     <string name="login_google_not_configured">Add GOOGLE_WEB_CLIENT_ID (OAuth Web client) to env, plus an Android OAuth client with your package name and SHA-1 in Google Cloud.</string>
     <string name="login_social_signing_in">Signing in…</string>
     <string name="login_legal_prefix">By continuing, you agree to\u00A0</string>

@@ -144,6 +144,15 @@ object AppEnvironment {
         return "$base/$lang/$rel"
     }
 
+    /** Auth URLs to try when locale-prefixed routing may be absent on the gateway (parity with [coreApiCandidateUrls]). */
+    fun authServiceCandidateUrls(relativePath: String): List<String> {
+        val path = relativePath.trim().trimStart('/')
+        val withLocale = authServicePath(path)
+        if (!BuildConfig.AUTH_API_USE_LANGUAGE_PREFIX) return listOf(withLocale)
+        val withoutLocale = "${authServiceBaseUrl.trimEnd('/')}/$path"
+        return if (withoutLocale == withLocale) listOf(withLocale) else listOf(withLocale, withoutLocale)
+    }
+
     /**
      * Core-service API (same host as [apiBaseUrl]). When [BuildConfig.CORE_API_USE_LANGUAGE_PREFIX] is true
      * (from `CORE_API_USE_LANGUAGE_PREFIX=true` in env), paths are `{base}/{vi|en}/{relativePath}` e.g. `.../vi/api/v1/...`.

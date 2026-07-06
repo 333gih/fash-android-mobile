@@ -74,15 +74,23 @@ class AuthRepository(
     /** [provider] e.g. `google`, `facebook`. [providerToken] is ID token (Google) or access token (Facebook). */
     fun socialLogin(provider: String, providerToken: String): Result<AuthSession> = runCatching {
         val path = AppEnvironment.authSocialLoginPath.trim().trimStart('/')
-        val url = AppEnvironment.authServicePath(path)
         val json = JSONObject()
             .put("provider", provider.trim().lowercase())
             .put("provider_token", providerToken.trim())
             .put("application_id", AppEnvironment.authApplicationId.trim())
             .put("client_channel", "fash_android_app")
             .toString()
-        val body = postJsonBody(url, json)
-        parseLoginResponse(body)
+        var lastError: Exception? = null
+        for (url in AppEnvironment.authServiceCandidateUrls(path)) {
+            try {
+                return@runCatching parseLoginResponse(postJsonBody(url, json))
+            } catch (e: Exception) {
+                lastError = e
+                if (e is AuthHttpException && e.httpCode == 404) continue
+                throw e
+            }
+        }
+        throw lastError ?: IllegalStateException("social-login failed")
     }
 
     /**

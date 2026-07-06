@@ -33,16 +33,24 @@ Reference fingerprints from this project (re-run `signingReport` if keystores ch
 
 ## Fix Play Store DEVELOPER_ERROR
 
+**Root cause:** Apps installed from Google Play are signed with Google's **App signing key**, not your upload/debug keystore. Google Sign-In validates `package + SHA-1`. iOS does not use this Android certificate check — that is why iOS can work while Play builds fail.
+
 1. Open [Google Play Console](https://play.google.com/console) → your app → **Setup → App signing**.
 2. Copy **App signing key certificate** SHA-1 (and SHA-256 for App Links).
-3. Open [Google Cloud Console](https://console.cloud.google.com/) → project `fash-3526e` → **APIs & Services → Credentials**.
-4. Edit or create **OAuth 2.0 Client ID → Android** with:
-   - Package: `com.pc.fash_android_mobile`
-   - SHA-1: Play **App signing** SHA-1 (not only upload/debug).
-5. Keep a separate Android client for dev: package `com.pc.fash_android_mobile.dev`, SHA-1 debug (table above).
+3. Open [Firebase Console](https://console.firebase.google.com/) → project **fash-3526e** → ⚙ **Project settings** → your Android app `com.pc.fash_android_mobile` → **Add fingerprint** → paste Play **App signing** SHA-1 (Firebase syncs OAuth clients in GCP).
+4. Also add debug SHA-1 (`com.pc.fash_android_mobile.dev`) and upload-key SHA-1 for local/CI builds if missing.
+5. Open [Google Cloud Console](https://console.cloud.google.com/) → project `fash-3526e` → **APIs & Services → Credentials** and confirm Android OAuth clients exist for:
+   - Package: `com.pc.fash_android_mobile` + Play **App signing** SHA-1
+   - Package: `com.pc.fash_android_mobile.dev` + debug SHA-1
 6. Confirm **Web application** client id matches `GOOGLE_WEB_CLIENT_ID` in env files.
 7. Confirm `fash-auth-service` `GOOGLE_OAUTH_CLIENT_IDS` includes the same Web client id.
-8. Rebuild and upload a new release after GCP changes propagate (usually minutes).
+8. Ship a new Play release (OAuth/Firebase changes propagate in minutes; users need the updated build only if app code changed).
+
+Quick local helper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/print_google_signin_fingerprints.ps1
+```
 
 ## Auth-service
 
