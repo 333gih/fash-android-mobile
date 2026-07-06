@@ -456,7 +456,10 @@ class FashApplication : Application(), ImageLoaderFactory {
         AppSessionTracker(
             feedEventReporter = feedEventReporter,
             onForeground = { realtimeManager.sendPresenceActive() },
-            onBackground = { realtimeManager.sendPresenceBackground() },
+            onBackground = {
+                realtimeManager.sendPresenceBackground()
+                realtimeManager.pauseForBackground()
+            },
         )
     }
 

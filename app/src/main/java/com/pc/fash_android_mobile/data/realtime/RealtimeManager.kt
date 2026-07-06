@@ -133,6 +133,15 @@ class RealtimeManager(
         openSocket()
     }
 
+    /** Closes the socket when the app backgrounds; subscriptions are kept for reconnect. */
+    fun pauseForBackground() {
+        intentionalDisconnect.set(true)
+        reconnectJob?.cancel()
+        webSocket?.close(CLOSE_NORMAL, "App background")
+        webSocket = null
+        _state.value = State.DISCONNECTED
+    }
+
     /** Closes the socket permanently (on sign-out). Cancels any pending reconnect. */
     fun disconnect() {
         intentionalDisconnect.set(true)
