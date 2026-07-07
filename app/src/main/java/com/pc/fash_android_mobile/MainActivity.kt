@@ -187,9 +187,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val SPLASH_DISPLAY_MS = 2_500L
+private const val SPLASH_DISPLAY_MS = 750L
 /** Cap cold-start session refresh so splash never blocks on a hung auth refresh. */
 private const val SPLASH_SESSION_VALIDATE_TIMEOUT_MS = 12_000L
+/** Home feed gate — never trap the user longer than this on the waiting screen (iOS parity). */
+private const val SHELL_WARMUP_HOME_GATE_MAX_MS = 6_000L
 /** Cap setup-status gate so authenticated users are not stuck on [FashWaitingScreen] indefinitely. */
 private const val SETUP_GATE_TOTAL_TIMEOUT_MS = 15_000L
 
@@ -448,8 +450,7 @@ class MainActivity : ComponentActivity() {
                 var splashFinished by rememberSaveable { mutableStateOf(false) }
                 var splashStartMs by rememberSaveable { mutableStateOf(0L) }
                 var isGuestBrowse by rememberSaveable { mutableStateOf(false) }
-                var shellWarmupComplete by rememberSaveable { mutableStateOf(false) }
-                var shellWarmupInProgress by remember { mutableStateOf(false) }
+                var shellWarmupComplete by remember { mutableStateOf(false) }
                 /** One-shot: cold start without session may enter guest shell; logout does not. */
                 var initialGuestShellDecided by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
@@ -555,6 +556,7 @@ class MainActivity : ComponentActivity() {
                     if (isAuthenticated) {
                         isGuestBrowse = false
                         fashApp.isGuestBrowseActive = false
+                        shellWarmupComplete = false
                         realtimeManager.connect()
                         pendingPaymentViewModel.startMonitoring()
                     } else if (!isGuestBrowse) {
@@ -592,15 +594,18 @@ class MainActivity : ComponentActivity() {
                     profileViewModel.onAuthenticatedSessionReady()
                 }
 
-                /** Prefetch Home, Explore, Profile, Orders, and Chat before revealing the main shell. */
+                /** Gate on Home feed before revealing the main shell; other tabs prefetch in the background (iOS parity). */
                 LaunchedEffect(splashFinished, isAuthenticated, isGuestBrowse, needsOnboarding) {
                     if (!splashFinished) return@LaunchedEffect
                     if (isAuthenticated && needsOnboarding != false) return@LaunchedEffect
                     if (shellWarmupComplete) return@LaunchedEffect
-                    shellWarmupInProgress = true
                     try {
-                        withTimeoutOrNull(12_000L) {
-                            homeViewModel.refresh()
+                        withTimeoutOrNull(SHELL_WARMUP_HOME_GATE_MAX_MS) {
+                            homeViewModel.awaitLaunchReady(isGuestBrowse)
+                        }
+                    } finally {
+                        shellWarmupComplete = true
+                        shellCoroutineScope.launch {
                             exploreViewModel.refresh()
                             if (isAuthenticated) {
                                 profileViewModel.onAuthenticatedSessionReady()
@@ -609,13 +614,7 @@ class MainActivity : ComponentActivity() {
                                 chatViewModel.loadConversations()
                                 notificationsViewModel.refreshUnreadSummary()
                             }
-                            while (homeViewModel.isRefreshing.value) {
-                                delay(50)
-                            }
                         }
-                    } finally {
-                        shellWarmupInProgress = false
-                        shellWarmupComplete = true
                     }
                 }
 
@@ -905,9 +904,9 @@ class MainActivity : ComponentActivity() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (splashFinished) {
-                        if (shellWarmupInProgress &&
+                        val blockingShellWarmup = !shellWarmupComplete &&
                             (isGuestBrowse || (isAuthenticated && needsOnboarding == false))
-                        ) {
+                        if (blockingShellWarmup) {
                             FashWaitingScreen()
                         } else {
                         Box(Modifier.fillMaxSize()) {
@@ -2489,6 +2488,7 @@ class MainActivity : ComponentActivity() {
                                         {
                                             isGuestBrowse = true
                                             fashApp.isGuestBrowseActive = true
+                                            shellWarmupComplete = false
                                         }
                                     } else {
                                         null

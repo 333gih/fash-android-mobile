@@ -1,4 +1,4 @@
 • Sửa màn hình chờ hiện lại sau khi Home đã load — luồng khởi động giống iOS
 • Chỉ chờ feed Home sẵn sàng; Explore và tab khác tải nền
-• Khởi động nhanh hơn
+• Khởi động nhanh hơn (splash ngắn hơn)
 • Ổn định và hiệu năng

@@ -1,3 +1,4 @@
-• Home shortcuts: Explore, Sell, and Orders — one tap from the feed
-• Matches iOS quick actions on the Home screen
+• Fix waiting screen flashing again after Home loads — iOS-style launch gate
+• Gate on Home feed only; Explore and other tabs load in the background
+• Faster cold start (shorter splash)
 • Stability and performance

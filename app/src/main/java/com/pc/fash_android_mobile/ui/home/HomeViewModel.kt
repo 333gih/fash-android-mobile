@@ -223,10 +223,79 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Launch gate — load the active Home tab before revealing the main shell (iOS parity).
+     * Shell chrome and other tabs continue loading in the background.
+     */
+    suspend fun awaitLaunchReady(isGuestBrowse: Boolean) {
+        normalizeSelectedFeedTab(isGuestBrowse)
+        val tab = _selectedFeedTab.value
+        withContext(Dispatchers.IO) {
+            coroutineScope {
+                val shell = async { reloadHomeShell() }
+                val sellers = async { loadFeaturedSellers() }
+                shell.await()
+                sellers.await()
+                awaitTabLoadedSync(tab, force = true)
+            }
+        }
+        lastSuccessfulRefreshAtMs = System.currentTimeMillis()
+        scheduleLaunchShellEnrichment()
+    }
+
+    private suspend fun awaitTabLoadedSync(tab: HomeFeedTab, force: Boolean) {
+        if (isGuestBrowse() && tab.requiresAuth) return
+        tabLoadJobs[tab]?.cancel()
+        setTabLoading(tab, true)
+        setTabError(tab, false)
+        val ok = when (tab) {
+            HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
+            HomeFeedTab.Following -> loadFollowingTab(force)
+            HomeFeedTab.ForYou,
+            HomeFeedTab.StylePicks,
+            HomeFeedTab.SimilarSaved,
+            HomeFeedTab.SeasonalNearYou,
+            -> loadRecommendationSections(force)
+        }
+        if (ok) {
+            loadedTabs.add(tab)
+            if (tab in HomeFeedTab.recommendationSectionTabs()) {
+                HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
+            }
+            prefetchTabImages(tab)
+        } else {
+            setTabError(tab, true)
+        }
+        setTabLoading(tab, false)
+    }
+
+    private fun scheduleLaunchShellEnrichment() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                coroutineScope {
+                    if (!isGuestBrowse()) {
+                        async { loadBuyerHomeStats() }
+                        async { refreshSizingBannerState() }
+                        async { loadUxPersonalization() }
+                        async { loadRecommendationSections(force = false) }
+                    }
+                }
+            }
+            prefetchAdjacentTabs(_selectedFeedTab.value)
+        }
+    }
+
+    /**
      * Guest browse shell: public Hunt Today feed only — drop signed-in tab/personalization state.
      * Call when entering [FashApplication.isGuestBrowseActive] (cold start guest or after logout → continue browsing).
      */
-    fun onGuestBrowseEntered() {
+    fun onGuestBrowseEntered(forceReset: Boolean = true) {
+        if (
+            !forceReset &&
+            HomeFeedTab.HuntToday in loadedTabs &&
+            _discoveryBundle.value.huntToday.isNotEmpty()
+        ) {
+            return
+        }
         uxTabTracker.closeActiveTab()
         feedEventReporter.flush()
         feedEventReporter.clearPending()

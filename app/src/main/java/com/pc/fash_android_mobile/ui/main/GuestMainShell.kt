@@ -118,7 +118,7 @@ fun GuestMainShell(
 
     LaunchedEffect(Unit) {
         fashApp.isGuestBrowseActive = true
-        homeViewModel.onGuestBrowseEntered()
+        homeViewModel.onGuestBrowseEntered(forceReset = false)
         exploreViewModel.refresh()
         promoSlidesViewModel.refresh()
     }
