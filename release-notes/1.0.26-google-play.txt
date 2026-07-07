@@ -1,4 +1,4 @@
 • Home giống iOS: hàng journey luôn hiện khi đã đăng nhập
 • Cuộn về đầu feed khi đổi tab; load thêm trên mọi tab feed
-• Footer thương hiệu chỉ hiện khi hết trang
+• Footer thương hiệu chỉ hiện khi hết trang; cải thiện trạng thái chờ tải chậm
 • Ổn định và hiệu năng

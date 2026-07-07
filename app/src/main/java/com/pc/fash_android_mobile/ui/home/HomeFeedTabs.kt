@@ -68,6 +68,7 @@ import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
+import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
@@ -164,11 +165,13 @@ fun HomeFeedTabHost(
     shellLoading: Boolean,
     tabsLoading: Set<HomeFeedTab>,
     tabsLoadError: Set<HomeFeedTab>,
+    tabsLoadStalled: Set<HomeFeedTab>,
     forYouItems: List<ListingFeedItem>,
     followingItems: List<ListingFeedItem>,
-    followingHasMore: Boolean,
-    followingLoadingMore: Boolean,
-    onLoadMoreFollowing: () -> Unit,
+    selectedTabHasMore: Boolean,
+    selectedTabLoadingMore: Boolean,
+    showBrandFooter: Boolean,
+    onLoadMoreActiveTab: () -> Unit,
     onRetryTab: () -> Unit,
     stylePickItems: List<ListingFeedItem>,
     similarSavedItems: List<ListingFeedItem>,
@@ -192,6 +195,7 @@ fun HomeFeedTabHost(
     onDwell: (ListingFeedItem, Int, Int, String) -> Unit,
     onRequestLogin: (GuestLoginReason) -> Unit,
     onScrollToTopRequest: kotlinx.coroutines.flow.SharedFlow<Unit>,
+    onScrollToFeedTopRequest: kotlinx.coroutines.flow.SharedFlow<Unit>,
 ) {
     val tabs = remember(isGuestBrowse, orderedTabs) {
         val allowed = HomeFeedTab.tabsFor(isGuestBrowse)
@@ -217,7 +221,9 @@ fun HomeFeedTabHost(
             (shellLoading && gridItems.isEmpty())
         )
     val loadError = !showGuestGate && safeSelected in tabsLoadError
-    val hasMore = !showGuestGate && safeSelected == HomeFeedTab.Following && followingHasMore
+    val loadStall = !showGuestGate && safeSelected in tabsLoadStalled
+    val hasMore = !showGuestGate && selectedTabHasMore
+    val loadingMore = !showGuestGate && selectedTabLoadingMore
     val gridState = rememberLazyStaggeredGridState()
     val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
     val scheme = MaterialTheme.colorScheme
@@ -228,7 +234,7 @@ fun HomeFeedTabHost(
     var suppressListingClicks by remember { mutableStateOf(false) }
     val swipeScope = rememberCoroutineScope()
     val selectedVisualIndex = tabs.indexOf(safeSelected).coerceAtLeast(0)
-    val showJourneyRow = !isGuestBrowse && buyerStats.hasJourneyActivity()
+    val showJourneyRow = !isGuestBrowse
     val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
     val tabRowIndex = 1 +
         (if (showJourneyRow) 1 else 0) +
@@ -254,6 +260,12 @@ fun HomeFeedTabHost(
     LaunchedEffect(onScrollToTopRequest) {
         onScrollToTopRequest.collect {
             gridState.animateScrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(onScrollToFeedTopRequest, tabRowIndex) {
+        onScrollToFeedTopRequest.collect {
+            gridState.animateScrollToItem(tabRowIndex)
         }
     }
 
@@ -421,6 +433,19 @@ fun HomeFeedTabHost(
                         )
                     }
                 }
+                loadStall && gridItems.isEmpty() -> {
+                    item(span = StaggeredGridItemSpan.FullLine, key = "home_feed_stall_${safeSelected.name}") {
+                        FeedEmptyColumn(
+                            title = stringResource(R.string.feed_load_error),
+                            subtitle = stringResource(R.string.feed_load_stall_subtitle),
+                            primaryActionLabel = stringResource(R.string.feed_retry),
+                            onPrimaryAction = onRetryTab,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                        )
+                    }
+                }
                 gridItems.isEmpty() -> {
                     item(span = StaggeredGridItemSpan.FullLine, key = "home_feed_empty_${safeSelected.name}") {
                         Box(
@@ -458,20 +483,22 @@ fun HomeFeedTabHost(
                             onSave = { onSaveListing(item) },
                         )
                     }
-                    if (safeSelected == HomeFeedTab.Following && (hasMore || followingLoadingMore)) {
+                    if (hasMore || loadingMore) {
                         item(span = StaggeredGridItemSpan.FullLine, key = "home_feed_load_more") {
                             FeedLoadMoreFooter(
                                 enabled = hasMore,
-                                isLoadingMore = followingLoadingMore,
-                                onLoadMore = onLoadMoreFollowing,
+                                isLoadingMore = loadingMore,
+                                onLoadMore = onLoadMoreActiveTab,
                             )
                         }
                     }
                 }
             }
 
-            item(span = StaggeredGridItemSpan.FullLine, key = "footer") {
-                HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
+            if (showBrandFooter) {
+                item(span = StaggeredGridItemSpan.FullLine, key = "footer") {
+                    HomeBrandFooterStrip(includeHorizontalEdgePadding = false)
+                }
             }
         }
 

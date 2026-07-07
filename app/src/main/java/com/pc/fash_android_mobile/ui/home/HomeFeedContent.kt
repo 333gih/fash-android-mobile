@@ -117,11 +117,13 @@ fun HomeFeedContent(
                 shellLoading = ui.isLoading,
                 tabsLoading = ui.tabsLoading,
                 tabsLoadError = ui.tabsLoadError,
+                tabsLoadStalled = ui.tabsLoadStalled,
                 forYouItems = ui.discovery.forYou,
                 followingItems = ui.items,
-                followingHasMore = ui.hasMoreItems,
-                followingLoadingMore = ui.isLoadingMore,
-                onLoadMoreFollowing = { viewModel.loadMoreFollowFeed() },
+                selectedTabHasMore = ui.selectedTabHasMore,
+                selectedTabLoadingMore = ui.selectedTabLoadingMore,
+                showBrandFooter = ui.showBrandFooter,
+                onLoadMoreActiveTab = viewModel::loadMoreActiveTab,
                 onRetryTab = { viewModel.retryTab(ui.selectedFeedTab) },
                 stylePickItems = ui.discovery.stylePicks,
                 similarSavedItems = ui.discovery.similarToSaved,
@@ -151,6 +153,7 @@ fun HomeFeedContent(
                 },
                 onRequestLogin = onRequestLogin,
                 onScrollToTopRequest = viewModel.scrollHomeToTop,
+                onScrollToFeedTopRequest = viewModel.scrollHomeFeedToTop,
             )
 
                 if (promoSlides.isNotEmpty()) {

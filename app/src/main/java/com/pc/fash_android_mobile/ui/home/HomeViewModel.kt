@@ -29,6 +29,7 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
 import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
+import com.pc.fash_android_mobile.ui.feed.FeedLoadStallWatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -69,6 +70,14 @@ private val BuyerDeliveringStatuses = setOf(
 /** Skip automatic Home refresh when data was loaded within this window (ms). */
 private const val HomeFeedStaleThresholdMs = 60_000L
 
+/** Section-tab pagination page size — matches iOS `HomeFeedConstants.tabLoadMorePageSize`. */
+private const val HomeTabLoadMorePageSize = 20
+
+private data class HomeTabFeedState(
+    val hasMore: Boolean = false,
+    val isLoadingMore: Boolean = false,
+)
+
 /** Aggregated Home feed UI state — one collect reduces broad recomposition. */
 data class HomeFeedUiState(
     val items: List<ListingFeedItem> = emptyList(),
@@ -81,7 +90,11 @@ data class HomeFeedUiState(
     val isLoadingMore: Boolean = false,
     val tabsLoading: Set<HomeFeedTab> = emptySet(),
     val tabsLoadError: Set<HomeFeedTab> = emptySet(),
+    val tabsLoadStalled: Set<HomeFeedTab> = emptySet(),
     val hasMoreItems: Boolean = true,
+    val selectedTabHasMore: Boolean = false,
+    val selectedTabLoadingMore: Boolean = false,
+    val showBrandFooter: Boolean = false,
     val showSizingBanner: Boolean = false,
     val listingPreview: ExploreListingPreviewState? = null,
     val featuredSellers: List<FeaturedSellerItem> = emptyList(),
@@ -166,6 +179,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val loadedTabs = mutableSetOf<HomeFeedTab>()
     private var recommendationSectionsFetched = false
     private val tabLoadJobs = mutableMapOf<HomeFeedTab, Job>()
+    private val sectionLoadMoreJobs = mutableMapOf<HomeFeedTab, Job>()
+    private val tabStallWatch = FeedLoadStallWatch()
+    private val _tabsLoadStalled = MutableStateFlow<Set<HomeFeedTab>>(emptySet())
+    private val _tabFeedState = MutableStateFlow<Map<HomeFeedTab, HomeTabFeedState>>(emptyMap())
 
     /** Follow-feed pagination — guards duplicate in-flight requests. */
     private val _isLoadingMore = MutableStateFlow(false)
@@ -178,16 +195,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _scrollHomeToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollHomeToTop: SharedFlow<Unit> = _scrollHomeToTop.asSharedFlow()
 
+    private val _scrollHomeFeedToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollHomeFeedToTop: SharedFlow<Unit> = _scrollHomeFeedToTop.asSharedFlow()
+
     private val _selectedFeedTab = MutableStateFlow(HomeFeedTab.HuntToday)
     val selectedFeedTab: StateFlow<HomeFeedTab> = _selectedFeedTab.asStateFlow()
 
     fun setSelectedFeedTab(tab: HomeFeedTab) {
-        if (_selectedFeedTab.value == tab) return
+        if (_selectedFeedTab.value == tab) {
+            requestScrollHomeToTop()
+            return
+        }
         uxTabTracker.onTabOpened("home", tab.toUxTabKey())
         _selectedFeedTab.value = tab
+        requestScrollHomeFeedToTop()
         ensureTabLoaded(tab)
         prefetchTabImages(tab)
         prefetchFromPersonalization(around = tab)
+    }
+
+    fun isTabLoadStalled(tab: HomeFeedTab): Boolean = tab in _tabsLoadStalled.value
+
+    fun loadMoreActiveTab() {
+        val tab = _selectedFeedTab.value
+        if (tab == HomeFeedTab.Following) {
+            loadMoreFollowFeed()
+        } else {
+            loadMoreSectionTab(tab)
+        }
     }
 
     private fun prefetchFeedImages(items: List<ListingFeedItem>) {
@@ -245,8 +280,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun awaitTabLoadedSync(tab: HomeFeedTab, force: Boolean) {
         if (isGuestBrowse() && tab.requiresAuth) return
         tabLoadJobs[tab]?.cancel()
-        setTabLoading(tab, true)
-        setTabError(tab, false)
+        beginTabLoad(tab)
         val ok = when (tab) {
             HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
             HomeFeedTab.Following -> loadFollowingTab(force)
@@ -256,16 +290,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             HomeFeedTab.SeasonalNearYou,
             -> loadRecommendationSections(force)
         }
-        if (ok) {
-            loadedTabs.add(tab)
-            if (tab in HomeFeedTab.recommendationSectionTabs()) {
-                HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
-            }
-            prefetchTabImages(tab)
-        } else {
-            setTabError(tab, true)
-        }
-        setTabLoading(tab, false)
+        finishTabLoad(tab, ok)
     }
 
     private fun scheduleLaunchShellEnrichment() {
@@ -362,6 +387,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isLoadingMore,
         _tabsLoading,
         _tabsLoadError,
+        _tabsLoadStalled,
+        _tabFeedState,
         _hasMoreItems,
         _showSizingBanner,
         _listingPreview,
@@ -370,11 +397,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _featuredSellersLoading,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
-        val ux = values[13] as HomeUxPersonalization
+        val ux = values[15] as HomeUxPersonalization
+        val selectedTab = values[2] as HomeFeedTab
+        val guest = isGuestBrowse()
+        val tabState = (values[11] as Map<HomeFeedTab, HomeTabFeedState>)[selectedTab]
+            ?: HomeTabFeedState()
+        val selectedTabHasMore = when (selectedTab) {
+            HomeFeedTab.Following -> values[12] as Boolean
+            else -> tabState.hasMore
+        }
+        val selectedTabLoadingMore = when (selectedTab) {
+            HomeFeedTab.Following -> values[7] as Boolean
+            else -> tabState.isLoadingMore
+        }
         HomeFeedUiState(
             items = values[0] as List<ListingFeedItem>,
             discovery = values[1] as HomeDiscoveryBundle,
-            selectedFeedTab = values[2] as HomeFeedTab,
+            selectedFeedTab = selectedTab,
             followingIds = values[3] as Set<String>,
             buyerStats = values[4] as BuyerHomeStats,
             isLoading = values[5] as Boolean,
@@ -382,13 +421,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoadingMore = values[7] as Boolean,
             tabsLoading = values[8] as Set<HomeFeedTab>,
             tabsLoadError = values[9] as Set<HomeFeedTab>,
-            hasMoreItems = values[10] as Boolean,
-            showSizingBanner = values[11] as Boolean,
-            listingPreview = values[12] as ExploreListingPreviewState?,
-            orderedFeedTabs = orderedHomeFeedTabs(isGuestBrowse(), ux.tabOrder),
+            tabsLoadStalled = values[10] as Set<HomeFeedTab>,
+            hasMoreItems = values[12] as Boolean,
+            selectedTabHasMore = selectedTabHasMore,
+            selectedTabLoadingMore = selectedTabLoadingMore,
+            showBrandFooter = computeShowBrandFooter(
+                tab = selectedTab,
+                isGuestBrowse = guest,
+                items = itemsForTab(selectedTab, values[0] as List<ListingFeedItem>, values[1] as HomeDiscoveryBundle),
+                isShellLoading = values[5] as Boolean,
+                isRefreshing = values[6] as Boolean,
+                tabsLoading = values[8] as Set<HomeFeedTab>,
+                followingHasMore = values[12] as Boolean,
+                followingLoadingMore = values[7] as Boolean,
+                tabHasMore = tabState.hasMore,
+                tabLoadingMore = tabState.isLoadingMore,
+            ),
+            showSizingBanner = values[13] as Boolean,
+            listingPreview = values[14] as ExploreListingPreviewState?,
+            orderedFeedTabs = orderedHomeFeedTabs(guest, ux.tabOrder),
             exploreShortcut = ux.exploreShortcut,
-            featuredSellers = values[14] as List<FeaturedSellerItem>,
-            featuredSellersLoading = values[15] as Boolean,
+            featuredSellers = values[16] as List<FeaturedSellerItem>,
+            featuredSellersLoading = values[17] as Boolean,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -491,13 +545,174 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun itemsForTab(
+        tab: HomeFeedTab,
+        followingItems: List<ListingFeedItem> = _items.value,
+        discovery: HomeDiscoveryBundle = _discoveryBundle.value,
+    ): List<ListingFeedItem> = when (tab) {
+        HomeFeedTab.HuntToday -> discovery.huntToday
+        HomeFeedTab.ForYou -> discovery.forYou
+        HomeFeedTab.Following -> followingItems
+        HomeFeedTab.StylePicks -> discovery.stylePicks
+        HomeFeedTab.SimilarSaved -> discovery.similarToSaved
+        HomeFeedTab.SeasonalNearYou -> discovery.seasonalNearYou
+    }
+
+    private fun computeShowBrandFooter(
+        tab: HomeFeedTab,
+        isGuestBrowse: Boolean,
+        items: List<ListingFeedItem>,
+        isShellLoading: Boolean,
+        isRefreshing: Boolean,
+        tabsLoading: Set<HomeFeedTab>,
+        followingHasMore: Boolean,
+        followingLoadingMore: Boolean,
+        tabHasMore: Boolean,
+        tabLoadingMore: Boolean,
+    ): Boolean {
+        if (isGuestBrowse && tab.requiresAuth) return false
+        if (items.isEmpty()) return false
+        if (isShellLoading || isRefreshing || tab in tabsLoading) return false
+        if (tab == HomeFeedTab.Following) {
+            return !followingHasMore && !followingLoadingMore
+        }
+        return !tabHasMore && !tabLoadingMore
+    }
+
+    private fun setTabHasMore(tab: HomeFeedTab, hasMore: Boolean) {
+        _tabFeedState.update { cur ->
+            cur + (tab to (cur[tab] ?: HomeTabFeedState()).copy(hasMore = hasMore))
+        }
+    }
+
+    private fun setTabLoadingMore(tab: HomeFeedTab, loading: Boolean) {
+        _tabFeedState.update { cur ->
+            cur + (tab to (cur[tab] ?: HomeTabFeedState()).copy(isLoadingMore = loading))
+        }
+    }
+
+    private fun scheduleTabStallWatch(tab: HomeFeedTab) {
+        tabStallWatch.schedule(
+            scope = viewModelScope,
+            key = tab.name,
+            isStillPending = {
+                _selectedFeedTab.value == tab &&
+                    tab !in loadedTabs &&
+                    tab !in _tabsLoading.value &&
+                    itemsForTab(tab).isEmpty()
+            },
+            onStalled = {
+                _tabsLoadStalled.update { it + tab }
+            },
+        )
+    }
+
+    private fun finishTabStallWatch(tab: HomeFeedTab) {
+        tabStallWatch.cancel(tab.name)
+        _tabsLoadStalled.update { it - tab }
+    }
+
+    private fun beginTabLoad(tab: HomeFeedTab) {
+        finishTabStallWatch(tab)
+        setTabLoading(tab, true)
+        setTabError(tab, false)
+        scheduleTabStallWatch(tab)
+    }
+
+    private fun finishTabLoad(tab: HomeFeedTab, ok: Boolean) {
+        finishTabStallWatch(tab)
+        if (ok) {
+            loadedTabs.add(tab)
+            if (tab in HomeFeedTab.recommendationSectionTabs()) {
+                HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
+            }
+            prefetchTabImages(tab)
+        } else {
+            setTabError(tab, true)
+        }
+        setTabLoading(tab, false)
+    }
+
+    private fun appendUniqueItems(page: List<ListingFeedItem>, tab: HomeFeedTab): Int {
+        val existing = itemsForTab(tab).mapTo(HashSet()) { it.id }
+        val fresh = page.filter { existing.add(it.id) }
+        if (fresh.isEmpty()) return 0
+        when (tab) {
+            HomeFeedTab.HuntToday ->
+                _discoveryBundle.update { it.copy(huntToday = it.huntToday + fresh) }
+            HomeFeedTab.ForYou ->
+                _discoveryBundle.update { it.copy(forYou = it.forYou + fresh) }
+            HomeFeedTab.StylePicks ->
+                _discoveryBundle.update { it.copy(stylePicks = it.stylePicks + fresh) }
+            HomeFeedTab.SimilarSaved ->
+                _discoveryBundle.update { it.copy(similarToSaved = it.similarToSaved + fresh) }
+            HomeFeedTab.SeasonalNearYou ->
+                _discoveryBundle.update { it.copy(seasonalNearYou = it.seasonalNearYou + fresh) }
+            HomeFeedTab.Following -> Unit
+        }
+        syncSellerFollowingFromListings(fresh)
+        prefetchFeedImages(fresh)
+        return fresh.size
+    }
+
+    private fun loadMoreSectionTab(tab: HomeFeedTab) {
+        if (isGuestBrowse() && tab.requiresAuth) return
+        val state = _tabFeedState.value[tab] ?: HomeTabFeedState()
+        if (!state.hasMore || state.isLoadingMore) return
+        if (_isLoading.value || _isRefreshing.value || tab in _tabsLoading.value) return
+        if (sectionLoadMoreJobs[tab]?.isActive == true) return
+        sectionLoadMoreJobs[tab] = viewModelScope.launch {
+            setTabLoadingMore(tab, true)
+            try {
+                val offset = itemsForTab(tab).size
+                val result = withContext(Dispatchers.IO) {
+                    fashApp.recommendationRepository.exploreListings(
+                        publicBrowse = isGuestBrowse(),
+                        limit = HomeTabLoadMorePageSize,
+                        offset = offset,
+                        surface = tab.analyticsSurface,
+                        sizingMode = huntTodaySizingMode(),
+                    )
+                }
+                if (_selectedFeedTab.value != tab) return@launch
+                result.fold(
+                    onSuccess = { page ->
+                        if (page.isEmpty()) {
+                            setTabHasMore(tab, false)
+                        } else {
+                            val added = appendUniqueItems(page, tab)
+                            setTabHasMore(
+                                tab,
+                                page.size >= HomeTabLoadMorePageSize && added > 0,
+                            )
+                        }
+                    },
+                    onFailure = {
+                        _events.tryEmit(
+                            it.message?.takeIf { msg -> msg.isNotBlank() }
+                                ?: getApplication<Application>().getString(R.string.feed_load_error),
+                        )
+                    },
+                )
+            } finally {
+                setTabLoadingMore(tab, false)
+                sectionLoadMoreJobs.remove(tab)
+            }
+        }
+    }
+
     private fun invalidateAllTabFeeds() {
         loadedTabs.clear()
         recommendationSectionsFetched = false
         tabLoadJobs.values.forEach { it.cancel() }
         tabLoadJobs.clear()
+        sectionLoadMoreJobs.values.forEach { it.cancel() }
+        sectionLoadMoreJobs.clear()
+        tabStallWatch.cancelAll()
         _tabsLoading.value = emptySet()
         _tabsLoadError.value = emptySet()
+        _tabsLoadStalled.value = emptySet()
+        _tabFeedState.value = emptyMap()
         _items.value = emptyList()
         _hasMoreItems.value = true
         _discoveryBundle.update {
@@ -531,8 +746,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         tabLoadJobs[tab]?.cancel()
         tabLoadJobs[tab] = viewModelScope.launch {
-            setTabLoading(tab, true)
-            setTabError(tab, false)
+            beginTabLoad(tab)
             val ok = withContext(Dispatchers.IO) {
                 when (tab) {
                     HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
@@ -541,16 +755,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         loadRecommendationSections(force)
                 }
             }
-            if (ok) {
-                loadedTabs.add(tab)
-                if (tab in HomeFeedTab.recommendationSectionTabs()) {
-                    HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
-                }
-                prefetchTabImages(tab)
-            } else {
-                setTabError(tab, true)
-            }
-            setTabLoading(tab, false)
+            finishTabLoad(tab, ok)
         }
     }
 
@@ -627,6 +832,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = { items ->
                 _discoveryBundle.update { it.copy(huntToday = items) }
                 syncSellerFollowingFromListings(items)
+                setTabHasMore(
+                    HomeFeedTab.HuntToday,
+                    items.size >= sectionLimitFor(HomeFeedTab.HuntToday, HomeHuntTodayLimit),
+                )
                 true
             },
             onFailure = { false },
@@ -650,11 +859,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!force && recommendationSectionsFetched) return true
         val styleLimit = sectionLimitFor(HomeFeedTab.StylePicks, 12)
         val similarLimit = sectionLimitFor(HomeFeedTab.SimilarSaved, 12)
+        val huntLimit = sectionLimitFor(HomeFeedTab.HuntToday, 12)
+        val forYouLimit = sectionLimitFor(HomeFeedTab.ForYou, 16)
+        val sectionLimit = maxOf(styleLimit, similarLimit)
         return fashApp.recommendationRepository.homeSections(
             publicBrowse = isGuestBrowse(),
-            huntTodayLimit = sectionLimitFor(HomeFeedTab.HuntToday, 12),
-            forYouLimit = sectionLimitFor(HomeFeedTab.ForYou, 16),
-            sectionLimit = maxOf(styleLimit, similarLimit),
+            huntTodayLimit = huntLimit,
+            forYouLimit = forYouLimit,
+            sectionLimit = sectionLimit,
             sizingMode = huntTodaySizingMode(),
         ).fold(
             onSuccess = { sections ->
@@ -674,7 +886,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 if (sections.huntToday.isNotEmpty()) {
                     loadedTabs.add(HomeFeedTab.HuntToday)
+                    setTabHasMore(HomeFeedTab.HuntToday, sections.huntToday.size >= huntLimit)
                 }
+                setTabHasMore(HomeFeedTab.ForYou, sections.forYou.size >= forYouLimit)
+                setTabHasMore(HomeFeedTab.StylePicks, sections.stylePicks.size >= styleLimit)
+                setTabHasMore(HomeFeedTab.SimilarSaved, sections.similarToSaved.size >= similarLimit)
+                setTabHasMore(HomeFeedTab.SeasonalNearYou, sections.seasonalNearYou.size >= sectionLimit)
                 recommendationSectionsFetched = true
                 prefetchTabImages(_selectedFeedTab.value)
                 true
@@ -855,6 +1072,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun retryTab(tab: HomeFeedTab) {
         requestScrollHomeToTop()
+        finishTabStallWatch(tab)
         loadedTabs.remove(tab)
         if (tab in HomeFeedTab.recommendationSectionTabs()) {
             recommendationSectionsFetched = false
@@ -887,12 +1105,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading.value = false
         _isRefreshing.value = false
         _isLoadingMore.value = false
+        _tabsLoadStalled.value = emptySet()
+        _tabFeedState.value = emptyMap()
+        tabStallWatch.cancelAll()
         lastSuccessfulRefreshAtMs = 0L
     }
 
     /** Bottom nav re-tap on Home — scroll feed to top (pairs with [refresh]). */
     fun requestScrollHomeToTop() {
         viewModelScope.launch { _scrollHomeToTop.emit(Unit) }
+    }
+
+    /** Tab swipe / tab change — scroll to pinned tab row (iOS `requestScrollHomeFeedToTop`). */
+    fun requestScrollHomeFeedToTop() {
+        viewModelScope.launch { _scrollHomeFeedToTop.emit(Unit) }
     }
 
     /** Refreshes only when data is older than [HomeFeedStaleThresholdMs]. */

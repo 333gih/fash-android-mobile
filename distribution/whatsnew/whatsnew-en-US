@@ -1,4 +1,4 @@
-• Fix waiting screen flashing again after Home loads — iOS-style launch gate
-• Gate on Home feed only; Explore and other tabs load in the background
-• Faster cold start (shorter splash)
+• Home iOS parity: journey row always visible when signed in
+• Scroll to feed top on tab change; load-more on all feed tabs
+• Brand footer only at end of feed; improved slow-load stall state
 • Stability and performance
