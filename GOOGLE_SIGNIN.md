@@ -35,11 +35,15 @@ Reference fingerprints from this project (re-run `signingReport` if keystores ch
 
 **Root cause:** Apps installed from Google Play are signed with Google's **App signing key**, not your upload/debug keystore. Google Sign-In validates `package + SHA-1`. iOS does not use this Android certificate check — that is why iOS can work while Play builds fail.
 
+**Current repo status:** `app/google-services.json` only lists Web OAuth clients (`client_type: 3`), not Android clients (`client_type: 1`). That means Firebase has **not** synced Android OAuth clients yet — add all SHA-1 fingerprints below, then re-download the JSON.
+
 1. Open [Google Play Console](https://play.google.com/console) → your app → **Setup → App signing**.
 2. Copy **App signing key certificate** SHA-1 (and SHA-256 for App Links).
 3. Open [Firebase Console](https://console.firebase.google.com/) → project **fash-3526e** → ⚙ **Project settings** → your Android app `com.pc.fash_android_mobile` → **Add fingerprint** → paste Play **App signing** SHA-1 (Firebase syncs OAuth clients in GCP).
 4. Also add debug SHA-1 (`com.pc.fash_android_mobile.dev`) and upload-key SHA-1 for local/CI builds if missing.
-5. Open [Google Cloud Console](https://console.cloud.google.com/) → project `fash-3526e` → **APIs & Services → Credentials** and confirm Android OAuth clients exist for:
+5. **Re-download** `google-services.json` from Firebase (must include `oauth_client` entries with `client_type: 1` for each package).
+6. Commit the updated JSON **or** set GitHub secret `GOOGLE_SERVICES_JSON` (full file) for CI inject.
+7. Open [Google Cloud Console](https://console.cloud.google.com/) → project `fash-3526e` → **APIs & Services → Credentials** and confirm Android OAuth clients exist for:
    - Package: `com.pc.fash_android_mobile` + Play **App signing** SHA-1
    - Package: `com.pc.fash_android_mobile.dev` + debug SHA-1
 6. Confirm **Web application** client id matches `GOOGLE_WEB_CLIENT_ID` in env files.

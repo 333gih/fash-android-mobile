@@ -149,6 +149,7 @@
     <string name="login_google_play_services_error_detail">Google Play Services chưa sẵn sàng: %1$s</string>
     <string name="login_google_developer_error">Cấu hình đăng nhập Google chưa đúng: kiểm tra GOOGLE_WEB_CLIENT_ID (OAuth Web), Android OAuth client (đúng package và SHA‑1 debug/release) trên Google Cloud Console.</string>
     <string name="login_google_play_signing_hint">Nếu cài từ Google Play: thêm SHA‑1 của App signing key (Play Console → Thiết lập → Chữ ký ứng dụng) vào Firebase → Cài đặt dự án → Ứng dụng Android.</string>
+    <string name="login_google_developer_error_cert">(Gói: %1$s · SHA‑1: %2$s — thêm SHA‑1 này vào Firebase nếu chưa có)</string>
     <string name="login_google_not_configured">Thêm GOOGLE_WEB_CLIENT_ID (OAuth Web client) vào env — và Android client + SHA-1 trên Google Cloud.</string>
     <string name="login_social_signing_in">Đang đăng nhập…</string>
 

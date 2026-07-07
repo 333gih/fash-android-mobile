@@ -15,6 +15,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthHttpException
+import com.pc.fash_android_mobile.data.auth.GoogleSignInDiagnostics
 import com.pc.fash_android_mobile.data.auth.GoogleSignInFlow
 import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
 import com.pc.fash_android_mobile.data.recommendation.UxPersonalizationLocalStore
@@ -350,17 +351,25 @@ class LoginViewModel(
             GoogleSignInStatusCodes.NETWORK_ERROR ->
                 app.getString(R.string.login_google_network_error)
             GoogleSignInStatusCodes.DEVELOPER_ERROR -> {
+                val snap = GoogleSignInDiagnostics.snapshot(app)
+                GoogleSignInDiagnostics.logSnapshot(app)
                 val base = app.getString(R.string.login_google_developer_error)
                 val playHint = if (BuildConfig.FLAVOR == "prod" && !BuildConfig.DEBUG) {
                     " " + app.getString(R.string.login_google_play_signing_hint)
                 } else {
                     ""
                 }
-                if (BuildConfig.DEBUG) {
-                    "$base (${BuildConfig.APPLICATION_ID}, ${BuildConfig.ENVIRONMENT_NAME}, ${BuildConfig.BUILD_TYPE})$playHint"
+                val sha1 = snap.signingSha1
+                val detail = if (!sha1.isNullOrBlank()) {
+                    " " + app.getString(
+                        R.string.login_google_developer_error_cert,
+                        snap.packageName,
+                        sha1,
+                    )
                 } else {
-                    base + playHint
+                    ""
                 }
+                base + playHint + detail
             }
             else -> app.getString(R.string.login_google_error_code, status, tech)
         }
@@ -379,6 +388,7 @@ class LoginViewModel(
             return
         }
         viewModelScope.launch {
+            GoogleSignInDiagnostics.logSnapshot(activity)
             when (val result = GoogleSignInFlow.launchSignIn(activity, launcher)) {
                 GoogleSignInFlow.LaunchResult.Launched -> Unit
                 GoogleSignInFlow.LaunchResult.NotConfigured -> warnGoogleNotConfigured()
