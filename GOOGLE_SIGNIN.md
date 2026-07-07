@@ -55,3 +55,17 @@ powershell -ExecutionPolicy Bypass -File tools/print_google_signin_fingerprints.
 ## Auth-service
 
 Server must accept ID tokens from the Web client id listed in `GOOGLE_OAUTH_CLIENT_IDS`.
+
+## iOS vs Android credentials (cannot swap)
+
+| Credential | Android | iOS |
+|------------|---------|-----|
+| `GOOGLE_WEB_CLIENT_ID` (Web OAuth) | ✅ `requestIdToken` + server verify | ✅ `serverClientID` + server verify |
+| `GOOGLE_IOS_CLIENT_ID` | ❌ not used | ✅ native `clientID` in GIDSignIn |
+| Android OAuth client (package + SHA-1) | ✅ required for Play / debug | ❌ not used |
+
+Both apps already share the **same Web client id** in `env/prod.env`. iOS `GOOGLE_IOS_CLIENT_ID` cannot fix Android — add **Play App signing SHA-1** to Firebase/GCP instead.
+
+## “Cannot reach Google server” on Android (network toast)
+
+Older builds ran an OkHttp HEAD probe to `accounts.google.com` before opening the picker. Some mobile networks / Private DNS block that probe while Google Play services sign-in still works (iOS never had this probe). **1.0.23+** removes the probe — only checks Internet + Google Play services, then opens the account picker like iOS.

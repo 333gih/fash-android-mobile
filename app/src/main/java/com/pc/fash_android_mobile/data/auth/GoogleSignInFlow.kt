@@ -28,7 +28,9 @@ object GoogleSignInFlow {
     }
 
     suspend fun blockReasonOrNull(context: Context): String? =
-        GoogleSignInPreflight.blockReason(context)
+        withContext(Dispatchers.IO) {
+            GoogleSignInPreflight.blockReason(context)
+        }
 
     suspend fun launchSignIn(
         context: Context,
