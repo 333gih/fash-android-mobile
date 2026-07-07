@@ -348,10 +348,6 @@
     <string name="home_follow_empty_cta_featured">Browse featured shops</string>
     <string name="home_brand_marketplace">FASH MARKETPLACE</string>
     <string name="home_brand_footer_sub">SHAPING VIETNAMESE STYLE</string>
-    <string name="home_quick_actions_title">Buy &amp; sell faster</string>
-    <string name="home_quick_explore">Explore</string>
-    <string name="home_quick_sell">Sell</string>
-    <string name="home_quick_orders">Orders</string>
     <string name="home_feed_title">For you</string>
     <string name="home_feed_subtitle">New listings from shops you follow</string>
     <string name="home_feed_empty_title">Nothing here yet</string>
