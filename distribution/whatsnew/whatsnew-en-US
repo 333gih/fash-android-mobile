@@ -1,4 +1,3 @@
-• Home iOS parity: journey row always visible when signed in
-• Scroll to feed top on tab change; load-more on all feed tabs
-• Brand footer only at end of feed; improved slow-load stall state
+• Home: area & season chip from your default address (e.g. Ho Chi Minh City · Rainy season)
+• Removed Home quick-actions row; journey row, load-more, and feed scroll match iOS
 • Stability and performance

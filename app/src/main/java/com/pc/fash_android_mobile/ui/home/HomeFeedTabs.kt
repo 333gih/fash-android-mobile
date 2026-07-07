@@ -182,9 +182,6 @@ fun HomeFeedTabHost(
     onDismissSizingBanner: () -> Unit,
     onOpenSizingSetup: (() -> Unit)?,
     buyerStats: BuyerHomeStats,
-    onQuickExplore: () -> Unit,
-    onQuickSell: () -> Unit,
-    onQuickOrders: () -> Unit,
     onDeliveringJourneyClick: () -> Unit,
     onSavedJourneyClick: () -> Unit,
     onInReviewJourneyClick: () -> Unit,
@@ -236,7 +233,7 @@ fun HomeFeedTabHost(
     val selectedVisualIndex = tabs.indexOf(safeSelected).coerceAtLeast(0)
     val showJourneyRow = !isGuestBrowse
     val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
-    val tabRowIndex = 1 +
+    val tabRowIndex = (if (!shoppingContextChip.isNullOrBlank()) 1 else 0) +
         (if (showJourneyRow) 1 else 0) +
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
         (if (hasFeaturedSellersBlock) 1 else 0) +
@@ -333,16 +330,6 @@ fun HomeFeedTabHost(
                         }
                     }
                 }
-            }
-
-            item(span = StaggeredGridItemSpan.FullLine, key = "home_quick_actions") {
-                HomeQuickActionsRow(
-                    onExplore = onQuickExplore,
-                    onSell = onQuickSell,
-                    onOrders = onQuickOrders,
-                    includeHorizontalEdgePadding = false,
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
 
             if (showJourneyRow) {

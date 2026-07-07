@@ -2183,6 +2183,8 @@ class MainActivity : ComponentActivity() {
                                                     if (oid != null && addr != null) {
                                                         addressBookViewModel.setOrderShipping(oid, addr)
                                                     }
+                                                    exploreViewModel.refreshBrowseLocationAfterAddressSave()
+                                                    homeViewModel.refreshShoppingContextAfterProfileSave()
                                                     showAddAddressScreen = false
                                                     if (addAddressOpenedFromList) {
                                                         addAddressOpenedFromList = false

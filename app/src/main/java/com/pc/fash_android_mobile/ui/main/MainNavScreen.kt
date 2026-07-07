@@ -652,20 +652,6 @@ fun MainNavScreen(
                         viewModel = homeViewModel,
                         onListingClick = navigateToListingDetail,
                         onNavigateToExplore = { openExploreOverlay(false) },
-                        onNavigateToSell = {
-                            if (isGuestMode) {
-                                onRequestLogin(GuestLoginReason.Post)
-                            } else {
-                                onTabChange(MainTab.Post.ordinal)
-                            }
-                        },
-                        onNavigateToOrders = {
-                            if (isGuestMode) {
-                                onRequestLogin(GuestLoginReason.Orders)
-                            } else {
-                                onTabChange(MainTab.Orders.ordinal)
-                            }
-                        },
                         onNavigateToExploreWithTag = { tagName ->
                             val chipId = homeViewModel.trendingStyleTagChipIdForName(tagName)
                             exploreViewModel.toggleInterestChipWithId(chipId, tagName)

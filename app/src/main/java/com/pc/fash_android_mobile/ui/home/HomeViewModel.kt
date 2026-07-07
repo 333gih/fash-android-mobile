@@ -464,6 +464,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 coroutineScope {
                     launch { loadUxPersonalization() }
                     launch { loadRecommendationSections(force = false) }
+                    launch { refreshShoppingContext() }
                 }
             }
         }
@@ -941,6 +942,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) { refreshSizingBannerState() }
     }
 
+    /** Refresh metro + season chip after default address / profile location changes. */
+    fun refreshShoppingContextAfterProfileSave() {
+        viewModelScope.launch(Dispatchers.IO) { refreshShoppingContext() }
+    }
+
+    private suspend fun refreshShoppingContext() {
+        if (isGuestBrowse()) {
+            _discoveryBundle.update { it.copy(shoppingContext = null) }
+            return
+        }
+        fashApp.recommendationRepository.shoppingContext(publicBrowse = false).fold(
+            onSuccess = { ctx ->
+                if (ctx.chipLabel() != null) {
+                    _discoveryBundle.update { cur -> cur.copy(shoppingContext = ctx) }
+                }
+            },
+            onFailure = { /* keep cached value from home-sections */ },
+        )
+    }
+
     /** Permanently hides the Home sizing banner until SharedPreferences are cleared (sign-out wipes them). */
     fun dismissSizingBanner() {
         val ctx = getApplication<Application>().applicationContext
@@ -975,6 +996,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val shell = async { reloadHomeShell() }
                     val sellers = async { loadFeaturedSellers() }
                     val sizing = async { refreshSizingBannerState() }
+                    val context = async { if (!isGuestBrowse()) refreshShoppingContext() }
                     val sections = async {
                         if (!isGuestBrowse()) loadRecommendationSections(force = false)
                     }
@@ -982,6 +1004,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     shell.await()
                     sellers.await()
                     sizing.await()
+                    context.await()
                     sections.await()
                 }
             }
@@ -1145,6 +1168,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val sellers = async { loadFeaturedSellers() }
                     val sizing = async { refreshSizingBannerState() }
                     val ux = async { if (!isGuestBrowse()) loadUxPersonalization() }
+                    val context = async { if (!isGuestBrowse()) refreshShoppingContext() }
                     val sections = async {
                         if (!isGuestBrowse()) loadRecommendationSections(force = false)
                     }
@@ -1153,6 +1177,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     sellers.await()
                     sizing.await()
                     ux.await()
+                    context.await()
                     sections.await()
                 }
             }
