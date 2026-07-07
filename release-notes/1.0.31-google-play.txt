@@ -1,0 +1,3 @@
+• Sửa lỗi build CI Google Sign-In diagnostics
+• Cập nhật google-services.json từ Firebase
+• Google Sign-In: hiển thị SHA‑1 cert khi cấu hình sai
