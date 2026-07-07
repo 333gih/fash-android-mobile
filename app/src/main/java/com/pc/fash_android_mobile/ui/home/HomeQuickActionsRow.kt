@@ -38,6 +38,7 @@ fun HomeQuickActionsRow(
     onOrders: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    includeHorizontalEdgePadding: Boolean = true,
 ) {
     if (compact) {
         HomeQuickActionsCompactRow(
@@ -45,15 +46,18 @@ fun HomeQuickActionsRow(
             onSell = onSell,
             onOrders = onOrders,
             modifier = modifier,
+            includeHorizontalEdgePadding = includeHorizontalEdgePadding,
         )
         return
     }
+    val edgeStart = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialEnd else 0.dp
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(
-                start = FashTheme.spacing.editorialStart,
-                end = FashTheme.spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 top = 4.dp,
                 bottom = 8.dp,
             ),
@@ -133,13 +137,16 @@ fun HomeQuickActionsCompactRow(
     onSell: () -> Unit,
     onOrders: () -> Unit,
     modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
 ) {
+    val edgeStart = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) FashTheme.spacing.editorialEnd else 0.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(
-                start = FashTheme.spacing.editorialStart,
-                end = FashTheme.spacing.editorialEnd,
+                start = edgeStart,
+                end = edgeEnd,
                 top = 2.dp,
                 bottom = 6.dp,
             ),

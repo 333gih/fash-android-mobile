@@ -1,3 +1,3 @@
-• Fix Google Sign-In on Play Store builds (register App signing SHA-1 in Firebase)
-• Improved Google login flow: preflight checks and account picker parity with iOS
-• More reliable social-login API routing
+• Home shortcuts: Explore, Sell, and Orders — one tap from the feed
+• Matches iOS quick actions on the Home screen
+• Stability and performance
