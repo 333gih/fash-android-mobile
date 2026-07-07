@@ -424,7 +424,7 @@ class MainActivity : ComponentActivity() {
             val onboardingSubmitting by onboardingViewModel.isSubmitting.collectAsState()
             val facebookLoginEnabled = LoginViewModel.isFacebookLoginEnabled()
             val facebookOk = LoginViewModel.isFacebookConfigured()
-            val googleOk = LoginViewModel.isGoogleConfigured()
+            val googleOk = LoginViewModel.isGoogleConfigured(this@MainActivity)
             val profileSetupBlocksShellChrome =
                 OnboardingFlowProgress.blocksShellPromosAndTours(needsOnboarding) ||
                     (isAuthenticated && onboardingStep != OnboardingStep.Completed)

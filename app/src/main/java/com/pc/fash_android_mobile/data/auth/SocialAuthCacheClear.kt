@@ -2,7 +2,6 @@ package com.pc.fash_android_mobile.data.auth
 
 import android.content.Context
 import com.facebook.login.LoginManager
-import com.pc.fash_android_mobile.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -14,8 +13,7 @@ import kotlinx.coroutines.withContext
 suspend fun clearCachedSocialSignInForLogout(applicationContext: Context) {
     withContext(Dispatchers.IO) {
         runCatching {
-            val webId = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
-            if (webId.isNotEmpty() && !webId.equals("YOUR_GOOGLE_WEB_CLIENT_ID", ignoreCase = true)) {
+            if (isGoogleWebClientIdConfigured(applicationContext)) {
                 buildGoogleSignInClient(applicationContext).signOut().await()
             }
         }

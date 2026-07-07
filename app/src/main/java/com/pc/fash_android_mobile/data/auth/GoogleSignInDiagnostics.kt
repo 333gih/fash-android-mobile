@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.pc.fash_android_mobile.BuildConfig
-import java.io.ByteArrayInputStream
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -23,7 +22,7 @@ object GoogleSignInDiagnostics {
     )
 
     fun snapshot(context: Context): Snapshot {
-        val webId = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
+        val webId = resolveGoogleWebClientId(context)
         return Snapshot(
             packageName = context.packageName,
             flavor = BuildConfig.FLAVOR,

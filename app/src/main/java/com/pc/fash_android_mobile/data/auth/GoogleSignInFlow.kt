@@ -14,14 +14,11 @@ import com.pc.fash_android_mobile.BuildConfig
  */
 object GoogleSignInFlow {
 
-    private fun isConfigured(): Boolean {
-        val id = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
-        return id.isNotEmpty() && !id.equals("YOUR_GOOGLE_WEB_CLIENT_ID", ignoreCase = true)
-    }
+    private fun isConfigured(context: Context): Boolean = isGoogleWebClientIdConfigured(context)
 
     /** Clears cached Google account so the next sign-in shows the account picker. */
     suspend fun prepareForAccountPicker(context: Context) {
-        if (!isConfigured()) return
+        if (!isConfigured(context)) return
         withContext(Dispatchers.IO) {
             runCatching { buildGoogleSignInClient(context).signOut().await() }
         }
@@ -37,6 +34,7 @@ object GoogleSignInFlow {
         launcher: ActivityResultLauncher<Intent>,
     ): LaunchResult {
         blockReasonOrNull(context)?.let { return LaunchResult.Blocked(it) }
+        if (!isConfigured(context)) return LaunchResult.NotConfigured
         prepareForAccountPicker(context)
         return runCatching {
             val client = buildGoogleSignInClient(context)

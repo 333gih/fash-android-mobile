@@ -17,6 +17,7 @@ import com.pc.fash_android_mobile.data.auth.AppAuthManager
 import com.pc.fash_android_mobile.data.auth.AuthHttpException
 import com.pc.fash_android_mobile.data.auth.GoogleSignInDiagnostics
 import com.pc.fash_android_mobile.data.auth.GoogleSignInFlow
+import com.pc.fash_android_mobile.data.auth.isGoogleWebClientIdConfigured
 import com.pc.fash_android_mobile.data.auth.clearCachedSocialSignInForLogout
 import com.pc.fash_android_mobile.data.recommendation.UxPersonalizationLocalStore
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
@@ -507,7 +508,8 @@ class LoginViewModel(
             return true
         }
 
-        fun isGoogleConfigured(): Boolean {
+        fun isGoogleConfigured(context: android.content.Context? = null): Boolean {
+            if (context != null) return isGoogleWebClientIdConfigured(context)
             val id = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
             if (id.isEmpty()) return false
             if (id.equals("YOUR_GOOGLE_WEB_CLIENT_ID", ignoreCase = true)) return false
