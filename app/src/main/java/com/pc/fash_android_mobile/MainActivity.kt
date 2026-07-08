@@ -453,6 +453,20 @@ class MainActivity : ComponentActivity() {
                 var shellWarmupComplete by remember { mutableStateOf(false) }
                 /** One-shot: cold start without session may enter guest shell; logout does not. */
                 var initialGuestShellDecided by rememberSaveable { mutableStateOf(false) }
+                // When app is opened by a notification/deep link, do not block the shell on Home warmup.
+                val pendingInboxNotificationId by fashApp.pendingInboxNotificationId.collectAsState()
+                val pendingOpenOrderId by fashApp.pendingOpenOrderId.collectAsState()
+                val pendingOpenChatConversationId by fashApp.pendingOpenChatConversationId.collectAsState()
+                val pendingDeepLinkListingId by fashApp.pendingDeepLinkListingId.collectAsState()
+                val pendingDeepLinkSellerUsername by fashApp.pendingDeepLinkSellerUsername.collectAsState()
+                val pendingOpenInviteFriends by fashApp.pendingOpenInviteFriends.collectAsState()
+                val hasPendingNotificationNavigation =
+                    pendingInboxNotificationId != null ||
+                        pendingOpenOrderId != null ||
+                        pendingOpenChatConversationId != null ||
+                        pendingDeepLinkListingId != null ||
+                        !pendingDeepLinkSellerUsername.isNullOrBlank() ||
+                        pendingOpenInviteFriends
                 LaunchedEffect(Unit) {
                     if (splashFinished) return@LaunchedEffect
                     val now = SystemClock.elapsedRealtime()
@@ -595,8 +609,35 @@ class MainActivity : ComponentActivity() {
                 }
 
                 /** Gate on Home feed before revealing the main shell; other tabs prefetch in the background (iOS parity). */
-                LaunchedEffect(splashFinished, isAuthenticated, isGuestBrowse, needsOnboarding) {
+                LaunchedEffect(
+                    splashFinished,
+                    isAuthenticated,
+                    isGuestBrowse,
+                    needsOnboarding,
+                    hasPendingNotificationNavigation,
+                ) {
                     if (!splashFinished) return@LaunchedEffect
+                    // If we were opened by a notification/deep link, mount the shell immediately so the
+                    // pending_* state can be consumed and the user lands on the correct detail screen.
+                    if (
+                        hasPendingNotificationNavigation &&
+                        (isGuestBrowse || (isAuthenticated && needsOnboarding == false))
+                    ) {
+                        if (!shellWarmupComplete) {
+                            shellWarmupComplete = true
+                            shellCoroutineScope.launch {
+                                exploreViewModel.refresh()
+                                if (isAuthenticated) {
+                                    profileViewModel.onAuthenticatedSessionReady()
+                                    profileViewModel.refresh(force = true)
+                                    ordersViewModel.refreshOrders()
+                                    chatViewModel.loadConversations()
+                                    notificationsViewModel.refreshUnreadSummary()
+                                }
+                            }
+                        }
+                        return@LaunchedEffect
+                    }
                     if (isAuthenticated && needsOnboarding != false) return@LaunchedEffect
                     if (shellWarmupComplete) return@LaunchedEffect
                     try {
@@ -905,6 +946,7 @@ class MainActivity : ComponentActivity() {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (splashFinished) {
                         val blockingShellWarmup = !shellWarmupComplete &&
+                            !hasPendingNotificationNavigation &&
                             (isGuestBrowse || (isAuthenticated && needsOnboarding == false))
                         if (blockingShellWarmup) {
                             FashWaitingScreen()

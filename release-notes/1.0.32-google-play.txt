@@ -1,3 +1,3 @@
-• Cải thiện waiting screen: không chặn action từ push/deep link
+• Cải thiện waiting screen: không chặn action khi mở từ push/deep link
 • Đảm bảo điều hướng nhanh tới inbox/order/chat/listing/seller/invite
 • Ổn định trải nghiệm mua đồ cũ thời trang cho người trẻ
