@@ -181,6 +181,7 @@ import com.pc.fash_android_mobile.deeplink.ProfileDeepLinks
 import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.data.user.UserSearchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1249,6 +1250,8 @@ class MainActivity : ComponentActivity() {
                                 isAuthenticated -> {
                                     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var listingDetailBackStack by rememberSaveable { mutableStateOf(listOf<String>()) }
+                                    var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
+                                    var exploreOverlayCloseNonce by rememberSaveable { mutableLongStateOf(0L) }
                                     val pendingDeepLink by fashApp.pendingDeepLinkListingId.collectAsState()
                                     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
                                     val pendingSellerDeepLink by fashApp.pendingDeepLinkSellerUsername.collectAsState()
@@ -1268,10 +1271,12 @@ class MainActivity : ComponentActivity() {
                                     fun closeListingDetail() {
                                         selectedListingId = null
                                         listingDetailBackStack = emptyList()
+                                        exploreOverlayCloseNonce++
                                     }
                                     fun openListingDetailFresh(listingId: String) {
                                         listingDetailBackStack = emptyList()
                                         selectedListingId = listingId
+                                        exploreOverlayCloseNonce++
                                     }
                                     fun pushListingDetail(listingId: String) {
                                         val lid = listingId.trim()
@@ -1291,6 +1296,17 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             closeListingDetail()
                                         }
+                                    }
+                                    fun openSellerShopFrom(
+                                        seller: UserSearchResult,
+                                        source: SellerShopEntrySource,
+                                        restore: SellerShopRestoreContext = SellerShopRestoreContext(),
+                                    ) {
+                                        val u = seller.username.trim()
+                                        if (u.isEmpty()) return
+                                        sellerShopEntrySource = source
+                                        sellerShopRestoreContext = restore
+                                        sellerShopUsername = u
                                     }
                                     fun openListingDetail(listingId: String, sellerId: String?) {
                                         val myId = authManager.sessionStore.read()?.userId?.trim().orEmpty()
@@ -1338,7 +1354,6 @@ class MainActivity : ComponentActivity() {
                                         showInviteFriendsScreen = true
                                         fashApp.pendingOpenInviteFriends.value = false
                                     }
-                                    var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
                                     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
                                     val pendingOpenOrderId by fashApp.pendingOpenOrderId.collectAsState()
                                     LaunchedEffect(pendingOpenOrderId) {
@@ -1416,7 +1431,9 @@ class MainActivity : ComponentActivity() {
                                             SellerShopEntrySource.OrderDetail -> {
                                                 restore.orderId?.let { selectedOrderId = it }
                                             }
-                                            else -> Unit
+                                            SellerShopEntrySource.Home,
+                                            SellerShopEntrySource.ProductDetail,
+                                            SellerShopEntrySource.None -> Unit
                                         }
                                         scope.launch {
                                             delay(100)
@@ -1748,15 +1765,17 @@ class MainActivity : ComponentActivity() {
                                                 showFollowConnections = true
                                             },
                                             onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
-                                            onFeaturedSellerClick = { seller ->
-                                                val u = seller.username.trim()
-                                                if (u.isNotEmpty()) {
-                                                    sellerShopEntrySource = SellerShopEntrySource.Explore
-                                                    sellerShopRestoreContext = SellerShopRestoreContext(
+                                            onHomeFeaturedSellerClick = { seller ->
+                                                openSellerShopFrom(seller, SellerShopEntrySource.Home)
+                                            },
+                                            onExploreFeaturedSellerClick = { seller ->
+                                                openSellerShopFrom(
+                                                    seller,
+                                                    SellerShopEntrySource.Explore,
+                                                    SellerShopRestoreContext(
                                                         exploreSection = exploreViewModel.primarySection.value,
-                                                    )
-                                                    sellerShopUsername = u
-                                                }
+                                                    ),
+                                                )
                                             },
                                             onConversationClick = { item ->
                                                 chatOrderDetailOverlayId = null
@@ -1776,6 +1795,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             exploreOverlayOpenNonce = exploreOverlayOpenNonce,
+                                            exploreOverlayCloseNonce = exploreOverlayCloseNonce,
                                             onMainTabReselectedIntercept = { tab ->
                                                 if (sellerShopUsername == null) {
                                                     false

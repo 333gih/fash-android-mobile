@@ -79,16 +79,19 @@ fun GuestMainShell(
 ) {
     val context = LocalContext.current
     var exploreOverlayOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
+    var exploreOverlayCloseNonce by rememberSaveable { mutableLongStateOf(0L) }
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.Home.ordinal) }
     var selectedListingId by rememberSaveable { mutableStateOf<String?>(null) }
     var listingDetailBackStack by rememberSaveable { mutableStateOf(listOf<String>()) }
     fun closeListingDetail() {
         selectedListingId = null
         listingDetailBackStack = emptyList()
+        exploreOverlayCloseNonce++
     }
     fun openListingDetailFresh(listingId: String) {
         listingDetailBackStack = emptyList()
         selectedListingId = listingId
+        exploreOverlayCloseNonce++
     }
     fun pushListingDetail(listingId: String) {
         val lid = listingId.trim()
@@ -240,7 +243,8 @@ fun GuestMainShell(
                 sellerShopUsername = null
                 openListingDetailFresh(lid)
             },
-            onFeaturedSellerClick = openSellerShop,
+            onHomeFeaturedSellerClick = openSellerShop,
+            onExploreFeaturedSellerClick = openSellerShop,
             onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
             onHomeEditorialPostClick = { post: HomeEditorialPostStub ->
                 val slug = post.slug.trim().ifBlank { post.id.trim() }
@@ -253,6 +257,7 @@ fun GuestMainShell(
             selectedTab = selectedTab,
             onTabChange = { selectedTab = it },
             exploreOverlayOpenNonce = exploreOverlayOpenNonce,
+            exploreOverlayCloseNonce = exploreOverlayCloseNonce,
             isGuestMode = true,
             onRequestLogin = requestLogin,
             featureTourActive = false,

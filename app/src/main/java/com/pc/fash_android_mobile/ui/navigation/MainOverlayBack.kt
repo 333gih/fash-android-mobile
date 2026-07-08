@@ -8,6 +8,8 @@ import com.pc.fash_android_mobile.ui.explore.ExplorePrimarySection
  */
 enum class SellerShopEntrySource {
     None,
+    /** Seller shop opened from Home feed (featured sellers rail, etc.). */
+    Home,
     ProductDetail,
     Explore,
     /** Chat header / order overlay in chat; restores [SellerShopRestoreContext.chatConversationId]. */

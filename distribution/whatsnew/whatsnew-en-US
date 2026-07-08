@@ -1,3 +1,3 @@
-• Improve waiting screen UX for push/deep links
-• Ensure fast navigation to inbox/order/chat/listing/seller/invite
-• Stabilize buying experience for pre-loved fashion
+• Fix back from product detail/editorial no longer jumping to Explore
+• Restore the correct previous screen when opening from Home
+• Stabilize pre-loved fashion navigation

@@ -1,0 +1,3 @@
+• Sửa back từ PDP/cẩm nang/seller shop trên Home không còn nhảy sang Explore
+• Khôi phục đúng màn hình trước khi mở overlay từ Home
+• Ổn định điều hướng mua đồ cũ thời trang

@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -176,8 +177,10 @@ fun MainNavScreen(
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     /** Explore featured sellers “See all” — full list from `GET /search/featured-sellers`. */
     onOpenFeaturedSellersAll: () -> Unit = {},
-    /** Featured seller chip on Explore — opens seller shop (`GET …/users/{username}`). */
-    onFeaturedSellerClick: (UserSearchResult) -> Unit = {},
+    /** Featured seller chip on Home — opens seller shop without restoring Explore on back. */
+    onHomeFeaturedSellerClick: (UserSearchResult) -> Unit = {},
+    /** Featured seller chip on Explore overlay — restores Explore when seller shop dismisses. */
+    onExploreFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
     notificationsViewModel: NotificationsViewModel,
     /** Ledger id from FCM tray / `fash://inbox/{id}` — opens inbox overlay and detail when non-null. */
@@ -207,6 +210,8 @@ fun MainNavScreen(
     onTabChange: (Int) -> Unit,
     /** Increment to open the Explore overlay (search + filters) from outside MainNavScreen. */
     exploreOverlayOpenNonce: Long = 0L,
+    /** Increment to force-close Explore when a fullscreen overlay (e.g. PDP) dismisses. */
+    exploreOverlayCloseNonce: Long = 0L,
     /**
      * When returning true, the default reselect reload (scroll-to-top + refresh) is skipped.
      * Use when a fullscreen overlay (e.g. seller shop) is open on top of the selected tab.
@@ -287,9 +292,18 @@ fun MainNavScreen(
         onListingClick(listingId, sellerId)
     }
 
+    var lastConsumedExploreOpenNonce by rememberSaveable { mutableLongStateOf(0L) }
     LaunchedEffect(exploreOverlayOpenNonce) {
-        if (exploreOverlayOpenNonce > 0L) {
+        if (exploreOverlayOpenNonce > lastConsumedExploreOpenNonce) {
+            lastConsumedExploreOpenNonce = exploreOverlayOpenNonce
             openExploreOverlay(false)
+        }
+    }
+    var lastConsumedExploreCloseNonce by rememberSaveable { mutableLongStateOf(0L) }
+    LaunchedEffect(exploreOverlayCloseNonce) {
+        if (exploreOverlayCloseNonce > lastConsumedExploreCloseNonce) {
+            lastConsumedExploreCloseNonce = exploreOverlayCloseNonce
+            closeExploreOverlay()
         }
     }
 
@@ -688,7 +702,7 @@ fun MainNavScreen(
                         onPromoSlideClick = onPromoSlideClick,
                         promoSlides = promoSlides,
                         onHomeEditorialPostClick = onHomeEditorialPostClick,
-                        onFeaturedSellerClick = onFeaturedSellerClick,
+                        onFeaturedSellerClick = onHomeFeaturedSellerClick,
                         onOpenFeaturedSellersAll = onOpenFeaturedSellersAll,
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
                     )
@@ -752,7 +766,7 @@ fun MainNavScreen(
                             onEditProfile = onEditProfile,
                             onShippingAddressesClick = onShippingAddressesClick,
                             onInviteFriendsClick = onInviteFriendsClick,
-                            onListingClick = onListingClick,
+                            onListingClick = navigateToListingDetail,
                             onOwnListingClick = onProfileOwnListingClick,
                             onOpenFollowConnections = onOpenFollowConnections,
                             onNavigateToExploreFromProfile = { cat, brand, aes, q, countryId, countryIso2 ->
@@ -778,7 +792,7 @@ fun MainNavScreen(
             viewModel = exploreViewModel,
             onClose = closeExploreOverlay,
             onListingClick = navigateToListingDetail,
-            onFeaturedSellerClick = onFeaturedSellerClick,
+            onFeaturedSellerClick = onExploreFeaturedSellerClick,
             onSeeAllFeaturedSellersClick = onOpenFeaturedSellersAll,
             onPromoSlideClick = onPromoSlideClick,
             promoSlides = promoSlides,
