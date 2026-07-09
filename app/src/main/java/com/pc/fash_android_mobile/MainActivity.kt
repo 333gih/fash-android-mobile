@@ -298,9 +298,13 @@ class MainActivity : ComponentActivity() {
         InviteDeepLinks.parseReferrerFromIntent(intent)?.let { fashApp.pendingReferrerUsername.value = it }
         fashApp.pendingDeepLinkListingId.value = ListingDeepLinks.parseListingIdFromIntent(intent)
         ProfileDeepLinks.parseUsernameFromIntent(intent)?.let { fashApp.pendingDeepLinkSellerUsername.value = it }
-        AccountSwitchDeepLinks.parseFromIntent(intent)?.let {
-            fashApp.requestAccountSwitchPrompt(it)
-        } ?: PushNotificationRouter.routeFromTrayTap(fashApp, intent)
+        val accountSwitch = AccountSwitchDeepLinks.parseFromIntent(intent)
+        if (accountSwitch != null) {
+            fashApp.requestAccountSwitchPrompt(accountSwitch)
+        } else if (PushNotificationRouter.isTrayTapIntent(intent)) {
+            PushNotificationRouter.routeFromTrayTap(fashApp, intent)
+            PushNotificationRouter.clearTrayRoutingExtras(intent)
+        }
         NotificationEngagementReporter.reportOpenFromIntent(fashApp.feedEventReporter, intent)
     }
 
@@ -616,6 +620,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
                     profileViewModel.onAuthenticatedSessionReady()
+                    notificationsViewModel.onAuthenticatedSessionReady()
                 }
 
                 /** Gate on Home feed before revealing the main shell; other tabs prefetch in the background (iOS parity). */
@@ -642,7 +647,7 @@ class MainActivity : ComponentActivity() {
                                     profileViewModel.refresh(force = true)
                                     ordersViewModel.refreshOrders()
                                     chatViewModel.loadConversations()
-                                    notificationsViewModel.refreshUnreadSummary()
+                                    notificationsViewModel.onAuthenticatedSessionReady()
                                 }
                             }
                         }

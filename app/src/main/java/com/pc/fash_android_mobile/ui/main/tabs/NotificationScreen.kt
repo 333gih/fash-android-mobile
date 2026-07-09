@@ -109,6 +109,8 @@ fun NotificationScreen(
     onOpenInviteFriends: () -> Unit = {},
     onPromoMainTab: (com.pc.fash_android_mobile.ui.main.MainTab) -> Unit = {},
     onPromoOpenOrders: () -> Unit = {},
+    /** Inbox API only after authenticated shell + session validation (avoids 401 on cold start). */
+    inboxLoadEnabled: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     val items by viewModel.items.collectAsState()
@@ -138,7 +140,8 @@ fun NotificationScreen(
         onDispose { viewModel.closeDetail() }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(inboxLoadEnabled) {
+        if (!inboxLoadEnabled) return@LaunchedEffect
         if (!viewModel.pushDetailLoading.value) {
             viewModel.refresh()
         }
@@ -266,6 +269,11 @@ fun NotificationScreen(
                             .fillMaxWidth(),
                     ) {
                             when {
+                                !inboxLoadEnabled -> {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = FashColors.Primary)
+                                    }
+                                }
                                 showPushDetailLoading -> {
                                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         CircularProgressIndicator(color = FashColors.Primary)

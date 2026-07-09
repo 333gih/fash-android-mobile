@@ -1,3 +1,3 @@
-• Like and save now show confirmation feedback like iOS
-• Bottom snackbar appears on Home, Explore, and product detail
-• Improved reliability when saving items to your wishlist
+• Fix notification inbox failing to load when opening the app normally
+• Inbox API waits until your session is ready (no more false errors on cold start)
+• Notification tray taps no longer re-trigger when reopening from the home screen icon

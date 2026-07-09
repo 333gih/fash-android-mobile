@@ -74,11 +74,28 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    private val _inboxApiReady = MutableStateFlow(false)
+    val inboxApiReady: StateFlow<Boolean> = _inboxApiReady.asStateFlow()
+
     init {
-        refreshUnreadSummary()
+        // Defer inbox API until [onAuthenticatedSessionReady] — avoids 401s during splash / token refresh.
     }
 
+    /** Call after splash session validation (same timing as profile shell). */
+    fun onAuthenticatedSessionReady() {
+        if (_inboxApiReady.value) return
+        _inboxApiReady.value = true
+        inboxSessionReady = true
+        refreshUnreadSummary()
+        if (_loadError.value != null && _groups.value.isEmpty() && _items.value.isEmpty()) {
+            refresh()
+        }
+    }
+
+    private var inboxSessionReady = false
+
     fun refreshUnreadSummary() {
+        if (!inboxSessionReady) return
         viewModelScope.launch {
             val n = withContext(Dispatchers.IO) {
                 userRepository.getMyNotificationsUnreadCount().getOrElse { 0 }
@@ -88,6 +105,8 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun clearCachesForSignedOutUser() {
+        inboxSessionReady = false
+        _inboxApiReady.value = false
         _groups.value = emptyList()
         _selectedGroup.value = null
         _items.value = emptyList()
@@ -161,6 +180,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun refresh() {
+        if (!inboxSessionReady) return
         if (_pushDetailLoading.value) return
         if (_selectedGroup.value == null) {
             refreshGroups()
@@ -170,6 +190,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     private fun refreshGroups() {
+        if (!inboxSessionReady) return
         viewModelScope.launch {
             if (_groups.value.isEmpty()) {
                 _isLoading.value = true
@@ -185,6 +206,10 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 refreshUnreadSummary()
             }.onFailure { e ->
                 val msg = e.message.orEmpty()
+                if (msg.contains("HTTP 401")) {
+                    _loadError.value = null
+                    return@onFailure
+                }
                 _loadError.value = msg
                 if (msg.contains("HTTP 404") || msg.contains("HTTP 503")) {
                     _inboxUnavailable.value = true
@@ -198,6 +223,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
 
     private fun refreshGroupItems() {
         val group = _selectedGroup.value ?: return
+        if (!inboxSessionReady) return
         viewModelScope.launch {
             if (_items.value.isEmpty()) {
                 _isLoading.value = true
@@ -215,6 +241,10 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 refreshUnreadSummary()
             }.onFailure { e ->
                 val msg = e.message.orEmpty()
+                if (msg.contains("HTTP 401")) {
+                    _loadError.value = null
+                    return@onFailure
+                }
                 _loadError.value = msg
                 if (msg.contains("HTTP 404") || msg.contains("HTTP 503")) {
                     _inboxUnavailable.value = true

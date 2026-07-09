@@ -224,6 +224,7 @@ fun MainNavScreen(
     isGuestMode: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
+    val inboxApiEnabled by notificationsViewModel.inboxApiReady.collectAsState()
     var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
     /** Tracks overlay visibility to refresh server unread count when user leaves the inbox. */
     var wasNotificationOverlayVisible by remember { mutableStateOf(false) }
@@ -348,13 +349,13 @@ fun MainNavScreen(
         }
     }
 
-    LaunchedEffect(inboxOpenRequestGeneration) {
-        if (inboxOpenRequestGeneration <= 0L || isGuestMode) return@LaunchedEffect
+    LaunchedEffect(inboxOpenRequestGeneration, inboxApiEnabled) {
+        if (inboxOpenRequestGeneration <= 0L || isGuestMode || !inboxApiEnabled) return@LaunchedEffect
         showNotificationScreen = true
     }
 
-    LaunchedEffect(pendingInboxNotificationIdToOpen) {
-        if (isGuestMode) return@LaunchedEffect
+    LaunchedEffect(pendingInboxNotificationIdToOpen, inboxApiEnabled) {
+        if (isGuestMode || !inboxApiEnabled) return@LaunchedEffect
         val id = pendingInboxNotificationIdToOpen?.trim()?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         showNotificationScreen = true
         notificationsViewModel.openInboxDetailFromPush(id)
@@ -822,6 +823,7 @@ fun MainNavScreen(
         NotificationScreen(
             modifier = Modifier.fillMaxSize(),
             viewModel = notificationsViewModel,
+            inboxLoadEnabled = inboxApiEnabled,
             onBack = { showNotificationScreen = false },
             onPromoSlideClick = onPromoSlideClick,
             promoSlides = promoSlides,

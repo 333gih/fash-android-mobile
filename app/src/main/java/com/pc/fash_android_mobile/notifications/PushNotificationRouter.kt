@@ -3,10 +3,12 @@ package com.pc.fash_android_mobile.notifications
 import android.content.Intent
 import android.net.Uri
 import com.pc.fash_android_mobile.FashApplication
+import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.InviteDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.deeplink.ProfileDeepLinks
+import com.pc.fash_android_mobile.data.recommendation.NotificationEngagementReporter
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 
 /**
@@ -16,6 +18,58 @@ import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 object PushNotificationRouter {
 
     private const val FCM_EXTRA_PREFIX = "fcm."
+
+    private val TRAY_ROUTING_EXTRA_KEYS = setOf(
+        "deep_link",
+        "user_notification_id",
+        "conversation_id",
+        "conversationId",
+        "order_id",
+        "marketplace_order_id",
+        "nav_target",
+        "navTarget",
+        "type",
+        "event",
+        NotificationEngagementReporter.EXTRA_NOTIFICATION_ID,
+        NotificationEngagementReporter.EXTRA_NOTIFICATION_LISTING_ID,
+        NotificationEngagementReporter.EXTRA_NOTIFICATION_SCENARIO_ID,
+    )
+
+    /**
+     * True only for system-tray / FCM tap intents — not normal launcher cold start.
+     * Prevents re-routing stale notification extras when the user opens the app from the icon.
+     */
+    fun isTrayTapIntent(intent: Intent?): Boolean {
+        intent ?: return false
+        if (NotificationEngagementReporter.isNotificationLaunchIntent(intent)) return true
+        if (fcmDataFromIntent(intent).isNotEmpty()) return true
+        if (!intent.getStringExtra(AccountSwitchDeepLinks.EXTRA_PENDING_USER_ID).isNullOrBlank()) {
+            return true
+        }
+        val data = intent.data
+        if (data != null && InboxDeepLinks.parseNotificationIdFromUri(data) != null) return true
+        return false
+    }
+
+    /** Strip tray payload so a later MAIN/LAUNCHER resume cannot re-open inbox navigation. */
+    fun clearTrayRoutingExtras(intent: Intent?) {
+        intent ?: return
+        val extras = intent.extras ?: return
+        for (key in extras.keySet().toList()) {
+            if (key.startsWith(FCM_EXTRA_PREFIX) || key in TRAY_ROUTING_EXTRA_KEYS) {
+                intent.removeExtra(key)
+            }
+        }
+        val deepLink = intent.getStringExtra("deep_link")?.trim().orEmpty()
+        if (deepLink.contains("inbox/", ignoreCase = true)) {
+            intent.removeExtra("deep_link")
+        }
+        intent.data?.let { uri ->
+            if (InboxDeepLinks.parseNotificationIdFromUri(uri) != null) {
+                intent.data = null
+            }
+        }
+    }
 
     /** Copies FCM data map onto the tray [Intent] so tap routing has conversation/order context. */
     fun attachFcmDataToIntent(intent: Intent, data: Map<String, String>) {

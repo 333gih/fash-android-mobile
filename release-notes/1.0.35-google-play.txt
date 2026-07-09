@@ -1,0 +1,5 @@
+Notification inbox cold-start fix
+- Defer inbox API until onAuthenticatedSessionReady (after splash token validation)
+- Only route FCM/tray intents on actual notification taps, not launcher MAIN
+- Clear tray extras after routing to prevent stale re-navigation
+- Gate NotificationScreen load on inboxApiReady; ignore transient HTTP 401
