@@ -341,22 +341,33 @@ class MainActivity : ComponentActivity() {
         setContent {
             val snackbarHostState = remember { SnackbarHostState() }
             val enqueueSnackbarSerial = rememberSerialSnackbarChannel(snackbarHostState)
+            val enqueueAppSnackbar = remember(enqueueSnackbarSerial) {
+                { message: String ->
+                    enqueueSnackbarSerial {
+                        showSnackbar(
+                            message = message,
+                            withDismissAction = true,
+                            duration = SnackbarDuration.Long,
+                        )
+                    }
+                }
+            }
             LaunchedEffect(Unit) {
-                launch { loginViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { onboardingViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { homeViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { exploreViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { productDetailViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { postViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { editProfileViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { chatViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { chatDetailViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { checkoutViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { ordersViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { orderDetailViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { addressBookViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { sellerProfileViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
-                launch { profileViewModel.events.collect { enqueueSnackbarSerial { showSnackbar(it) } } }
+                launch { loginViewModel.events.collect(enqueueAppSnackbar) }
+                launch { onboardingViewModel.events.collect(enqueueAppSnackbar) }
+                launch { homeViewModel.events.collect(enqueueAppSnackbar) }
+                launch { exploreViewModel.events.collect(enqueueAppSnackbar) }
+                launch { productDetailViewModel.events.collect(enqueueAppSnackbar) }
+                launch { postViewModel.events.collect(enqueueAppSnackbar) }
+                launch { editProfileViewModel.events.collect(enqueueAppSnackbar) }
+                launch { chatViewModel.events.collect(enqueueAppSnackbar) }
+                launch { chatDetailViewModel.events.collect(enqueueAppSnackbar) }
+                launch { checkoutViewModel.events.collect(enqueueAppSnackbar) }
+                launch { ordersViewModel.events.collect(enqueueAppSnackbar) }
+                launch { orderDetailViewModel.events.collect(enqueueAppSnackbar) }
+                launch { addressBookViewModel.events.collect(enqueueAppSnackbar) }
+                launch { sellerProfileViewModel.events.collect(enqueueAppSnackbar) }
+                launch { profileViewModel.events.collect(enqueueAppSnackbar) }
             }
 
             val email by loginViewModel.email.collectAsState()
@@ -379,10 +390,8 @@ class MainActivity : ComponentActivity() {
             // Show snackbar when the server force-expires the session, then navigate to login
             LaunchedEffect(sessionExpiredMessage) {
                 val msg = sessionExpiredMessage ?: return@LaunchedEffect
-                enqueueSnackbarSerial {
-                    showSnackbar(msg)
-                    authManager.clearSessionExpiredMessage()
-                }
+                enqueueAppSnackbar(msg)
+                authManager.clearSessionExpiredMessage()
             }
             // Not saveable: a persisted false would skip re-fetching access-status after process restore (wrong home).
             var needsOnboarding by remember { mutableStateOf<Boolean?>(null) }
@@ -2604,13 +2613,6 @@ class MainActivity : ComponentActivity() {
                                     showOnboardingProgress = false,
                                 )
                             }
-                            FashSnackbarHost(
-                                hostState = snackbarHostState,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth(),
-                                additionalBottomInset = snackbarBottomChromeInset,
-                            )
                         }
                         }
                     } else {
@@ -2867,6 +2869,25 @@ class MainActivity : ComponentActivity() {
                     onDismissAll = { fashApp.uiDialog.dismissAll() },
                     bottomOverlayInset = welcomeBottomInset,
                 )
+                val globalSnackbarBottomInset = when {
+                    isAuthenticated && needsOnboarding == false -> snackbarBottomChromeInset
+                    isGuestBrowse -> MainNavBottomBarOverlayInset
+                    else -> 0.dp
+                }
+                if (splashFinished) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(150f),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
+                        FashSnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier.fillMaxWidth(),
+                            additionalBottomInset = globalSnackbarBottomInset,
+                        )
+                    }
+                }
             }
             }
         }

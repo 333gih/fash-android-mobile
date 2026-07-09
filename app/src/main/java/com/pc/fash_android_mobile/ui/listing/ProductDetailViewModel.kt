@@ -15,6 +15,8 @@ import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.components.FeedEngagementFeedback
+import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -118,7 +120,7 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _isOpeningChat = MutableStateFlow(false)
     val isOpeningChat: StateFlow<Boolean> = _isOpeningChat.asStateFlow()
 
-    private val _events = MutableSharedFlow<String>()
+    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events = _events.asSharedFlow()
 
     private var activeListingId: String = ""
@@ -543,14 +545,11 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                 onSuccess = { saved ->
                     _detail.update { it?.copy(isSaved = saved) }
                     if (saved) feedEventReporter.save(d.id, surface = "pdp")
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.saveMessageRes(saved))
                 },
                 onFailure = {
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )
@@ -580,14 +579,11 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                         )
                     }
                     if (liked) feedEventReporter.like(d.id, surface = "pdp")
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.likeMessageRes(liked))
                 },
                 onFailure = {
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )
@@ -614,14 +610,11 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                             likeCount = (it.likeCount + delta).coerceAtLeast(0),
                         )
                     }
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.likeMessageRes(liked))
                 },
                 onFailure = {
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )
@@ -648,14 +641,11 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
                             saveCount = (it.saveCount + delta).coerceAtLeast(0),
                         )
                     }
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.saveMessageRes(saved))
                 },
                 onFailure = {
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )

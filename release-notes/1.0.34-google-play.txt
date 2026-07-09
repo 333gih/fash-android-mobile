@@ -1,0 +1,4 @@
+Like/save feedback (iOS parity)
+- Show bottom confirmation snackbar when liking or saving listings
+- Global overlay host so feedback is visible above Home, Explore, and PDP
+- Reliable event delivery (no dropped tryEmit messages)

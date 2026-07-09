@@ -12,6 +12,8 @@ import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.ui.components.FeedEngagementFeedback
+import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
@@ -178,7 +180,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     private val _followingIds = MutableStateFlow<Set<String>>(emptySet())
     val followingIds: StateFlow<Set<String>> = _followingIds.asStateFlow()
-    private val _events = MutableSharedFlow<String>()
+    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events = _events.asSharedFlow()
 
     /** Bottom nav: tap Explore again while Explore is already selected — scroll feed to top. */
@@ -1742,14 +1744,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         )
                     }
                     if (liked) feedEventReporter.like(item.id, surface = "explore")
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.likeMessageRes(liked))
                 },
                 onFailure = {
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )
@@ -1775,14 +1774,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         )
                     }
                     if (saved) feedEventReporter.save(item.id, surface = "explore")
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.saveMessageRes(saved))
                 },
                 onFailure = {
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         it.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )

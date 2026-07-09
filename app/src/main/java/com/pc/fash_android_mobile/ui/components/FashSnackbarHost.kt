@@ -94,6 +94,11 @@ fun inferFashSnackbarKind(message: String): FashSnackbarKind {
         "có thể mua lại",
         "review sent",
         "đánh giá",
+        "yêu thích",
+        "mong muốn",
+        "wishlist",
+        "đã theo dõi",
+        "following",
     )
     if (successHints.any { m.contains(it) }) return FashSnackbarKind.Success
     return FashSnackbarKind.Info

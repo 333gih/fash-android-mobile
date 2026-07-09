@@ -16,6 +16,8 @@ import com.pc.fash_android_mobile.data.recommendation.profileTabKeyFromIndex
 import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.UserAccessStatus
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.components.FeedEngagementFeedback
+import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
@@ -82,7 +84,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _loadError = MutableStateFlow(false)
     val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
 
-    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
     private val _meetingSchedulingReverifyRequired = MutableStateFlow(false)
@@ -419,14 +421,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     _rejectedListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
                     _soldListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
                     _wishlistListings.update { list -> list.map { if (it.id == item.id) patch(it) else it } }
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (liked) R.string.listing_like_added_snackbar else R.string.listing_like_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.likeMessageRes(liked))
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         e.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )
@@ -469,14 +468,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     }
-                    _events.tryEmit(
-                        getApplication<Application>().getString(
-                            if (saved) R.string.listing_save_added_snackbar else R.string.listing_save_removed_snackbar,
-                        ),
-                    )
+                    emitSnackbarMessage(_events, FeedEngagementFeedback.saveMessageRes(saved))
                 },
                 onFailure = { e ->
-                    _events.tryEmit(
+                    emitSnackbarMessage(
+                        _events,
                         e.message?.takeIf { m -> m.isNotBlank() }
                             ?: getApplication<Application>().getString(R.string.feed_action_error),
                     )
