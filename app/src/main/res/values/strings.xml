@@ -376,6 +376,10 @@
     <string name="home_hunt_today_title">Săn đồ hôm nay</string>
     <string name="home_hunt_today_subtitle">Đang hot trên Fash — lướt nhanh trước khi hết</string>
     <string name="home_hunt_today_see_all">Xem tất cả</string>
+    <string name="home_quick_actions_title">Mua &amp; bán nhanh</string>
+    <string name="home_quick_explore">Khám phá</string>
+    <string name="home_quick_sell">Đăng bán</string>
+    <string name="home_quick_orders">Đơn hàng</string>
     <string name="home_follow_empty_hint">Theo vài shop để thấy tin mới ở đây.</string>
     <string name="home_follow_empty_cta_featured">Khám phá shop nổi bật</string>
     <string name="home_brand_marketplace">FASH MARKETPLACE</string>

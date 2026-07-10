@@ -345,6 +345,10 @@
     <string name="home_hunt_today_title">Hunt today</string>
     <string name="home_hunt_today_subtitle">Trending on Fash — scroll before it\'s gone</string>
     <string name="home_hunt_today_see_all">See all</string>
+    <string name="home_quick_actions_title">Buy &amp; sell faster</string>
+    <string name="home_quick_explore">Explore</string>
+    <string name="home_quick_sell">Sell</string>
+    <string name="home_quick_orders">Orders</string>
     <string name="home_follow_empty_hint">Follow a few shops to see their new listings here.</string>
     <string name="home_follow_empty_cta_featured">Browse featured shops</string>
     <string name="home_brand_marketplace">FASH MARKETPLACE</string>

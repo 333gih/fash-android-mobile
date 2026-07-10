@@ -1,3 +1,3 @@
-• Sửa lỗi không tải được hộp thư thông báo khi mở app bình thường
-• API inbox chỉ gọi sau khi phiên đăng nhập sẵn sàng (không còn lỗi giả khi cold start)
-• Bấm icon app không còn mở lại thông báo cũ từ lần tap tray trước
+• Home: hàng Mua & bán nhanh (Khám phá / Đăng bán / Đơn hàng) hiện cả khi chưa đăng nhập
+• Tab feed luôn ghim trên cùng khi cuộn — giống iOS
+• Ổn định và hiệu năng

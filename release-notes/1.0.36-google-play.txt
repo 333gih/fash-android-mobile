@@ -1,0 +1,1 @@
+Home: quick actions (Explore / Sell / Orders) visible for guests; feed tabs stay pinned when scrolling.

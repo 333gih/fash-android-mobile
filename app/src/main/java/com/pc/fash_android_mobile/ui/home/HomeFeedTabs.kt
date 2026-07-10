@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Search
 import com.pc.fash_android_mobile.data.recommendation.HomeExploreShortcut
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
@@ -42,7 +43,6 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -182,6 +182,9 @@ fun HomeFeedTabHost(
     onDismissSizingBanner: () -> Unit,
     onOpenSizingSetup: (() -> Unit)?,
     buyerStats: BuyerHomeStats,
+    onQuickExplore: () -> Unit,
+    onQuickSell: () -> Unit,
+    onQuickOrders: () -> Unit,
     onDeliveringJourneyClick: () -> Unit,
     onSavedJourneyClick: () -> Unit,
     onInReviewJourneyClick: () -> Unit,
@@ -233,20 +236,33 @@ fun HomeFeedTabHost(
     val selectedVisualIndex = tabs.indexOf(safeSelected).coerceAtLeast(0)
     val showJourneyRow = !isGuestBrowse
     val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
-    val tabRowIndex = (if (!shoppingContextChip.isNullOrBlank()) 1 else 0) +
+    val tabRowIndex = 1 +
+        (if (!shoppingContextChip.isNullOrBlank()) 1 else 0) +
         (if (showJourneyRow) 1 else 0) +
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
         (if (hasFeaturedSellersBlock) 1 else 0) +
         (if (showExploreShortcut) 1 else 0)
     val listingStartIndex = tabRowIndex + 1
     val analyticsSurface = safeSelected.analyticsSurface
-    val showStickyTabs by remember(tabRowIndex) {
-        derivedStateOf {
-            val layoutInfo = gridState.layoutInfo
-            if (layoutInfo.visibleItemsInfo.isEmpty()) return@derivedStateOf false
-            !layoutInfo.visibleItemsInfo.any { it.index == tabRowIndex }
+    var stickyTabsLatch by remember(tabRowIndex) { mutableStateOf(false) }
+    LaunchedEffect(gridState, tabRowIndex) {
+        snapshotFlow {
+            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
         }
+            .distinctUntilChanged()
+            .collect { (firstIndex, firstOffset) ->
+                val tabsFullyVisible = firstIndex < tabRowIndex ||
+                    (firstIndex == tabRowIndex && firstOffset <= 4)
+                if (tabsFullyVisible) {
+                    stickyTabsLatch = false
+                } else if (firstIndex > tabRowIndex ||
+                    (firstIndex == tabRowIndex && firstOffset > 4)
+                ) {
+                    stickyTabsLatch = true
+                }
+            }
     }
+    val showStickyTabs = stickyTabsLatch
 
     LaunchedEffect(isGuestBrowse, tabs) {
         if (selectedTab !in tabs) {
@@ -299,6 +315,16 @@ fun HomeFeedTabHost(
             horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
             verticalItemSpacing = FashTheme.spacing.spacing2,
         ) {
+            item(span = StaggeredGridItemSpan.FullLine, key = "home_quick_actions") {
+                HomeQuickActionsRow(
+                    onExplore = onQuickExplore,
+                    onSell = onQuickSell,
+                    onOrders = onQuickOrders,
+                    includeHorizontalEdgePadding = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             if (!shoppingContextChip.isNullOrBlank()) {
                 item(span = StaggeredGridItemSpan.FullLine, key = "home_shopping_context_chip") {
                     val scheme = MaterialTheme.colorScheme
@@ -494,21 +520,26 @@ fun HomeFeedTabHost(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .zIndex(1f),
+                    .zIndex(20f),
                 color = scheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 2.dp,
             ) {
-                HomeFeedTabSwitcher(
-                    tabs = tabs,
-                    selectedIndex = tabs.indexOf(safeSelected).coerceAtLeast(0),
-                    isGuestBrowse = isGuestBrowse,
-                    onSelect = { index -> onTabSelected(tabs[index]) },
-                    modifier = Modifier.padding(
-                        start = FashTheme.spacing.editorialStart,
-                        end = FashTheme.spacing.editorialEnd,
-                    ),
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HomeFeedTabSwitcher(
+                        tabs = tabs,
+                        selectedIndex = tabs.indexOf(safeSelected).coerceAtLeast(0),
+                        isGuestBrowse = isGuestBrowse,
+                        onSelect = { index -> onTabSelected(tabs[index]) },
+                        modifier = Modifier.padding(
+                            start = FashTheme.spacing.editorialStart,
+                            end = FashTheme.spacing.editorialEnd,
+                        ),
+                    )
+                    HorizontalDivider(
+                        color = scheme.outlineVariant.copy(alpha = 0.35f),
+                    )
+                }
             }
         }
     }
