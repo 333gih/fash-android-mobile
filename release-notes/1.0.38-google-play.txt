@@ -1,0 +1,1 @@
+Fix notification inbox failing on first open: defer API until session is ready, auto-retry transient auth/network errors.

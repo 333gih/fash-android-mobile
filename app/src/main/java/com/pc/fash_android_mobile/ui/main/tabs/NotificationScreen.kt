@@ -142,9 +142,7 @@ fun NotificationScreen(
 
     LaunchedEffect(inboxLoadEnabled) {
         if (!inboxLoadEnabled) return@LaunchedEffect
-        if (!viewModel.pushDetailLoading.value) {
-            viewModel.refresh()
-        }
+        viewModel.ensureInboxLoadedOnScreenOpen()
     }
 
     LaunchedEffect(Unit) {

@@ -1,3 +1,3 @@
-• Removed Home quick-actions row — matches iOS
-• Feed tabs still pin while scrolling
+• Notification inbox loads reliably on first open with automatic retry
+• Opening from push or the bell icon is more stable
 • Stability and performance

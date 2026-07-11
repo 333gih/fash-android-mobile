@@ -517,6 +517,10 @@ class MainActivity : ComponentActivity() {
                             fashApp.isGuestBrowseActive = true
                         }
                     }
+                    if (authenticated) {
+                        profileViewModel.onAuthenticatedSessionReady()
+                        notificationsViewModel.onAuthenticatedSessionReady()
+                    }
                     splashFinished = true
                 }
 
@@ -668,7 +672,7 @@ class MainActivity : ComponentActivity() {
                                 profileViewModel.refresh(force = true)
                                 ordersViewModel.refreshOrders()
                                 chatViewModel.loadConversations()
-                                notificationsViewModel.refreshUnreadSummary()
+                                notificationsViewModel.onAuthenticatedSessionReady()
                             }
                         }
                     }
