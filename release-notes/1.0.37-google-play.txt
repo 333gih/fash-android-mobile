@@ -1,0 +1,1 @@
+Remove Home quick-actions row (Explore / Sell / Orders) to match iOS; sticky feed tabs unchanged.
