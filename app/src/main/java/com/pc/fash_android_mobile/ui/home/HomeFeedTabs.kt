@@ -241,9 +241,8 @@ fun HomeFeedTabHost(
     val listingStartIndex = tabRowIndex + 1
     val analyticsSurface = safeSelected.analyticsSurface
     var stickyTabsLatch by remember(tabRowIndex) { mutableStateOf(false) }
-    // Only pin tabs when header blocks exist above the tab row; guests often have tabRowIndex 0
-    // which caused tabs to latch immediately and blocked scrolling back to featured sellers / top.
-    val enableStickyTabs = tabRowIndex > 0
+    // Guests: never pin tabs — featured sellers above tabs caused sticky latch and blocked scroll to top.
+    val enableStickyTabs = !isGuestBrowse && tabRowIndex > 0
     LaunchedEffect(gridState, tabRowIndex, enableStickyTabs) {
         if (!enableStickyTabs) {
             stickyTabsLatch = false
@@ -281,14 +280,15 @@ fun HomeFeedTabHost(
 
     LaunchedEffect(onScrollToTopRequest) {
         onScrollToTopRequest.collect {
+            stickyTabsLatch = false
             gridState.animateScrollToItem(0)
         }
     }
 
-    LaunchedEffect(onScrollToFeedTopRequest, tabRowIndex, isGuestBrowse) {
+    LaunchedEffect(onScrollToFeedTopRequest, tabRowIndex) {
         onScrollToFeedTopRequest.collect {
-            val targetIndex = if (isGuestBrowse) 0 else tabRowIndex
-            gridState.animateScrollToItem(targetIndex)
+            stickyTabsLatch = false
+            gridState.animateScrollToItem(tabRowIndex)
         }
     }
 
