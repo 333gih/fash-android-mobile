@@ -94,6 +94,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.guest.GuestTopBarSignInAction
 import com.pc.fash_android_mobile.ui.guest.GuestTabPlaceholder
 import com.pc.fash_android_mobile.ui.onboarding.AppFeatureTourOverlay
 import com.pc.fash_android_mobile.ui.onboarding.AppTourStep
@@ -528,12 +529,14 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
+                    onGuestSignIn = openGuestSignIn,
                 )
                 MainTab.Profile -> ProfileTopBar(
                     inboxUnreadCount = if (isGuestMode) 0 else inboxUnreadTotal,
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
+                    onGuestSignIn = openGuestSignIn,
                     onLogout = onLogout,
                     onOpenSettings = {
                         showNotificationScreen = false
@@ -546,6 +549,7 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
+                    onGuestSignIn = openGuestSignIn,
                     searchHintAnimation = true,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
@@ -556,6 +560,7 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
+                    onGuestSignIn = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -565,6 +570,7 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
+                    onGuestSignIn = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -574,6 +580,7 @@ fun MainNavScreen(
                     onSearchClick = openExploreSearch,
                     onNotificationsClick = openNotifications,
                     showGuestSignIn = isGuestMode,
+                    onGuestSignIn = openGuestSignIn,
                     tourTopBarAnchorsEnabled = featureTourActive,
                     onTourTopActionsPositioned = onTourTopActionsPositioned,
                 )
@@ -935,6 +942,7 @@ private fun ProfileTopBar(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     showGuestSignIn: Boolean = false,
+    onGuestSignIn: () -> Unit = {},
     onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
     isLoggingOut: Boolean,
@@ -950,7 +958,9 @@ private fun ProfileTopBar(
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            if (!showGuestSignIn) {
+            if (showGuestSignIn) {
+                GuestTopBarSignInAction(onClick = onGuestSignIn)
+            } else {
                 FashInboxNotificationIconButton(
                     unreadCount = inboxUnreadCount,
                     onClick = onNotificationsClick,
@@ -999,6 +1009,7 @@ private fun HomeTopBar(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     showGuestSignIn: Boolean = false,
+    onGuestSignIn: () -> Unit = {},
     searchHintAnimation: Boolean = true,
     tourTopBarAnchorsEnabled: Boolean = false,
     onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
@@ -1071,7 +1082,9 @@ private fun HomeTopBar(
                                 }
                             }
                         }
-                        if (!showGuestSignIn) {
+                        if (showGuestSignIn) {
+                            GuestTopBarSignInAction(onClick = onGuestSignIn)
+                        } else {
                             FashInboxNotificationIconButton(
                                 unreadCount = inboxUnreadCount,
                                 onClick = onNotificationsClick,
@@ -1096,6 +1109,7 @@ private fun MainTopBar(
     onSearchClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     showGuestSignIn: Boolean = false,
+    onGuestSignIn: () -> Unit = {},
     searchHintAnimation: Boolean = false,
     tourTopBarAnchorsEnabled: Boolean = false,
     onTourTopActionsPositioned: (LayoutCoordinates?) -> Unit = {},
@@ -1130,7 +1144,9 @@ private fun MainTopBar(
                             )
                         }
                     }
-                    if (!showGuestSignIn) {
+                    if (showGuestSignIn) {
+                        GuestTopBarSignInAction(onClick = onGuestSignIn)
+                    } else {
                         FashInboxNotificationIconButton(
                             unreadCount = inboxUnreadCount,
                             onClick = onNotificationsClick,
