@@ -7,7 +7,7 @@ import java.util.Locale
 object NotificationEngagementReporter {
     fun reportOpen(reporter: FeedEventReporter, data: Map<String, String>?) {
         val listingId = firstString(data, "listing_id", "listingId")
-        val scenarioId = firstString(data, "scenario_id", "scenarioId")
+        val scenarioId = firstString(data, "scenario_id", "scenarioId", "experiment_id")
         reporter.notificationOpen(listingId = listingId, scenarioId = scenarioId)
     }
 
@@ -31,6 +31,9 @@ object NotificationEngagementReporter {
         firstString(data, "scenario_id", "scenarioId")?.let {
             intent.putExtra(EXTRA_NOTIFICATION_SCENARIO_ID, it)
         }
+        firstString(data, "type", "payload_type")?.let {
+            intent.putExtra("notification_payload_type", it)
+        }
     }
 
     private fun notificationDataFromIntent(intent: Intent): Map<String, String> {
@@ -40,6 +43,9 @@ object NotificationEngagementReporter {
         }
         intent.getStringExtra(EXTRA_NOTIFICATION_SCENARIO_ID)?.trim()?.takeIf { it.isNotEmpty() }?.let {
             out["scenario_id"] = it
+        }
+        intent.getStringExtra("notification_payload_type")?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            out["payload_type"] = it
         }
         return out
     }
