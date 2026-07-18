@@ -22,68 +22,55 @@ class FeedEventReporter(
     private val lock = Any()
     private var debouncedFlushJob: Job? = null
 
-    fun impression(listingId: String, surface: String, position: Int = 0, dwellMs: Int? = null) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "impression",
-                position = position,
-                dwellMs = dwellMs,
-            ),
+    private fun payload(
+        listingId: String,
+        surface: String,
+        eventType: String,
+        position: Int = 0,
+        dwellMs: Int? = null,
+        experimentId: String? = null,
+    ): FeedEventPayload {
+        val resolvedExperimentId = experimentId
+            ?: if (RecExperimentContext.isRecommendationSurface(surface)) {
+                RecExperimentContext.experimentIdForFeedEvents()
+            } else {
+                null
+            }
+        return FeedEventPayload(
+            listingId = listingId,
+            surface = surface,
+            eventType = eventType,
+            position = position,
+            dwellMs = dwellMs,
+            experimentId = resolvedExperimentId,
         )
     }
 
+    fun impression(listingId: String, surface: String, position: Int = 0, dwellMs: Int? = null) {
+        enqueue(payload(listingId, surface, "impression", position, dwellMs))
+    }
+
     fun click(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "click",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "click", position))
         flush()
     }
 
     /** User opened the quick-look bottom sheet (lower intent than a direct PDP click). */
     fun previewOpen(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "preview_open",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "preview_open", position))
         flush()
     }
 
     /** User closed quick look without opening PDP/chat — [dwellMs] drives taste weight server-side. */
     fun previewDismiss(listingId: String, surface: String, position: Int = 0, dwellMs: Int) {
         if (dwellMs <= 0) return
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "preview_dismiss",
-                position = position,
-                dwellMs = dwellMs,
-            ),
-        )
+        enqueue(payload(listingId, surface, "preview_dismiss", position, dwellMs))
         flush()
     }
 
     /** User continued from quick look to full product detail. */
     fun previewDetail(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "preview_detail",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "preview_detail", position))
         flush()
     }
 
@@ -93,15 +80,7 @@ class FeedEventReporter(
      */
     fun dwell(listingId: String, surface: String, position: Int = 0, dwellMs: Int) {
         if (dwellMs <= 0) return
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "dwell",
-                position = position,
-                dwellMs = dwellMs,
-            ),
-        )
+        enqueue(payload(listingId, surface, "dwell", position, dwellMs))
     }
 
     /**
@@ -109,27 +88,13 @@ class FeedEventReporter(
      * (see core-service feed_events normalization). Flushed immediately so taste refresh sees it.
      */
     fun save(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "save",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "save", position))
         flush()
     }
 
     /** Lightweight affection signal. Less weight than `save` but stronger than `click`. */
     fun like(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "like",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "like", position))
         flush()
     }
 
@@ -138,14 +103,7 @@ class FeedEventReporter(
      * FROM (e.g. "pdp", "explore_grid", "home_for_you").
      */
     fun share(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "share",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "share", position))
         flush()
     }
 
@@ -154,14 +112,7 @@ class FeedEventReporter(
      * collect. Flushed eagerly.
      */
     fun chatInitiate(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "chat_initiate",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "chat_initiate", position))
         flush()
     }
 
@@ -170,26 +121,13 @@ class FeedEventReporter(
      * backend can attribute the signal to a listing surface for content-based taste building.
      */
     fun followSeller(listingId: String, surface: String, position: Int = 0) {
-        enqueue(
-            FeedEventPayload(
-                listingId = listingId,
-                surface = surface,
-                eventType = "follow_seller",
-                position = position,
-            ),
-        )
+        enqueue(payload(listingId, surface, "follow_seller", position))
         flush()
     }
 
     /** One foreground session signal — surface [FeedSurfaces.APP_OPEN]. */
     fun appOpen() {
-        enqueue(
-            FeedEventPayload(
-                listingId = FeedSurfaces.SESSION_SENTINEL_LISTING_ID,
-                surface = FeedSurfaces.APP_OPEN,
-                eventType = "click",
-            ),
-        )
+        enqueue(payload(FeedSurfaces.SESSION_SENTINEL_LISTING_ID, FeedSurfaces.APP_OPEN, "click"))
         flush()
     }
 
@@ -201,7 +139,7 @@ class FeedEventReporter(
         val resolvedListingId = listingId?.trim()?.takeIf { it.isNotEmpty() }
             ?: FeedSurfaces.SESSION_SENTINEL_LISTING_ID
         enqueue(
-            FeedEventPayload(
+            payload(
                 listingId = resolvedListingId,
                 surface = FeedSurfaces.NOTIFICATION_OPEN,
                 eventType = "click",

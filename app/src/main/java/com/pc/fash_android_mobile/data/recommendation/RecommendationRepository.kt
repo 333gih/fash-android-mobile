@@ -93,8 +93,9 @@ class RecommendationRepository(
         } else {
             AppEnvironment.apiPath("api/v1/recommendations/explore-listings")
         }
-        val body = executeGet("$path?${q.joinToString("&")}", publicBrowse)
-        ListingFeedJsonParser.parseFeedArray(body)
+        val response = executeGetWithResponse("$path?${q.joinToString("&")}", publicBrowse)
+        RecExperimentContext.applyResponseHeaders(response.headers)
+        ListingFeedJsonParser.parseFeedArray(response.body)
     }
 
     fun homeSections(
@@ -118,9 +119,11 @@ class RecommendationRepository(
         sizingMode?.takeIf { it.isNotBlank() && !it.equals("all", ignoreCase = true) }
             ?.let { q.add("sizing_mode=${enc(it.trim())}") }
         val url = "$path?${q.joinToString("&")}"
-        val body = executeGet(url, publicBrowse)
-        val root = JSONObject(body)
+        val response = executeGetWithResponse(url, publicBrowse)
+        val root = JSONObject(response.body)
         val data = root.optJSONObject("data") ?: root
+        RecExperimentContext.parseMeta(data)
+        RecExperimentContext.applyResponseHeaders(response.headers)
         HomeRecommendationSections(
             huntToday = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("hunt_today")),
             forYou = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("for_you")),
@@ -179,14 +182,19 @@ class RecommendationRepository(
         }
     }
 
-    private fun executeGet(url: String, publicBrowse: Boolean): String {
+    private data class GetResponse(val body: String, val headers: okhttp3.Headers)
+
+    private fun executeGetWithResponse(url: String, publicBrowse: Boolean): GetResponse {
         val req = Request.Builder().url(url).get().build()
         return client(publicBrowse).newCall(req).execute().use { resp ->
             val text = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) error("HTTP ${resp.code}: $text")
-            text
+            GetResponse(body = text, headers = resp.headers)
         }
     }
+
+    private fun executeGet(url: String, publicBrowse: Boolean): String =
+        executeGetWithResponse(url, publicBrowse).body
 
     fun uxPersonalization(clientHour: Int? = null): Result<UxPersonalizationBundle> = runCatching {
         val path = AppEnvironment.apiPath("api/v1/recommendations/ux-personalization")
