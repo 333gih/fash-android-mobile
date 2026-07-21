@@ -22,9 +22,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.SnackbarHostState
 import android.content.Intent
 import android.net.Uri
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.content.ContextCompat
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.data.locale.AppLocale
+import com.pc.fash_android_mobile.notifications.GuestLocalReengagementScheduler
+import com.pc.fash_android_mobile.notifications.GuestReengagementLifecycleObserver
 import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.toFashPromoSlideDef
@@ -38,6 +46,7 @@ import com.pc.fash_android_mobile.ui.explore.FeaturedSellersScreen
 import com.pc.fash_android_mobile.ui.explore.FeaturedSellersViewModel
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
 import com.pc.fash_android_mobile.ui.guest.GuestLoginSheet
+import com.pc.fash_android_mobile.ui.guest.GuestSignupNudgeSheet
 import com.pc.fash_android_mobile.ui.home.HomeEditorialDetailScreen
 import com.pc.fash_android_mobile.ui.home.HomeEditorialListScreen
 import com.pc.fash_android_mobile.ui.home.UserExperienceSurveyScreen
@@ -52,6 +61,7 @@ import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
+import kotlinx.coroutines.delay
 
 /**
  * Authenticated-light main shell: Home + Explore + listing PDP + editorial reader + seller shop for guests.
@@ -118,6 +128,43 @@ fun GuestMainShell(
     var sellerShopUsername by rememberSaveable { mutableStateOf<String?>(null) }
     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
     var guestLoginReason by remember { mutableStateOf<GuestLoginReason?>(null) }
+    var showSignupNudge by remember { mutableStateOf(false) }
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { _ ->
+        GuestLocalReengagementScheduler.markNotificationPermissionPrompted(context)
+    }
+
+    LaunchedEffect(Unit) {
+        GuestLocalReengagementScheduler.onGuestShellEntered(context)
+        if (GuestLocalReengagementScheduler.shouldShowSignupNudge(context)) {
+            delay(1500)
+            showSignupNudge = true
+        }
+        delay(3000)
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !GuestLocalReengagementScheduler.wasNotificationPermissionPrompted(context)
+        ) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                GuestLocalReengagementScheduler.markNotificationPermissionPrompted(context)
+                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    val guestLifecycleObserver = remember {
+        GuestReengagementLifecycleObserver(context.applicationContext)
+    }
+    DisposableEffect(Unit) {
+        guestLifecycleObserver.register()
+        onDispose { guestLifecycleObserver.unregister() }
+    }
 
     LaunchedEffect(Unit) {
         fashApp.isGuestBrowseActive = true
@@ -130,6 +177,7 @@ fun GuestMainShell(
         promoSlidesViewModel.refresh()
     }
     val remotePromo by promoSlidesViewModel.remoteSlides.collectAsState()
+    val reengagementPromo by promoSlidesViewModel.guestReengagementSlides.collectAsState()
     val scheme = MaterialTheme.colorScheme
     val mappedPromoSlides = remember(remotePromo, scheme) {
         remotePromo.map { it.toFashPromoSlideDef(scheme) }
@@ -159,6 +207,7 @@ fun GuestMainShell(
                 val key = nav?.payload?.trim().orEmpty().ifBlank { "fash_ux_v1" }
                 uxSurveyKey = key
             }
+            "in_app_sign_in" -> requestLogin(GuestLoginReason.PromoSignUp)
             "external_url" -> {
                 val url = nav?.payload?.trim().orEmpty()
                 if (url.isNotEmpty()) {
@@ -381,8 +430,26 @@ fun GuestMainShell(
                 onDismiss = { guestLoginReason = null },
                 onSignIn = {
                     guestLoginReason = null
+                    GuestLocalReengagementScheduler.clearGuestState(context)
                     fashApp.isGuestBrowseActive = false
                     onExitGuestToLogin()
+                },
+            )
+        }
+
+        if (showSignupNudge && guestLoginReason == null) {
+            val nudgeSlide = reengagementPromo.firstOrNull()
+            GuestSignupNudgeSheet(
+                title = nudgeSlide?.title,
+                body = nudgeSlide?.subtitle,
+                onDismiss = {
+                    showSignupNudge = false
+                    GuestLocalReengagementScheduler.markSignupNudgeShown(context)
+                },
+                onSignIn = {
+                    showSignupNudge = false
+                    GuestLocalReengagementScheduler.markSignupNudgeShown(context)
+                    guestLoginReason = GuestLoginReason.PromoSignUp
                 },
             )
         }

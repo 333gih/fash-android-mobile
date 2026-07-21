@@ -32,4 +32,6 @@ enum class GuestLoginReason(@StringRes val messageRes: Int) {
     HomeStylePicks(R.string.guest_login_reason_home_style),
     /** Home “Tương tự món đã lưu” — needs wishlist history. */
     HomeSimilarSaved(R.string.guest_login_reason_home_similar),
+    /** Promo carousel / CMS CTA — sign up for daily picks. */
+    PromoSignUp(R.string.guest_login_reason_home_for_you),
 }

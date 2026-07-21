@@ -8,6 +8,12 @@
     <string name="notification_channel_recommendation_desc">Personalized product and content suggestions</string>
     <string name="notification_channel_general_name">Fash</string>
     <string name="notification_channel_general_desc">General notifications</string>
+    <string name="notification_channel_guest_reengagement_name">Browse reminders</string>
+    <string name="notification_channel_guest_reengagement_desc">A gentle nudge when you have not opened Fash — on-device only, not FCM</string>
+    <string name="guest_local_reminder_title">Fash is waiting for you</string>
+    <string name="guest_local_reminder_body">Discover more pre-loved fashion — sign up for daily picks made for you.</string>
+    <string name="guest_signup_nudge_title">Sign up for daily picks</string>
+    <string name="guest_signup_nudge_body">Create a free account — Fash learns your taste and sends updates from shops you follow.</string>
     <string name="buy_now">Buy now</string>
     <string name="add_to_cart">Add to cart</string>
     <string name="search_label">Search</string>

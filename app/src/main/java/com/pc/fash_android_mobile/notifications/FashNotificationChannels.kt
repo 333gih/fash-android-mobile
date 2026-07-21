@@ -18,6 +18,7 @@ object FashNotificationChannels {
     const val ORDERS = "fash_orders"
     const val RECOMMENDATION = "fash_recommendation"
     const val GENERAL = "fash_general"
+    const val GUEST_REENGAGEMENT = "fash_guest_reengagement"
 
     private fun applyDefaultAlertStyle(channel: NotificationChannel) {
         val soundUri = Settings.System.DEFAULT_NOTIFICATION_URI
@@ -65,10 +66,19 @@ object FashNotificationChannels {
             description = context.getString(com.pc.fash_android_mobile.R.string.notification_channel_general_desc)
             applyDefaultAlertStyle(this)
         }
+        val guestReengagement = NotificationChannel(
+            GUEST_REENGAGEMENT,
+            context.getString(com.pc.fash_android_mobile.R.string.notification_channel_guest_reengagement_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = context.getString(com.pc.fash_android_mobile.R.string.notification_channel_guest_reengagement_desc)
+            applyDefaultAlertStyle(this)
+        }
         mgr.createNotificationChannel(chat)
         mgr.createNotificationChannel(orders)
         mgr.createNotificationChannel(recommendation)
         mgr.createNotificationChannel(general)
+        mgr.createNotificationChannel(guestReengagement)
     }
 
     fun areNotificationsEnabled(context: Context): Boolean =

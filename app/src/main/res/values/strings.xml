@@ -8,6 +8,12 @@
     <string name="notification_channel_recommendation_desc">Gợi ý sản phẩm và nội dung dành cho bạn</string>
     <string name="notification_channel_general_name">Fash</string>
     <string name="notification_channel_general_desc">Thông báo chung</string>
+    <string name="notification_channel_guest_reengagement_name">Nhắc khám phá</string>
+    <string name="notification_channel_guest_reengagement_desc">Nhắc nhẹ khi bạn chưa mở Fash — chỉ trên thiết bị, không dùng FCM</string>
+    <string name="guest_local_reminder_title">Fash đang chờ bạn</string>
+    <string name="guest_local_reminder_body">Khám phá thêm đồ second-hand — đăng ký để nhận gợi ý riêng mỗi ngày.</string>
+    <string name="guest_signup_nudge_title">Đăng ký để nhận gợi ý hàng ngày</string>
+    <string name="guest_signup_nudge_body">Tạo tài khoản miễn phí — Fash gợi ý đồ phù hợp gu bạn và gửi tin mới từ shop bạn theo dõi.</string>
     <string name="buy_now">Mua ngay</string>
     <string name="add_to_cart">Thêm vào giỏ</string>
     <string name="search_label">Tìm kiếm</string>

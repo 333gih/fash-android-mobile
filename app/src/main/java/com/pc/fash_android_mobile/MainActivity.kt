@@ -83,6 +83,7 @@ import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.checkout.CheckoutScreen
 import com.pc.fash_android_mobile.ui.checkout.CheckoutViewModel
 import com.pc.fash_android_mobile.data.chat.ConversationItem
+import com.pc.fash_android_mobile.notifications.GuestLocalReengagementScheduler
 import com.pc.fash_android_mobile.notifications.InAppNotificationNavigation
 import com.pc.fash_android_mobile.notifications.PushNotificationRouter
 import com.pc.fash_android_mobile.notifications.RealtimeNotificationRouter
@@ -623,6 +624,7 @@ class MainActivity : ComponentActivity() {
                 // never shows the previous user's profile or listings.
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                    GuestLocalReengagementScheduler.clearGuestState(this@MainActivity)
                     profileViewModel.onAuthenticatedSessionReady()
                     notificationsViewModel.onAuthenticatedSessionReady()
                 }
@@ -1599,6 +1601,7 @@ class MainActivity : ComponentActivity() {
                                             "in_app_ux_survey" -> {
                                                 uxSurveyKey = nav?.payload?.trim().orEmpty().ifBlank { "fash_ux_v1" }
                                             }
+                                            "in_app_sign_in" -> Unit
                                             "external_url" -> {
                                                 val url = nav?.payload?.trim().orEmpty()
                                                 if (url.isNotEmpty()) {

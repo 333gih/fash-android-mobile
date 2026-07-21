@@ -45,6 +45,14 @@
             </intent-filter>
         </service>
 
+        <receiver
+            android:name=".notifications.GuestLocalReengagementReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.pc.fash_android_mobile.GUEST_LOCAL_REMINDER_FIRE" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"
