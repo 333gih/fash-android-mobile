@@ -131,15 +131,13 @@ object PushNotificationRouter {
         val inboxId = data["user_notification_id"]?.trim()?.takeIf { it.isNotEmpty() }
             ?: InboxDeepLinks.parseNotificationIdFromIntent(intent)
         if (!inboxId.isNullOrEmpty()) {
-            fashApp.pendingInboxNotificationId.value = inboxId
-            fashApp.requestOpenNotificationInbox()
+            fashApp.requestOpenInboxNotificationFromPush(inboxId)
         }
     }
 
     private fun routeDeepLink(fashApp: FashApplication, deepLink: String): Boolean {
         InboxDeepLinks.parseNotificationIdFromDeepLinkString(deepLink)?.let { nid ->
-            fashApp.pendingInboxNotificationId.value = nid
-            fashApp.requestOpenNotificationInbox()
+            fashApp.requestOpenInboxNotificationFromPush(nid)
             return true
         }
         runCatching {

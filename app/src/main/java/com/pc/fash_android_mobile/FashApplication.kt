@@ -159,6 +159,29 @@ class FashApplication : Application(), ImageLoaderFactory {
     private val _inboxOpenRequestGeneration = MutableStateFlow(0L)
     val inboxOpenRequestGeneration = _inboxOpenRequestGeneration.asStateFlow()
 
+    /** True while resolving a tray-tap deep link to a specific inbox row ([openInboxDetailFromPush]). */
+    private val _inboxOpenFromTrayTap = MutableStateFlow(false)
+
+    fun markInboxOpenFromTrayTap() {
+        _inboxOpenFromTrayTap.value = true
+    }
+
+    /** Consumes and returns whether the current inbox open was initiated by a system notification tap. */
+    fun consumeInboxOpenFromTrayTap(): Boolean {
+        val fromTray = _inboxOpenFromTrayTap.value
+        _inboxOpenFromTrayTap.value = false
+        return fromTray
+    }
+
+    /** Tray tap / push payload with a concrete inbox notification id. */
+    fun requestOpenInboxNotificationFromPush(notificationId: String) {
+        val id = notificationId.trim()
+        if (id.isEmpty()) return
+        pendingInboxNotificationId.value = id
+        markInboxOpenFromTrayTap()
+        requestOpenNotificationInbox()
+    }
+
     fun requestOpenNotificationInbox() {
         _inboxOpenRequestGeneration.update { it + 1L }
     }

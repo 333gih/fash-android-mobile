@@ -27,8 +27,11 @@ class NotificationPreferencesViewModel(
     private val _prefs = MutableStateFlow<NotificationPreferences?>(null)
     val prefs: StateFlow<NotificationPreferences?> = _prefs.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(true)
+    private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _loadFailed = MutableStateFlow(false)
+    val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
 
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
@@ -36,24 +39,18 @@ class NotificationPreferencesViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
-    init {
-        load()
-    }
-
+    /** Load only when the user opens Notification preferences (iOS `.task` parity — not on app entry). */
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
+            _loadFailed.value = false
             try {
                 val result = withContext(Dispatchers.IO) {
                     repository.getNotificationPreferences()
                 }
                 result.fold(
                     onSuccess = { _prefs.value = it },
-                    onFailure = {
-                        _events.tryEmit(
-                            getApplication<Application>().getString(R.string.notification_preferences_load_error),
-                        )
-                    },
+                    onFailure = { _loadFailed.value = true },
                 )
             } finally {
                 _isLoading.value = false

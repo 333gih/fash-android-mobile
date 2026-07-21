@@ -2861,8 +2861,7 @@ class MainActivity : ComponentActivity() {
                                     fashApp.dismissInAppNotification()
                                 },
                                 onOpenNotificationDetail = { nid ->
-                                    fashApp.pendingInboxNotificationId.value = nid
-                                    fashApp.requestOpenNotificationInbox()
+                                    fashApp.requestOpenInboxNotificationFromPush(nid)
                                     fashApp.dismissInAppNotification()
                                 },
                                 onOpenNotificationInbox = {
@@ -2910,8 +2909,7 @@ class MainActivity : ComponentActivity() {
 
     private fun routeInAppBannerDeepLink(fashApp: FashApplication, deepLink: String) {
         InboxDeepLinks.parseNotificationIdFromDeepLinkString(deepLink)?.let { nid ->
-            fashApp.pendingInboxNotificationId.value = nid
-            fashApp.requestOpenNotificationInbox()
+            fashApp.requestOpenInboxNotificationFromPush(nid)
             return
         }
         runCatching {

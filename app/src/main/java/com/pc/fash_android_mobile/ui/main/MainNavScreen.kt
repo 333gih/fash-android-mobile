@@ -226,7 +226,7 @@ fun MainNavScreen(
     onRequestLogin: (GuestLoginReason) -> Unit = {},
 ) {
     val inboxApiEnabled by notificationsViewModel.inboxApiReady.collectAsState()
-    var showNotificationScreen by rememberSaveable { mutableStateOf(false) }
+    var showNotificationScreen by remember { mutableStateOf(false) }
     /** Tracks overlay visibility to refresh server unread count when user leaves the inbox. */
     var wasNotificationOverlayVisible by remember { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
@@ -251,18 +251,16 @@ fun MainNavScreen(
             }
         }
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showNotificationPreferencesScreen) {
+        if (!showNotificationPreferencesScreen) return@LaunchedEffect
+        notificationPreferencesViewModel.load()
         notificationPreferencesViewModel.events.collect { msg ->
             snackbarHostState.showSnackbar(msg)
         }
     }
-    LaunchedEffect(showNotificationPreferencesScreen) {
-        if (showNotificationPreferencesScreen) {
-            notificationPreferencesViewModel.load()
-        }
-    }
     val notifPrefs by notificationPreferencesViewModel.prefs.collectAsState()
     val notifPrefsLoading by notificationPreferencesViewModel.isLoading.collectAsState()
+    val notifPrefsLoadFailed by notificationPreferencesViewModel.loadFailed.collectAsState()
     val notifPrefsSaving by notificationPreferencesViewModel.isSaving.collectAsState()
     val tabs = MainTab.entries
 
@@ -902,6 +900,8 @@ fun MainNavScreen(
             modifier = Modifier.fillMaxSize(),
             prefs = notifPrefs,
             isLoading = notifPrefsLoading,
+            loadFailed = notifPrefsLoadFailed,
+            onRetryLoad = notificationPreferencesViewModel::load,
             isSaving = notifPrefsSaving,
             onRecommendationPushChanged = notificationPreferencesViewModel::onRecommendationPushChanged,
             onRecommendationEmailChanged = notificationPreferencesViewModel::onRecommendationEmailChanged,

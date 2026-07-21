@@ -357,6 +357,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         val id = notificationId.trim()
         if (id.isEmpty()) return
         if (!inboxSessionReady) return
+        val fromTrayTap = (getApplication<Application>() as FashApplication).consumeInboxOpenFromTrayTap()
         _pushDetailLoading.value = true
         _pushDetailNotFound.value = false
         _pushDetailItem.value = null
@@ -378,8 +379,10 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                     loadGroupItemsForPushDetail(group, item)
                 }
                 markReadIfNeeded(item)
-            } else {
+            } else if (fromTrayTap) {
                 _pushDetailNotFound.value = true
+            } else {
+                _selectedDetailId.value = null
             }
         }
     }

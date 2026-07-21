@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +56,8 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 fun NotificationPreferencesScreen(
     prefs: NotificationPreferences?,
     isLoading: Boolean,
+    loadFailed: Boolean = false,
+    onRetryLoad: () -> Unit = {},
     isSaving: Boolean,
     onRecommendationPushChanged: (Boolean) -> Unit,
     onRecommendationEmailChanged: (Boolean) -> Unit,
@@ -122,6 +127,30 @@ fun NotificationPreferencesScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    }
+                } else if (loadFailed && prefs == null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = scheme.error,
+                            modifier = Modifier.size(40.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.notification_preferences_load_error),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant,
+                        )
+                        Button(
+                            onClick = onRetryLoad,
+                            colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                        ) {
+                            Text(stringResource(R.string.feed_retry))
+                        }
                     }
                 } else if (prefs != null) {
                     PreferencesCard {
