@@ -296,9 +296,10 @@ fun HomeFeedTabHost(
         }
     }
 
-    // Guest browse: pin scroll to page top after layout shifts (featured sellers rail, tab coerce).
-    LaunchedEffect(isGuestBrowse, hasFeaturedSellersBlock, safeSelected) {
+    // Guest cold start: pin to absolute top after waiting screen (parity with bottom-nav re-tap / reload).
+    LaunchedEffect(isGuestBrowse, shellLoading, hasFeaturedSellersBlock, gridItems.size) {
         if (!isGuestBrowse) return@LaunchedEffect
+        if (shellLoading && gridItems.isEmpty()) return@LaunchedEffect
         stickyTabsLatch = false
         gridState.scrollToItem(0)
         delay(80)

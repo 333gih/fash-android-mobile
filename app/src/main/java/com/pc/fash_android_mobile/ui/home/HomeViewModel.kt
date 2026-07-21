@@ -32,6 +32,7 @@ import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
 import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
 import com.pc.fash_android_mobile.ui.feed.FeedLoadStallWatch
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -194,7 +195,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasMoreItems = MutableStateFlow(true)
     val hasMoreItems: StateFlow<Boolean> = _hasMoreItems.asStateFlow()
 
-    private val _scrollHomeToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _scrollHomeToTop = MutableSharedFlow<Unit>(
+        replay = 1,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
     val scrollHomeToTop: SharedFlow<Unit> = _scrollHomeToTop.asSharedFlow()
 
     private val _scrollHomeFeedToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -282,6 +287,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         lastSuccessfulRefreshAtMs = System.currentTimeMillis()
         scheduleLaunchShellEnrichment()
+        if (isGuestBrowse) {
+            requestScrollHomeToTop()
+        }
     }
 
     private suspend fun awaitTabLoadedSync(tab: HomeFeedTab, force: Boolean) {
@@ -1147,6 +1155,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Bottom nav re-tap on Home — scroll feed to top (pairs with [refresh]). */
     fun requestScrollHomeToTop() {
         viewModelScope.launch { _scrollHomeToTop.emit(Unit) }
+    }
+
+    /**
+     * Guest shell reveal after [FashWaitingScreen] — re-emit scroll like bottom-nav re-tap so
+     * [HomeFeedTabs] receives the event once the grid is composed (cold start parity with reload).
+     */
+    fun scheduleGuestHomeScrollToTopAfterReveal() {
+        if (!isGuestBrowse()) return
+        viewModelScope.launch {
+            repeat(3) { attempt ->
+                _scrollHomeToTop.emit(Unit)
+                if (attempt < 2) delay(if (attempt == 0) 50L else 200L)
+            }
+        }
     }
 
     /** Tab swipe / tab change — scroll to pinned tab row (iOS `requestScrollHomeFeedToTop`). */

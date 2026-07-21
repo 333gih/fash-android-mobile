@@ -644,6 +644,9 @@ class MainActivity : ComponentActivity() {
                     ) {
                         if (!shellWarmupComplete) {
                             shellWarmupComplete = true
+                            if (isGuestBrowse) {
+                                homeViewModel.scheduleGuestHomeScrollToTopAfterReveal()
+                            }
                             shellCoroutineScope.launch {
                                 exploreViewModel.refresh()
                                 if (isAuthenticated) {
@@ -665,6 +668,9 @@ class MainActivity : ComponentActivity() {
                         }
                     } finally {
                         shellWarmupComplete = true
+                        if (isGuestBrowse) {
+                            homeViewModel.scheduleGuestHomeScrollToTopAfterReveal()
+                        }
                         shellCoroutineScope.launch {
                             exploreViewModel.refresh()
                             if (isAuthenticated) {
