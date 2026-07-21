@@ -210,7 +210,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         uxTabTracker.onTabOpened("home", tab.toUxTabKey())
         _selectedFeedTab.value = tab
-        requestScrollHomeFeedToTop()
+        if (isGuestBrowse()) {
+            requestScrollHomeToTop()
+        } else {
+            requestScrollHomeFeedToTop()
+        }
         ensureTabLoaded(tab)
         prefetchTabImages(tab)
         prefetchFromPersonalization(around = tab)
@@ -251,6 +255,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun normalizeSelectedFeedTab(isGuestBrowse: Boolean) {
         if (isGuestBrowse) {
             resetToHuntTodayTab(forceReload = false)
+            requestScrollHomeToTop()
             return
         }
         val allowed = HomeFeedTab.tabsFor(false)
@@ -322,6 +327,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _discoveryBundle.value.huntToday.isNotEmpty()
         ) {
             return
+        }
+        if (_featuredSellers.value.isEmpty()) {
+            _featuredSellersLoading.value = true
         }
         uxTabTracker.closeActiveTab()
         feedEventReporter.flush()

@@ -226,7 +226,10 @@ fun HomeFeedTabHost(
     val scheme = MaterialTheme.colorScheme
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
     val showFeaturedSellersSkeleton = featuredSellersLoading && featuredSellers.isEmpty()
-    val hasFeaturedSellersBlock = hasFeaturedSellers || showFeaturedSellersSkeleton
+    // Guest home: reserve featured-sellers rail while shell loads so tabs are never the first row.
+    val showGuestFeaturedSkeleton = isGuestBrowse && featuredSellers.isEmpty() &&
+        (featuredSellersLoading || shellLoading)
+    val hasFeaturedSellersBlock = hasFeaturedSellers || showFeaturedSellersSkeleton || showGuestFeaturedSkeleton
     var tabSwipeConsuming by remember { mutableStateOf(false) }
     var suppressListingClicks by remember { mutableStateOf(false) }
     val swipeScope = rememberCoroutineScope()
@@ -285,11 +288,23 @@ fun HomeFeedTabHost(
         }
     }
 
-    LaunchedEffect(onScrollToFeedTopRequest, tabRowIndex) {
+    LaunchedEffect(onScrollToFeedTopRequest, tabRowIndex, isGuestBrowse) {
         onScrollToFeedTopRequest.collect {
             stickyTabsLatch = false
-            gridState.animateScrollToItem(tabRowIndex)
+            val targetIndex = if (isGuestBrowse) 0 else tabRowIndex
+            gridState.animateScrollToItem(targetIndex)
         }
+    }
+
+    // Guest browse: pin scroll to page top after layout shifts (featured sellers rail, tab coerce).
+    LaunchedEffect(isGuestBrowse, hasFeaturedSellersBlock, safeSelected) {
+        if (!isGuestBrowse) return@LaunchedEffect
+        stickyTabsLatch = false
+        gridState.scrollToItem(0)
+        delay(80)
+        gridState.scrollToItem(0)
+        delay(200)
+        gridState.scrollToItem(0)
     }
 
     CompositionLocalProvider(
@@ -391,7 +406,7 @@ fun HomeFeedTabHost(
                         includeHorizontalEdgePadding = false,
                     )
                 }
-            } else if (showFeaturedSellersSkeleton) {
+            } else if (showFeaturedSellersSkeleton || showGuestFeaturedSkeleton) {
                 item(span = StaggeredGridItemSpan.FullLine, key = "home_featured_sellers_skeleton") {
                     HomeRecommendedSellersSkeleton(includeHorizontalEdgePadding = false)
                 }
