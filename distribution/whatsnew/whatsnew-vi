@@ -1,3 +1,3 @@
-• Sửa hộp thư thông báo: không còn lỗi lần đầu mở, tự thử lại khi mạng/token chưa sẵn sàng
-• Mở từ push hoặc icon chuông ổn định hơn
+• Trang chủ (chưa đăng nhập): mở đúng đầu trang với seller nổi bật
+• Đăng nhập Google: thông báo lỗi rõ ràng hơn khi cấu hình máy chủ hoặc Firebase chưa đúng
 • Ổn định và hiệu năng

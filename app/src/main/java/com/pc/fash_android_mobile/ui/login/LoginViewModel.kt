@@ -489,7 +489,7 @@ class LoginViewModel(
     ): String {
         val authEx = e as? AuthHttpException
         val serviceError = authEx?.serviceError
-        if (serviceError != null && serviceError.isRateLimited) {
+        if (serviceError != null) {
             return CoreServiceErrors.localizedMessage(app, serviceError, otpContext)
         }
         return e.message?.takeIf { it.isNotBlank() } ?: app.getString(fallback)

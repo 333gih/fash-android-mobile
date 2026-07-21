@@ -86,6 +86,10 @@ class AuthRepository(
                 return@runCatching parseLoginResponse(postJsonBody(url, json))
             } catch (e: Exception) {
                 lastError = e
+                if (BuildConfig.DEBUG) {
+                    val code = (e as? AuthHttpException)?.errorCode
+                    Log.w(TAG, "social-login failed url=$url code=$code http=${(e as? AuthHttpException)?.httpCode}", e)
+                }
                 if (e is AuthHttpException && e.httpCode == 404) continue
                 throw e
             }

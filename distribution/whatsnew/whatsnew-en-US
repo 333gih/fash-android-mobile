@@ -1,3 +1,3 @@
-• Notification inbox loads reliably on first open with automatic retry
-• Opening from push or the bell icon is more stable
+• Guest home opens at the top with featured sellers
+• Google sign-in shows clearer errors when server or Firebase config is wrong
 • Stability and performance

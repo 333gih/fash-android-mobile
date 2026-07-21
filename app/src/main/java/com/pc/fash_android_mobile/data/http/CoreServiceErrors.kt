@@ -85,18 +85,37 @@ object CoreServiceErrors {
      * Maps a [ServiceError] to a localized string when the client should override generic English/Kong text.
      */
     fun localizedMessage(context: Context, error: ServiceError, otpContext: Boolean = false): String {
-        if (!error.isRateLimited) return error.message
-        val retry = error.retryAfterSeconds
-        return when {
-            otpContext && retry != null && retry > 0 ->
-                context.getString(R.string.error_rate_limit_otp_wait, retry)
-            otpContext ->
-                context.getString(R.string.error_rate_limit_otp)
-            retry != null && retry > 0 ->
-                context.getString(R.string.error_rate_limit_wait, retry)
-            else ->
-                context.getString(R.string.error_rate_limit_generic)
+        if (error.isRateLimited) {
+            val retry = error.retryAfterSeconds
+            return when {
+                otpContext && retry != null && retry > 0 ->
+                    context.getString(R.string.error_rate_limit_otp_wait, retry)
+                otpContext ->
+                    context.getString(R.string.error_rate_limit_otp)
+                retry != null && retry > 0 ->
+                    context.getString(R.string.error_rate_limit_wait, retry)
+                else ->
+                    context.getString(R.string.error_rate_limit_generic)
+            }
         }
+        return when (error.code?.uppercase()) {
+            "MISSING_TOKEN" -> context.getString(R.string.error_auth_missing_token)
+            "SOCIAL_AUTH_DISABLED" -> context.getString(R.string.error_social_auth_disabled)
+            "SOCIAL_AUTH_FAILED" -> context.getString(R.string.error_social_auth_failed)
+            "INVALID_APPLICATION_ID" -> context.getString(R.string.error_invalid_application_id)
+            else -> error.message.takeIf { it.isNotBlank() } ?: localizedHttpFallback(context, error.httpCode)
+        }
+    }
+
+    private fun localizedHttpFallback(context: Context, httpCode: Int): String = when (httpCode) {
+        400 -> context.getString(R.string.error_http_bad_request)
+        401 -> context.getString(R.string.error_http_unauthorized)
+        403 -> context.getString(R.string.error_http_forbidden)
+        404 -> context.getString(R.string.error_http_not_found)
+        409 -> context.getString(R.string.error_http_conflict)
+        429 -> context.getString(R.string.error_rate_limit_generic)
+        in 500..599 -> context.getString(R.string.error_http_server)
+        else -> context.getString(R.string.error_http_status, httpCode.toString())
     }
 
     private fun parseCodeField(o: JSONObject, httpCode: Int): String? {

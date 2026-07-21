@@ -47,6 +47,7 @@ if missing:
     print("  2. Firebase fash-3526e → Project settings → Android app → Add fingerprint")
     print("  3. Re-download google-services.json and commit or set GOOGLE_SERVICES_JSON secret")
     print("  See GOOGLE_SIGNIN.md")
+    # Warning only until Play App signing SHA-1 is registered and GOOGLE_SERVICES_JSON secret is refreshed.
     sys.exit(0)
 
 print("google-services.json: Android OAuth clients present for prod + dev packages")

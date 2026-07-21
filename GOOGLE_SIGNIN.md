@@ -56,6 +56,43 @@ Quick local helper:
 powershell -ExecutionPolicy Bypass -File tools/print_google_signin_fingerprints.ps1
 ```
 
+## “Unauthorized” / “no auth” / MISSING_TOKEN after choosing Google account
+
+Two different failure points:
+
+| When it fails | Typical toast / log | Cause | Fix |
+|---------------|---------------------|-------|-----|
+| **Before** account picker | `DEVELOPER_ERROR` (code 10) | `google-services.json` has **no Android OAuth client** (`client_type: 1`) — current repo only has Web (`client_type: 3`) | Add **Play App signing SHA-1** in Firebase → re-download JSON (see above) |
+| **After** Google returns | `Unauthorized`, `Thiếu Bearer token`, `MISSING_TOKEN` | App or gateway hit **api-core** instead of **api-auth**, or Kong does not treat `POST /vi/api/v1/auth/social-login` as public | Confirm `AUTH_SERVICE_BASE_URL=https://api-auth.fashandcurious.com/` in `env/prod.env` |
+| **After** Google returns | `SOCIAL_AUTH_DISABLED` | `fash-auth-service` missing `GOOGLE_OAUTH_CLIENT_IDS` at runtime | Set env on deployed auth-service (must match `GOOGLE_WEB_CLIENT_ID`) |
+| **After** Google returns | `SOCIAL_AUTH_FAILED` | Web client id mismatch or invalid id_token | Align `GOOGLE_WEB_CLIENT_ID` (app) = `GOOGLE_OAUTH_CLIENT_IDS` (auth-service) |
+
+### Verify from your machine (no real Google token needed)
+
+```powershell
+# 1) Auth host must NOT return 401 MISSING_TOKEN (public route)
+curl.exe -sS -X POST "https://api-auth.fashandcurious.com/vi/api/v1/auth/social-login" `
+  -H "Content-Type: application/json" `
+  -d "{\"provider\":\"google\",\"provider_token\":\"test\",\"application_id\":\"web\",\"client_channel\":\"fash_android_app\"}"
+# Expect: 401 SOCIAL_AUTH_FAILED or 400 — NOT Kong MISSING_TOKEN
+
+# 2) Wrong host (api-core) — should 401 if misconfigured
+curl.exe -sS -X POST "https://api-core.fashandcurious.com/vi/api/v1/auth/social-login" ...
+# Expect: 401 Unauthorized — do NOT point the app here for login
+```
+
+### Verify on device (logcat)
+
+Filter `GoogleSignIn` and `AuthRepository`:
+
+```text
+adb logcat -s GoogleSignIn AuthRepository
+```
+
+- `DEVELOPER_ERROR` → note **package + SHA-1** in toast/log → add SHA-1 in Firebase.
+- `social-login failed url=... code=MISSING_TOKEN` → wrong host or Kong public-auth list.
+- `code=SOCIAL_AUTH_DISABLED` → ops: set `GOOGLE_OAUTH_CLIENT_IDS` on auth-service pod.
+
 ## Auth-service
 
 Server must accept ID tokens from the Web client id listed in `GOOGLE_OAUTH_CLIENT_IDS`.

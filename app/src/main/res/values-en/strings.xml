@@ -135,6 +135,10 @@
     <string name="error_rate_limit_wait">Too many requests. Please try again in %1$d seconds.</string>
     <string name="error_rate_limit_otp">Too many OTP requests. Please wait before requesting another code.</string>
     <string name="error_rate_limit_otp_wait">Too many OTP requests. Try again in %1$d seconds.</string>
+    <string name="error_auth_missing_token">The server requires sign-in first (missing token). Check AUTH_SERVICE_BASE_URL points to api-auth, not api-core.</string>
+    <string name="error_social_auth_disabled">Google sign-in is not enabled on the server (GOOGLE_OAUTH_CLIENT_IDS).</string>
+    <string name="error_social_auth_failed">Google could not verify your account. Check GOOGLE_WEB_CLIENT_ID matches auth-service and Play App signing SHA‑1 in Firebase.</string>
+    <string name="error_invalid_application_id">Invalid login application (AUTH_APPLICATION_ID).</string>
     <string name="login_facebook_success">Signed in with Facebook.</string>
     <string name="login_facebook_error">Facebook sign-in failed.</string>
     <string name="login_facebook_not_configured">Add FACEBOOK_APP_ID and Facebook Client Token to your env/build.</string>
