@@ -1,0 +1,4 @@
+Fash Android 1.0.50 (versionCode 51)
+
+- Tap push notification from system tray opens inbox detail directly (not Chat tab first).
+- Aligns tray routing with iOS: deep_link / user_notification_id before chat fallback.

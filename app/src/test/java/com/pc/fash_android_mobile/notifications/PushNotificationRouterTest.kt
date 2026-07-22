@@ -40,4 +40,17 @@ class PushNotificationRouterTest {
         assertNotNull(conv)
         assertEquals("conv-xyz", conv)
     }
+
+    @Test
+    fun trayPayload_withChatFields_stillCarriesInboxLedgerId() {
+        val nid = "550e8400-e29b-41d4-a716-446655440000"
+        val data = mapOf(
+            "conversation_id" to "conv-xyz",
+            "user_notification_id" to nid,
+            "deep_link" to "fash://inbox/$nid",
+            "type" to "marketplace.chat.message",
+        )
+        assertNotNull(InAppNotificationNavigation.chatConversationId(data))
+        assertEquals(nid, data["user_notification_id"])
+    }
 }

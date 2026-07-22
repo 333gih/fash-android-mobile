@@ -13,7 +13,7 @@ import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 
 /**
  * Routes system-tray notification taps (MainActivity intent) — mirrors iOS
- * [FashFirebaseMessagingService.routeFromPushData] with Android in-app chat-first parity.
+ * [FashFirebaseMessagingService.routeFromPushData]: inbox detail / deep_link before chat fallback.
  */
 object PushNotificationRouter {
 
@@ -96,6 +96,9 @@ object PushNotificationRouter {
     /**
      * Applies navigation pending state from a notification tray tap or deep-link VIEW intent.
      * Call after account-switch parsing; engagement is reported separately.
+     *
+     * Tray taps prefer inbox detail when the payload includes a ledger row id — parity with iOS
+     * [FashFirebaseMessagingService.routeFromPushData] (deep_link / user_notification_id before chat).
      */
     fun routeFromTrayTap(fashApp: FashApplication, intent: Intent?) {
         val data = fcmDataFromIntent(intent)
@@ -105,15 +108,22 @@ object PushNotificationRouter {
             fashApp.requestInboxUnreadRefreshDebounced()
         }
 
-        InAppNotificationNavigation.chatConversationId(data)?.let { conversationId ->
-            fashApp.pendingOpenChatConversationId.value = conversationId.trim()
-            return
-        }
-
         val deepLink = data["deep_link"]?.trim()?.takeIf { it.isNotEmpty() }
             ?: intent?.getStringExtra("deep_link")?.trim()?.takeIf { it.isNotEmpty() }
         if (!deepLink.isNullOrEmpty()) {
             if (routeDeepLink(fashApp, deepLink)) return
+        }
+
+        val inboxId = data["user_notification_id"]?.trim()?.takeIf { it.isNotEmpty() }
+            ?: InboxDeepLinks.parseNotificationIdFromIntent(intent)
+        if (!inboxId.isNullOrEmpty()) {
+            fashApp.requestOpenInboxNotificationFromPush(inboxId)
+            return
+        }
+
+        InAppNotificationNavigation.chatConversationId(data)?.let { conversationId ->
+            fashApp.pendingOpenChatConversationId.value = conversationId.trim()
+            return
         }
 
         val nav = normalized(data["nav_target"] ?: data["navTarget"])
@@ -126,12 +136,6 @@ object PushNotificationRouter {
                 fashApp.pendingOpenOrderId.value = orderId
                 return
             }
-        }
-
-        val inboxId = data["user_notification_id"]?.trim()?.takeIf { it.isNotEmpty() }
-            ?: InboxDeepLinks.parseNotificationIdFromIntent(intent)
-        if (!inboxId.isNullOrEmpty()) {
-            fashApp.requestOpenInboxNotificationFromPush(inboxId)
         }
     }
 

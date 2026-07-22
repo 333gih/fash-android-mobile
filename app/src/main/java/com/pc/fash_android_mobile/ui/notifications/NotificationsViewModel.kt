@@ -353,10 +353,10 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         _selectedDetailId.value = id.trim().takeIf { it.isNotEmpty() }
     }
 
-    fun openInboxDetailFromPush(notificationId: String) {
+    fun openInboxDetailFromPush(notificationId: String): Boolean {
         val id = notificationId.trim()
-        if (id.isEmpty()) return
-        if (!inboxSessionReady) return
+        if (id.isEmpty()) return false
+        if (!inboxSessionReady) return false
         val fromTrayTap = (getApplication<Application>() as FashApplication).consumeInboxOpenFromTrayTap()
         _pushDetailLoading.value = true
         _pushDetailNotFound.value = false
@@ -385,6 +385,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 _selectedDetailId.value = null
             }
         }
+        return true
     }
 
     private suspend fun findNotificationInInbox(id: String): InboxNotificationItem? {

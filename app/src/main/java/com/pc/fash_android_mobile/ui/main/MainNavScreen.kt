@@ -357,8 +357,9 @@ fun MainNavScreen(
         if (isGuestMode || !inboxApiEnabled) return@LaunchedEffect
         val id = pendingInboxNotificationIdToOpen?.trim()?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         showNotificationScreen = true
-        notificationsViewModel.openInboxDetailFromPush(id)
-        onConsumePendingInboxNotificationId()
+        if (notificationsViewModel.openInboxDetailFromPush(id)) {
+            onConsumePendingInboxNotificationId()
+        }
     }
 
     if (!isGuestMode) {
