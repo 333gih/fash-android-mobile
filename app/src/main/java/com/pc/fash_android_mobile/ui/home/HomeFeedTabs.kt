@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -214,8 +215,7 @@ fun HomeFeedTabHost(
         )
     }
     val isLoading = !showGuestGate && (
-        safeSelected in tabsLoading ||
-            (shellLoading && gridItems.isEmpty())
+        safeSelected in tabsLoading && gridItems.isEmpty()
         )
     val loadError = !showGuestGate && safeSelected in tabsLoadError
     val loadStall = !showGuestGate && safeSelected in tabsLoadStalled
@@ -241,6 +241,13 @@ fun HomeFeedTabHost(
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
         (if (hasFeaturedSellersBlock) 1 else 0) +
         (if (showExploreShortcut) 1 else 0)
+    var stableTabRowIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(tabRowIndex, shellLoading, featuredSellersLoading) {
+        if (stableTabRowIndex < 0 && !shellLoading && !featuredSellersLoading) {
+            stableTabRowIndex = tabRowIndex
+        }
+    }
+    val scrollTabRowIndex = if (stableTabRowIndex >= 0) stableTabRowIndex else tabRowIndex
     val listingStartIndex = tabRowIndex + 1
     val analyticsSurface = safeSelected.analyticsSurface
     var stickyTabsLatch by remember(tabRowIndex) { mutableStateOf(false) }
@@ -288,10 +295,10 @@ fun HomeFeedTabHost(
         }
     }
 
-    LaunchedEffect(onScrollToFeedTopRequest, tabRowIndex, isGuestBrowse) {
+    LaunchedEffect(onScrollToFeedTopRequest, scrollTabRowIndex, isGuestBrowse) {
         onScrollToFeedTopRequest.collect {
             stickyTabsLatch = false
-            val targetIndex = if (isGuestBrowse) 0 else tabRowIndex
+            val targetIndex = if (isGuestBrowse) 0 else scrollTabRowIndex
             gridState.animateScrollToItem(targetIndex)
         }
     }
@@ -517,6 +524,7 @@ fun HomeFeedTabHost(
                             FeedLoadMoreFooter(
                                 enabled = hasMore,
                                 isLoadingMore = loadingMore,
+                                anchorItemCount = gridItems.size,
                                 onLoadMore = onLoadMoreActiveTab,
                             )
                         }

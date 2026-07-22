@@ -113,6 +113,7 @@ private const val HomeHuntTodayLimit = 12
 
 /** Home “Shop nên ghé” rail — matches iOS [HomeViewModel.loadFeaturedSellers]. */
 private const val HomeFeaturedSellersLimit = 12
+private const val TAB_PREFETCH_DEFER_MS = 180L
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -215,6 +216,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         uxTabTracker.onTabOpened("home", tab.toUxTabKey())
         _selectedFeedTab.value = tab
+        if (tabLoadJobs[tab]?.isActive == true && itemsForTab(tab).isEmpty()) {
+            beginTabLoad(tab)
+        }
         if (isGuestBrowse()) {
             requestScrollHomeToTop()
         } else {
@@ -222,8 +226,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         ensureTabLoaded(tab)
         prefetchTabImages(tab)
-        prefetchFromPersonalization(around = tab)
+        viewModelScope.launch {
+            delay(TAB_PREFETCH_DEFER_MS)
+            if (_selectedFeedTab.value == tab) {
+                prefetchFromPersonalization(around = tab)
+            }
+        }
     }
+
+    fun hasCachedItems(tab: HomeFeedTab): Boolean = itemsForTab(tab).isNotEmpty()
 
     fun isTabLoadStalled(tab: HomeFeedTab): Boolean = tab in _tabsLoadStalled.value
 
@@ -633,9 +644,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun beginTabLoad(tab: HomeFeedTab) {
         finishTabStallWatch(tab)
-        setTabLoading(tab, true)
+        if (_selectedFeedTab.value == tab && itemsForTab(tab).isEmpty()) {
+            setTabLoading(tab, true)
+            scheduleTabStallWatch(tab)
+        }
         setTabError(tab, false)
-        scheduleTabStallWatch(tab)
     }
 
     private fun finishTabLoad(tab: HomeFeedTab, ok: Boolean) {
@@ -750,7 +763,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun ensureTabLoaded(tab: HomeFeedTab, force: Boolean = false) {
         if (isGuestBrowse() && tab.requiresAuth) return
         if (!force && tab in loadedTabs) return
-        if (tab in _tabsLoading.value) return
+        if (tabLoadJobs[tab]?.isActive == true) return
+        if (!force && itemsForTab(tab).isNotEmpty()) {
+            loadedTabs.add(tab)
+            if (tab in HomeFeedTab.recommendationSectionTabs()) {
+                HomeFeedTab.recommendationSectionTabs().forEach { loadedTabs.add(it) }
+            }
+            return
+        }
         if (!force && tab == HomeFeedTab.HuntToday && recommendationSectionsFetched) {
             val cached = _discoveryBundle.value.huntToday
             if (cached.isNotEmpty()) {

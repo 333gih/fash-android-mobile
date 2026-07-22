@@ -420,6 +420,29 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         _pushDetailNotFound.value = false
     }
 
+    /** @return true when an inner inbox screen consumed back; false = dismiss overlay. */
+    fun navigateBackInInbox(): Boolean = when {
+        _selectedDetailId.value != null -> {
+            closeDetail()
+            true
+        }
+        _selectedGroup.value != null -> {
+            closeGroup()
+            true
+        }
+        else -> false
+    }
+
+    /** Clears drill-down state when the inbox overlay closes. */
+    fun resetInboxNavigation() {
+        _selectedDetailId.value = null
+        _pushDetailItem.value = null
+        _pushDetailNotFound.value = false
+        _selectedGroup.value = null
+        _items.value = emptyList()
+        _hasMore.value = false
+    }
+
     fun markReadIfNeeded(item: InboxNotificationItem) {
         if (!item.isUnread) return
         viewModelScope.launch {

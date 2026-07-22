@@ -137,7 +137,7 @@ fun NotificationScreen(
         (items.any { it.isUnread } || (groups.find { it.group == selectedGroup }?.unreadCount ?: 0) > 0)
 
     DisposableEffect(Unit) {
-        onDispose { viewModel.closeDetail() }
+        onDispose { viewModel.resetInboxNavigation() }
     }
 
     LaunchedEffect(inboxLoadEnabled) {

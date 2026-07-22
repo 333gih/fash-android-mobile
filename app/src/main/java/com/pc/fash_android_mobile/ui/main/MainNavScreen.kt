@@ -474,9 +474,8 @@ fun MainNavScreen(
             showChangePasswordScreen -> showChangePasswordScreen = false
             showSettingsScreen -> showSettingsScreen = false
             showNotificationScreen -> {
-                if (notificationDetailId != null) {
-                    notificationsViewModel.closeDetail()
-                } else {
+                if (!notificationsViewModel.navigateBackInInbox()) {
+                    notificationsViewModel.resetInboxNavigation()
                     showNotificationScreen = false
                 }
             }
@@ -829,7 +828,10 @@ fun MainNavScreen(
             modifier = Modifier.fillMaxSize(),
             viewModel = notificationsViewModel,
             inboxLoadEnabled = inboxApiEnabled,
-            onBack = { showNotificationScreen = false },
+            onBack = {
+                notificationsViewModel.resetInboxNavigation()
+                showNotificationScreen = false
+            },
             onPromoSlideClick = onPromoSlideClick,
             promoSlides = promoSlides,
             onOpenOrder = { orderId ->
