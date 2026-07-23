@@ -144,24 +144,34 @@ class AuthRepository(
     ): Result<Unit> = runCatching {
         if (fcmToken.isBlank()) return@runCatching
         val path = AppEnvironment.authFcmRegisterPath.trim().trimStart('/')
-        val url = AppEnvironment.authServicePath(path)
         val json = JSONObject()
             .put("fcm_token", fcmToken.trim())
             .put("device_platform", devicePlatform)
         clientLocale?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("client_locale", it) }
         val payload = json.toString()
-        val request = Request.Builder()
-            .url(url)
-            .post(payload.toRequestBody(JSON_MEDIA))
-            .header("Accept", "application/json")
-            .header("Authorization", "Bearer ${accessToken.trim()}")
-            .build()
-        client.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                throw authHttpException(response, body)
+        var lastError: Exception? = null
+        for (url in AppEnvironment.authServiceCandidateUrls(path)) {
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .post(payload.toRequestBody(JSON_MEDIA))
+                    .header("Accept", "application/json")
+                    .header("Authorization", "Bearer ${accessToken.trim()}")
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        throw authHttpException(response, body)
+                    }
+                }
+                return@runCatching
+            } catch (e: Exception) {
+                lastError = e
+                if (e is AuthHttpException && e.httpCode == 404) continue
+                throw e
             }
         }
+        throw lastError ?: IllegalStateException("fcm register failed")
     }
 
     private fun postWithBearer(url: String, accessToken: String) {

@@ -98,11 +98,11 @@ class FcmTokenRegistrar(
     }
 
     private fun logW(msg: String) {
-        if (BuildConfig.DEBUG) Log.w(TAG, msg)
+        Log.w(TAG, msg)
     }
 
     private fun logE(msg: String, t: Throwable? = null) {
-        if (BuildConfig.DEBUG) Log.e(TAG, msg, t)
+        Log.e(TAG, msg, t)
     }
 
     companion object {

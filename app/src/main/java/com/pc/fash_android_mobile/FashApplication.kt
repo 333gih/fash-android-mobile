@@ -478,9 +478,16 @@ class FashApplication : Application(), ImageLoaderFactory {
     private val appSessionTracker: AppSessionTracker by lazy {
         AppSessionTracker(
             feedEventReporter = feedEventReporter,
-            onForeground = { realtimeManager.sendPresenceActive() },
+            onForeground = {
+                if (authManager.sessionStore.read() != null) {
+                    realtimeManager.connect()
+                    realtimeManager.sendPresenceActive()
+                    applicationScope.launch(Dispatchers.IO) {
+                        fcmTokenRegistrar.registerCurrentTokenIfSession()
+                    }
+                }
+            },
             onBackground = {
-                realtimeManager.sendPresenceBackground()
                 realtimeManager.pauseForBackground()
             },
         )

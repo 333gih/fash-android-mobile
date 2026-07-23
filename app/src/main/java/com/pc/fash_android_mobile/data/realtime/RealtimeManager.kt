@@ -135,6 +135,14 @@ class RealtimeManager(
 
     /** Closes the socket when the app backgrounds; subscriptions are kept for reconnect. */
     fun pauseForBackground() {
+        if (_state.value == State.CONNECTED && webSocket != null) {
+            sendNow(
+                JSONObject().apply {
+                    put("type", "presence")
+                    put("state", "background")
+                },
+            )
+        }
         intentionalDisconnect.set(true)
         reconnectJob?.cancel()
         webSocket?.close(CLOSE_NORMAL, "App background")
