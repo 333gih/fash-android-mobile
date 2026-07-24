@@ -558,6 +558,7 @@ class MainActivity : ComponentActivity() {
                         !splashFinished ||
                         !isAuthenticated ||
                         profileSetupBlocksShellChrome ||
+                        !shellWarmupComplete ||
                         selectedConversationId != null
                     ) {
                         return
@@ -686,22 +687,30 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Profile setup (loading gate or onboarding screens) blocks welcome promo + feature tour.
-                LaunchedEffect(profileSetupBlocksShellChrome) {
-                    if (profileSetupBlocksShellChrome) {
+                // Profile setup / home waiting gate blocks welcome promo + feature tour.
+                LaunchedEffect(profileSetupBlocksShellChrome, shellWarmupComplete) {
+                    if (profileSetupBlocksShellChrome || !shellWarmupComplete) {
                         activePromoCampaign = null
                         showFeatureTour = false
-                        fashApp.uiDialog.dismiss()
+                        if (profileSetupBlocksShellChrome) {
+                            fashApp.uiDialog.dismiss()
+                        }
                     }
                 }
 
                 // Resolve app-open promo once main shell is ready (and again when returning to foreground).
                 val lifecycleOwner = LocalLifecycleOwner.current
                 var promoOpenCountIncremented by remember { mutableStateOf(false) }
-                LaunchedEffect(splashFinished, isAuthenticated, needsOnboarding, lifecycleOwner) {
-                    if (!splashFinished || !isAuthenticated) return@LaunchedEffect
+                LaunchedEffect(
+                    splashFinished,
+                    isAuthenticated,
+                    needsOnboarding,
+                    shellWarmupComplete,
+                    lifecycleOwner,
+                ) {
+                    if (!splashFinished || !isAuthenticated || !shellWarmupComplete) return@LaunchedEffect
                     lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                        if (profileSetupBlocksShellChrome) return@repeatOnLifecycle
+                        if (profileSetupBlocksShellChrome || !shellWarmupComplete) return@repeatOnLifecycle
                         if (selectedConversationId != null) return@repeatOnLifecycle
                         if (activePromoCampaign != null) return@repeatOnLifecycle
                         delay(550)
@@ -756,8 +765,19 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(activePromoCampaign, splashFinished, isAuthenticated, needsOnboarding) {
-                    if (!splashFinished || !isAuthenticated || profileSetupBlocksShellChrome) {
+                LaunchedEffect(
+                    activePromoCampaign,
+                    splashFinished,
+                    isAuthenticated,
+                    needsOnboarding,
+                    shellWarmupComplete,
+                ) {
+                    if (
+                        !splashFinished ||
+                        !isAuthenticated ||
+                        profileSetupBlocksShellChrome ||
+                        !shellWarmupComplete
+                    ) {
                         showFeatureTour = false
                         return@LaunchedEffect
                     }
@@ -2643,9 +2663,13 @@ class MainActivity : ComponentActivity() {
                     (isAuthenticated && needsOnboarding == false) || isGuestBrowse -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
-                // Full-screen interstitial — only after profile setup (not during gate load / onboarding).
+                // Full-screen interstitial — only after waiting/home reveal (not during warmup / onboarding).
                 FashAppPromoOverlayDialog(
-                    campaign = if (profileSetupBlocksShellChrome) null else activePromoCampaign,
+                    campaign = if (profileSetupBlocksShellChrome || !shellWarmupComplete) {
+                        null
+                    } else {
+                        activePromoCampaign
+                    },
                     onDismiss = {
                         activePromoCampaign?.let { campaign ->
                             AppPromoCampaignStore.markDismissed(

@@ -1,0 +1,4 @@
+Fash Android 1.0.52 (versionCode 53)
+
+- Do not show welcome/promo dialog while the waiting screen is still loading home.
+- Improve guest return-to-app local reminder (survives reboot; more reliable scheduling).

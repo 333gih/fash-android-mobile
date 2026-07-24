@@ -26,6 +26,7 @@ object GuestLocalReengagementScheduler {
     private const val KEY_SESSION_COUNT = "browse_session_count"
     private const val KEY_NUDGE_LAST_SHOWN_MS = "signup_nudge_last_shown_ms"
     private const val KEY_PERMISSION_PROMPTED = "notif_permission_prompted"
+    private const val KEY_GUEST_ACTIVE = "guest_session_active"
 
     const val ACTION_FIRE = "com.pc.fash_android_mobile.GUEST_LOCAL_REMINDER_FIRE"
     const val ACTION_OPEN_GUEST_HOME = "com.pc.fash_android_mobile.GUEST_REENGAGEMENT"
@@ -39,7 +40,10 @@ object GuestLocalReengagementScheduler {
     fun onGuestShellEntered(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val next = prefs.getInt(KEY_SESSION_COUNT, 0) + 1
-        prefs.edit { putInt(KEY_SESSION_COUNT, next) }
+        prefs.edit {
+            putInt(KEY_SESSION_COUNT, next)
+            putBoolean(KEY_GUEST_ACTIVE, true)
+        }
         return next
     }
 
@@ -90,14 +94,26 @@ object GuestLocalReengagementScheduler {
             Log.d(TAG, "skip schedule — notifications disabled")
             return
         }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // After reboot / package replace, only re-arm if a guest session was active recently.
+        if (!prefs.getBoolean(KEY_GUEST_ACTIVE, false)) {
+            Log.d(TAG, "skip schedule — no active guest session flag")
+            return
+        }
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val triggerAt = System.currentTimeMillis() + inactiveMs
         val pi = alarmPendingIntent(context)
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-            } else {
-                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    // Prefer exact-while-idle when the OS allows it; fall back to inexact (Play-safe).
+                    try {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    } catch (_: SecurityException) {
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    }
+                }
+                else -> alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pi)
             }
             Log.d(TAG, "scheduled guest reminder in 24h")
         } catch (e: SecurityException) {
@@ -115,6 +131,7 @@ object GuestLocalReengagementScheduler {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
             remove(KEY_REMINDER_TITLE)
             remove(KEY_REMINDER_BODY)
+            putBoolean(KEY_GUEST_ACTIVE, false)
         }
     }
 
