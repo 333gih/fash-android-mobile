@@ -121,6 +121,8 @@ fun resolveInboxNotificationGroup(item: InboxNotificationItem): String {
             "marketplace.recommendation.inactive_nudge",
             "marketplace.recommendation.inactive_ladder",
             "marketplace.recommendation.sustainable_impact",
+            "marketplace.recommendation.daily_comeback",
+            "marketplace.recommendation.ai_re_engagement",
             -> NotificationGroups.REENGAGEMENT
             else -> NotificationGroups.RECOMMENDATION
         }
