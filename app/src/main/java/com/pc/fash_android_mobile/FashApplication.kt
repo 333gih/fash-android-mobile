@@ -45,6 +45,7 @@ import com.pc.fash_android_mobile.ui.chat.ChatNotificationPresence
 import com.pc.fash_android_mobile.ui.chat.ChatUnreadRefreshHub
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.chat.InboxNotificationSync
+import io.sentry.android.core.SentryAndroid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,6 +92,17 @@ private fun resolveRealtimeBaseUrl(): String {
  * away); that is normal. Framework/HWUI may still log decode interruptions; `logger(null)` disables Coil logs.
  */
 class FashApplication : Application(), ImageLoaderFactory {
+
+    private fun initSentryIfConfigured() {
+        val dsn = BuildConfig.SENTRY_DSN.trim()
+        if (dsn.isEmpty()) return
+        SentryAndroid.init(this) { options ->
+            options.dsn = dsn
+            options.environment = BuildConfig.ENVIRONMENT_NAME
+            options.tracesSampleRate = 0.2
+            options.release = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+        }
+    }
 
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
@@ -324,6 +336,7 @@ class FashApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        initSentryIfConfigured()
         AppLocale.installApplicationContext(this)
         AppLocale.applyPersistedOrDefault(this)
         FashNotificationChannels.ensureChannels(this)

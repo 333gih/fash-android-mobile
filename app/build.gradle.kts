@@ -58,6 +58,7 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     val envName = envVal("ENVIRONMENT_NAME") ?: flavorName
 
     buildConfigField("String", "ENVIRONMENT_NAME", buildConfigStringLiteral(envName))
+    buildConfigField("String", "SENTRY_DSN", buildConfigStringLiteral(envOrEmpty("SENTRY_DSN")))
     buildConfigField("String", "AUTH_SERVICE_BASE_URL", buildConfigStringLiteral(authBase))
     buildConfigField("String", "API_BASE_URL", buildConfigStringLiteral(apiBase))
     val realtimeBaseFromEnv = envVal("REALTIME_BASE_URL") ?: ""
@@ -285,8 +286,8 @@ android {
         applicationId = "com.pc.fash_android_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 54
-        versionName = "1.0.53"
+        versionCode = 55
+        versionName = "1.0.54"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Overridden per flavor by [injectFromEnv] (LISTING_SHARE_BASE_URL host).
@@ -382,6 +383,7 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.androidx.lifecycle.process)
+    implementation(libs.sentry.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
