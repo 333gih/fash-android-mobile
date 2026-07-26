@@ -12,7 +12,7 @@ import com.pc.fash_android_mobile.data.common.CommonCountryDto
 import com.pc.fash_android_mobile.data.listing.Category
 import com.pc.fash_android_mobile.data.listing.ListingDetail
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
-import com.pc.fash_android_mobile.ui.components.FeedEngagementFeedback
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreThrottle
 import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
 import com.pc.fash_android_mobile.data.listing.ListingRepository
@@ -238,6 +238,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val listingsFetchGeneration = AtomicInteger(0)
 
     private var lastSuccessfulExploreRefreshAtMs = 0L
+    private var lastExploreLoadMoreAtMs = 0L
+    private var exploreLoadMoreBlockedUntilMs = 0L
 
     /** Digits-only VND hints; empty = no bound. */
     private val _minPriceText = MutableStateFlow("")
@@ -720,6 +722,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     fun loadMore() {
         if (!_hasMore.value || _isLoadingMore.value || _isLoading.value) return
         if (_loadError.value && _listings.value.isEmpty()) return
+        if (FeedLoadMoreThrottle.isBlocked(exploreLoadMoreBlockedUntilMs)) return
+        if (!FeedLoadMoreThrottle.canLoadNow(lastExploreLoadMoreAtMs)) return
+        lastExploreLoadMoreAtMs = System.currentTimeMillis()
         val offset = _listings.value.size
         val stableGen = listingsFetchGeneration.get()
         viewModelScope.launch {
@@ -738,11 +743,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         _loadError.value = false
                         prefetchExploreImages(page)
                     },
-                    onFailure = {
-                        _events.tryEmit(
-                            it.message?.takeIf { m -> m.isNotBlank() }
-                                ?: getApplication<Application>().getString(R.string.feed_load_error),
-                        )
+                    onFailure = { err ->
+                        val blocked = FeedLoadMoreThrottle.blockedUntilAfter(err)
+                        if (blocked != null) {
+                            exploreLoadMoreBlockedUntilMs = blocked
+                        } else {
+                            _events.tryEmit(
+                                err.message?.takeIf { m -> m.isNotBlank() }
+                                    ?: getApplication<Application>().getString(R.string.feed_load_error),
+                            )
+                        }
                     },
                 )
             } finally {

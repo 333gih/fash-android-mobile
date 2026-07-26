@@ -31,6 +31,7 @@ import com.pc.fash_android_mobile.ui.components.FeedEngagementFeedback
 import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
 import com.pc.fash_android_mobile.ui.feed.FeedListingImagePrefetch
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreThrottle
 import com.pc.fash_android_mobile.ui.feed.FeedLoadStallWatch
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.Dispatchers
@@ -693,6 +694,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!state.hasMore || state.isLoadingMore) return
         if (_isLoading.value || _isRefreshing.value || tab in _tabsLoading.value) return
         if (sectionLoadMoreJobs[tab]?.isActive == true) return
+        val blockedUntil = sectionTabLoadMoreBlockedUntilMs[tab] ?: 0L
+        if (FeedLoadMoreThrottle.isBlocked(blockedUntil)) return
+        val lastAt = sectionTabLoadMoreAtMs[tab] ?: 0L
+        if (!FeedLoadMoreThrottle.canLoadNow(lastAt)) return
+        sectionTabLoadMoreAtMs[tab] = System.currentTimeMillis()
         sectionLoadMoreJobs[tab] = viewModelScope.launch {
             setTabLoadingMore(tab, true)
             try {
@@ -719,11 +725,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
                     },
-                    onFailure = {
-                        _events.tryEmit(
-                            it.message?.takeIf { msg -> msg.isNotBlank() }
-                                ?: getApplication<Application>().getString(R.string.feed_load_error),
-                        )
+                    onFailure = { err ->
+                        val blocked = FeedLoadMoreThrottle.blockedUntilAfter(err)
+                        if (blocked != null) {
+                            sectionTabLoadMoreBlockedUntilMs[tab] = blocked
+                        } else {
+                            _events.tryEmit(
+                                err.message?.takeIf { msg -> msg.isNotBlank() }
+                                    ?: getApplication<Application>().getString(R.string.feed_load_error),
+                            )
+                        }
                     },
                 )
             } finally {
@@ -1081,6 +1092,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * boundary does not spam the API or recompose the list.
      */
     private var lastFollowFeedLoadMoreAtMs = 0L
+    private var followFeedLoadMoreBlockedUntilMs = 0L
+    private val sectionTabLoadMoreAtMs = mutableMapOf<HomeFeedTab, Long>()
+    private val sectionTabLoadMoreBlockedUntilMs = mutableMapOf<HomeFeedTab, Long>()
 
     fun loadMoreFollowFeed() {
         if (isGuestBrowse()) return
@@ -1088,9 +1102,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (_isLoading.value || _isRefreshing.value) return
         val offset = _items.value.size
         if (offset == 0) return
-        val now = System.currentTimeMillis()
-        if (now - lastFollowFeedLoadMoreAtMs < 900) return
-        lastFollowFeedLoadMoreAtMs = now
+        if (FeedLoadMoreThrottle.isBlocked(followFeedLoadMoreBlockedUntilMs)) return
+        if (!FeedLoadMoreThrottle.canLoadNow(lastFollowFeedLoadMoreAtMs, FeedLoadMoreThrottle.FOLLOWING_INTERVAL_MS)) return
+        lastFollowFeedLoadMoreAtMs = System.currentTimeMillis()
         viewModelScope.launch {
             _isLoadingMore.value = true
             val result = withContext(Dispatchers.IO) {
@@ -1112,12 +1126,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         _hasMoreItems.value = page.size >= HomeFollowFeedPageSize
                     }
                 },
-                onFailure = {
-                    // Soft fail: surface a snackbar, don't disable further attempts.
-                    _events.tryEmit(
-                        it.message?.takeIf { m -> m.isNotBlank() }
-                            ?: getApplication<Application>().getString(R.string.feed_load_error),
-                    )
+                onFailure = { err ->
+                    val blocked = FeedLoadMoreThrottle.blockedUntilAfter(err)
+                    if (blocked != null) {
+                        followFeedLoadMoreBlockedUntilMs = blocked
+                    } else {
+                        _events.tryEmit(
+                            err.message?.takeIf { m -> m.isNotBlank() }
+                                ?: getApplication<Application>().getString(R.string.feed_load_error),
+                        )
+                    }
                 },
             )
         }

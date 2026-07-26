@@ -11,7 +11,7 @@ import com.pc.fash_android_mobile.data.user.ProfileInfo
 import com.pc.fash_android_mobile.data.user.SellerFocusForbiddenException
 import com.pc.fash_android_mobile.data.user.SellerFocusUnauthorizedException
 import com.pc.fash_android_mobile.data.user.SellerListingFocus
-import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreThrottle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -89,6 +89,7 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
 
     private var listingsLoadGeneration = 0
     private var lastListingsLoadMoreAtMs = 0L
+    private var listingsLoadMoreBlockedUntilMs = 0L
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val events: SharedFlow<String> = _events.asSharedFlow()
@@ -260,9 +261,9 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
         if (sellerId.isBlank()) return
         if (_isLoadingMore.value || _listingsLoading.value) return
         if (!hasMoreForTab(tab)) return
-        val now = System.currentTimeMillis()
-        if (now - lastListingsLoadMoreAtMs < 900) return
-        lastListingsLoadMoreAtMs = now
+        if (FeedLoadMoreThrottle.isBlocked(listingsLoadMoreBlockedUntilMs)) return
+        if (!FeedLoadMoreThrottle.canLoadNow(lastListingsLoadMoreAtMs, FeedLoadMoreThrottle.FOLLOWING_INTERVAL_MS)) return
+        lastListingsLoadMoreAtMs = System.currentTimeMillis()
         val stableGen = listingsLoadGeneration
         val status = if (tab == 0) "active" else "sold"
         val offset = if (tab == 0) _sellingListings.value.size else _soldListings.value.size
@@ -286,6 +287,8 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
                     _soldListings.update { current -> dedupeAppendSellerListings(current, page) }
                     _soldHasMore.value = page.size >= SellerListingsPageSize
                 }
+            } catch (err: Throwable) {
+                FeedLoadMoreThrottle.blockedUntilAfter(err)?.let { listingsLoadMoreBlockedUntilMs = it }
             } finally {
                 _isLoadingMore.value = false
             }

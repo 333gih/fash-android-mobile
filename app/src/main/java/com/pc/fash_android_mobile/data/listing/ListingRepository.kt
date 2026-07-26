@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -36,8 +37,8 @@ class ListingRepository(
     private val userIdUuidRegex =
         Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
-    private fun throwHttpError(httpCode: Int, body: String): Nothing =
-        throw CoreServiceHttpException(httpCode, CoreServiceErrors.parseErrorMessage(httpCode, body))
+    private fun throwHttpError(response: Response, body: String): Nothing =
+        throw CoreServiceErrors.toHttpException(response.code, body, response.header("Retry-After"))
 
     private fun encodeUserPathSegment(segment: String): String =
         if (userIdUuidRegex.matches(segment)) segment else Uri.encode(segment, null)
@@ -201,7 +202,7 @@ class ListingRepository(
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 val b = response.body?.string().orEmpty()
-                throwHttpError(response.code, b)
+                throwHttpError(response, b)
             }
         }
     }
@@ -299,7 +300,7 @@ class ListingRepository(
         val bodyStr = securedClient.newCall(request).execute().use { response ->
             val b = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throwHttpError(response.code, b)
+                throwHttpError(response, b)
             }
             b
         }
@@ -389,7 +390,7 @@ class ListingRepository(
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throwHttpError(response.code, body)
+                throwHttpError(response, body)
             }
             body.ifBlank { "{}" }
         }
@@ -415,7 +416,7 @@ class ListingRepository(
                     "createListing failure url=$url http=${response.code} responseBody=",
                     body.ifBlank { "<empty>" },
                 )
-                throwHttpError(response.code, body)
+                throwHttpError(response, body)
             }
             body.ifBlank { "{}" }
         }
@@ -454,7 +455,7 @@ class ListingRepository(
         return httpClient(publicBrowse).newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throwHttpError(response.code, body)
+                throwHttpError(response, body)
             }
             body
         }
@@ -505,7 +506,7 @@ class ListingRepository(
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throwHttpError(response.code, body)
+                throwHttpError(response, body)
             }
             body.ifBlank { "{}" }
         }
@@ -521,7 +522,7 @@ class ListingRepository(
         return securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throwHttpError(response.code, body)
+                throwHttpError(response, body)
             }
             body.ifBlank { "{}" }
         }
@@ -606,7 +607,7 @@ class ListingRepository(
         securedClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throwHttpError(response.code, body)
+                throwHttpError(response, body)
             }
         }
     }

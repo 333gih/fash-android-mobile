@@ -9,7 +9,7 @@ import com.pc.fash_android_mobile.data.user.InboxNotificationGroupsPage
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
 import com.pc.fash_android_mobile.data.user.InboxNotificationsPage
 import com.pc.fash_android_mobile.data.user.NotificationGroupSummaryItem
-import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreThrottle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -91,6 +91,8 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
     private val inboxRefreshMutex = Mutex()
     private var groupsRefreshJob: Job? = null
     private var itemsRefreshJob: Job? = null
+    private var lastNotificationsLoadMoreAtMs = 0L
+    private var notificationsLoadMoreBlockedUntilMs = 0L
 
     /** Call after splash session validation (same timing as profile shell). */
     fun onAuthenticatedSessionReady() {
@@ -334,6 +336,9 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         val group = _selectedGroup.value ?: return
         val last = _items.value.lastOrNull() ?: return
         if (!_hasMore.value || _loadMoreBusy.value || _isLoading.value) return
+        if (FeedLoadMoreThrottle.isBlocked(notificationsLoadMoreBlockedUntilMs)) return
+        if (!FeedLoadMoreThrottle.canLoadNow(lastNotificationsLoadMoreAtMs)) return
+        lastNotificationsLoadMoreAtMs = System.currentTimeMillis()
         viewModelScope.launch {
             _loadMoreBusy.value = true
             val r = withContext(Dispatchers.IO) {
@@ -344,6 +349,8 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 val appended = page.items.filter { it.id !in have }
                 _items.update { it + appended }
                 _hasMore.value = page.items.size >= PAGE_LIMIT
+            }.onFailure { err ->
+                FeedLoadMoreThrottle.blockedUntilAfter(err)?.let { notificationsLoadMoreBlockedUntilMs = it }
             }
             _loadMoreBusy.value = false
         }

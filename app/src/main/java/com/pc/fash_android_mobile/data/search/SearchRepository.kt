@@ -2,7 +2,7 @@ package com.pc.fash_android_mobile.data.search
 
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
-import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import com.pc.fash_android_mobile.data.listing.ListingFeedJsonParser
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -253,8 +253,11 @@ class SearchRepository(
         return client(publicBrowse).newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val msg = try { JSONObject(body).optString("error", body).ifBlank { body } } catch (_: Exception) { body }
-                error("HTTP ${response.code}: $msg")
+                throw CoreServiceErrors.toHttpException(
+                    response.code,
+                    body,
+                    response.header("Retry-After"),
+                )
             }
             body
         }

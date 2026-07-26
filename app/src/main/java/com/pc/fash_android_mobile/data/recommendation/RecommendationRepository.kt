@@ -1,7 +1,7 @@
 package com.pc.fash_android_mobile.data.recommendation
 
 import com.pc.fash_android_mobile.config.AppEnvironment
-import com.pc.fash_android_mobile.data.listing.ListingFeedItem
+import com.pc.fash_android_mobile.data.http.CoreServiceErrors
 import com.pc.fash_android_mobile.data.listing.ListingFeedJsonParser
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import okhttp3.MediaType.Companion.toMediaType
@@ -188,7 +188,13 @@ class RecommendationRepository(
         val req = Request.Builder().url(url).get().build()
         return client(publicBrowse).newCall(req).execute().use { resp ->
             val text = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) error("HTTP ${resp.code}: $text")
+            if (!resp.isSuccessful) {
+                throw CoreServiceErrors.toHttpException(
+                    resp.code,
+                    text,
+                    resp.header("Retry-After"),
+                )
+            }
             GetResponse(body = text, headers = resp.headers)
         }
     }
