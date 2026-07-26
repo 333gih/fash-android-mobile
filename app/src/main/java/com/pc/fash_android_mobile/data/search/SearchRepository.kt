@@ -3,6 +3,7 @@ package com.pc.fash_android_mobile.data.search
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
+import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingFeedJsonParser
 import okhttp3.OkHttpClient
 import okhttp3.Request

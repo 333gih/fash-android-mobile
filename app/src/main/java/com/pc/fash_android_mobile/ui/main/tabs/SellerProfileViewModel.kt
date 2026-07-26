@@ -8,6 +8,7 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.user.ProfileInfo
+import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.SellerFocusForbiddenException
 import com.pc.fash_android_mobile.data.user.SellerFocusUnauthorizedException
 import com.pc.fash_android_mobile.data.user.SellerListingFocus

@@ -2,6 +2,7 @@ package com.pc.fash_android_mobile.data.recommendation
 
 import com.pc.fash_android_mobile.config.AppEnvironment
 import com.pc.fash_android_mobile.data.http.CoreServiceErrors
+import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.data.listing.ListingFeedJsonParser
 import com.pc.fash_android_mobile.network.PublicBrowseHttp
 import okhttp3.MediaType.Companion.toMediaType
