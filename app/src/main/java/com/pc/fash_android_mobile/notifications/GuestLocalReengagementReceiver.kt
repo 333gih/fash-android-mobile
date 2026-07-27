@@ -14,7 +14,13 @@ import com.pc.fash_android_mobile.R
 class GuestLocalReengagementReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != GuestLocalReengagementScheduler.ACTION_FIRE) return
+        val action = intent?.action ?: return
+        if (
+            action != GuestLocalReengagementScheduler.ACTION_FIRE &&
+            action != GuestLocalReengagementScheduler.ACTION_FIRE_EVENING
+        ) {
+            return
+        }
         if (!FashNotificationChannels.areNotificationsEnabled(context)) return
         if (!GuestLocalReengagementScheduler.canFireToday(context)) {
             Log.d(TAG, "daily cap hit — skip")
@@ -22,32 +28,32 @@ class GuestLocalReengagementReceiver : BroadcastReceiver() {
             return
         }
         FashNotificationChannels.ensureChannels(context)
+        val notificationId = if (action == GuestLocalReengagementScheduler.ACTION_FIRE_EVENING) {
+            GuestLocalReengagementScheduler.NOTIFICATION_ID_EVENING
+        } else {
+            GuestLocalReengagementScheduler.NOTIFICATION_ID
+        }
         val openIntent = Intent(context, MainActivity::class.java).apply {
-            action = GuestLocalReengagementScheduler.ACTION_OPEN_GUEST_HOME
+            this.action = GuestLocalReengagementScheduler.ACTION_OPEN_GUEST_HOME
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val contentPi = PendingIntent.getActivity(
             context,
-            GuestLocalReengagementScheduler.NOTIFICATION_ID,
+            notificationId,
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val body = GuestLocalReengagementScheduler.reminderBody(context)
         val notification = NotificationCompat.Builder(context, FashNotificationChannels.GUEST_REENGAGEMENT)
             .setSmallIcon(R.drawable.ic_stat_fash)
             .setContentTitle(GuestLocalReengagementScheduler.reminderTitle(context))
-            .setContentText(GuestLocalReengagementScheduler.reminderBody(context))
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText(GuestLocalReengagementScheduler.reminderBody(context)),
-            )
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentPi)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        NotificationManagerCompat.from(context).notify(
-            GuestLocalReengagementScheduler.NOTIFICATION_ID,
-            notification,
-        )
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
         GuestLocalReengagementScheduler.markFiredToday(context)
         GuestLocalReengagementScheduler.scheduleAfterBackground(context)
     }
