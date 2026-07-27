@@ -1618,14 +1618,13 @@ data class UserAccessStatus(
     /** RFC3339 / server ISO timestamp until meetup scheduling is suspended, if any. */
     val meetingSchedulingSuspendedUntil: String? = null,
 ) {
-    /** First-time password step: after username ([onboardingDone]), before home. */
+    /** First-time password step: after username ([onboardingDone]), before home. Social (Google/Apple) exempt when [isChangePassword] is false. */
     fun needsPasswordSetup(): Boolean {
-        if (!onboardingDone) return false
-        if (passwordSet == true) return false
-        if (passwordSet == false) return true
-        if (isChangePassword == true) return true
         if (nextStep?.trim()?.equals("password", ignoreCase = true) == true) return true
-        return false
+        if (isChangePassword == false) return false
+        if (passwordSet == true) return false
+        if (!onboardingDone) return false
+        return isChangePassword == true
     }
 
     /**
