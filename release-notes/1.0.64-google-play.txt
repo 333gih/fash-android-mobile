@@ -1,0 +1,4 @@
+<en-US>
+• Fix notification status bar icon showing as a solid square — Fash hanger logo silhouette restored
+• Background push notifications now use the correct small icon (not the app launcher)
+</en-US>

@@ -118,6 +118,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_stat_fash)
+            .setColor(getColor(R.color.fash_brand))
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -187,6 +188,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
         )
         val notification = NotificationCompat.Builder(this, FashNotificationChannels.GENERAL)
             .setSmallIcon(R.drawable.ic_stat_fash)
+            .setColor(getColor(R.color.fash_brand))
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
