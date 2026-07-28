@@ -673,7 +673,7 @@ class UserRepository(
         /** Gender preference: "women" | "men" | "non_binary" | "prefer_not_to_say" | null (unchanged). */
         gender: String? = null,
     ): Result<Unit> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/users/me/shopping-preferences")
+        val relative = "api/v1/users/me/shopping-preferences"
         val json = JSONObject().apply {
             put("shopping_intents", JSONArray(shoppingIntents))
             preferredPriceMin?.let { put("preferred_price_min", it) }
@@ -683,25 +683,35 @@ class UserRepository(
             }
             gender?.takeIf { it.isNotBlank() }?.let { put("gender", it.trim().lowercase()) }
         }.toString()
-        securedClient.newCall(
-            Request.Builder()
-                .url(url)
-                .put(json.toRequestBody(JSON_MEDIA))
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
-                .header("User-Agent", "FashAndroid/1.0")
-                .build(),
-        ).execute().use { response ->
-            val resBody = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val msg = try {
-                    JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
-                } catch (_: Exception) {
-                    resBody
+        val urls = AppEnvironment.coreApiCandidateUrls(relative)
+        var last: Exception? = null
+        for (url in urls) {
+            try {
+                securedClient.newCall(
+                    Request.Builder()
+                        .url(url)
+                        .put(json.toRequestBody(JSON_MEDIA))
+                        .header("Accept", "application/json")
+                        .header("Content-Type", "application/json")
+                        .header("User-Agent", "FashAndroid/1.0")
+                        .build(),
+                ).execute().use { response ->
+                    val resBody = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        val msg = try {
+                            JSONObject(resBody).optString("error", resBody).ifBlank { resBody }
+                        } catch (_: Exception) {
+                            resBody
+                        }
+                        error("HTTP ${response.code}: $msg")
+                    }
                 }
-                error("HTTP ${response.code}: $msg")
+                return@runCatching
+            } catch (e: Exception) {
+                last = e
             }
         }
+        throw last ?: IllegalStateException("saveShoppingPreferences: no candidate URL")
     }
 
     fun saveSizingReference(request: SizingReferenceRequest): Result<Unit> = runCatching {

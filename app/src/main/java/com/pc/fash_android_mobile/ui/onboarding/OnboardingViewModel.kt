@@ -631,6 +631,9 @@ class OnboardingViewModel(
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
+                withContext(Dispatchers.IO) {
+                    userRepository.putUserAestheticTags(emptyList())
+                }
                 val status = withContext(Dispatchers.IO) {
                     userRepository.getUserAccessStatus().getOrNull()
                 }
