@@ -130,8 +130,8 @@ Write-Host "Mark bounds: $($bounds.Width)x$($bounds.Height) on $($source.Width)x
 
 $silhouette = New-WhiteSilhouetteBitmap -source $source -bounds $bounds
 
-# PNG mark fills ~72% of asset; final on-screen size is capped by ic_launcher_foreground_image (48dp).
-$foregroundMark = New-TransparentMarkCanvas -silhouette $silhouette -size 432 -markScale 0.72
+# PNG mark fills ~78% of asset; legacy mipmaps use ~54% for pre-26 / DeX fallback launchers.
+$foregroundMark = New-TransparentMarkCanvas -silhouette $silhouette -size 432 -markScale 0.78
 Save-Png $foregroundMark (Join-Path $resNodpi "ic_launcher_foreground_mark.png")
 Write-Host "Wrote ic_launcher_foreground_mark.png (432, transparent)"
 
@@ -148,11 +148,11 @@ Save-Png $monochrome (Join-Path $resNodpi "ic_launcher_monochrome.png")
 Write-Host "Wrote ic_launcher_monochrome.png (432, themed icon)"
 
 foreach ($entry in @(
-        @{ folder = "mdpi"; px = 48; scale = 0.44 },
-        @{ folder = "hdpi"; px = 72; scale = 0.44 },
-        @{ folder = "xhdpi"; px = 96; scale = 0.44 },
-        @{ folder = "xxhdpi"; px = 144; scale = 0.44 },
-        @{ folder = "xxxhdpi"; px = 192; scale = 0.44 }
+        @{ folder = "mdpi"; px = 48; scale = 0.54 },
+        @{ folder = "hdpi"; px = 72; scale = 0.54 },
+        @{ folder = "xhdpi"; px = 96; scale = 0.54 },
+        @{ folder = "xxhdpi"; px = 144; scale = 0.54 },
+        @{ folder = "xxxhdpi"; px = 192; scale = 0.54 }
     )) {
     Save-LegacyMipmap -silhouette $silhouette -folder $entry.folder -px $entry.px -markScale $entry.scale
     Write-Host "Updated mipmap-$($entry.folder)"
