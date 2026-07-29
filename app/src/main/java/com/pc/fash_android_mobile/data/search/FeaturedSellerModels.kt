@@ -28,6 +28,7 @@ fun FeaturedSellerItem.isShopReady(): Boolean =
 fun List<FeaturedSellerItem>.shopReadyOnly(): List<FeaturedSellerItem> =
     filter { it.isShopReady() }
 
+fun FeaturedSellerItem.toUserSearchResult(): UserSearchResult =
     UserSearchResult(
         userId = userId,
         username = username,
