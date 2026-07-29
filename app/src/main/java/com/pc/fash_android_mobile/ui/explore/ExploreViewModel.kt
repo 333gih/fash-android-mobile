@@ -24,7 +24,8 @@ import com.pc.fash_android_mobile.data.explore.BrowseLocationMode
 import com.pc.fash_android_mobile.data.explore.ExploreBrowseLocationPreference
 import com.pc.fash_android_mobile.data.explore.ExploreSizingPreference
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
-import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
+import com.pc.fash_android_mobile.data.search.SearchRepository
+import com.pc.fash_android_mobile.data.search.shopReadyOnly
 import com.pc.fash_android_mobile.data.recommendation.ShoppingContext
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem

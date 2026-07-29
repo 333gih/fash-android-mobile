@@ -6,9 +6,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.data.listing.ListingRepository
-import com.pc.fash_android_mobile.data.search.isShopReady
-import com.pc.fash_android_mobile.data.search.shopReadyOnly
+import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
 import com.pc.fash_android_mobile.data.search.SearchRepository
+import com.pc.fash_android_mobile.data.search.shopReadyOnly
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
