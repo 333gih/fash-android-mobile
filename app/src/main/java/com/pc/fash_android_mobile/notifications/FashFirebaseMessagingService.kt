@@ -116,9 +116,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_stat_fash)
-            .setColor(getColor(R.color.fash_brand))
+        val notification = FashNotificationStyle.builder(this, channelId)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -186,9 +184,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notification = NotificationCompat.Builder(this, FashNotificationChannels.GENERAL)
-            .setSmallIcon(R.drawable.ic_stat_fash)
-            .setColor(getColor(R.color.fash_brand))
+        val notification = FashNotificationStyle.builder(this, FashNotificationChannels.GENERAL)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

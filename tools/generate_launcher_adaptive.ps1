@@ -101,6 +101,20 @@ function New-CompositeBrand {
     return $bmp
 }
 
+function Save-StatDrawable {
+    param(
+        [System.Drawing.Bitmap]$silhouette,
+        [string]$folder,
+        [int]$px
+    )
+    # Status bar icons are 24dp; extra inset keeps the hanger readable when tinted.
+    $markScale = 0.50
+    $stat = New-TransparentMarkCanvas -silhouette $silhouette -size $px -markScale $markScale
+    $dir = Join-Path $repoRoot "app\src\main\res\drawable-$folder"
+    Save-Png $stat (Join-Path $dir "ic_stat_fash.png")
+    $stat.Dispose()
+}
+
 function Save-Png([System.Drawing.Bitmap]$bmp, [string]$path) {
     $dir = Split-Path $path -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
@@ -139,9 +153,20 @@ $brandComposite = New-CompositeBrand -markCanvas $foregroundMark
 Save-Png $brandComposite (Join-Path $resNodpi "ic_launcher_brand.png")
 Write-Host "Wrote ic_launcher_brand.png (432, composite)"
 
-$statIcon = New-TransparentMarkCanvas -silhouette $silhouette -size 96 -markScale 0.62
+$statIcon = New-TransparentMarkCanvas -silhouette $silhouette -size 96 -markScale 0.50
 Save-Png $statIcon (Join-Path $resNodpi "ic_stat_fash.png")
 Write-Host "Wrote ic_stat_fash.png (96, white silhouette for status bar)"
+
+foreach ($entry in @(
+        @{ folder = "mdpi"; px = 24 },
+        @{ folder = "hdpi"; px = 36 },
+        @{ folder = "xhdpi"; px = 48 },
+        @{ folder = "xxhdpi"; px = 72 },
+        @{ folder = "xxxhdpi"; px = 96 }
+    )) {
+    Save-StatDrawable -silhouette $silhouette -folder $entry.folder -px $entry.px
+    Write-Host "Wrote drawable-$($entry.folder)/ic_stat_fash.png ($($entry.px))"
+}
 
 $monochrome = New-TransparentMarkCanvas -silhouette $silhouette -size 432 -markScale 0.72
 Save-Png $monochrome (Join-Path $resNodpi "ic_launcher_monochrome.png")

@@ -1,0 +1,5 @@
+<en-US>
+• Fix Android status bar notification icon — Fash hanger logo now shows correctly when a push arrives
+• Notification tray uses the brand logo (large icon) plus the correct white silhouette in the status bar
+• Background FCM pushes always use ic_stat_fash (Google Play compliant white-on-transparent icon)
+</en-US>

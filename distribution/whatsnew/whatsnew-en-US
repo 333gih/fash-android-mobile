@@ -1,4 +1,3 @@
-• Launcher icon matches the app on Samsung DeX and home screen
-• App icon badge clears after notifications are read (tray sync)
-• Featured sellers rail shows shops with live listings only
-• Stability and performance improvements
+• Fix Android status bar notification icon — Fash hanger logo shows when a push arrives
+• Notification tray shows brand logo with correct white silhouette in status bar
+• Background push notifications use Google Play compliant ic_stat_fash icon

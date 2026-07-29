@@ -7,7 +7,6 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.pc.fash_android_mobile.MainActivity
 import com.pc.fash_android_mobile.R
 
@@ -45,9 +44,7 @@ class GuestLocalReengagementReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val body = GuestLocalReengagementScheduler.reminderBody(context)
-        val notification = NotificationCompat.Builder(context, FashNotificationChannels.GUEST_REENGAGEMENT)
-            .setSmallIcon(R.drawable.ic_stat_fash)
-            .setColor(ContextCompat.getColor(context, R.color.fash_brand))
+        val notification = FashNotificationStyle.builder(context, FashNotificationChannels.GUEST_REENGAGEMENT)
             .setContentTitle(GuestLocalReengagementScheduler.reminderTitle(context))
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

@@ -130,6 +130,9 @@ jobs:
           echo "version_name=${VN}" >> "${GITHUB_OUTPUT}"
           echo "Build target: ${VN} (${VC}) · flavor ${{ matrix.flavor }}"
 
+      - name: Verify notification icon assets
+        run: python3 tools/check_notification_icon.py
+
       - name: Gradle assembleRelease
         run: |
           set -o pipefail

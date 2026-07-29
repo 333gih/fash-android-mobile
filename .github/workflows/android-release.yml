@@ -151,6 +151,9 @@ jobs:
           echo "version_name=${VN}" >> "${GITHUB_OUTPUT}"
           echo "Release target: ${VN} (${VC})"
 
+      - name: Verify notification icon assets
+        run: python3 tools/check_notification_icon.py
+
       - name: Bundle prodRelease AAB
         id: bundle
         run: |
