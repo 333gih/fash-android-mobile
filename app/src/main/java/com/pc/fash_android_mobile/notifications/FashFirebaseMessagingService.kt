@@ -133,7 +133,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
             }
             .build()
 
-        val notifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+        val notifId = FashNotificationTraySync.trayIdForFcmData(message.data)
         NotificationManagerCompat.from(this).notify(notifId, notification)
     }
 

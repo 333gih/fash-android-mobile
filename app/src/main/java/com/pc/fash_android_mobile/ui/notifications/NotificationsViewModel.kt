@@ -10,6 +10,7 @@ import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.InboxNotificationItem
 import com.pc.fash_android_mobile.data.user.InboxNotificationsPage
 import com.pc.fash_android_mobile.data.user.NotificationGroupSummaryItem
+import com.pc.fash_android_mobile.notifications.FashNotificationTraySync
 import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreThrottle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -125,6 +126,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                 userRepository.getMyNotificationsUnreadCount().getOrElse { 0 }
             }
             _unreadCount.value = n
+            FashNotificationTraySync.syncTrayWithUnreadCount(getApplication(), n)
         }
     }
 
@@ -150,6 +152,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         _isRefreshing.value = false
         _loadMoreBusy.value = false
         _markAllReadBusy.value = false
+        FashNotificationTraySync.clearAllTrayNotifications(getApplication())
     }
 
     fun openGroup(group: String) {
@@ -175,6 +178,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         if (_items.value.none { it.isUnread } && groupUnread <= 0) return
         viewModelScope.launch {
             _markAllReadBusy.value = true
+            val unreadIds = _items.value.filter { it.isUnread }.map { it.id }
             val result = withContext(Dispatchers.IO) {
                 userRepository.markAllNotificationsRead(group = group)
             }
@@ -188,6 +192,9 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                         list.map { row ->
                             if (row.group == group) row.copy(unreadCount = 0) else row
                         }
+                    }
+                    unreadIds.forEach { nid ->
+                        FashNotificationTraySync.cancelInboxNotification(app, nid)
                     }
                     refreshUnreadSummary()
                     refreshGroups()
@@ -472,6 +479,7 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
                         }
                     }
                 }
+                FashNotificationTraySync.cancelInboxNotification(getApplication(), item.id)
                 refreshUnreadSummary()
             }
         }
