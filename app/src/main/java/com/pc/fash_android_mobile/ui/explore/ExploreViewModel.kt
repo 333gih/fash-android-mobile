@@ -28,7 +28,6 @@ import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.recommendation.ShoppingContext
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.shopReadyOnly
-import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
