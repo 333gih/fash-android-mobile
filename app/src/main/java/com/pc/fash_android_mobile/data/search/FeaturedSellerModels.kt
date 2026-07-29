@@ -22,7 +22,12 @@ data class FeaturedSellerItem(
     val previewListingIds: List<String>,
 )
 
-fun FeaturedSellerItem.toUserSearchResult(): UserSearchResult =
+fun FeaturedSellerItem.isShopReady(): Boolean =
+    username.isNotBlank() && listingCount > 0 && previewListingIds.isNotEmpty()
+
+fun List<FeaturedSellerItem>.shopReadyOnly(): List<FeaturedSellerItem> =
+    filter { it.isShopReady() }
+
     UserSearchResult(
         userId = userId,
         username = username,

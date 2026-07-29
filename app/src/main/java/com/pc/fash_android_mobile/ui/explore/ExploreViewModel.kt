@@ -1058,7 +1058,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             result = fetchOnce()
         }
         result.fold(
-            onSuccess = { _featuredSellers.value = it },
+            onSuccess = { _featuredSellers.value = it.shopReadyOnly() },
             onFailure = { /* keep stale rail */ },
         )
     }

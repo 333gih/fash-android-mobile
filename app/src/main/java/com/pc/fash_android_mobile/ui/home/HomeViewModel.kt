@@ -555,7 +555,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 result = fetchOnce()
             }
             result.onSuccess { sellers ->
-                _featuredSellers.value = sellers
+                _featuredSellers.value = sellers.shopReadyOnly()
             }
         } finally {
             if (showLoadingShell) {

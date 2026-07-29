@@ -6,7 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.data.listing.ListingRepository
-import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
+import com.pc.fash_android_mobile.data.search.isShopReady
+import com.pc.fash_android_mobile.data.search.shopReadyOnly
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,7 +69,7 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
             }
             val page = result.getOrElse { return Result.failure(it) }
             total = page.total
-            for (s in page.items) {
+            for (s in page.items.shopReadyOnly()) {
                 val k = sellerKey(s)
                 if (k.isBlank()) continue
                 if (seen.add(k)) acc.add(s)
