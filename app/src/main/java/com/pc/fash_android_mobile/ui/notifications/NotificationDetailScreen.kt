@@ -76,7 +76,8 @@ fun NotificationDetailScreen(
     onOpenListing: (String, String?) -> Unit = { _, _ -> },
     onOpenChat: (String) -> Unit = {},
     onOpenFollowConnections: (Int) -> Unit = {},
-    onOpenExplore: () -> Unit = {},
+    onOpenExplore: (ExploreNavigationFilter?) -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
     onOpenInviteFriends: () -> Unit = {},
     onPromoMainTab: (MainTab) -> Unit = {},
     onPromoOpenOrders: () -> Unit = {},
@@ -271,11 +272,27 @@ fun NotificationDetailScreen(
                     }
                 }
                 if (actions.openExploreTab) {
+                    actions.exploreFilter?.seasonLabel?.takeIf { it.isNotBlank() }?.let { seasonLabel ->
+                        Text(
+                            text = seasonLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                     OutlinedButton(
-                        onClick = onOpenExplore,
+                        onClick = { onOpenExplore(actions.exploreFilter) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.notification_action_open_explore))
+                    }
+                }
+                if (actions.openOnboarding) {
+                    OutlinedButton(
+                        onClick = onOpenOnboarding,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_complete_profile))
                     }
                 }
                 if (actions.openInviteFriends) {

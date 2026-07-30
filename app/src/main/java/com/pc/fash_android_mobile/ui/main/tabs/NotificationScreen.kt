@@ -81,6 +81,7 @@ import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
+import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
 import com.pc.fash_android_mobile.ui.notifications.NotificationDetailScreen
 import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -105,7 +106,8 @@ fun NotificationScreen(
     onOpenListing: (String, String?) -> Unit = { _, _ -> },
     onOpenChat: (String) -> Unit = {},
     onOpenFollowConnections: (Int) -> Unit = {},
-    onOpenExplore: () -> Unit = {},
+    onOpenExplore: (ExploreNavigationFilter?) -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
     onOpenInviteFriends: () -> Unit = {},
     onPromoMainTab: (com.pc.fash_android_mobile.ui.main.MainTab) -> Unit = {},
     onPromoOpenOrders: () -> Unit = {},
@@ -488,6 +490,7 @@ fun NotificationScreen(
                     onOpenChat = onOpenChat,
                     onOpenFollowConnections = onOpenFollowConnections,
                     onOpenExplore = onOpenExplore,
+                    onOpenOnboarding = onOpenOnboarding,
                     onOpenInviteFriends = onOpenInviteFriends,
                     onPromoMainTab = onPromoMainTab,
                     onPromoOpenOrders = onPromoOpenOrders,

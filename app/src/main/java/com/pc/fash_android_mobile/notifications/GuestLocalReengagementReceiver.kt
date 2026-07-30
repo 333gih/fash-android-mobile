@@ -36,6 +36,9 @@ class GuestLocalReengagementReceiver : BroadcastReceiver() {
         val openIntent = Intent(context, MainActivity::class.java).apply {
             this.action = GuestLocalReengagementScheduler.ACTION_OPEN_GUEST_HOME
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            GuestLocalReengagementScheduler.guestOpenPayload(context).forEach { (key, value) ->
+                putExtra(key, value)
+            }
         }
         val contentPi = PendingIntent.getActivity(
             context,

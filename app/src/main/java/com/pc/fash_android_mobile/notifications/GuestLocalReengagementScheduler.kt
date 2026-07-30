@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.content.edit
-import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.notifications.NotificationExploreNavigation
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -47,7 +47,16 @@ object GuestLocalReengagementScheduler {
     private const val MAX_DAILY_REMINDERS = 2
     private const val EVENING_HOUR_VN = 20
 
-    private data class ReminderVariant(val titleVi: String, val bodyVi: String, val titleEn: String, val bodyEn: String)
+    private data class ReminderVariant(
+        val titleVi: String,
+        val bodyVi: String,
+        val titleEn: String,
+        val bodyEn: String,
+        val action: String,
+        val exploreSurface: String? = null,
+        val seasonLabelVi: String? = null,
+        val seasonLabelEn: String? = null,
+    )
 
     private val variants = listOf(
         ReminderVariant(
@@ -55,36 +64,48 @@ object GuestLocalReengagementScheduler {
             "Khám phá thêm đồ second-hand — đăng ký để nhận gợi ý riêng mỗi ngày.",
             "Fash is waiting for you",
             "Discover more pre-loved fashion — sign up for daily picks made for you.",
+            NotificationExploreNavigation.GUEST_ACTION_OPEN_HOME_SIGNUP,
         ),
         ReminderVariant(
             "Style mới vừa lên kệ",
             "Xem bộ sưu tập pre-loved hôm nay — mở Fash không cần đăng nhập.",
             "Fresh pre-loved drops",
             "Browse today's curated second-hand picks — no login required.",
+            NotificationExploreNavigation.GUEST_ACTION_OPEN_EXPLORE,
+            exploreSurface = "explore",
         ),
         ReminderVariant(
             "Mùa này mặc gì?",
             "Gợi ý outfit second-hand phù hợp khí hậu VN — khám phá ngay trên Fash.",
             "What to wear this season?",
             "Climate-friendly pre-loved outfit ideas are waiting on Fash.",
+            NotificationExploreNavigation.GUEST_ACTION_OPEN_EXPLORE,
+            exploreSurface = "seasonal_near_you",
+            seasonLabelVi = "Mùa này",
+            seasonLabelEn = "This season",
         ),
         ReminderVariant(
             "Lưu món yêu thích",
             "Đăng ký miễn phí để lưu listing và nhận thông báo giảm giá.",
             "Save what you love",
             "Sign up free to save listings and get price-drop alerts.",
+            NotificationExploreNavigation.GUEST_ACTION_OPEN_HOME_SIGNUP,
         ),
         ReminderVariant(
             "Cộng đồng Fash đang sôi động",
             "Người bán C2C đang đăng hàng mới — ghé xem trước khi hết size.",
             "Fash community is buzzing",
             "C2C sellers just listed new pieces — browse before they're gone.",
+            NotificationExploreNavigation.GUEST_ACTION_OPEN_EXPLORE,
+            exploreSurface = "explore",
         ),
         ReminderVariant(
             "Deal second-hand hôm nay",
             "Món đẹp, giá tốt — mở Fash khám phá kho pre-loved gần bạn.",
             "Today's pre-loved deals",
             "Great style, better prices — explore pre-loved near you on Fash.",
+            NotificationExploreNavigation.GUEST_ACTION_OPEN_EXPLORE,
+            exploreSurface = "explore",
         ),
     )
 
@@ -129,21 +150,40 @@ object GuestLocalReengagementScheduler {
     }
 
     fun pickVariant(context: Context): Pair<String, String> {
+        val v = selectedVariant(context)
+        val en = Locale.getDefault().language.startsWith("en")
+        return if (en) v.titleEn to v.bodyEn else v.titleVi to v.bodyVi
+    }
+
+    fun guestOpenPayload(context: Context): Map<String, String> {
+        val v = selectedVariant(context)
+        val en = Locale.getDefault().language.startsWith("en")
+        val out = linkedMapOf(NotificationExploreNavigation.GUEST_ACTION_KEY to v.action)
+        v.exploreSurface?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            out[NotificationExploreNavigation.GUEST_EXPLORE_SURFACE_KEY] = it
+        }
+        val seasonLabel = if (en) v.seasonLabelEn else v.seasonLabelVi
+        seasonLabel?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            out[NotificationExploreNavigation.GUEST_EXPLORE_SEASON_LABEL_KEY] = it
+        }
+        return out
+    }
+
+    private fun selectedVariant(context: Context): ReminderVariant {
         val cachedTitle = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_REMINDER_TITLE, null)?.trim().orEmpty()
         val cachedBody = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_REMINDER_BODY, null)?.trim().orEmpty()
         if (cachedTitle.isNotEmpty() && cachedBody.isNotEmpty()) {
-            return cachedTitle to cachedBody
+            return variants.firstOrNull { it.titleVi == cachedTitle || it.titleEn == cachedTitle }
+                ?: variants.first()
         }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val session = prefs.getInt(KEY_SESSION_COUNT, 0)
         val hour = LocalDateTime.now(vnZone).hour
         val day = LocalDate.now(vnZone).dayOfMonth
         val idx = (session + hour + day) % variants.size
-        val v = variants[idx]
-        val en = Locale.getDefault().language.startsWith("en")
-        return if (en) v.titleEn to v.bodyEn else v.titleVi to v.bodyVi
+        return variants[idx]
     }
 
     fun reminderTitle(context: Context): String = pickVariant(context).first

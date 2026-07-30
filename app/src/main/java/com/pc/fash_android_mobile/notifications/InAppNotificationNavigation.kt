@@ -3,6 +3,8 @@ package com.pc.fash_android_mobile.notifications
 import com.pc.fash_android_mobile.FashInAppNotificationSession
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
+import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
+import com.pc.fash_android_mobile.ui.notifications.NotificationExploreNavigation
 
 /** Resolves in-app banner taps to navigation targets (chat-first for marketplace threads). */
 object InAppNotificationNavigation {
@@ -42,6 +44,8 @@ object InAppNotificationNavigation {
         onOpenChat: (String) -> Unit,
         onOpenOrder: (String) -> Unit,
         onOpenInviteFriends: () -> Unit,
+        onOpenExplore: (ExploreNavigationFilter?) -> Unit,
+        onOpenOnboarding: () -> Unit,
         onOpenNotificationDetail: (String) -> Unit,
         onOpenNotificationInbox: () -> Unit,
         onOpenDeepLink: (String) -> Unit,
@@ -63,9 +67,22 @@ object InAppNotificationNavigation {
             onOpenInviteFriends()
             return true
         }
-        if (nav == "order") {
+        if (nav == "onboarding") {
+            onOpenOnboarding()
+            return true
+        }
+        if (nav == "order" || nav == "orders") {
             orderId(data)?.let { oid ->
                 onOpenOrder(oid)
+                return true
+            }
+        }
+        NotificationExploreNavigation.parseFromStringMap(data)?.let { filter ->
+            if (NotificationExploreNavigation.isExplorePrimaryIntent(
+                    data?.mapValues { it.value as Any? },
+                )
+            ) {
+                onOpenExplore(filter)
                 return true
             }
         }

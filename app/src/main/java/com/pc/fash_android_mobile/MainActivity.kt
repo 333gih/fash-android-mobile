@@ -86,6 +86,7 @@ import com.pc.fash_android_mobile.data.chat.ConversationItem
 import com.pc.fash_android_mobile.notifications.GuestLocalReengagementScheduler
 import com.pc.fash_android_mobile.notifications.InAppNotificationNavigation
 import com.pc.fash_android_mobile.notifications.PushNotificationRouter
+import com.pc.fash_android_mobile.ui.notifications.NotificationExploreNavigation
 import com.pc.fash_android_mobile.notifications.RealtimeNotificationRouter
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
 import com.pc.fash_android_mobile.ui.chat.ChatNotificationPresence
@@ -302,6 +303,19 @@ class MainActivity : ComponentActivity() {
         val accountSwitch = AccountSwitchDeepLinks.parseFromIntent(intent)
         if (accountSwitch != null) {
             fashApp.requestAccountSwitchPrompt(accountSwitch)
+        } else if (intent?.action == GuestLocalReengagementScheduler.ACTION_OPEN_GUEST_HOME) {
+            val payload = linkedMapOf<String, String>()
+            intent.extras?.keySet()?.forEach { key ->
+                intent.getStringExtra(key)?.trim()?.takeIf { it.isNotEmpty() }?.let { payload[key] = it }
+            }
+            NotificationExploreNavigation.parseFromGuestPayload(payload)?.let { filter ->
+                fashApp.pendingExploreNavigationFilter.value = filter
+            }
+            if (payload[NotificationExploreNavigation.GUEST_ACTION_KEY] ==
+                NotificationExploreNavigation.GUEST_ACTION_OPEN_HOME_SIGNUP
+            ) {
+                fashApp.pendingGuestSignupNudge.value = true
+            }
         } else if (PushNotificationRouter.isTrayTapIntent(intent)) {
             PushNotificationRouter.routeFromTrayTap(fashApp, intent)
             PushNotificationRouter.clearTrayRoutingExtras(intent)
@@ -1427,6 +1441,19 @@ class MainActivity : ComponentActivity() {
                                         chatViewModel.refreshUnreadCount()
                                         ChatNotificationPresence.registerOpenConversation(fashApp, cid)
                                         fashApp.pendingOpenChatConversationId.value = null
+                                    }
+                                    val pendingExploreFilter by fashApp.pendingExploreNavigationFilter.collectAsState()
+                                    LaunchedEffect(pendingExploreFilter) {
+                                        val filter = pendingExploreFilter ?: return@LaunchedEffect
+                                        exploreViewModel.openExploreFromNotificationFilter(filter)
+                                        fashApp.pendingExploreNavigationFilter.value = null
+                                        exploreOverlayOpenNonce++
+                                    }
+                                    val pendingOpenOnboarding by fashApp.pendingOpenOnboarding.collectAsState()
+                                    LaunchedEffect(pendingOpenOnboarding) {
+                                        if (!pendingOpenOnboarding) return@LaunchedEffect
+                                        needsOnboarding = true
+                                        fashApp.pendingOpenOnboarding.value = false
                                     }
                                     LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders, pendingPromoOpenExplore) {
                                         if (pendingPromoMainTab >= 0) {
@@ -2885,6 +2912,14 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenInviteFriends = {
                                     fashApp.pendingOpenInviteFriends.value = true
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenExplore = { filter ->
+                                    filter?.let { fashApp.pendingExploreNavigationFilter.value = it }
+                                    fashApp.dismissInAppNotification()
+                                },
+                                onOpenOnboarding = {
+                                    fashApp.pendingOpenOnboarding.value = true
                                     fashApp.dismissInAppNotification()
                                 },
                                 onOpenNotificationDetail = { nid ->

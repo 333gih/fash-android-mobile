@@ -424,14 +424,14 @@ fun ExploreScreen(
                                 if (
                                     sizingMode.equals("match_profile", ignoreCase = true) ||
                                     browseLocationMode != BrowseLocationMode.Off ||
-                                    shoppingContextChip?.chipLabel() != null
+                                    viewModel.effectiveSeasonContextLabel() != null
                                 ) {
                                     item(span = StaggeredGridItemSpan.FullLine) {
                                         ExploreActivePersonalFilterChips(
                                             sizingActive = sizingMode.equals("match_profile", ignoreCase = true),
                                             browseLocationMode = browseLocationMode,
                                             browseLocationLabel = viewModel.activeBrowseLocationLabel(),
-                                            seasonContextLabel = shoppingContextChip?.chipLabel(),
+                                            seasonContextLabel = viewModel.effectiveSeasonContextLabel(),
                                             onClearSizing = { viewModel.setSizingModeFilter("all") },
                                             onClearLocation = { viewModel.clearBrowseLocationFilter() },
                                             onOpenFilters = { showFilterSheet = true },

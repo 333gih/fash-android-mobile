@@ -35,6 +35,7 @@ import com.pc.fash_android_mobile.data.ui.UiDialogController
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.locale.PreferredLocaleSync
 import com.pc.fash_android_mobile.data.user.NotificationPreferencesRepository
+import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
@@ -147,6 +148,15 @@ class FashApplication : Application(), ImageLoaderFactory {
 
     /** In-app banner tap → order detail ([MainActivity] consumes). */
     val pendingOpenOrderId = MutableStateFlow<String?>(null)
+
+    /** Profile-completion push → onboarding shell ([MainActivity] consumes). */
+    val pendingOpenOnboarding = MutableStateFlow(false)
+
+    /** Push/inbox → Explore overlay with recommendation filters ([MainNavScreen] consumes). */
+    val pendingExploreNavigationFilter = MutableStateFlow<ExploreNavigationFilter?>(null)
+
+    /** Guest local reminder → signup nudge sheet ([GuestMainShell] consumes). */
+    val pendingGuestSignupNudge = MutableStateFlow(false)
 
     /** FCM tray / banner tap → chat thread ([MainActivity] consumes). */
     val pendingOpenChatConversationId = MutableStateFlow<String?>(null)

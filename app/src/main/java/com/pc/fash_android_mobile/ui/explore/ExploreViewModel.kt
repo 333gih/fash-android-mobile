@@ -28,6 +28,7 @@ import com.pc.fash_android_mobile.data.recommendation.FeedEventReporter
 import com.pc.fash_android_mobile.data.recommendation.ShoppingContext
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.shopReadyOnly
+import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
@@ -320,6 +321,16 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _shoppingContext = MutableStateFlow<ShoppingContext?>(null)
     val shoppingContext: StateFlow<ShoppingContext?> = _shoppingContext.asStateFlow()
 
+    /** Recommendation surface from notification deep link (`seasonal_near_you`, `hunt_today`, …). */
+    private val _exploreSurface = MutableStateFlow<String?>(null)
+    val exploreSurface: StateFlow<String?> = _exploreSurface.asStateFlow()
+
+    /** Season chip label when opened from a seasonal notification. */
+    private val _notificationSeasonLabel = MutableStateFlow<String?>(null)
+    val notificationSeasonLabel: StateFlow<String?> = _notificationSeasonLabel.asStateFlow()
+
+    private val _notificationSeasonKey = MutableStateFlow<String?>(null)
+
     /** @deprecated Use [manualBrowseLocation] — kept for gradual UI migration. */
     val browseLocation: StateFlow<BrowseLocationFilter> = _manualBrowseLocation.asStateFlow()
 
@@ -440,6 +451,89 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             requestScrollExploreToTop()
         }
     }
+
+    /** Opens Explore with filters from push / inbox notification payload. */
+    fun openExploreFromNotificationFilter(filter: ExploreNavigationFilter) {
+        viewModelScope.launch {
+            _primarySection.value = ExplorePrimarySection.Listings
+            setSearchBarExpanded(false)
+            lastSuccessfulExploreRefreshAtMs = 0L
+            _exploreSurface.value = filter.surface?.trim()?.takeIf { it.isNotEmpty() }
+            _notificationSeasonKey.value = filter.seasonKey?.trim()?.takeIf { it.isNotEmpty() }
+            _notificationSeasonLabel.value = filter.seasonLabel?.trim()?.takeIf { it.isNotEmpty() }
+            _isLoading.value = true
+            _loadError.value = false
+            _listings.value = emptyList()
+            _hasMore.value = true
+            withContext(Dispatchers.IO) {
+                loadTags()
+                loadCategories()
+            }
+            val q = filter.searchQuery?.trim().orEmpty()
+            val cat = filter.categoryId?.takeIf { it.isNotBlank() }
+            val brand = filter.brandId?.takeIf { it.isNotBlank() }
+            var tag = filter.aestheticTagId?.takeIf { it.isNotBlank() }
+            if (tag == null && cat == null && brand == null && q.isNotBlank()) {
+                tag = _aestheticTagsCatalog.value.firstOrNull { t ->
+                    t.name.equals(q, ignoreCase = true) ||
+                        t.displayName.equals(q, ignoreCase = true) ||
+                        t.displayNameVi.equals(q, ignoreCase = true)
+                }?.id
+            }
+            when {
+                cat != null -> {
+                    _selectedCategoryId.value = cat
+                    _selectedBrandId.value = null
+                    _selectedAestheticTagIds.value = emptySet()
+                }
+                brand != null -> {
+                    _selectedCategoryId.value = null
+                    _selectedBrandId.value = brand
+                    _selectedAestheticTagIds.value = emptySet()
+                }
+                tag != null -> {
+                    _selectedCategoryId.value = null
+                    _selectedBrandId.value = null
+                    _selectedAestheticTagIds.value = setOf(tag)
+                }
+                else -> {
+                    _selectedCategoryId.value = null
+                    _selectedBrandId.value = null
+                    _selectedAestheticTagIds.value = emptySet()
+                }
+            }
+            val hasStructuredFilter = cat != null || brand != null || tag != null ||
+                !filter.surface.isNullOrBlank() || !filter.seasonKey.isNullOrBlank()
+            when {
+                hasStructuredFilter || q.isBlank() -> {
+                    _committedListingSearchQuery.value = ""
+                    _isSearchMode.value = false
+                    fetchListingsFirstPage()
+                }
+                q.isNotBlank() -> {
+                    _committedListingSearchQuery.value = q
+                    _isSearchMode.value = true
+                    runSearchWithCurrentFilters()
+                }
+            }
+            _searchQuery.value = ""
+            _isLoading.value = false
+            requestScrollExploreToTop()
+        }
+    }
+
+    fun clearNotificationExploreContext() {
+        _exploreSurface.value = null
+        _notificationSeasonKey.value = null
+        _notificationSeasonLabel.value = null
+    }
+
+    fun effectiveSeasonContextLabel(): String? =
+        _notificationSeasonLabel.value?.trim()?.takeIf { it.isNotEmpty() }
+            ?: _shoppingContext.value?.chipLabel()
+
+    private fun activeExploreSurface(): String? =
+        _exploreSurface.value?.trim()?.takeIf { it.isNotEmpty() }
 
     private suspend fun refreshSellerBrowse() {
         val gen = sellersBrowseGeneration.incrementAndGet()
@@ -1183,6 +1277,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 sellerProvinceId = location.provinceId,
                 sellerDistrictId = location.districtId,
                 sellerWardId = location.wardId,
+                surface = activeExploreSurface(),
+                seasonKey = _notificationSeasonKey.value,
             )
         } else if (guest) {
             searchRepository.browseListings(
@@ -1458,6 +1554,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         if (_browseLocationMode.value != BrowseLocationMode.Off) {
             persistBrowseLocationMode(BrowseLocationMode.Off)
         }
+        clearNotificationExploreContext()
         _hasMore.value = true
         reloadAfterFilterChange()
         viewModelScope.launch { requestScrollExploreToTop() }
@@ -1497,6 +1594,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             if (_browseLocationMode.value != BrowseLocationMode.Off) {
                 persistBrowseLocationMode(BrowseLocationMode.Off)
             }
+            clearNotificationExploreContext()
             _isSearchMode.value = false
             _committedListingSearchQuery.value = ""
             _searchQuery.value = ""

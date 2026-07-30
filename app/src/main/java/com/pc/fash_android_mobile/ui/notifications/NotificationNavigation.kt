@@ -14,6 +14,8 @@ data class NotificationDetailActions(
     val openFollowingTab: Boolean,
     val openExploreTab: Boolean,
     val openInviteFriends: Boolean,
+    val openOnboarding: Boolean,
+    val exploreFilter: ExploreNavigationFilter?,
     val richDetailBody: String?,
     val imageUrl: String?,
 )
@@ -31,6 +33,8 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
             openFollowingTab = false,
             openExploreTab = false,
             openInviteFriends = false,
+            openOnboarding = false,
+            exploreFilter = null,
             richDetailBody = rich,
             imageUrl = image,
         )
@@ -50,7 +54,14 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
 
     val openFollowingTab = nav == "following_tab"
 
-    val openExploreTab = nav == "explore_tab" || nav == "explore"
+    val openExploreTab = nav == "explore_tab" || nav == "explore" ||
+        (nav == "home" && feedSurfaceEqualsSeasonal(data)) ||
+        NotificationExploreNavigation.isExplorePrimaryIntent(data)
+
+    val openOnboarding = nav == "onboarding" ||
+        ptype.equals("marketplace.recommendation.profile_completion", ignoreCase = true)
+
+    val exploreFilter = NotificationExploreNavigation.parseFromNotificationData(data)
 
     val openInviteFriends = nav == "in_app_invite_friends" ||
         ptype.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
@@ -80,6 +91,8 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
         openFollowingTab = openFollowingTab,
         openExploreTab = openExploreTab,
         openInviteFriends = openInviteFriends,
+        openOnboarding = openOnboarding,
+        exploreFilter = exploreFilter,
         richDetailBody = rich,
         imageUrl = imageUrl,
     )
@@ -102,3 +115,8 @@ internal fun firstStringFromDataCi(data: Map<String, Any?>?, vararg keys: String
 
 internal fun sellerUserIdFromData(data: Map<String, Any?>?): String? =
     firstStringFromDataCi(data, "seller_user_id", "sellerUserId", "seller_id", "sellerId")
+
+private fun feedSurfaceEqualsSeasonal(data: Map<String, Any?>?): Boolean {
+    val surface = firstStringFromDataCi(data, "feed_surface", "feedSurface")?.lowercase(Locale.ROOT).orEmpty()
+    return surface == "seasonal_near_you"
+}

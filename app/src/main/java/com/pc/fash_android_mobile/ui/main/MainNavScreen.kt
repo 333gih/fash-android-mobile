@@ -851,9 +851,15 @@ fun MainNavScreen(
                 showNotificationScreen = false
                 onOpenFollowConnections(tab)
             },
-            onOpenExplore = {
+            onOpenExplore = { filter ->
                 showNotificationScreen = false
+                filter?.let { exploreViewModel.openExploreFromNotificationFilter(it) }
                 openExploreOverlay(false)
+            },
+            onOpenOnboarding = {
+                showNotificationScreen = false
+                (context.applicationContext as com.pc.fash_android_mobile.FashApplication)
+                    .pendingOpenOnboarding.value = true
             },
             onOpenInviteFriends = {
                 showNotificationScreen = false

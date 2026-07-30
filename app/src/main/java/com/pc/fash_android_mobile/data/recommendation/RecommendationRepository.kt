@@ -57,6 +57,7 @@ class RecommendationRepository(
         sellerDistrictId: String? = null,
         sellerWardId: String? = null,
         surface: String? = null,
+        seasonKey: String? = null,
         excludeListingIds: List<String>? = null,
     ): Result<List<ListingFeedItem>> = runCatching {
         val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
@@ -82,6 +83,7 @@ class RecommendationRepository(
         sellerDistrictId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_district_id=${enc(it)}") }
         sellerWardId?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("seller_ward_id=${enc(it)}") }
         surface?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("surface=${enc(it)}") }
+        seasonKey?.trim()?.takeIf { it.isNotEmpty() }?.let { q.add("season_key=${enc(it)}") }
         excludeListingIds
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }

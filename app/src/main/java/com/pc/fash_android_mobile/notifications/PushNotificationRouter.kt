@@ -10,6 +10,7 @@ import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
 import com.pc.fash_android_mobile.deeplink.ProfileDeepLinks
 import com.pc.fash_android_mobile.data.recommendation.NotificationEngagementReporter
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
+import com.pc.fash_android_mobile.ui.notifications.NotificationExploreNavigation
 
 /**
  * Routes system-tray notification taps (MainActivity intent) — mirrors iOS
@@ -131,7 +132,11 @@ object PushNotificationRouter {
             fashApp.pendingOpenInviteFriends.value = true
             return
         }
-        if (nav == "order") {
+        if (nav == "onboarding") {
+            fashApp.pendingOpenOnboarding.value = true
+            return
+        }
+        if (nav == "order" || nav == "orders") {
             InAppNotificationNavigation.orderId(data)?.let { orderId ->
                 fashApp.pendingOpenOrderId.value = orderId
                 return

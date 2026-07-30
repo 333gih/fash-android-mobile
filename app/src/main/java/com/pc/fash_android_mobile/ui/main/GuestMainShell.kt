@@ -56,7 +56,7 @@ import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileScreen
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
-import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
+import com.pc.fash_android_mobile.ui.notifications.NotificationExploreNavigation
 import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
@@ -129,6 +129,20 @@ fun GuestMainShell(
     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
     var guestLoginReason by remember { mutableStateOf<GuestLoginReason?>(null) }
     var showSignupNudge by remember { mutableStateOf(false) }
+
+    val pendingExploreFilter by fashApp.pendingExploreNavigationFilter.collectAsState()
+    LaunchedEffect(pendingExploreFilter) {
+        val filter = pendingExploreFilter ?: return@LaunchedEffect
+        exploreViewModel.openExploreFromNotificationFilter(filter)
+        fashApp.pendingExploreNavigationFilter.value = null
+        exploreOverlayOpenNonce++
+    }
+    val pendingGuestNudge by fashApp.pendingGuestSignupNudge.collectAsState()
+    LaunchedEffect(pendingGuestNudge) {
+        if (!pendingGuestNudge) return@LaunchedEffect
+        showSignupNudge = true
+        fashApp.pendingGuestSignupNudge.value = false
+    }
 
     val notifPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
