@@ -57,6 +57,7 @@ import com.pc.fash_android_mobile.ui.main.tabs.ProfileViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileScreen
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileViewModel
 import com.pc.fash_android_mobile.ui.notifications.NotificationExploreNavigation
+import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
 import com.pc.fash_android_mobile.ui.orders.OrdersViewModel
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
