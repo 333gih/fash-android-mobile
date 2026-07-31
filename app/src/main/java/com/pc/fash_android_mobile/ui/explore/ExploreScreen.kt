@@ -120,6 +120,7 @@ import com.pc.fash_android_mobile.ui.components.FashAvatarCircle
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSlider
+import com.pc.fash_android_mobile.ui.components.FashStickyPromoDockHeight
 import com.pc.fash_android_mobile.ui.components.StickyBottomPromoBar
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewEmptySlotPlaceholder
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
@@ -284,6 +285,7 @@ fun ExploreScreen(
         enabled = listings.isNotEmpty(),
     )
     val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
+    val promoDockInset = if (promoSlides.isNotEmpty()) FashStickyPromoDockHeight else 0.dp
     val sellersListState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
     val density = LocalDensity.current
@@ -381,18 +383,17 @@ fun ExploreScreen(
             ) {
                 when (primarySection) {
                     ExplorePrimarySection.Listings -> {
-                        Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.fillMaxSize()) {
                         LazyVerticalStaggeredGrid(
                             columns = StaggeredGridCells.Fixed(2),
                             state = gridState,
                             modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
+                                .fillMaxSize(),
                             contentPadding = PaddingValues(
                                 start = FashTheme.spacing.editorialStart,
                                 end = FashTheme.spacing.editorialEnd,
                                 top = 0.dp,
-                                bottom = FashTheme.spacing.spacing3,
+                                bottom = FashTheme.spacing.spacing4 + promoDockInset,
                             ),
                             horizontalArrangement = Arrangement.spacedBy(FashTheme.spacing.spacing2),
                             verticalItemSpacing = FashTheme.spacing.spacing2,
@@ -545,19 +546,11 @@ fun ExploreScreen(
                                 }
                             }
                         }
-                        AnimatedVisibility(
-                            visible = promoSlides.isNotEmpty(),
-                            modifier = Modifier.fillMaxWidth(),
-                            enter = slideInVertically(
-                                animationSpec = tween(280, easing = FastOutSlowInEasing),
-                                initialOffsetY = { it },
-                            ) + fadeIn(animationSpec = tween(280)),
-                            exit = slideOutVertically(
-                                animationSpec = tween(240, easing = FastOutSlowInEasing),
-                                targetOffsetY = { it },
-                            ) + fadeOut(animationSpec = tween(200)),
-                        ) {
-                            StickyBottomPromoBar(elevated = true) {
+                        if (promoSlides.isNotEmpty()) {
+                            StickyBottomPromoBar(
+                                elevated = true,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
                                 FashPromoSlider(
                                     modifier = Modifier.fillMaxWidth(),
                                     slides = promoSlides,
