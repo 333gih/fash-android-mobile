@@ -88,6 +88,7 @@ import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashProfileAvatarImage
 import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
+import com.pc.fash_android_mobile.ui.feed.FeedLazyListScrollPreserveEffect
 import com.pc.fash_android_mobile.ui.feed.listingMasonryProfileChunkItems
 import com.pc.fash_android_mobile.ui.feed.makeStableColumnLayout
 import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
@@ -234,6 +235,12 @@ fun ProfileCollapsingScrollLayout(
         (screenHeightDpInt * 0.28f).dp.coerceIn(120.dp, 280.dp)
     }
     val totalBottomPad = bottomScrollPad + additionalBottomInset
+
+    FeedLazyListScrollPreserveEffect(
+        state = listState,
+        itemCount = items.size,
+        enabled = enableGridPagination && items.isNotEmpty(),
+    )
 
     LaunchedEffect(listState, items.size, gridHasMore, gridIsLoadingMore, showGridLoading, enableGridPagination) {
         if (!enableGridPagination) return@LaunchedEffect
@@ -387,6 +394,7 @@ fun ProfileCollapsingScrollLayout(
                     FeedLoadMoreFooter(
                         enabled = gridHasMore,
                         isLoadingMore = gridIsLoadingMore,
+                        anchorItemCount = items.size,
                         onLoadMore = onGridLoadMore,
                         modifier = tabSwipeModifier,
                     )

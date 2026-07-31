@@ -126,6 +126,7 @@ import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
+import com.pc.fash_android_mobile.ui.feed.FeedStaggeredGridScrollPreserveEffect
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.feed.listingMasonryAspectRatio
 import com.pc.fash_android_mobile.ui.feed.listingMasonryTileSize
@@ -277,6 +278,11 @@ fun ExploreScreen(
     val sellersLoading by viewModel.sellersLoading.collectAsState()
     val sellersLoadError by viewModel.sellersLoadError.collectAsState()
     val gridState = rememberLazyStaggeredGridState()
+    FeedStaggeredGridScrollPreserveEffect(
+        state = gridState,
+        itemCount = listings.size,
+        enabled = listings.isNotEmpty(),
+    )
     val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
     val sellersListState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
@@ -526,6 +532,7 @@ fun ExploreScreen(
                                             FeedLoadMoreFooter(
                                                 enabled = hasMore,
                                                 isLoadingMore = isLoadingMore,
+                                                anchorItemCount = listings.size,
                                                 onLoadMore = { viewModel.loadMore() },
                                             )
                                         }

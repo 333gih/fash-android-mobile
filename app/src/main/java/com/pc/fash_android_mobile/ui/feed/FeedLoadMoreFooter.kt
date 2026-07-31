@@ -74,7 +74,6 @@ fun FeedLoadMoreFooter(
         if (!isLoadingMore && enabled) {
             delay(280)
             visitArmed = true
-            lastTriggeredAtCount = -1
             tryLoadOnVisit()
         }
     }

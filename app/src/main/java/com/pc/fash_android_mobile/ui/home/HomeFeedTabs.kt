@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
-import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.outlined.Inventory2
@@ -72,6 +71,7 @@ import com.pc.fash_android_mobile.ui.components.FashSkeletonGrid
 import com.pc.fash_android_mobile.ui.feed.FeedEmptyColumn
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
 import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
+import com.pc.fash_android_mobile.ui.feed.FeedStaggeredGridScrollPreserveEffect
 import com.pc.fash_android_mobile.ui.feed.ListingGridCard
 import com.pc.fash_android_mobile.ui.feed.listingMasonryAspectRatio
 import com.pc.fash_android_mobile.ui.feed.listingMasonryTileSize
@@ -221,7 +221,15 @@ fun HomeFeedTabHost(
     val loadStall = !showGuestGate && safeSelected in tabsLoadStalled
     val hasMore = !showGuestGate && selectedTabHasMore
     val loadingMore = !showGuestGate && selectedTabLoadingMore
-    val gridState = rememberLazyStaggeredGridState()
+    val gridStates = remember { mutableMapOf<HomeFeedTab, androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState>() }
+    val gridState = gridStates.getOrPut(safeSelected) {
+        androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState()
+    }
+    FeedStaggeredGridScrollPreserveEffect(
+        state = gridState,
+        itemCount = gridItems.size,
+        enabled = !showGuestGate && gridItems.isNotEmpty(),
+    )
     val masonryColumnWidthDp = rememberListingMasonryColumnWidthDp()
     val scheme = MaterialTheme.colorScheme
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
@@ -303,10 +311,12 @@ fun HomeFeedTabHost(
         }
     }
 
+    var guestColdStartScrollPinned by remember { mutableStateOf(false) }
     // Guest cold start: pin to absolute top after waiting screen (parity with bottom-nav re-tap / reload).
-    LaunchedEffect(isGuestBrowse, shellLoading, hasFeaturedSellersBlock, gridItems.size) {
-        if (!isGuestBrowse) return@LaunchedEffect
+    LaunchedEffect(isGuestBrowse, shellLoading, hasFeaturedSellersBlock) {
+        if (!isGuestBrowse || guestColdStartScrollPinned) return@LaunchedEffect
         if (shellLoading && gridItems.isEmpty()) return@LaunchedEffect
+        guestColdStartScrollPinned = true
         stickyTabsLatch = false
         gridState.scrollToItem(0)
         delay(80)

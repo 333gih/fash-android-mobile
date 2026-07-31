@@ -1,0 +1,3 @@
+• Larger Fash notification icon in the status bar — hanger logo is easier to spot and tinted with brand pink
+• Fix home/explore/profile feeds jumping back to the top while load-more is still loading
+• Smoother infinite scroll when browsing long product lists

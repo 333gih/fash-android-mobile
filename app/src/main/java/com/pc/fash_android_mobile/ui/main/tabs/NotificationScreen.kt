@@ -81,6 +81,7 @@ import com.pc.fash_android_mobile.ui.components.FashEmptyState
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
 import com.pc.fash_android_mobile.ui.components.FashPromoSliderAdFooter
 import com.pc.fash_android_mobile.ui.components.FashSnackbarHost
+import com.pc.fash_android_mobile.ui.feed.FeedLazyListScrollPreserveEffect
 import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
 import com.pc.fash_android_mobile.ui.notifications.NotificationDetailScreen
 import com.pc.fash_android_mobile.ui.notifications.NotificationsViewModel
@@ -132,6 +133,11 @@ fun NotificationScreen(
     val selectedGroup by viewModel.selectedGroup.collectAsState()
     val pullState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
+    FeedLazyListScrollPreserveEffect(
+        state = listState,
+        itemCount = items.size,
+        enabled = items.isNotEmpty(),
+    )
     val snackbarHostState = remember { SnackbarHostState() }
     val canMarkAllRead = !inboxUnavailable &&
         !markAllReadBusy &&

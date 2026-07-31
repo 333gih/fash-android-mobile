@@ -107,8 +107,8 @@ function Save-StatDrawable {
         [string]$folder,
         [int]$px
     )
-    # Status bar icons are 24dp; extra inset keeps the hanger readable when tinted.
-    $markScale = 0.50
+    # Status bar icons are 24dp; ~68% fill matches Material guidance and peer apps in the status bar.
+    $markScale = 0.68
     $stat = New-TransparentMarkCanvas -silhouette $silhouette -size $px -markScale $markScale
     $dir = Join-Path $repoRoot "app\src\main\res\drawable-$folder"
     Save-Png $stat (Join-Path $dir "ic_stat_fash.png")
@@ -153,7 +153,7 @@ $brandComposite = New-CompositeBrand -markCanvas $foregroundMark
 Save-Png $brandComposite (Join-Path $resNodpi "ic_launcher_brand.png")
 Write-Host "Wrote ic_launcher_brand.png (432, composite)"
 
-$statIcon = New-TransparentMarkCanvas -silhouette $silhouette -size 96 -markScale 0.50
+$statIcon = New-TransparentMarkCanvas -silhouette $silhouette -size 96 -markScale 0.68
 Save-Png $statIcon (Join-Path $resNodpi "ic_stat_fash.png")
 Write-Host "Wrote ic_stat_fash.png (96, white silhouette for status bar)"
 
