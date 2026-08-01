@@ -116,6 +116,13 @@ Set-GhSecret "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" $playJson
 Set-GhSecret "PLAY_EXPECTED_UPLOAD_SHA1" $envMap["PLAY_EXPECTED_UPLOAD_SHA1"]
 Set-GhSecret "PLAY_TRACK" $envMap["PLAY_TRACK"]
 
+# Firebase google-services.json (optional — after SHA-1 registered in Firebase Console)
+$googleServicesJson = $envMap["GOOGLE_SERVICES_JSON"]
+if ([string]::IsNullOrWhiteSpace($googleServicesJson) -and $envMap["GOOGLE_SERVICES_JSON_PATH"]) {
+    $googleServicesJson = Read-RepoFileOptional $envMap["GOOGLE_SERVICES_JSON_PATH"]
+}
+Set-GhSecret "GOOGLE_SERVICES_JSON" $googleServicesJson
+
 Write-Host ""
 Write-Host "Done. Verify: gh secret list @repoArg"
 Write-Host "Then: Actions -> Android Build / Android Release -> Run workflow"

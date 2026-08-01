@@ -1,6 +1,21 @@
 # Google Sign-In (Android)
 
-## Build variants vs Play Store
+## play-service-account.json ≠ google-services.json
+
+| File | Mục đích | GitHub secret | Upload Play? | Google Sign-In? |
+|------|----------|---------------|--------------|-----------------|
+| `secrets/play-service-account.json` | Google Play Developer API — upload AAB lên Play | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | ✅ | ❌ |
+| `app/google-services.json` | Firebase config — Android OAuth client (`client_type: 1`) | `GOOGLE_SERVICES_JSON` (optional) | ❌ | ✅ |
+
+CI cảnh báo `missing Android OAuth clients (client_type 1)` vì **`google-services.json` chưa có Android OAuth client**, không phải vì thiếu `play-service-account.json`. Upload Play vẫn **success**; Google Sign-In trên bản cài từ Play sẽ **DEVELOPER_ERROR** cho đến khi thêm SHA-1 trên Firebase và cập nhật `google-services.json`.
+
+Tự động (sau khi có Play App signing SHA-1):
+
+```powershell
+python tools/register_firebase_sha.py --play-app-signing-sha1 "XX:XX:..."
+.\scripts\push_github_android_secrets.ps1
+```
+
 
 | How you run / ship | Gradle variant | Package name | Signing cert (local) |
 |--------------------|----------------|--------------|----------------------|
