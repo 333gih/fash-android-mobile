@@ -29,3 +29,4 @@ secrets/play-service-account.json
 secrets/*-service-account*.json
 upload-cert.pem
 *.pem
+*/_pycache_/
