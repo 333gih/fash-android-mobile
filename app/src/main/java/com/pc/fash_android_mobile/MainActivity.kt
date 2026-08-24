@@ -2992,6 +2992,10 @@ class MainActivity : ComponentActivity() {
                     else -> 0.dp
                 }
                 if (splashFinished && !maintenance.maintenance) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(150f),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         FashSnackbarHost(
