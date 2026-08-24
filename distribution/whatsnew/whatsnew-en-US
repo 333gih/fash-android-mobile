@@ -1,3 +1,3 @@
-• Maintenance screen when the app is temporarily unavailable
-• Turned on or off from admin — no reinstall needed after this update
-• Session stays signed in; after maintenance you return to Home
+• More reliable push notifications when the app is in the background
+• FCM token refresh after login
+• Session stays signed in

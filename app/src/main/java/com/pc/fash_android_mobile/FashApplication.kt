@@ -628,6 +628,7 @@ class FashApplication : Application(), ImageLoaderFactory {
     /** Registers FCM device token with core-service after login ([AuthRepository.registerFcm]). */
     val fcmTokenRegistrar: FcmTokenRegistrar by lazy {
         FcmTokenRegistrar(
+            appContext = this,
             authRepository = authManager.authRepository,
             sessionStore = authManager.sessionStore,
             clientLocaleProvider = { AppLocale.coreApiPathSegment() },

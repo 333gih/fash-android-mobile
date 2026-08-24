@@ -411,6 +411,7 @@ class LoginViewModel(
         viewModelScope.launch {
             _isLoggingOut.value = true
             val result = withContext(Dispatchers.IO) {
+                (app as FashApplication).fcmTokenRegistrar.clearOnLogout()
                 authManager.logout(session.accessToken)
             }
             withContext(Dispatchers.IO) {
@@ -442,6 +443,7 @@ class LoginViewModel(
         viewModelScope.launch {
             _isLoggingOut.value = true
             val result = withContext(Dispatchers.IO) {
+                (app as FashApplication).fcmTokenRegistrar.clearOnLogout()
                 authManager.logoutAll(session.accessToken)
             }
             withContext(Dispatchers.IO) {

@@ -135,16 +135,26 @@ class RealtimeManager(
 
     /** Closes the socket when the app backgrounds; subscriptions are kept for reconnect. */
     fun pauseForBackground() {
-        if (_state.value == State.CONNECTED && webSocket != null) {
+        intentionalDisconnect.set(true)
+        reconnectJob?.cancel()
+        val ws = webSocket
+        if (_state.value == State.CONNECTED && ws != null) {
             sendNow(
                 JSONObject().apply {
                     put("type", "presence")
                     put("state", "background")
                 },
             )
+            scope.launch {
+                delay(80)
+                runCatching { ws.close(CLOSE_NORMAL, "App background") }
+                if (webSocket === ws) {
+                    webSocket = null
+                    _state.value = State.DISCONNECTED
+                }
+            }
+            return
         }
-        intentionalDisconnect.set(true)
-        reconnectJob?.cancel()
         webSocket?.close(CLOSE_NORMAL, "App background")
         webSocket = null
         _state.value = State.DISCONNECTED

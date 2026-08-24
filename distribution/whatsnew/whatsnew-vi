@@ -1,3 +1,3 @@
-• Màn hình bảo trì khi app tạm ngưng
-• Bật/tắt từ admin — không cần cài lại sau bản này
-• Giữ đăng nhập; hết bảo trì quay về Home
+• Thông báo đẩy ổn định hơn khi app ở nền
+• Làm mới token FCM sau khi đăng nhập
+• Giữ phiên đăng nhập
