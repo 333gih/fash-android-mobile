@@ -134,6 +134,7 @@ import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
+import com.pc.fash_android_mobile.ui.splash.MaintenanceScreen
 import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
 import com.pc.fash_android_mobile.ui.components.FashAppPromoOverlayDialog
@@ -186,6 +187,7 @@ import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -556,6 +558,25 @@ class MainActivity : ComponentActivity() {
                 val fashApp = application as FashApplication
                 val notificationSnackbarContext = LocalContext.current
                 val shellCoroutineScope = rememberCoroutineScope()
+                val maintenance by fashApp.appMaintenanceController.status.collectAsState()
+                var wasMaintenance by remember { mutableStateOf(false) }
+                var shellEpoch by remember { mutableIntStateOf(0) }
+                LaunchedEffect(maintenance.maintenance) {
+                    if (wasMaintenance && !maintenance.maintenance) {
+                        shellEpoch++
+                    }
+                    wasMaintenance = maintenance.maintenance
+                }
+                val maintenanceLifecycle = LocalLifecycleOwner.current
+                LaunchedEffect(maintenanceLifecycle) {
+                    maintenanceLifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        while (isActive) {
+                            fashApp.appMaintenanceController.refresh()
+                            val on = fashApp.appMaintenanceController.status.value.maintenance
+                            delay(if (on) 15_000L else 45_000L)
+                        }
+                    }
+                }
                 val dialogMessage by fashApp.uiDialog.current.collectAsState()
                 /** Hoisted so [FashGlobalDialogHost] can reserve bottom inset for chat composer vs main nav. */
                 var selectedConversationId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1005,6 +1026,23 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
+                    if (maintenance.maintenance) {
+                        BackHandler(enabled = true) { }
+                        val title = maintenance.title?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.maintenance_title)
+                        val body = maintenance.message?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.maintenance_body)
+                        MaintenanceScreen(
+                            title = title,
+                            message = body,
+                            onRetry = {
+                                shellCoroutineScope.launch {
+                                    fashApp.appMaintenanceController.refresh()
+                                }
+                            },
+                        )
+                    } else {
+                    key(shellEpoch) {
                     if (splashFinished) {
                         val blockingShellWarmup = !shellWarmupComplete &&
                             !hasPendingNotificationNavigation &&
@@ -2683,6 +2721,8 @@ class MainActivity : ComponentActivity() {
                     } else {
                         FashWaitingScreen()
                     }
+                    }
+                    }
                 }
 
                 val welcomeBottomInset = when {
@@ -2692,7 +2732,7 @@ class MainActivity : ComponentActivity() {
                 }
                 // Full-screen interstitial — only after waiting/home reveal (not during warmup / onboarding).
                 FashAppPromoOverlayDialog(
-                    campaign = if (profileSetupBlocksShellChrome || !shellWarmupComplete) {
+                    campaign = if (maintenance.maintenance || profileSetupBlocksShellChrome || !shellWarmupComplete) {
                         null
                     } else {
                         activePromoCampaign
@@ -2872,6 +2912,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val showInAppNotificationShell = splashFinished &&
+                    !maintenance.maintenance &&
                     isAuthenticated &&
                     needsOnboarding == false &&
                     !profileSetupBlocksShellChrome &&
@@ -2940,7 +2981,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 FashGlobalDialogHost(
-                    message = if (profileSetupBlocksShellChrome) null else dialogMessage,
+                    message = if (maintenance.maintenance || profileSetupBlocksShellChrome) null else dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
                     onDismissAll = { fashApp.uiDialog.dismissAll() },
                     bottomOverlayInset = welcomeBottomInset,
@@ -2950,11 +2991,7 @@ class MainActivity : ComponentActivity() {
                     isGuestBrowse -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
-                if (splashFinished) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zIndex(150f),
+                if (splashFinished && !maintenance.maintenance) {
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         FashSnackbarHost(

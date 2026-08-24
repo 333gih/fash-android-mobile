@@ -9,6 +9,8 @@ import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSessionStore
 import com.pc.fash_android_mobile.data.chat.ChatRepository
 import com.pc.fash_android_mobile.data.deal.DealRepository
+import com.pc.fash_android_mobile.data.appstatus.AppMaintenanceController
+import com.pc.fash_android_mobile.data.appstatus.AppStatusRepository
 import com.pc.fash_android_mobile.data.advertising.AdvertisingRepository
 import com.pc.fash_android_mobile.data.promo.AppPromoCampaign
 import com.pc.fash_android_mobile.data.promo.AppPromoInterstitialRepository
@@ -416,6 +418,19 @@ class FashApplication : Application(), ImageLoaderFactory {
                 .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
                 .createClient(),
         )
+    }
+
+    val appStatusRepository: AppStatusRepository by lazy {
+        AppStatusRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+            localeTagProvider = { AppLocale.currentTag(this@FashApplication) },
+        )
+    }
+
+    val appMaintenanceController: AppMaintenanceController by lazy {
+        AppMaintenanceController(repository = appStatusRepository)
     }
 
     /** Public editorial guides (common-service `GET /api/v1/public/editorial-guides`). */
