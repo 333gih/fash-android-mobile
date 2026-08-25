@@ -1146,6 +1146,10 @@
     <string name="maintenance_title">Fash is under maintenance</string>
     <string name="maintenance_body">We\'ll be back shortly. Thanks for your patience.</string>
     <string name="maintenance_retry">Try again</string>
+    <string name="maintenance_warning_title">Fash maintenance soon</string>
+    <string name="maintenance_warning_body">Save your work. The app stays usable until lock.</string>
+    <string name="maintenance_warning_countdown">%1$d seconds left — save your work</string>
+    <string name="notification_pt_admin_app_maintenance">App maintenance</string>
     <string name="setup_gate_sign_out">Sign out</string>
     <string name="edit_profile_title">Edit profile</string>
     <string name="edit_profile_section_basic">Basic info</string>

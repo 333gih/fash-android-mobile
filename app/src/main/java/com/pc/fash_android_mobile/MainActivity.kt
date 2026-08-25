@@ -135,6 +135,7 @@ import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.splash.MaintenanceScreen
+import com.pc.fash_android_mobile.ui.splash.MaintenanceWarningBanner
 import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
 import com.pc.fash_android_mobile.ui.components.FashAppPromoOverlayDialog
@@ -562,8 +563,8 @@ class MainActivity : ComponentActivity() {
                 val maintenanceReady by fashApp.appMaintenanceController.ready.collectAsState()
                 var wasMaintenance by remember { mutableStateOf(false) }
                 var shellEpoch by remember { mutableIntStateOf(0) }
-                LaunchedEffect(maintenance.maintenance) {
-                    if (maintenance.maintenance) {
+                LaunchedEffect(maintenance.isLocked) {
+                    if (maintenance.isLocked) {
                         fashApp.pendingDeepLinkListingId.value = null
                         fashApp.pendingDeepLinkSellerUsername.value = null
                         fashApp.pendingInboxNotificationId.value = null
@@ -572,10 +573,10 @@ class MainActivity : ComponentActivity() {
                         fashApp.pendingOpenOrderId.value = null
                         fashApp.pendingExploreNavigationFilter.value = null
                     }
-                    if (wasMaintenance && !maintenance.maintenance) {
+                    if (wasMaintenance && !maintenance.isLocked) {
                         shellEpoch++
                     }
-                    wasMaintenance = maintenance.maintenance
+                    wasMaintenance = maintenance.isLocked
                 }
                 LaunchedEffect(Unit) {
                     realtimeManager.events.collect { event ->
@@ -589,8 +590,7 @@ class MainActivity : ComponentActivity() {
                     maintenanceLifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                         while (isActive) {
                             fashApp.appMaintenanceController.refresh()
-                            val on = fashApp.appMaintenanceController.status.value.maintenance
-                            delay(if (on) 5_000L else 8_000L)
+                            delay(fashApp.appMaintenanceController.status.value.pollIntervalMs())
                         }
                     }
                 }
@@ -1043,7 +1043,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (maintenance.maintenance) {
+                    if (maintenance.isLocked) {
                         BackHandler(enabled = true) { }
                         val title = maintenance.title?.takeIf { it.isNotBlank() }
                             ?: stringResource(R.string.maintenance_title)
@@ -2751,7 +2751,7 @@ class MainActivity : ComponentActivity() {
                 }
                 // Full-screen interstitial — only after waiting/home reveal (not during warmup / onboarding).
                 FashAppPromoOverlayDialog(
-                    campaign = if (maintenance.maintenance || profileSetupBlocksShellChrome || !shellWarmupComplete) {
+                    campaign = if (maintenance.isLocked || profileSetupBlocksShellChrome || !shellWarmupComplete) {
                         null
                     } else {
                         activePromoCampaign
@@ -2931,7 +2931,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val showInAppNotificationShell = splashFinished &&
-                    !maintenance.maintenance &&
+                    !maintenance.isLocked &&
                     isAuthenticated &&
                     needsOnboarding == false &&
                     !profileSetupBlocksShellChrome &&
@@ -3000,7 +3000,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 FashGlobalDialogHost(
-                    message = if (maintenance.maintenance || profileSetupBlocksShellChrome) null else dialogMessage,
+                    message = if (maintenance.isLocked || profileSetupBlocksShellChrome) null else dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
                     onDismissAll = { fashApp.uiDialog.dismissAll() },
                     bottomOverlayInset = welcomeBottomInset,
@@ -3010,7 +3010,7 @@ class MainActivity : ComponentActivity() {
                     isGuestBrowse -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
-                if (splashFinished && !maintenance.maintenance) {
+                if (splashFinished && !maintenance.isLocked) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -3024,7 +3024,13 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-                if (maintenance.maintenance) {
+                if (maintenance.isWarning && !maintenance.isLocked) {
+                    MaintenanceWarningBanner(
+                        status = maintenance,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                }
+                if (maintenance.isLocked) {
                     BackHandler(enabled = true) { }
                     Box(
                         modifier = Modifier
@@ -3052,7 +3058,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun routeInAppBannerDeepLink(fashApp: FashApplication, deepLink: String) {
-        if (fashApp.appMaintenanceController.status.value.maintenance) return
+        if (fashApp.appMaintenanceController.status.value.isLocked) return
         InboxDeepLinks.parseNotificationIdFromDeepLinkString(deepLink)?.let { nid ->
             fashApp.requestOpenInboxNotificationFromPush(nid)
             return

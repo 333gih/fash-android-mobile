@@ -101,7 +101,7 @@ fun notificationPayloadIcon(payloadType: String?): ImageVector {
         "marketplace.recommendation.social_style_match",
         -> Icons.Outlined.Recommend
         "admin.mobile_push.promo", "admin.app_promo_interstitial" -> Icons.Outlined.Campaign
-        "admin.mobile_push.ops", "admin.mobile_push.transactional", "admin.mobile_push.announcement", "admin.mobile_push" -> Icons.Outlined.Settings
+        "admin.mobile_push.ops", "admin.mobile_push.transactional", "admin.mobile_push.announcement", "admin.mobile_push", "admin.app_maintenance" -> Icons.Outlined.Settings
         else -> if (payloadType?.startsWith("marketplace.recommendation.", ignoreCase = true) == true) {
             Icons.Outlined.Recommend
         } else {
