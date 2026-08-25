@@ -135,6 +135,7 @@ import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.splash.MaintenanceScreen
+import com.pc.fash_android_mobile.ui.splash.MaintenanceResumeOverlay
 import com.pc.fash_android_mobile.ui.splash.MaintenanceWarningBanner
 import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
 import com.pc.fash_android_mobile.ui.components.FashGlobalDialogHost
@@ -561,6 +562,7 @@ class MainActivity : ComponentActivity() {
                 val shellCoroutineScope = rememberCoroutineScope()
                 val maintenance by fashApp.appMaintenanceController.status.collectAsState()
                 val maintenanceReady by fashApp.appMaintenanceController.ready.collectAsState()
+                val pendingMaintenanceResume by fashApp.appMaintenanceController.pendingResume.collectAsState()
                 var wasMaintenance by remember { mutableStateOf(false) }
                 var shellEpoch by remember { mutableIntStateOf(0) }
                 LaunchedEffect(maintenance.isLocked) {
@@ -3056,6 +3058,14 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                MaintenanceResumeOverlay(
+                    presentation = pendingMaintenanceResume,
+                    onDismiss = { fashApp.appMaintenanceController.dismissResumePresentation() },
+                    onExplore = {
+                        fashApp.appMaintenanceController.dismissResumePresentation()
+                        pendingPromoOpenExplore = true
+                    },
+                )
             }
             }
         }

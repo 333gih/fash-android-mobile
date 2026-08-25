@@ -17,6 +17,10 @@ data class AppMaintenanceStatus(
     val countdownSeconds: Int,
     val title: String?,
     val message: String?,
+    val updatedAtIso: String? = null,
+    val resumeMoment: String? = null,
+    val releaseNotesTitle: String? = null,
+    val releaseNotes: String? = null,
 ) {
     val isWarning: Boolean get() = !maintenance && phase.equals("warning", ignoreCase = true)
     val isLocked: Boolean get() = maintenance || phase.equals("maintenance", ignoreCase = true)
@@ -48,6 +52,10 @@ data class AppMaintenanceStatus(
             countdownSeconds = 0,
             title = null,
             message = null,
+            updatedAtIso = null,
+            resumeMoment = null,
+            releaseNotesTitle = null,
+            releaseNotes = null,
         )
 
         fun parse(root: JSONObject): AppMaintenanceStatus {
@@ -73,6 +81,10 @@ data class AppMaintenanceStatus(
                 countdownSeconds = payload.optInt("countdown_seconds", 0),
                 title = payload.optString("title").trim().ifEmpty { null },
                 message = payload.optString("message").trim().ifEmpty { null },
+                updatedAtIso = payload.optString("updated_at").trim().ifEmpty { null },
+                resumeMoment = payload.optString("resume_moment").trim().ifEmpty { null },
+                releaseNotesTitle = payload.optString("release_notes_title").trim().ifEmpty { null },
+                releaseNotes = payload.optString("release_notes").trim().ifEmpty { null },
             )
         }
 
@@ -105,6 +117,10 @@ data class AppMaintenanceStatus(
                 countdownSeconds = data["countdown_seconds"]?.toIntOrNull() ?: 0,
                 title = data["title"]?.trim()?.ifEmpty { null },
                 message = data["message"]?.trim()?.ifEmpty { null },
+                updatedAtIso = data["updated_at"]?.trim()?.ifEmpty { null },
+                resumeMoment = data["resume_moment"]?.trim()?.ifEmpty { null },
+                releaseNotesTitle = data["release_notes_title"]?.trim()?.ifEmpty { null },
+                releaseNotes = data["release_notes"]?.trim()?.ifEmpty { null },
             )
         }
     }
