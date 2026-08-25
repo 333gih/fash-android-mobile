@@ -3025,10 +3025,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (maintenance.isWarning && !maintenance.isLocked) {
-                    MaintenanceWarningBanner(
-                        status = maintenance,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .zIndex(5_000f),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        MaintenanceWarningBanner(status = maintenance)
+                    }
                 }
                 if (maintenance.isLocked) {
                     BackHandler(enabled = true) { }
