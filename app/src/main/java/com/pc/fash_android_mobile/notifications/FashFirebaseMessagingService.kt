@@ -37,7 +37,7 @@ class FashFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         val app = applicationContext as? FashApplication
-        if (app?.appMaintenanceController.applyFromPushData(message.data) == true) {
+        if (app?.appMaintenanceController?.applyFromPushData(message.data) == true) {
             return
         }
         AccountSwitchDeepLinks.parseFromFcmData(message.data)?.let { prompt ->
