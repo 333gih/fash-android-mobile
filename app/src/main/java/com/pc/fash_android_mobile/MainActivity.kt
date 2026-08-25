@@ -559,13 +559,30 @@ class MainActivity : ComponentActivity() {
                 val notificationSnackbarContext = LocalContext.current
                 val shellCoroutineScope = rememberCoroutineScope()
                 val maintenance by fashApp.appMaintenanceController.status.collectAsState()
+                val maintenanceReady by fashApp.appMaintenanceController.ready.collectAsState()
                 var wasMaintenance by remember { mutableStateOf(false) }
                 var shellEpoch by remember { mutableIntStateOf(0) }
                 LaunchedEffect(maintenance.maintenance) {
+                    if (maintenance.maintenance) {
+                        fashApp.pendingDeepLinkListingId.value = null
+                        fashApp.pendingDeepLinkSellerUsername.value = null
+                        fashApp.pendingInboxNotificationId.value = null
+                        fashApp.pendingOpenInviteFriends.value = false
+                        fashApp.pendingOpenChatConversationId.value = null
+                        fashApp.pendingOpenOrderId.value = null
+                        fashApp.pendingExploreNavigationFilter.value = null
+                    }
                     if (wasMaintenance && !maintenance.maintenance) {
                         shellEpoch++
                     }
                     wasMaintenance = maintenance.maintenance
+                }
+                LaunchedEffect(Unit) {
+                    realtimeManager.events.collect { event ->
+                        if (event is RealtimeEvent.AppStatusChanged) {
+                            fashApp.appMaintenanceController.apply(event.status)
+                        }
+                    }
                 }
                 val maintenanceLifecycle = LocalLifecycleOwner.current
                 LaunchedEffect(maintenanceLifecycle) {
@@ -573,7 +590,7 @@ class MainActivity : ComponentActivity() {
                         while (isActive) {
                             fashApp.appMaintenanceController.refresh()
                             val on = fashApp.appMaintenanceController.status.value.maintenance
-                            delay(if (on) 15_000L else 45_000L)
+                            delay(if (on) 5_000L else 8_000L)
                         }
                     }
                 }
@@ -1041,6 +1058,8 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         )
+                    } else if (!maintenanceReady) {
+                        FashWaitingScreen()
                     } else {
                     key(shellEpoch) {
                     if (splashFinished) {
@@ -3005,12 +3024,35 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                if (maintenance.maintenance) {
+                    BackHandler(enabled = true) { }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(10_000f),
+                    ) {
+                        val overlayTitle = maintenance.title?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.maintenance_title)
+                        val overlayBody = maintenance.message?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.maintenance_body)
+                        MaintenanceScreen(
+                            title = overlayTitle,
+                            message = overlayBody,
+                            onRetry = {
+                                shellCoroutineScope.launch {
+                                    fashApp.appMaintenanceController.refresh()
+                                }
+                            },
+                        )
+                    }
+                }
             }
             }
         }
     }
 
     private fun routeInAppBannerDeepLink(fashApp: FashApplication, deepLink: String) {
+        if (fashApp.appMaintenanceController.status.value.maintenance) return
         InboxDeepLinks.parseNotificationIdFromDeepLinkString(deepLink)?.let { nid ->
             fashApp.requestOpenInboxNotificationFromPush(nid)
             return

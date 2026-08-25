@@ -6,6 +6,7 @@ import com.pc.fash_android_mobile.data.http.CoreServiceHttpException
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 data class AppMaintenanceStatus(
     val maintenance: Boolean,
@@ -14,16 +15,49 @@ data class AppMaintenanceStatus(
 ) {
     companion object {
         val Open = AppMaintenanceStatus(maintenance = false, title = null, message = null)
+
+        fun parse(root: JSONObject): AppMaintenanceStatus {
+            val payload = if (root.has("data") && root.opt("data") is JSONObject) {
+                root.getJSONObject("data")
+            } else {
+                root
+            }
+            val on = payload.optBoolean("maintenance", false) || payload.optBoolean("enabled", false)
+            val title = payload.optString("title").trim().ifEmpty { null }
+            val message = payload.optString("message").trim().ifEmpty { null }
+            return AppMaintenanceStatus(maintenance = on, title = title, message = message)
+        }
+
+        fun parseJson(raw: String): AppMaintenanceStatus? = runCatching {
+            parse(JSONObject(raw))
+        }.getOrNull()
+
+        fun fromPushData(data: Map<String, String>): AppMaintenanceStatus? {
+            val type = data["type"]?.trim()?.lowercase().orEmpty()
+            if (type != "app.maintenance" && type != "app.status.changed") return null
+            val raw = (data["maintenance"] ?: data["enabled"] ?: "").trim().lowercase()
+            val on = raw == "true" || raw == "1" || raw == "yes"
+            return AppMaintenanceStatus(
+                maintenance = on,
+                title = data["title"]?.trim()?.ifEmpty { null },
+                message = data["message"]?.trim()?.ifEmpty { null },
+            )
+        }
     }
 }
 
 /**
- * Public kill-switch: `GET /api/v1/app/status` (no attestation).
+ * Public kill-switch: `GET /api/v1/app/status` with a plain client (no JWT).
  */
 class AppStatusRepository(
-    private val securedClient: OkHttpClient,
     private val localeTagProvider: () -> String = { "vi" },
 ) {
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .writeTimeout(8, TimeUnit.SECONDS)
+        .build()
+
     fun fetch(): Result<AppMaintenanceStatus> = runCatching {
         val urls = AppEnvironment.coreApiCandidateUrls("api/v1/app/status")
         var last: Exception? = null
@@ -47,7 +81,7 @@ class AppStatusRepository(
             .header("X-Fash-Lang", locale)
             .header("User-Agent", "FashAndroid/1.0")
             .build()
-        return securedClient.newCall(request).execute().use { response ->
+        return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 throw CoreServiceHttpException(response.code, CoreServiceErrors.parseErrorMessage(response.code, body))
@@ -56,16 +90,5 @@ class AppStatusRepository(
         }
     }
 
-    private fun parse(raw: String): AppMaintenanceStatus {
-        val root = JSONObject(raw)
-        val payload = if (root.has("data") && root.opt("data") is JSONObject) {
-            root.getJSONObject("data")
-        } else {
-            root
-        }
-        val on = payload.optBoolean("maintenance", false) || payload.optBoolean("enabled", false)
-        val title = payload.optString("title").trim().ifEmpty { null }
-        val message = payload.optString("message").trim().ifEmpty { null }
-        return AppMaintenanceStatus(maintenance = on, title = title, message = message)
-    }
+    private fun parse(raw: String): AppMaintenanceStatus = AppMaintenanceStatus.parse(JSONObject(raw))
 }

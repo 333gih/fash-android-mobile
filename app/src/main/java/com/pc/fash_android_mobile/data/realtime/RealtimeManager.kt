@@ -583,6 +583,12 @@ class RealtimeManager(
                         ?: JSONObject()
                     RealtimeEvent.AppPromoShow(campaign)
                 }
+                "app.status.changed" -> {
+                    val src = if (payload.length() > 0) payload else json
+                    RealtimeEvent.AppStatusChanged(
+                        com.pc.fash_android_mobile.data.appstatus.AppMaintenanceStatus.parse(src),
+                    )
+                }
                 "pong" -> RealtimeEvent.Pong
                 else -> RealtimeEvent.Unknown(type)
             }

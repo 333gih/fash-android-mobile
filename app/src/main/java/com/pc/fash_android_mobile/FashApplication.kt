@@ -357,6 +357,7 @@ class FashApplication : Application(), ImageLoaderFactory {
             refreshAestheticTagCatalog()
             val hasSession = runCatching { authManager.sessionStore.read() != null }.getOrDefault(false)
             authManager.hydrateInitialAuthFromStore(hasSession)
+            appMaintenanceController.refresh()
         }
     }
 
@@ -422,15 +423,15 @@ class FashApplication : Application(), ImageLoaderFactory {
 
     val appStatusRepository: AppStatusRepository by lazy {
         AppStatusRepository(
-            securedClient = authManager
-                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
-                .createClient(),
             localeTagProvider = { AppLocale.currentTag(this@FashApplication) },
         )
     }
 
     val appMaintenanceController: AppMaintenanceController by lazy {
-        AppMaintenanceController(repository = appStatusRepository)
+        AppMaintenanceController(
+            repository = appStatusRepository,
+            prefs = getSharedPreferences("fash_app_status", android.content.Context.MODE_PRIVATE),
+        )
     }
 
     /** Public editorial guides (common-service `GET /api/v1/public/editorial-guides`). */

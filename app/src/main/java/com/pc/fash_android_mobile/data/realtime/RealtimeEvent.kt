@@ -87,6 +87,9 @@ sealed class RealtimeEvent {
     /** Admin promo interstitial (`type: app.promo.show`) — show blocking dialog from payload. */
     data class AppPromoShow(val campaignJson: org.json.JSONObject) : RealtimeEvent()
 
+    /** Maintenance kill-switch (`type: app.status.changed`) — replace the whole UI. */
+    data class AppStatusChanged(val status: com.pc.fash_android_mobile.data.appstatus.AppMaintenanceStatus) : RealtimeEvent()
+
     /** Server pong response (`type: pong`). */
     object Pong : RealtimeEvent()
 
