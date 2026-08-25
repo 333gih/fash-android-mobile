@@ -34,9 +34,11 @@ import kotlinx.coroutines.delay
 fun MaintenanceWarningBanner(
     status: AppMaintenanceStatus,
     modifier: Modifier = Modifier,
+    nowMillis: Long = System.currentTimeMillis(),
 ) {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(status.isWarning) {
+    var now by remember(nowMillis) { mutableLongStateOf(nowMillis) }
+    LaunchedEffect(status.isWarning, nowMillis) {
+        now = nowMillis
         while (status.isWarning) {
             delay(1_000)
             now = System.currentTimeMillis()

@@ -26,6 +26,16 @@ data class AppMaintenanceStatus(
     val isLocked: Boolean get() = maintenance || phase.equals("maintenance", ignoreCase = true)
     val sawRestricted: Boolean get() = isWarning || isLocked
 
+    /** Countdown elapsed while app was backgrounded — lock locally until server confirms. */
+    fun isEffectivelyLocked(nowMillis: Long = System.currentTimeMillis()): Boolean {
+        if (isLocked) return true
+        if (isWarning && remainingSeconds(nowMillis) <= 0) return true
+        return false
+    }
+
+    fun isEffectivelyWarning(nowMillis: Long = System.currentTimeMillis()): Boolean =
+        isWarning && !isEffectivelyLocked(nowMillis)
+
     fun remainingSeconds(nowMillis: Long = System.currentTimeMillis()): Int {
         val iso = startsAtIso?.trim().orEmpty()
         if (iso.isNotEmpty()) {

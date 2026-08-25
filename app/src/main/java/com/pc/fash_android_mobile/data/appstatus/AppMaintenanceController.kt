@@ -36,10 +36,7 @@ class AppMaintenanceController(
             sawRestrictedThisSession = true
         }
         maybeQueueResume(prev, next)
-        prefs.edit()
-            .putBoolean(KEY_LAST_ON, next.isLocked)
-            .putString(KEY_LAST_PHASE, next.phase)
-            .apply()
+        persistSnapshot(next)
     }
 
     fun dismissResumePresentation() {
@@ -62,6 +59,15 @@ class AppMaintenanceController(
                 apply(AppMaintenanceStatus.Open)
             }
         }
+    }
+
+    private fun persistSnapshot(next: AppMaintenanceStatus) {
+        prefs.edit()
+            .putBoolean(KEY_LAST_ON, next.isLocked)
+            .putString(KEY_LAST_PHASE, next.phase)
+            .putString(KEY_STARTS_AT, next.startsAtIso)
+            .putInt(KEY_COUNTDOWN, next.countdownSeconds)
+            .apply()
     }
 
     private fun maybeQueueResume(prev: AppMaintenanceStatus, next: AppMaintenanceStatus) {
@@ -88,14 +94,16 @@ class AppMaintenanceController(
 
     private fun loadPersistedOrOpen(): AppMaintenanceStatus {
         val phase = prefs.getString(KEY_LAST_PHASE, null)?.trim().orEmpty()
+        val startsAt = prefs.getString(KEY_STARTS_AT, null)?.trim()?.ifEmpty { null }
+        val countdown = prefs.getInt(KEY_COUNTDOWN, 0)
         val locked = prefs.getBoolean(KEY_LAST_ON, false) || phase.equals("maintenance", ignoreCase = true)
         if (locked) {
             return AppMaintenanceStatus(
                 maintenance = true,
                 phase = "maintenance",
                 mode = "none",
-                startsAtIso = null,
-                countdownSeconds = 0,
+                startsAtIso = startsAt,
+                countdownSeconds = countdown,
                 title = null,
                 message = null,
                 updatedAtIso = null,
@@ -109,8 +117,8 @@ class AppMaintenanceController(
                 maintenance = false,
                 phase = "warning",
                 mode = "none",
-                startsAtIso = null,
-                countdownSeconds = 0,
+                startsAtIso = startsAt,
+                countdownSeconds = countdown,
                 title = null,
                 message = null,
                 updatedAtIso = null,
@@ -125,6 +133,8 @@ class AppMaintenanceController(
     companion object {
         private const val KEY_LAST_ON = "maintenance_last_on"
         private const val KEY_LAST_PHASE = "maintenance_last_phase"
+        private const val KEY_STARTS_AT = "maintenance_starts_at"
+        private const val KEY_COUNTDOWN = "maintenance_countdown"
         private const val KEY_SEEN_RESUME = "maintenance_seen_resume"
     }
 }

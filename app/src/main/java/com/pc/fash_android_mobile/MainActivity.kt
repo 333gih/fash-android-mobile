@@ -135,6 +135,7 @@ import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
 import com.pc.fash_android_mobile.ui.splash.MaintenanceScreen
+import com.pc.fash_android_mobile.ui.splash.MaintenanceReturnGate
 import com.pc.fash_android_mobile.ui.splash.MaintenanceResumeOverlay
 import com.pc.fash_android_mobile.ui.splash.MaintenanceWarningBanner
 import com.pc.fash_android_mobile.ui.splash.SetupGateRetryScreen
@@ -563,10 +564,26 @@ class MainActivity : ComponentActivity() {
                 val maintenance by fashApp.appMaintenanceController.status.collectAsState()
                 val maintenanceReady by fashApp.appMaintenanceController.ready.collectAsState()
                 val pendingMaintenanceResume by fashApp.appMaintenanceController.pendingResume.collectAsState()
+                var maintenanceNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(maintenance.phase, maintenance.startsAtIso, maintenance.maintenance) {
+                    if (maintenance.isWarning || maintenance.isLocked) {
+                        while (isActive) {
+                            delay(500)
+                            maintenanceNowMillis = System.currentTimeMillis()
+                            if (maintenance.isWarning && maintenance.remainingSeconds(maintenanceNowMillis) <= 0) {
+                                fashApp.appMaintenanceController.refresh()
+                            }
+                        }
+                    }
+                }
+                val maintenanceLocked = maintenance.isEffectivelyLocked(maintenanceNowMillis)
+                val maintenanceWarning = maintenance.isEffectivelyWarning(maintenanceNowMillis)
+                val maintenanceReturnBlocking = pendingMaintenanceResume?.isBackOnline == true
+                val maintenanceBlocking = maintenanceLocked || maintenanceReturnBlocking
                 var wasMaintenance by remember { mutableStateOf(false) }
                 var shellEpoch by remember { mutableIntStateOf(0) }
-                LaunchedEffect(maintenance.isLocked) {
-                    if (maintenance.isLocked) {
+                LaunchedEffect(maintenanceLocked) {
+                    if (maintenanceLocked) {
                         fashApp.pendingDeepLinkListingId.value = null
                         fashApp.pendingDeepLinkSellerUsername.value = null
                         fashApp.pendingInboxNotificationId.value = null
@@ -575,10 +592,10 @@ class MainActivity : ComponentActivity() {
                         fashApp.pendingOpenOrderId.value = null
                         fashApp.pendingExploreNavigationFilter.value = null
                     }
-                    if (wasMaintenance && !maintenance.isLocked) {
+                    if (wasMaintenance && !maintenanceLocked) {
                         shellEpoch++
                     }
-                    wasMaintenance = maintenance.isLocked
+                    wasMaintenance = maintenanceLocked
                 }
                 LaunchedEffect(Unit) {
                     realtimeManager.events.collect { event ->
@@ -594,6 +611,11 @@ class MainActivity : ComponentActivity() {
                             fashApp.appMaintenanceController.refresh()
                             delay(fashApp.appMaintenanceController.status.value.pollIntervalMs())
                         }
+                    }
+                }
+                LaunchedEffect(maintenanceLifecycle) {
+                    maintenanceLifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                        fashApp.appMaintenanceController.refresh()
                     }
                 }
                 val dialogMessage by fashApp.uiDialog.current.collectAsState()
@@ -1045,7 +1067,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (maintenance.isLocked) {
+                    if (maintenanceLocked) {
                         BackHandler(enabled = true) { }
                         val title = maintenance.title?.takeIf { it.isNotBlank() }
                             ?: stringResource(R.string.maintenance_title)
@@ -1058,6 +1080,18 @@ class MainActivity : ComponentActivity() {
                                 shellCoroutineScope.launch {
                                     fashApp.appMaintenanceController.refresh()
                                 }
+                            },
+                        )
+                    } else if (maintenanceReturnBlocking && pendingMaintenanceResume != null) {
+                        BackHandler(enabled = true) { }
+                        MaintenanceReturnGate(
+                            presentation = pendingMaintenanceResume,
+                            onExplore = {
+                                fashApp.appMaintenanceController.dismissResumePresentation()
+                                pendingPromoOpenExplore = true
+                            },
+                            onHome = {
+                                fashApp.appMaintenanceController.dismissResumePresentation()
                             },
                         )
                     } else if (!maintenanceReady) {
@@ -2753,7 +2787,7 @@ class MainActivity : ComponentActivity() {
                 }
                 // Full-screen interstitial — only after waiting/home reveal (not during warmup / onboarding).
                 FashAppPromoOverlayDialog(
-                    campaign = if (maintenance.isLocked || profileSetupBlocksShellChrome || !shellWarmupComplete) {
+                    campaign = if (maintenanceBlocking || profileSetupBlocksShellChrome || !shellWarmupComplete) {
                         null
                     } else {
                         activePromoCampaign
@@ -2933,7 +2967,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val showInAppNotificationShell = splashFinished &&
-                    !maintenance.isLocked &&
+                    !maintenanceBlocking &&
                     isAuthenticated &&
                     needsOnboarding == false &&
                     !profileSetupBlocksShellChrome &&
@@ -3002,7 +3036,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 FashGlobalDialogHost(
-                    message = if (maintenance.isLocked || profileSetupBlocksShellChrome) null else dialogMessage,
+                    message = if (maintenanceBlocking || profileSetupBlocksShellChrome) null else dialogMessage,
                     onDismiss = { fashApp.uiDialog.dismiss() },
                     onDismissAll = { fashApp.uiDialog.dismissAll() },
                     bottomOverlayInset = welcomeBottomInset,
@@ -3012,7 +3046,7 @@ class MainActivity : ComponentActivity() {
                     isGuestBrowse -> MainNavBottomBarOverlayInset
                     else -> 0.dp
                 }
-                if (splashFinished && !maintenance.isLocked) {
+                if (splashFinished && !maintenanceBlocking) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -3026,17 +3060,20 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-                if (maintenance.isWarning && !maintenance.isLocked) {
+                if (maintenanceWarning) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .zIndex(5_000f),
                         contentAlignment = Alignment.TopCenter,
                     ) {
-                        MaintenanceWarningBanner(status = maintenance)
+                        MaintenanceWarningBanner(
+                            status = maintenance,
+                            nowMillis = maintenanceNowMillis,
+                        )
                     }
                 }
-                if (maintenance.isLocked) {
+                if (maintenanceLocked) {
                     BackHandler(enabled = true) { }
                     Box(
                         modifier = Modifier
@@ -3061,10 +3098,6 @@ class MainActivity : ComponentActivity() {
                 MaintenanceResumeOverlay(
                     presentation = pendingMaintenanceResume,
                     onDismiss = { fashApp.appMaintenanceController.dismissResumePresentation() },
-                    onExplore = {
-                        fashApp.appMaintenanceController.dismissResumePresentation()
-                        pendingPromoOpenExplore = true
-                    },
                 )
             }
             }
@@ -3072,7 +3105,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun routeInAppBannerDeepLink(fashApp: FashApplication, deepLink: String) {
-        if (fashApp.appMaintenanceController.status.value.isLocked) return
+        if (fashApp.appMaintenanceController.status.value.isEffectivelyLocked()) return
         InboxDeepLinks.parseNotificationIdFromDeepLinkString(deepLink)?.let { nid ->
             fashApp.requestOpenInboxNotificationFromPush(nid)
             return
