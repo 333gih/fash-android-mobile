@@ -30,8 +30,10 @@ import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.shopReadyOnly
 import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
 import com.pc.fash_android_mobile.data.search.TrendingQueryItem
+import com.pc.fash_android_mobile.data.search.toUserSearchResult
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
+import com.pc.fash_android_mobile.data.user.normalizePeopleSearchQuery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -149,7 +151,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val _sellersLoadError = MutableStateFlow(false)
     val sellersLoadError: StateFlow<Boolean> = _sellersLoadError.asStateFlow()
 
+    private val _sellersHasMore = MutableStateFlow(false)
+    val sellersHasMore: StateFlow<Boolean> = _sellersHasMore.asStateFlow()
+
+    private val _sellersLoadingMore = MutableStateFlow(false)
+    val sellersLoadingMore: StateFlow<Boolean> = _sellersLoadingMore.asStateFlow()
+
     private val sellersBrowseGeneration = AtomicInteger(0)
+    private val sellerBrowseSeen = LinkedHashSet<String>()
+    private var sellerBrowseNextOffset = 0
 
     private val _categories = MutableStateFlow<List<Category>>(emptyList())
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
@@ -541,14 +551,23 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _sellersLoading.value = true
         _sellersLoadError.value = false
         _sellerPreviewPosts.value = emptyMap()
+        sellerBrowseSeen.clear()
+        sellerBrowseNextOffset = 0
         val guest = isGuestBrowse()
-        val result = withContext(Dispatchers.IO) {
-            userRepository.searchUsers("a", limit = 40, publicBrowse = guest)
-        }
+        val result = withContext(Dispatchers.IO) { fetchSellerBrowsePage(offset = 0, guest = guest) }
         result.fold(
-            onSuccess = { users ->
+            onSuccess = { page ->
                 if (gen != sellersBrowseGeneration.get()) return@fold
+                val users = page.items.shopReadyOnly().map { it.toUserSearchResult() }.also { list ->
+                    list.forEach { u ->
+                        val k = sellerBrowseKey(u)
+                        if (k.isNotBlank()) sellerBrowseSeen.add(k)
+                    }
+                }
                 _sellerBrowseResults.value = users
+                sellerBrowseNextOffset = page.items.size
+                _sellersHasMore.value = page.items.size >= ExploreFeedPageSize &&
+                    (page.total <= 0 || sellerBrowseNextOffset < page.total)
                 _sellersLoadError.value = false
                 lastSuccessfulExploreRefreshAtMs = System.currentTimeMillis()
             },
@@ -556,6 +575,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 if (gen != sellersBrowseGeneration.get()) return@fold
                 _sellerBrowseResults.value = emptyList()
                 _sellerPreviewPosts.value = emptyMap()
+                _sellersHasMore.value = false
                 _sellersLoadError.value = true
                 _events.tryEmit(
                     it.message?.takeIf { m -> m.isNotBlank() }
@@ -565,18 +585,66 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
         _sellersLoading.value = false
         if (gen == sellersBrowseGeneration.get() && _sellerBrowseResults.value.isNotEmpty()) {
-            loadSellerListingPreviews(gen)
+            loadSellerListingPreviews(gen, replace = true)
         }
     }
 
-    private fun loadSellerListingPreviews(expectedGen: Int) {
+    private suspend fun fetchSellerBrowsePage(offset: Int, guest: Boolean) =
+        if (guest) {
+            searchRepository.browseFeaturedSellersPage(limit = ExploreFeedPageSize, offset = offset)
+        } else {
+            searchRepository.getFeaturedSellersPage(limit = ExploreFeedPageSize, offset = offset)
+        }
+
+    private fun sellerBrowseKey(user: UserSearchResult): String =
+        user.userId.trim().ifBlank { user.username.trim() }
+
+    fun loadMoreSellers() {
+        if (_committedSellerSearchQuery.value.isNotBlank()) return
+        if (!_sellersHasMore.value || _sellersLoadingMore.value || _sellersLoading.value) return
+        val gen = sellersBrowseGeneration.get()
         viewModelScope.launch {
-            _sellerPreviewPosts.value = emptyMap()
+            _sellersLoadingMore.value = true
+            val offset = sellerBrowseNextOffset
+            val guest = isGuestBrowse()
+            val result = withContext(Dispatchers.IO) { fetchSellerBrowsePage(offset = offset, guest = guest) }
+            result.fold(
+                onSuccess = { page ->
+                    if (gen != sellersBrowseGeneration.get()) return@fold
+                    val appended = ArrayList(_sellerBrowseResults.value)
+                    for (s in page.items.shopReadyOnly()) {
+                        val u = s.toUserSearchResult()
+                        val k = sellerBrowseKey(u)
+                        if (k.isBlank()) continue
+                        if (sellerBrowseSeen.add(k)) appended.add(u)
+                    }
+                    _sellerBrowseResults.value = appended
+                    sellerBrowseNextOffset = offset + page.items.size
+                    _sellersHasMore.value = page.items.size >= ExploreFeedPageSize &&
+                        (page.total <= 0 || sellerBrowseNextOffset < page.total)
+                    loadSellerListingPreviews(gen, replace = false)
+                },
+                onFailure = {
+                    if (gen != sellersBrowseGeneration.get()) return@fold
+                    _sellersHasMore.value = false
+                },
+            )
+            _sellersLoadingMore.value = false
+        }
+    }
+
+    private fun loadSellerListingPreviews(expectedGen: Int, replace: Boolean) {
+        viewModelScope.launch {
+            if (replace) {
+                _sellerPreviewPosts.value = emptyMap()
+            }
             val sellers = _sellerBrowseResults.value
+            val existing = _sellerPreviewPosts.value
             coroutineScope {
                 sellers.forEach { seller ->
-                    val key = seller.userId.trim().ifBlank { seller.username.trim() }
+                    val key = sellerBrowseKey(seller)
                     if (key.isBlank()) return@forEach
+                    if (!replace && existing.containsKey(key)) return@forEach
                     launch(Dispatchers.IO) {
                         val listings = if (isGuestBrowse()) {
                             listingRepository.getListingsBySellerPublic(
@@ -672,7 +740,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         ExplorePrimarySection.Listings ->
                             searchRepository.autocompleteListingTitles(snapshot).getOrElse { emptyList() }
                         ExplorePrimarySection.Sellers ->
-                            userRepository.searchUsers(snapshot, limit = 8, publicBrowse = isGuestBrowse()).fold(
+                            userRepository.searchUsers(
+                                normalizePeopleSearchQuery(snapshot),
+                                limit = 8,
+                                publicBrowse = isGuestBrowse(),
+                            ).fold(
                                 onSuccess = { list ->
                                     list.mapNotNull { u ->
                                         val uu = u.username.trim()
@@ -714,7 +786,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     /** Applies a title suggestion or recent/trending query and runs search. */
     fun selectSearchSuggestionAndSubmit(text: String) {
-        val t = text.trim()
+        val t = when (_primarySection.value) {
+            ExplorePrimarySection.Sellers -> normalizePeopleSearchQuery(text)
+            ExplorePrimarySection.Listings -> text.trim()
+        }
         if (t.isBlank()) return
         autocompleteJob?.cancel()
         _searchQuery.value = t
@@ -762,22 +837,25 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
      */
     fun submitSearch() {
         viewModelScope.launch {
-            val q = _searchQuery.value.trim()
-            if (q.isBlank()) return@launch
+            val raw = _searchQuery.value.trim()
+            if (raw.isBlank()) return@launch
             when (_primarySection.value) {
                 ExplorePrimarySection.Listings -> {
                     _isLoading.value = true
                     _loadError.value = false
-                    _committedListingSearchQuery.value = q
+                    _committedListingSearchQuery.value = raw
                     _isSearchMode.value = true
                     runSearchWithCurrentFilters()
                     _isLoading.value = false
                     setSearchBarExpanded(false)
                 }
                 ExplorePrimarySection.Sellers -> {
+                    val q = normalizePeopleSearchQuery(raw)
+                    if (q.isBlank()) return@launch
                     val gen = sellersBrowseGeneration.incrementAndGet()
                     _sellersLoading.value = true
                     _sellersLoadError.value = false
+                    _sellersHasMore.value = false
                     _sellerPreviewPosts.value = emptyMap()
                     val result = withContext(Dispatchers.IO) {
                         userRepository.searchUsers(q, limit = 50, publicBrowse = isGuestBrowse())
@@ -803,7 +881,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     )
                     _sellersLoading.value = false
                     if (gen == sellersBrowseGeneration.get() && _sellerBrowseResults.value.isNotEmpty()) {
-                        loadSellerListingPreviews(gen)
+                        loadSellerListingPreviews(gen, replace = true)
                     }
                     setSearchBarExpanded(false)
                 }
@@ -1662,6 +1740,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _hasMore.value = true
         _loadError.value = false
         _sellersLoadError.value = false
+        _sellersHasMore.value = false
+        _sellersLoadingMore.value = false
+        sellerBrowseSeen.clear()
+        sellerBrowseNextOffset = 0
     }
 
     fun refresh() {

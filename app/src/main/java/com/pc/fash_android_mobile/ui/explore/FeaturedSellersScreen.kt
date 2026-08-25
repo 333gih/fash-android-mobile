@@ -54,6 +54,7 @@ import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewEmptySlotPlaceholder
 import com.pc.fash_android_mobile.ui.components.ProfilePreviewRowCaption
 import com.pc.fash_android_mobile.ui.feed.FeedErrorColumn
+import com.pc.fash_android_mobile.ui.feed.FeedLoadMoreFooter
 import com.pc.fash_android_mobile.ui.feed.resolveListingImageUrl
 import com.pc.fash_android_mobile.ui.feed.resolveProfileImageUrl
 import com.pc.fash_android_mobile.ui.theme.FashColors
@@ -73,6 +74,8 @@ fun FeaturedSellersScreen(
     val loadError by viewModel.loadError.collectAsState()
     val loadErrorDetail by viewModel.loadErrorDetail.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
     val previewCovers by viewModel.previewCoverUrlsBySellerKey.collectAsState()
     val pullState = rememberPullToRefreshState()
     val scheme = MaterialTheme.colorScheme
@@ -197,6 +200,16 @@ fun FeaturedSellersScreen(
                                     onListingClick(listingId, seller.userId.takeIf { it.isNotBlank() })
                                 },
                             )
+                        }
+                        if (hasMore || isLoadingMore) {
+                            item(key = "featured_sellers_load_more") {
+                                FeedLoadMoreFooter(
+                                    enabled = hasMore,
+                                    isLoadingMore = isLoadingMore,
+                                    anchorItemCount = items.size,
+                                    onLoadMore = { viewModel.loadMore() },
+                                )
+                            }
                         }
                     }
                 }

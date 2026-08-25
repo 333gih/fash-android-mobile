@@ -1632,7 +1632,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     ReloadWhenVisible(showFeaturedSellersAll, sellerShopUsername, selectedListingId) {
                                         if (showFeaturedSellersAll && sellerShopUsername == null && selectedListingId == null) {
-                                            featuredSellersViewModel.refresh()
+                                            featuredSellersViewModel.ensureLoaded()
                                         }
                                     }
                                     ReloadWhenVisible(showEditProfile) {

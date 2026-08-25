@@ -278,6 +278,8 @@ fun ExploreScreen(
     val sellerPreviewPosts by viewModel.sellerPreviewPosts.collectAsState()
     val sellersLoading by viewModel.sellersLoading.collectAsState()
     val sellersLoadError by viewModel.sellersLoadError.collectAsState()
+    val sellersHasMore by viewModel.sellersHasMore.collectAsState()
+    val sellersLoadingMore by viewModel.sellersLoadingMore.collectAsState()
     val gridState = rememberLazyStaggeredGridState()
     FeedStaggeredGridScrollPreserveEffect(
         state = gridState,
@@ -574,6 +576,8 @@ fun ExploreScreen(
                             sellerPreviewPosts = sellerPreviewPosts,
                             sellersLoading = sellersLoading,
                             sellersLoadError = sellersLoadError,
+                            sellersHasMore = sellersHasMore,
+                            sellersLoadingMore = sellersLoadingMore,
                             committedSellerSearchQuery = committedSellerSearchQuery,
                             onClearSellerSearch = viewModel::clearSellerSearch,
                             onSellerClick = onFeaturedSellerClick,
@@ -581,6 +585,7 @@ fun ExploreScreen(
                                 viewModel.openListingPreview(item, position = 0)
                             },
                             onRetrySellers = viewModel::retrySellerBrowse,
+                            onLoadMoreSellers = viewModel::loadMoreSellers,
                         )
                     }
                 }
@@ -820,11 +825,14 @@ private fun ExploreSellersDiscoveryColumn(
     sellerPreviewPosts: Map<String, List<ListingFeedItem>>,
     sellersLoading: Boolean,
     sellersLoadError: Boolean,
+    sellersHasMore: Boolean,
+    sellersLoadingMore: Boolean,
     committedSellerSearchQuery: String,
     onClearSellerSearch: () -> Unit,
     onSellerClick: (UserSearchResult) -> Unit,
     onListingPreviewClick: (ListingFeedItem) -> Unit,
     onRetrySellers: () -> Unit,
+    onLoadMoreSellers: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val spacing = FashTheme.spacing
@@ -932,6 +940,16 @@ private fun ExploreSellersDiscoveryColumn(
                         onSellerClick = { onSellerClick(seller) },
                         onListingClick = onListingPreviewClick,
                     )
+                }
+                if (committedSellerSearchQuery.isBlank() && (sellersHasMore || sellersLoadingMore)) {
+                    item(key = "explore_sellers_load_more") {
+                        FeedLoadMoreFooter(
+                            enabled = sellersHasMore,
+                            isLoadingMore = sellersLoadingMore,
+                            anchorItemCount = sellerBrowseResults.size,
+                            onLoadMore = onLoadMoreSellers,
+                        )
+                    }
                 }
             }
         }

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.data.listing.ListingRepository
 import com.pc.fash_android_mobile.data.search.FeaturedSellerItem
+import com.pc.fash_android_mobile.data.search.FeaturedSellersPage
 import com.pc.fash_android_mobile.data.search.SearchRepository
 import com.pc.fash_android_mobile.data.search.shopReadyOnly
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,13 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    /** Server-reported eligible count after exclusions (drives the "see-all" pagination loop). */
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+
+    private val _hasMore = MutableStateFlow(false)
+    val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+
+    /** Server-reported eligible count after exclusions. */
     private val _totalCount = MutableStateFlow(0)
     val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
 
@@ -50,43 +57,47 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
     val previewCoverUrlsBySellerKey: StateFlow<Map<String, List<String?>>> =
         _previewCoverUrlsBySellerKey.asStateFlow()
 
-    /**
-     * "See all" must show every eligible seller — server caps each page at 50 (MaxFeaturedSellersLimit on
-     * core-service). We loop pages by offset until we reach `total` or the server returns fewer rows than
-     * requested. Sellers are de-duplicated by [sellerKey] in case of rare concurrent inserts shifting offsets.
-     */
-    private suspend fun loadAllPages(): Result<Pair<List<FeaturedSellerItem>, Int>> {
-        val pageSize = 50
-        val acc = ArrayList<FeaturedSellerItem>()
-        val seen = HashSet<String>()
-        var offset = 0
-        var total = 0
-        while (true) {
-            val result = if (isGuestBrowse()) {
-                searchRepository.browseFeaturedSellersPage(limit = pageSize, offset = offset)
-            } else {
-                searchRepository.getFeaturedSellersPage(limit = pageSize, offset = offset)
-            }
-            val page = result.getOrElse { return Result.failure(it) }
-            total = page.total
-            for (s in page.items.shopReadyOnly()) {
-                val k = sellerKey(s)
-                if (k.isBlank()) continue
-                if (seen.add(k)) acc.add(s)
-            }
-            if (page.items.size < pageSize) break
-            if (total > 0 && acc.size >= total) break
-            offset += page.items.size
-            // Guardrail: defensive break (server max=50 sellers historically, but loop must terminate).
-            if (offset > 5_000) break
+    private val seenKeys = LinkedHashSet<String>()
+    private var nextOffset = 0
+    private var lastLoadedAtMs = 0L
+
+    private suspend fun fetchPage(offset: Int): Result<FeaturedSellersPage> {
+        return if (isGuestBrowse()) {
+            searchRepository.browseFeaturedSellersPage(limit = PAGE_SIZE, offset = offset)
+        } else {
+            searchRepository.getFeaturedSellersPage(limit = PAGE_SIZE, offset = offset)
         }
-        return Result.success(acc to total)
     }
 
-    /** First paint when cache is empty (e.g. guest "See all" before [refresh] runs). */
+    private fun mergePage(page: FeaturedSellersPage, replace: Boolean) {
+        if (replace) {
+            seenKeys.clear()
+        }
+        val acc = if (replace) ArrayList<FeaturedSellerItem>() else ArrayList(_items.value)
+        for (s in page.items.shopReadyOnly()) {
+            val k = sellerKey(s)
+            if (k.isBlank()) continue
+            if (seenKeys.add(k)) acc.add(s)
+        }
+        _items.value = acc
+        _totalCount.value = page.total
+        nextOffset += page.items.size
+        _hasMore.value = page.items.size >= PAGE_SIZE &&
+            (page.total <= 0 || nextOffset < page.total)
+        lastLoadedAtMs = System.currentTimeMillis()
+    }
+
+    /** First paint: reuse in-memory page if fresh; otherwise load first offset page. */
     fun ensureLoaded() {
-        if (_isLoading.value || _isRefreshing.value || _items.value.isNotEmpty()) return
-        load()
+        if (_isLoading.value || _isRefreshing.value) return
+        val cached = _items.value.isNotEmpty() &&
+            System.currentTimeMillis() - lastLoadedAtMs < MEMORY_CACHE_TTL_MS
+        if (cached) return
+        if (_items.value.isEmpty()) {
+            load()
+        } else {
+            refresh()
+        }
     }
 
     fun load() {
@@ -94,16 +105,20 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
             _isLoading.value = true
             _loadError.value = false
             _loadErrorDetail.value = null
-            val result = withContext(Dispatchers.IO) { loadAllPages() }
+            nextOffset = 0
+            val result = withContext(Dispatchers.IO) { fetchPage(0) }
             result.fold(
-                onSuccess = { (items, total) ->
-                    _items.value = items
-                    _totalCount.value = total
+                onSuccess = { page ->
+                    nextOffset = 0
+                    mergePage(page, replace = true)
                 },
                 onFailure = { e ->
                     Log.e(TAG, "getFeaturedSellers failed", e)
                     _items.value = emptyList()
                     _totalCount.value = 0
+                    _hasMore.value = false
+                    nextOffset = 0
+                    seenKeys.clear()
                     _loadError.value = true
                     _loadErrorDetail.value = e.message ?: e.toString()
                 },
@@ -117,11 +132,12 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
             _isRefreshing.value = true
             _loadError.value = false
             _loadErrorDetail.value = null
-            val result = withContext(Dispatchers.IO) { loadAllPages() }
+            val result = withContext(Dispatchers.IO) { fetchPage(0) }
             result.fold(
-                onSuccess = { (items, total) ->
-                    _items.value = items
-                    _totalCount.value = total
+                onSuccess = { page ->
+                    nextOffset = 0
+                    mergePage(page, replace = true)
+                    _previewCoverUrlsBySellerKey.value = emptyMap()
                 },
                 onFailure = { e ->
                     Log.e(TAG, "getFeaturedSellers refresh failed", e)
@@ -129,8 +145,24 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
                     _loadErrorDetail.value = e.message ?: e.toString()
                 },
             )
-            _previewCoverUrlsBySellerKey.value = emptyMap()
             _isRefreshing.value = false
+        }
+    }
+
+    fun loadMore() {
+        if (!_hasMore.value || _isLoadingMore.value || _isLoading.value || _isRefreshing.value) return
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            val offset = nextOffset
+            val result = withContext(Dispatchers.IO) { fetchPage(offset) }
+            result.fold(
+                onSuccess = { page -> mergePage(page, replace = false) },
+                onFailure = { e ->
+                    Log.e(TAG, "getFeaturedSellers loadMore failed", e)
+                    _hasMore.value = false
+                },
+            )
+            _isLoadingMore.value = false
         }
     }
 
@@ -141,6 +173,12 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
         _loadErrorDetail.value = null
         _isLoading.value = false
         _isRefreshing.value = false
+        _isLoadingMore.value = false
+        _hasMore.value = false
+        _totalCount.value = 0
+        nextOffset = 0
+        lastLoadedAtMs = 0L
+        seenKeys.clear()
     }
 
     fun ensurePreviewCoversLoaded(seller: FeaturedSellerItem) {
@@ -167,6 +205,8 @@ class FeaturedSellersViewModel(application: Application) : AndroidViewModel(appl
 
     companion object {
         private const val TAG = "FeaturedSellersVM"
+        private const val PAGE_SIZE = 20
+        private const val MEMORY_CACHE_TTL_MS = 60_000L
 
         fun sellerKey(seller: FeaturedSellerItem): String =
             seller.userId.trim().ifBlank { seller.username.trim() }
