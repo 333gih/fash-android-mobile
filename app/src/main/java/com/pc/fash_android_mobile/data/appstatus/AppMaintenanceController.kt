@@ -12,7 +12,6 @@ class AppMaintenanceController(
     private val prefs: SharedPreferences,
 ) {
     private var sawRestrictedThisSession = false
-    private var confirmedFromNetwork = false
 
     private val _status = MutableStateFlow(loadPersistedOrOpen())
     val status: StateFlow<AppMaintenanceStatus> = _status.asStateFlow()
@@ -54,10 +53,7 @@ class AppMaintenanceController(
         result.onSuccess { applyInternal(it, fromNetwork = true) }
         result.onFailure {
             _ready.value = true
-            // Keep a persisted lock (user can retry). Only fail-open when we were not locked.
-            if (!confirmedFromNetwork && !_status.value.isLocked) {
-                applyInternal(AppMaintenanceStatus.Open, fromNetwork = false)
-            }
+            // Keep last snapshot (including persisted lock/warning). Never fail-open to Home.
         }
     }
 
@@ -65,9 +61,6 @@ class AppMaintenanceController(
         val prev = _status.value
         _status.value = next
         _ready.value = true
-        if (fromNetwork) {
-            confirmedFromNetwork = true
-        }
         if (next.sawRestricted) {
             sawRestrictedThisSession = true
         }
@@ -78,14 +71,18 @@ class AppMaintenanceController(
     }
 
     private fun persistSnapshot(next: AppMaintenanceStatus) {
-        // Warning is a 60s in-session state — persisting it makes the next cold start look locked
-        // after the countdown has elapsed.
-        val persistLocked = next.isLocked
+        val phase = when {
+            next.isLocked -> "maintenance"
+            next.isWarning -> "warning"
+            else -> "open"
+        }
         prefs.edit()
-            .putBoolean(KEY_LAST_ON, persistLocked)
-            .putString(KEY_LAST_PHASE, if (persistLocked) "maintenance" else "open")
+            .putBoolean(KEY_LAST_ON, next.isLocked)
+            .putString(KEY_LAST_PHASE, phase)
             .putString(KEY_STARTS_AT, next.startsAtIso)
             .putInt(KEY_COUNTDOWN, next.countdownSeconds)
+            .putString(KEY_TITLE, next.title)
+            .putString(KEY_MESSAGE, next.message)
             .apply()
     }
 
@@ -113,6 +110,8 @@ class AppMaintenanceController(
         val phase = prefs.getString(KEY_LAST_PHASE, null)?.trim().orEmpty()
         val startsAt = prefs.getString(KEY_STARTS_AT, null)?.trim()?.ifEmpty { null }
         val countdown = prefs.getInt(KEY_COUNTDOWN, 0)
+        val title = prefs.getString(KEY_TITLE, null)?.trim()?.ifEmpty { null }
+        val message = prefs.getString(KEY_MESSAGE, null)?.trim()?.ifEmpty { null }
         val locked = prefs.getBoolean(KEY_LAST_ON, false) || phase.equals("maintenance", ignoreCase = true)
         if (locked) {
             return AppMaintenanceStatus(
@@ -121,23 +120,40 @@ class AppMaintenanceController(
                 mode = "none",
                 startsAtIso = startsAt,
                 countdownSeconds = countdown,
-                title = null,
-                message = null,
+                title = title,
+                message = message,
                 updatedAtIso = null,
                 resumeMoment = null,
                 releaseNotesTitle = null,
                 releaseNotes = null,
             )
         }
-        // Stale warning snapshots from older builds must not lock the next launch.
+        if (phase.equals("warning", ignoreCase = true)) {
+            return AppMaintenanceStatus(
+                maintenance = false,
+                phase = "warning",
+                mode = "none",
+                startsAtIso = startsAt,
+                countdownSeconds = countdown,
+                title = title,
+                message = message,
+                updatedAtIso = null,
+                resumeMoment = null,
+                releaseNotesTitle = null,
+                releaseNotes = null,
+            )
+        }
         return AppMaintenanceStatus.Open
     }
 
     companion object {
+        const val FCM_TOPIC = "fash_app_status"
         private const val KEY_LAST_ON = "maintenance_last_on"
         private const val KEY_LAST_PHASE = "maintenance_last_phase"
         private const val KEY_STARTS_AT = "maintenance_starts_at"
         private const val KEY_COUNTDOWN = "maintenance_countdown"
+        private const val KEY_TITLE = "maintenance_title"
+        private const val KEY_MESSAGE = "maintenance_message"
         private const val KEY_SEEN_RESUME = "maintenance_seen_resume"
     }
 }

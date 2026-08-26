@@ -188,6 +188,7 @@ import com.pc.fash_android_mobile.data.theme.AppThemePreference
 import com.pc.fash_android_mobile.data.onboarding.AppFeatureTourStore
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.data.user.UserSearchResult
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -196,6 +197,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val SPLASH_DISPLAY_MS = 750L
+private const val SPLASH_MAINTENANCE_REFRESH_TIMEOUT_MS = 4_000L
 /** Cap cold-start session refresh so splash never blocks on a hung auth refresh. */
 private const val SPLASH_SESSION_VALIDATE_TIMEOUT_MS = 12_000L
 /** Home feed gate — never trap the user longer than this on the waiting screen (iOS parity). */
@@ -508,6 +510,11 @@ class MainActivity : ComponentActivity() {
                     if (splashStartMs == 0L) splashStartMs = start
                     val elapsed = now - start
                     delay((SPLASH_DISPLAY_MS - elapsed).coerceAtLeast(0L))
+                    val maintenanceRefresh = async {
+                        withTimeoutOrNull(SPLASH_MAINTENANCE_REFRESH_TIMEOUT_MS) {
+                            fashApp.appMaintenanceController.refresh()
+                        }
+                    }
                     val hasSession = withContext(Dispatchers.IO) {
                         authManager.sessionStore.read() != null
                     }
@@ -541,6 +548,7 @@ class MainActivity : ComponentActivity() {
                         profileViewModel.onAuthenticatedSessionReady()
                         notificationsViewModel.onAuthenticatedSessionReady()
                     }
+                    maintenanceRefresh.await()
                     splashFinished = true
                 }
 

@@ -1,6 +1,11 @@
 package com.pc.fash_android_mobile
 
 import android.app.Application
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.pc.fash_android_mobile.data.auth.AppAuthManager
@@ -357,7 +362,28 @@ class FashApplication : Application(), ImageLoaderFactory {
             refreshAestheticTagCatalog()
             val hasSession = runCatching { authManager.sessionStore.read() != null }.getOrDefault(false)
             authManager.hydrateInitialAuthFromStore(hasSession)
+            fcmTokenRegistrar.subscribeAppStatusTopic()
             appMaintenanceController.refresh()
+        }
+        registerAppStatusNetworkCallback()
+    }
+
+    private fun registerAppStatusNetworkCallback() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        runCatching {
+            cm.registerNetworkCallback(
+                request,
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        applicationScope.launch(Dispatchers.IO) {
+                            appMaintenanceController.refresh()
+                        }
+                    }
+                },
+            )
         }
     }
 
@@ -518,6 +544,9 @@ class FashApplication : Application(), ImageLoaderFactory {
         AppSessionTracker(
             feedEventReporter = feedEventReporter,
             onForeground = {
+                applicationScope.launch(Dispatchers.IO) {
+                    fcmTokenRegistrar.subscribeAppStatusTopic()
+                }
                 if (authManager.sessionStore.read() != null) {
                     realtimeManager.connect()
                     realtimeManager.sendPresenceActive()

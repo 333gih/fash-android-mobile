@@ -9,6 +9,22 @@ import org.junit.Test
 class AppMaintenanceStatusTest {
 
     @Test
+    fun fromPushData_parsesLockPayload() {
+        val status = AppMaintenanceStatus.fromPushData(
+            mapOf(
+                "type" to "admin.app_maintenance",
+                "phase" to "maintenance",
+                "maintenance" to "true",
+                "title" to "Lock",
+                "message" to "Back soon",
+            ),
+        )
+        assertNotNull(status)
+        assertTrue(status!!.isLocked)
+        assertEquals("Lock", status.title)
+    }
+
+    @Test
     fun warningIsNotLocked() {
         val status = AppMaintenanceStatus.Open.copy(phase = "warning", countdownSeconds = 60)
         assertTrue(status.isWarning)

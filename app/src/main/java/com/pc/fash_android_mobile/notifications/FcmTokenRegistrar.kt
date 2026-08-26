@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessaging
 import com.pc.fash_android_mobile.BuildConfig
+import com.pc.fash_android_mobile.data.appstatus.AppMaintenanceController
 import com.pc.fash_android_mobile.data.auth.AuthHttpException
 import com.pc.fash_android_mobile.data.auth.AuthRepository
 import com.pc.fash_android_mobile.data.auth.AuthSession
@@ -34,6 +35,7 @@ class FcmTokenRegistrar(
 
     /** Fetches the current token and registers with the backend if a session exists. */
     suspend fun registerCurrentTokenIfSession() = withContext(Dispatchers.IO) {
+        subscribeAppStatusTopic()
         val session = sessionStore.read()
         if (session == null) {
             logD("registerCurrentTokenIfSession: no session, skip")
@@ -54,6 +56,7 @@ class FcmTokenRegistrar(
     fun registerTokenAsync(fcmToken: String) {
         if (!isPlausibleFcmToken(fcmToken)) return
         scope.launch {
+            subscribeAppStatusTopic()
             val session = sessionStore.read()
             if (session == null) {
                 stashPendingToken(fcmToken.trim())
@@ -72,12 +75,27 @@ class FcmTokenRegistrar(
         registerFcmWithOptionalRefresh(session, pending)
     }
 
+    fun subscribeAppStatusTopic() {
+        scope.launch {
+            runCatching {
+                FirebaseMessaging.getInstance()
+                    .subscribeToTopic(AppMaintenanceController.FCM_TOPIC)
+                    .await()
+            }.onSuccess {
+                logD("subscribed FCM topic=${AppMaintenanceController.FCM_TOPIC}")
+            }.onFailure {
+                logW("FCM topic subscribe failed — ${it.message}")
+            }
+        }
+    }
+
     fun clearOnLogout() {
         prefs().edit().remove(PENDING_TOKEN_KEY).apply()
         scope.launch {
             runCatching { FirebaseMessaging.getInstance().deleteToken().await() }
                 .onSuccess { logD("clearOnLogout: FCM token deleted") }
                 .onFailure { logW("clearOnLogout: deleteToken failed — ${it.message}") }
+            subscribeAppStatusTopic()
         }
     }
 

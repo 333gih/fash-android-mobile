@@ -105,6 +105,10 @@ object PushNotificationRouter {
         val data = fcmDataFromIntent(intent)
         if (data.isEmpty() && intent == null) return
 
+        if (fashApp.appMaintenanceController.applyFromPushData(data)) {
+            return
+        }
+
         if (data["inbox_refresh"] == "1") {
             fashApp.requestInboxUnreadRefreshDebounced()
         }
@@ -184,7 +188,28 @@ object PushNotificationRouter {
         intent.getStringExtra("deep_link")?.trim()?.takeIf { it.isNotEmpty() }?.let {
             out.putIfAbsent("deep_link", it)
         }
-        for (key in listOf("conversation_id", "conversationId", "order_id", "marketplace_order_id", "nav_target", "type", "event")) {
+        for (key in listOf(
+            "conversation_id",
+            "conversationId",
+            "order_id",
+            "marketplace_order_id",
+            "nav_target",
+            "type",
+            "event",
+            "phase",
+            "maintenance",
+            "enabled",
+            "starts_at",
+            "countdown_seconds",
+            "title",
+            "message",
+            "updated_at",
+            "resume_moment",
+            "release_notes_title",
+            "release_notes",
+            "mode",
+            "kind",
+        )) {
             intent.getStringExtra(key)?.trim()?.takeIf { it.isNotEmpty() }?.let { value ->
                 out.putIfAbsent(key, value)
             }

@@ -1,3 +1,2 @@
-• Maintenance screens no longer overlap on tall devices; theme-aware colors
-• After maintenance: admin copy when set, otherwise a generic thank-you
-• Home/Explore recover instead of spinning when a load hangs
+• Show the maintenance screen even if the app was closed or offline (FCM + status check on launch)
+• Keep the last maintenance state if the network fails — do not open Home by mistake

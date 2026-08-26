@@ -1,3 +1,2 @@
-• Màn bảo trì không còn icon/chữ đè nhau; nền và chữ theo theme
-• Sau bảo trì: copy từ admin, không thì lời cảm ơn chung
-• Home/Explore không kẹt loading khi mạng chậm
+• Nhận màn bảo trì cả khi app đang tắt hoặc không online (FCM + kiểm tra lúc mở app)
+• Giữ trạng thái bảo trì nếu mạng lỗi — không tự mở Home
