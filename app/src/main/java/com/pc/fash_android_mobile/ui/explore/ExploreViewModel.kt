@@ -397,6 +397,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _loadError.value = false
             _listings.value = emptyList()
             _hasMore.value = true
+            try {
             withContext(Dispatchers.IO) {
                 loadTags()
                 loadCategories()
@@ -457,8 +458,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
             _searchQuery.value = ""
-            _isLoading.value = false
             requestScrollExploreToTop()
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
@@ -475,6 +478,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             _loadError.value = false
             _listings.value = emptyList()
             _hasMore.value = true
+            try {
             withContext(Dispatchers.IO) {
                 loadTags()
                 loadCategories()
@@ -527,8 +531,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
             _searchQuery.value = ""
-            _isLoading.value = false
             requestScrollExploreToTop()
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
@@ -819,12 +825,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             viewModelScope.launch {
                 _isLoading.value = true
                 _loadError.value = false
-                if (_isSearchMode.value) {
-                    runSearchWithCurrentFilters()
-                } else {
-                    fetchListingsFirstPage()
+                try {
+                    if (_isSearchMode.value) {
+                        runSearchWithCurrentFilters()
+                    } else {
+                        fetchListingsFirstPage()
+                    }
+                } finally {
+                    _isLoading.value = false
                 }
-                _isLoading.value = false
             }
         } else {
             selectSearchSuggestionAndSubmit(cleaned)
@@ -845,8 +854,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     _loadError.value = false
                     _committedListingSearchQuery.value = raw
                     _isSearchMode.value = true
-                    runSearchWithCurrentFilters()
-                    _isLoading.value = false
+                    try {
+                        runSearchWithCurrentFilters()
+                    } finally {
+                        _isLoading.value = false
+                    }
                     setSearchBarExpanded(false)
                 }
                 ExplorePrimarySection.Sellers -> {

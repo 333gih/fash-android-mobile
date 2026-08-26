@@ -52,4 +52,38 @@ class AppMaintenanceStatusTest {
         val next = AppMaintenanceStatus.Open
         assertEquals("local:back_online:maintenance", next.resumeDedupeToken(prev))
     }
+
+    @Test
+    fun resumeBody_usesAdminReleaseNotes() {
+        val prev = AppMaintenanceStatus.Open.copy(
+            maintenance = true,
+            phase = "maintenance",
+            message = "Lock message",
+        )
+        val next = AppMaintenanceStatus.Open.copy(releaseNotes = "- Faster search")
+        assertEquals("- Faster search", next.resumeBody(prev))
+        assertNull(next.resumeTitle(prev))
+    }
+
+    @Test
+    fun resumeBody_fallsBackToLockMessageWhenNotesEmpty() {
+        val prev = AppMaintenanceStatus.Open.copy(
+            maintenance = true,
+            phase = "maintenance",
+            message = "Back at 3pm",
+        )
+        val next = AppMaintenanceStatus.Open
+        assertEquals("Back at 3pm", next.resumeBody(prev))
+    }
+
+    @Test
+    fun resumeTitle_ignoresLockScreenTitle() {
+        val prev = AppMaintenanceStatus.Open.copy(
+            maintenance = true,
+            phase = "maintenance",
+            title = "Fash đang bảo trì",
+        )
+        val next = AppMaintenanceStatus.Open
+        assertNull(next.resumeTitle(prev))
+    }
 }

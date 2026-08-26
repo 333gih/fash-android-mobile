@@ -54,6 +54,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Buyer/seller dashboard counts for the home journey row (orders in delivery, wishlist, listings pending review). */
 data class BuyerHomeStats(
@@ -118,6 +119,8 @@ private const val HomeHuntTodayLimit = 12
 /** Home “Shop nên ghé” rail — matches iOS [HomeViewModel.loadFeaturedSellers]. */
 private const val HomeFeaturedSellersLimit = 12
 private const val TAB_PREFETCH_DEFER_MS = 180L
+/** Drop hung first-page loads so Home can show retry instead of an infinite skeleton. */
+private const val TAB_LOAD_TIMEOUT_MS = 12_000L
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -313,15 +316,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         beginTabLoad(tab)
         var ok = false
         try {
-            ok = when (tab) {
-                HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
-                HomeFeedTab.Following -> loadFollowingTab(force)
-                HomeFeedTab.ForYou,
-                HomeFeedTab.StylePicks,
-                HomeFeedTab.SimilarSaved,
-                HomeFeedTab.SeasonalNearYou,
-                -> loadRecommendationSections(force)
-            }
+            ok = withTimeoutOrNull(TAB_LOAD_TIMEOUT_MS) {
+                when (tab) {
+                    HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
+                    HomeFeedTab.Following -> loadFollowingTab(force)
+                    HomeFeedTab.ForYou,
+                    HomeFeedTab.StylePicks,
+                    HomeFeedTab.SimilarSaved,
+                    HomeFeedTab.SeasonalNearYou,
+                    -> loadRecommendationSections(force)
+                }
+            } == true
         } finally {
             if (currentCoroutineContext().isActive) {
                 finishTabLoad(tab, ok)
@@ -816,14 +821,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             beginTabLoad(tab)
             var ok = false
             try {
-                ok = withContext(Dispatchers.IO) {
-                    when (tab) {
-                        HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
-                        HomeFeedTab.Following -> loadFollowingTab(force)
-                        HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved, HomeFeedTab.SeasonalNearYou ->
-                            loadRecommendationSections(force)
+                ok = withTimeoutOrNull(TAB_LOAD_TIMEOUT_MS) {
+                    withContext(Dispatchers.IO) {
+                        when (tab) {
+                            HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
+                            HomeFeedTab.Following -> loadFollowingTab(force)
+                            HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved, HomeFeedTab.SeasonalNearYou ->
+                                loadRecommendationSections(force)
+                        }
                     }
-                }
+                } == true
             } finally {
                 if (isActive) {
                     finishTabLoad(tab, ok)

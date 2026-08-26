@@ -1,8 +1,8 @@
 package com.pc.fash_android_mobile.ui.splash
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -20,7 +20,7 @@ fun MaintenanceMascotImage(
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = modifier
-            .fillMaxWidth()
-            .heightIn(max = maxHeightDp.dp),
+            .height(maxHeightDp.dp)
+            .widthIn(max = maxHeightDp.dp),
     )
 }

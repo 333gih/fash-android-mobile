@@ -70,6 +70,14 @@ data class AppMaintenanceStatus(
         return "local:$moment:${previous.phase}"
     }
 
+    /** Reopen-sheet title: admin release-notes title only (not the lock-screen title). */
+    fun resumeTitle(previous: AppMaintenanceStatus): String? =
+        firstNonBlank(releaseNotesTitle, previous.releaseNotesTitle)
+
+    /** Reopen body: admin release notes, else maintenance message, else null (app generic copy). */
+    fun resumeBody(previous: AppMaintenanceStatus): String? =
+        firstNonBlank(releaseNotes, previous.releaseNotes, message, previous.message)
+
     companion object {
         val Open = AppMaintenanceStatus(
             maintenance = false,
@@ -199,4 +207,12 @@ class AppStatusRepository(
     }
 
     private fun parse(raw: String): AppMaintenanceStatus = AppMaintenanceStatus.parse(JSONObject(raw))
+}
+
+private fun firstNonBlank(vararg values: String?): String? {
+    for (raw in values) {
+        val t = raw?.trim().orEmpty()
+        if (t.isNotEmpty()) return t
+    }
+    return null
 }
