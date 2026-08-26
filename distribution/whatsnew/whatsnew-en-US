@@ -1,3 +1,3 @@
-• Maintenance screen when Fash is under maintenance
-• Faster switch when maintenance turns on or off
-• More reliable push notifications when the app is in the background
+• Home feed no longer stays on a loading skeleton after launch
+• Maintenance lock, warning, and back-online screens recover more reliably
+• Stale maintenance snapshots no longer block the app on the next open

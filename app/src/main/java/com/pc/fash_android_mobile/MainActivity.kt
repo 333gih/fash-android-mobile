@@ -562,7 +562,6 @@ class MainActivity : ComponentActivity() {
                 val notificationSnackbarContext = LocalContext.current
                 val shellCoroutineScope = rememberCoroutineScope()
                 val maintenance by fashApp.appMaintenanceController.status.collectAsState()
-                val maintenanceReady by fashApp.appMaintenanceController.ready.collectAsState()
                 val pendingMaintenanceResume by fashApp.appMaintenanceController.pendingResume.collectAsState()
                 var maintenanceNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
                 LaunchedEffect(maintenance.phase, maintenance.startsAtIso, maintenance.maintenance) {
@@ -594,6 +593,8 @@ class MainActivity : ComponentActivity() {
                     }
                     if (wasMaintenance && !maintenanceLocked) {
                         shellEpoch++
+                        homeViewModel.reloadAfterMaintenance()
+                        exploreViewModel.refresh()
                     }
                     wasMaintenance = maintenanceLocked
                 }
@@ -747,6 +748,7 @@ class MainActivity : ComponentActivity() {
                         }
                     } finally {
                         shellWarmupComplete = true
+                        homeViewModel.continueLaunchLoadIfNeeded()
                         if (isGuestBrowse) {
                             homeViewModel.scheduleGuestHomeScrollToTopAfterReveal()
                         }
@@ -1094,8 +1096,6 @@ class MainActivity : ComponentActivity() {
                                 fashApp.appMaintenanceController.dismissResumePresentation()
                             },
                         )
-                    } else if (!maintenanceReady) {
-                        FashWaitingScreen()
                     } else {
                     key(shellEpoch) {
                     if (splashFinished) {
@@ -3070,28 +3070,6 @@ class MainActivity : ComponentActivity() {
                         MaintenanceWarningBanner(
                             status = maintenance,
                             nowMillis = maintenanceNowMillis,
-                        )
-                    }
-                }
-                if (maintenanceLocked) {
-                    BackHandler(enabled = true) { }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zIndex(10_000f),
-                    ) {
-                        val overlayTitle = maintenance.title?.takeIf { it.isNotBlank() }
-                            ?: stringResource(R.string.maintenance_title)
-                        val overlayBody = maintenance.message?.takeIf { it.isNotBlank() }
-                            ?: stringResource(R.string.maintenance_body)
-                        MaintenanceScreen(
-                            title = overlayTitle,
-                            message = overlayBody,
-                            onRetry = {
-                                shellCoroutineScope.launch {
-                                    fashApp.appMaintenanceController.refresh()
-                                }
-                            },
                         )
                     }
                 }

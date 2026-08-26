@@ -53,6 +53,23 @@ data class AppMaintenanceStatus(
         else -> 8_000L
     }
 
+    /**
+     * When leaving warning/lock, prefer the server [resumeMoment]; otherwise infer so the
+     * return UI still shows if the payload omitted the field.
+     */
+    fun inferredResumeMoment(previous: AppMaintenanceStatus): String? {
+        if (!previous.sawRestricted || sawRestricted) return null
+        val fromServer = resumeMoment?.trim().orEmpty()
+        if (fromServer.isNotEmpty()) return fromServer
+        return if (previous.isLocked) "back_online" else "warning_cleared"
+    }
+
+    fun resumeDedupeToken(previous: AppMaintenanceStatus): String {
+        updatedAtIso?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val moment = inferredResumeMoment(previous) ?: "open"
+        return "local:$moment:${previous.phase}"
+    }
+
     companion object {
         val Open = AppMaintenanceStatus(
             maintenance = false,
@@ -143,9 +160,10 @@ class AppStatusRepository(
     private val localeTagProvider: () -> String = { "vi" },
 ) {
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
-        .writeTimeout(8, TimeUnit.SECONDS)
+        .connectTimeout(4, TimeUnit.SECONDS)
+        .readTimeout(4, TimeUnit.SECONDS)
+        .writeTimeout(4, TimeUnit.SECONDS)
+        .callTimeout(6, TimeUnit.SECONDS)
         .build()
 
     fun fetch(): Result<AppMaintenanceStatus> = runCatching {

@@ -50,6 +50,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -309,16 +311,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (isGuestBrowse() && tab.requiresAuth) return
         tabLoadJobs[tab]?.cancel()
         beginTabLoad(tab)
-        val ok = when (tab) {
-            HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
-            HomeFeedTab.Following -> loadFollowingTab(force)
-            HomeFeedTab.ForYou,
-            HomeFeedTab.StylePicks,
-            HomeFeedTab.SimilarSaved,
-            HomeFeedTab.SeasonalNearYou,
-            -> loadRecommendationSections(force)
+        var ok = false
+        try {
+            ok = when (tab) {
+                HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
+                HomeFeedTab.Following -> loadFollowingTab(force)
+                HomeFeedTab.ForYou,
+                HomeFeedTab.StylePicks,
+                HomeFeedTab.SimilarSaved,
+                HomeFeedTab.SeasonalNearYou,
+                -> loadRecommendationSections(force)
+            }
+        } finally {
+            if (currentCoroutineContext().isActive) {
+                finishTabLoad(tab, ok)
+            } else {
+                clearTabLoadingWithoutMarkingLoaded(tab)
+            }
         }
-        finishTabLoad(tab, ok)
     }
 
     private fun scheduleLaunchShellEnrichment() {
@@ -630,13 +640,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isStillPending = {
                 _selectedFeedTab.value == tab &&
                     tab !in loadedTabs &&
-                    tab !in _tabsLoading.value &&
                     itemsForTab(tab).isEmpty()
             },
             onStalled = {
+                // Drop the skeleton so the retry CTA can show even if the job is still hung.
+                setTabLoading(tab, false)
                 _tabsLoadStalled.update { it + tab }
             },
         )
+    }
+
+    private fun clearTabLoadingWithoutMarkingLoaded(tab: HomeFeedTab) {
+        finishTabStallWatch(tab)
+        setTabLoading(tab, false)
     }
 
     private fun finishTabStallWatch(tab: HomeFeedTab) {
@@ -775,7 +791,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun ensureTabLoaded(tab: HomeFeedTab, force: Boolean = false) {
         if (isGuestBrowse() && tab.requiresAuth) return
         if (!force && tab in loadedTabs) return
-        if (tabLoadJobs[tab]?.isActive == true) return
+        if (!force && tabLoadJobs[tab]?.isActive == true) return
         if (!force && itemsForTab(tab).isNotEmpty()) {
             loadedTabs.add(tab)
             if (tab in HomeFeedTab.recommendationSectionTabs()) {
@@ -798,15 +814,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         tabLoadJobs[tab]?.cancel()
         tabLoadJobs[tab] = viewModelScope.launch {
             beginTabLoad(tab)
-            val ok = withContext(Dispatchers.IO) {
-                when (tab) {
-                    HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
-                    HomeFeedTab.Following -> loadFollowingTab(force)
-                    HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved, HomeFeedTab.SeasonalNearYou ->
-                        loadRecommendationSections(force)
+            var ok = false
+            try {
+                ok = withContext(Dispatchers.IO) {
+                    when (tab) {
+                        HomeFeedTab.HuntToday -> loadHuntTodayTab(force)
+                        HomeFeedTab.Following -> loadFollowingTab(force)
+                        HomeFeedTab.ForYou, HomeFeedTab.StylePicks, HomeFeedTab.SimilarSaved, HomeFeedTab.SeasonalNearYou ->
+                            loadRecommendationSections(force)
+                    }
+                }
+            } finally {
+                if (isActive) {
+                    finishTabLoad(tab, ok)
+                } else {
+                    clearTabLoadingWithoutMarkingLoaded(tab)
                 }
             }
-            finishTabLoad(tab, ok)
         }
     }
 
@@ -1040,28 +1064,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun loadFeed() {
         viewModelScope.launch {
             _isLoading.value = true
-            withContext(Dispatchers.IO) {
-                coroutineScope {
-                    val stats = async { loadBuyerHomeStats() }
-                    val shell = async { reloadHomeShell() }
-                    val sellers = async { loadFeaturedSellers() }
-                    val sizing = async { refreshSizingBannerState() }
-                    val context = async { if (!isGuestBrowse()) refreshShoppingContext() }
-                    val sections = async {
-                        if (!isGuestBrowse()) loadRecommendationSections(force = false)
+            try {
+                withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        val stats = async { loadBuyerHomeStats() }
+                        val shell = async { reloadHomeShell() }
+                        val sellers = async { loadFeaturedSellers() }
+                        val sizing = async { refreshSizingBannerState() }
+                        val context = async { if (!isGuestBrowse()) refreshShoppingContext() }
+                        val sections = async {
+                            if (!isGuestBrowse()) loadRecommendationSections(force = false)
+                        }
+                        stats.await()
+                        shell.await()
+                        sellers.await()
+                        sizing.await()
+                        context.await()
+                        sections.await()
                     }
-                    stats.await()
-                    shell.await()
-                    sellers.await()
-                    sizing.await()
-                    context.await()
-                    sections.await()
                 }
+                if (!isActive) return@launch
+                ensureTabLoaded(_selectedFeedTab.value, force = true)
+                prefetchAdjacentTabs(_selectedFeedTab.value)
+                lastSuccessfulRefreshAtMs = System.currentTimeMillis()
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
-            ensureTabLoaded(_selectedFeedTab.value, force = true)
-            prefetchAdjacentTabs(_selectedFeedTab.value)
-            lastSuccessfulRefreshAtMs = System.currentTimeMillis()
         }
     }
 
@@ -1231,33 +1259,57 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isRefreshing.value = true
             val selected = _selectedFeedTab.value
-            invalidateAllTabFeeds()
-            withContext(Dispatchers.IO) {
-                coroutineScope {
-                    val stats = async { loadBuyerHomeStats() }
-                    val shell = async { reloadHomeShell() }
-                    val sellers = async { loadFeaturedSellers() }
-                    val sizing = async { refreshSizingBannerState() }
-                    val ux = async { if (!isGuestBrowse()) loadUxPersonalization() }
-                    val context = async { if (!isGuestBrowse()) refreshShoppingContext() }
-                    val sections = async {
-                        if (!isGuestBrowse()) loadRecommendationSections(force = false)
+            try {
+                invalidateAllTabFeeds()
+                withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        val stats = async { loadBuyerHomeStats() }
+                        val shell = async { reloadHomeShell() }
+                        val sellers = async { loadFeaturedSellers() }
+                        val sizing = async { refreshSizingBannerState() }
+                        val ux = async { if (!isGuestBrowse()) loadUxPersonalization() }
+                        val context = async { if (!isGuestBrowse()) refreshShoppingContext() }
+                        val sections = async {
+                            if (!isGuestBrowse()) loadRecommendationSections(force = false)
+                        }
+                        stats.await()
+                        shell.await()
+                        sellers.await()
+                        sizing.await()
+                        ux.await()
+                        context.await()
+                        sections.await()
                     }
-                    stats.await()
-                    shell.await()
-                    sellers.await()
-                    sizing.await()
-                    ux.await()
-                    context.await()
-                    sections.await()
                 }
+                if (!isActive) return@launch
+                ensureTabLoaded(selected, force = true)
+                prefetchFromPersonalization(selected)
+                lastSuccessfulRefreshAtMs = System.currentTimeMillis()
+                requestScrollHomeToTop()
+            } finally {
+                _isRefreshing.value = false
             }
-            ensureTabLoaded(selected, force = true)
-            prefetchFromPersonalization(selected)
-            _isRefreshing.value = false
-            lastSuccessfulRefreshAtMs = System.currentTimeMillis()
-            requestScrollHomeToTop()
         }
+    }
+
+    /**
+     * After the splash home-gate times out, keep loading the visible tab in the background
+     * so the grid does not stay on an infinite skeleton.
+     */
+    fun continueLaunchLoadIfNeeded() {
+        val tab = _selectedFeedTab.value
+        if (tab in loadedTabs && itemsForTab(tab).isNotEmpty()) return
+        _isLoading.value = false
+        ensureTabLoaded(tab, force = true)
+    }
+
+    /** End of maintenance — drop hung in-flight flags and fetch a fresh Home. */
+    fun reloadAfterMaintenance() {
+        lastSuccessfulRefreshAtMs = 0L
+        _isLoading.value = false
+        _isRefreshing.value = false
+        invalidateAllTabFeeds()
+        loadFeed()
     }
 
     /**

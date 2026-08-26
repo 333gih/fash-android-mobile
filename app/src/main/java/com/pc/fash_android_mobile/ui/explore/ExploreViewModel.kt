@@ -1750,24 +1750,27 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isRefreshing.value = true
             _loadError.value = false
-            withContext(Dispatchers.IO) {
-                loadTags()
-                loadFeaturedSellers()
-                loadCategories()
-            }
-            when (_primarySection.value) {
-                ExplorePrimarySection.Listings -> {
-                    if (_isSearchMode.value) {
-                        runSearchWithCurrentFilters()
-                    } else {
-                        fetchListingsFirstPage()
+            try {
+                withContext(Dispatchers.IO) {
+                    loadTags()
+                    loadFeaturedSellers()
+                    loadCategories()
+                }
+                when (_primarySection.value) {
+                    ExplorePrimarySection.Listings -> {
+                        if (_isSearchMode.value) {
+                            runSearchWithCurrentFilters()
+                        } else {
+                            fetchListingsFirstPage()
+                        }
+                    }
+                    ExplorePrimarySection.Sellers -> {
+                        refreshSellerBrowse()
                     }
                 }
-                ExplorePrimarySection.Sellers -> {
-                    refreshSellerBrowse()
-                }
+            } finally {
+                _isRefreshing.value = false
             }
-            _isRefreshing.value = false
         }
     }
 

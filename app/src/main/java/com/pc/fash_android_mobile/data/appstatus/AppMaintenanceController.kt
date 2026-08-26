@@ -12,11 +12,15 @@ class AppMaintenanceController(
     private val prefs: SharedPreferences,
 ) {
     private var sawRestrictedThisSession = false
+    private var confirmedFromNetwork = false
 
     private val _status = MutableStateFlow(loadPersistedOrOpen())
     val status: StateFlow<AppMaintenanceStatus> = _status.asStateFlow()
 
-    private val _ready = MutableStateFlow(false)
+    /**
+     * Persisted snapshot is enough to paint the first frame — do not block Home on GET /app/status.
+     */
+    private val _ready = MutableStateFlow(true)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
     private val _pendingResume = MutableStateFlow<MaintenanceResumePresentation?>(null)
@@ -29,14 +33,7 @@ class AppMaintenanceController(
     }
 
     fun apply(next: AppMaintenanceStatus) {
-        val prev = _status.value
-        _status.value = next
-        _ready.value = true
-        if (next.sawRestricted) {
-            sawRestrictedThisSession = true
-        }
-        maybeQueueResume(prev, next)
-        persistSnapshot(next)
+        applyInternal(next, fromNetwork = true)
     }
 
     fun dismissResumePresentation() {
@@ -51,20 +48,42 @@ class AppMaintenanceController(
     }
 
     suspend fun refresh() {
-        val result = withContext(Dispatchers.IO) { repository.fetch() }
-        result.onSuccess { apply(it) }
+        val result = runCatching {
+            withContext(Dispatchers.IO) { repository.fetch().getOrThrow() }
+        }
+        result.onSuccess { applyInternal(it, fromNetwork = true) }
         result.onFailure {
             _ready.value = true
-            if (!sawRestrictedThisSession && !_status.value.sawRestricted) {
-                apply(AppMaintenanceStatus.Open)
+            // Keep a persisted lock (user can retry). Only fail-open when we were not locked.
+            if (!confirmedFromNetwork && !_status.value.isLocked) {
+                applyInternal(AppMaintenanceStatus.Open, fromNetwork = false)
             }
         }
     }
 
+    private fun applyInternal(next: AppMaintenanceStatus, fromNetwork: Boolean) {
+        val prev = _status.value
+        _status.value = next
+        _ready.value = true
+        if (fromNetwork) {
+            confirmedFromNetwork = true
+        }
+        if (next.sawRestricted) {
+            sawRestrictedThisSession = true
+        }
+        if (fromNetwork) {
+            maybeQueueResume(prev, next)
+        }
+        persistSnapshot(next)
+    }
+
     private fun persistSnapshot(next: AppMaintenanceStatus) {
+        // Warning is a 60s in-session state — persisting it makes the next cold start look locked
+        // after the countdown has elapsed.
+        val persistLocked = next.isLocked
         prefs.edit()
-            .putBoolean(KEY_LAST_ON, next.isLocked)
-            .putString(KEY_LAST_PHASE, next.phase)
+            .putBoolean(KEY_LAST_ON, persistLocked)
+            .putString(KEY_LAST_PHASE, if (persistLocked) "maintenance" else "open")
             .putString(KEY_STARTS_AT, next.startsAtIso)
             .putInt(KEY_COUNTDOWN, next.countdownSeconds)
             .apply()
@@ -72,10 +91,8 @@ class AppMaintenanceController(
 
     private fun maybeQueueResume(prev: AppMaintenanceStatus, next: AppMaintenanceStatus) {
         if (!sawRestrictedThisSession) return
-        if (!prev.sawRestricted || next.sawRestricted) return
-        val moment = next.resumeMoment?.trim().orEmpty()
-        if (moment.isEmpty()) return
-        val token = next.updatedAtIso?.trim().orEmpty()
+        val moment = next.inferredResumeMoment(prev) ?: return
+        val token = next.resumeDedupeToken(prev)
         if (token.isEmpty() || hasSeenResume(token)) return
         _pendingResume.value = MaintenanceResumePresentation(
             moment = moment,
@@ -112,21 +129,7 @@ class AppMaintenanceController(
                 releaseNotes = null,
             )
         }
-        if (phase.equals("warning", ignoreCase = true)) {
-            return AppMaintenanceStatus(
-                maintenance = false,
-                phase = "warning",
-                mode = "none",
-                startsAtIso = startsAt,
-                countdownSeconds = countdown,
-                title = null,
-                message = null,
-                updatedAtIso = null,
-                resumeMoment = null,
-                releaseNotesTitle = null,
-                releaseNotes = null,
-            )
-        }
+        // Stale warning snapshots from older builds must not lock the next launch.
         return AppMaintenanceStatus.Open
     }
 
