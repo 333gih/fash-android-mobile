@@ -41,7 +41,7 @@ fun SellerPackageEntitlementCard(
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             )
             when {
-                loading && summary == null -> Text(stringResource(R.string.loading))
+                loading && summary == null -> Text(stringResource(R.string.explore_filter_loading))
                 summary == null -> Text(stringResource(R.string.seller_packages_entitlement_empty))
                 else -> {
                     Text(

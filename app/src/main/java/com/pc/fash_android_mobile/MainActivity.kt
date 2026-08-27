@@ -2502,7 +2502,7 @@ class MainActivity : ComponentActivity() {
                                                 mockPurchaseInFlight = mockPurchaseInFlight,
                                                 onMockPurchase = { packageId ->
                                                     mockPurchaseInFlight = true
-                                                    lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                                         val result = fashApp.userEntitlementRepository.mockPurchasePackage(packageId)
                                                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                                             mockPurchaseInFlight = false
