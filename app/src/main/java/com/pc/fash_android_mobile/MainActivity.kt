@@ -114,6 +114,7 @@ import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.ui.main.PromoSlidesViewModel
 import com.pc.fash_android_mobile.data.sellerpackages.SellerProductPackage
+import com.pc.fash_android_mobile.ui.entitlements.SellerPackageToolsScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerPackageCheckoutScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesScreen
 import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesViewModel
@@ -1507,8 +1508,10 @@ class MainActivity : ComponentActivity() {
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var showSellerPackagesScreen by rememberSaveable { mutableStateOf(false) }
+                                    var showSellerPackageTools by rememberSaveable { mutableStateOf(false) }
                                     var showInviteFriendsScreen by rememberSaveable { mutableStateOf(false) }
                                     var sellerPackageCheckout by remember { mutableStateOf<SellerProductPackage?>(null) }
+                                    var mockPurchaseInFlight by remember { mutableStateOf(false) }
                                     val pendingInviteFriends by fashApp.pendingOpenInviteFriends.collectAsState()
                                     LaunchedEffect(pendingInviteFriends) {
                                         if (!pendingInviteFriends) return@LaunchedEffect
@@ -1930,6 +1933,8 @@ class MainActivity : ComponentActivity() {
                                                 showShippingAddressList = true
                                             },
                                             onInviteFriendsClick = { showInviteFriendsScreen = true },
+                                            onOpenSellerPackages = { showSellerPackagesScreen = true },
+                                            onOpenSellerPackageTools = { showSellerPackageTools = true },
                                             onOrdersClick = { selectedTab = MainTab.Orders.ordinal },
                                             onHomeEditorialPostClick = { post ->
                                                 val slug = post.slug.trim().ifBlank { post.id.trim() }
@@ -2494,6 +2499,36 @@ class MainActivity : ComponentActivity() {
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 pkg = sellerPackageCheckout!!,
                                                 onBack = { sellerPackageCheckout = null },
+                                                mockPurchaseInFlight = mockPurchaseInFlight,
+                                                onMockPurchase = { packageId ->
+                                                    mockPurchaseInFlight = true
+                                                    lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                        val result = fashApp.userEntitlementRepository.mockPurchasePackage(packageId)
+                                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                            mockPurchaseInFlight = false
+                                                            result.onSuccess {
+                                                                snackbarHostState.showSnackbar(
+                                                                    getString(R.string.seller_packages_purchase_success),
+                                                                )
+                                                                sellerPackageCheckout = null
+                                                                showSellerPackagesScreen = false
+                                                            }.onFailure {
+                                                                snackbarHostState.showSnackbar(it.message ?: "Purchase failed")
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        } else if (showSellerPackageTools && selectedOrderId == null) {
+                                            SellerPackageToolsScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                repository = fashApp.userEntitlementRepository,
+                                                onBack = { showSellerPackageTools = false },
+                                                onEntitlementsChanged = {
+                                                    profileViewModel.loadProfile()
+                                                },
                                             )
                                         } else if (showSellerPackagesScreen && selectedOrderId == null) {
                                             SellerProductPackagesScreen(

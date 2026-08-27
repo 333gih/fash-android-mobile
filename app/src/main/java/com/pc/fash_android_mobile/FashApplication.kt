@@ -438,6 +438,14 @@ class FashApplication : Application(), ImageLoaderFactory {
         )
     }
 
+    val userEntitlementRepository: com.pc.fash_android_mobile.data.entitlements.UserEntitlementRepository by lazy {
+        com.pc.fash_android_mobile.data.entitlements.UserEntitlementRepository(
+            securedClient = authManager
+                .createSecuringClient { reason -> authManager.onSessionCleared(reason) }
+                .createClient(),
+        )
+    }
+
     /** Admin promo interstitials pull backup (`GET /app/promo-interstitials/active`). */
     val appPromoInterstitialRepository: AppPromoInterstitialRepository by lazy {
         AppPromoInterstitialRepository(

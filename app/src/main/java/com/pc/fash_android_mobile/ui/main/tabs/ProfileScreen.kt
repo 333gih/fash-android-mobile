@@ -97,7 +97,10 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.config.AppEnvironment
+import com.pc.fash_android_mobile.data.entitlements.UserEntitlementSummary
+import com.pc.fash_android_mobile.ui.entitlements.SellerPackageEntitlementCard
 import com.pc.fash_android_mobile.data.listing.ListingFeedItem
 import com.pc.fash_android_mobile.ui.common.stableLazyKey
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
@@ -333,6 +336,8 @@ fun ProfileScreen(
     onEditProfile: () -> Unit = { },
     onShippingAddressesClick: () -> Unit = { },
     onInviteFriendsClick: () -> Unit = { },
+    onOpenSellerPackages: () -> Unit = { },
+    onOpenSellerPackageTools: () -> Unit = { },
     onListingClick: (listingId: String, sellerId: String?) -> Unit = { _, _ -> },
     /** Own listings on profile tabs → edit overlay; includes tab index for scroll restore on back. */
     onOwnListingClick: (listingId: String, profileTabIndex: Int) -> Unit = { _, _ -> },
@@ -368,9 +373,27 @@ fun ProfileScreen(
     val meetingSuspendedUntil by viewModel.meetingSchedulingSuspendedUntil.collectAsState()
     val ackMeetingReverifyInFlight by viewModel.ackMeetingReverifyInFlight.collectAsState()
     val profileContext = LocalContext.current
+    val entitlementRepo = remember(profileContext) {
+        (profileContext.applicationContext as FashApplication).userEntitlementRepository
+    }
+    var entitlementSummary by remember { mutableStateOf<UserEntitlementSummary?>(entitlementRepo.peekCached()) }
+    var entitlementLoading by remember { mutableStateOf(false) }
+    val entitlementScope = rememberCoroutineScope()
+
+    fun refreshEntitlements() {
+        entitlementScope.launch {
+            entitlementLoading = true
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                entitlementRepo.fetchEntitlements()
+            }
+            entitlementLoading = false
+            result.onSuccess { entitlementSummary = it }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.ensureProfileLoaded()
+        refreshEntitlements()
     }
 
     LaunchedEffect(Unit) {
@@ -494,6 +517,16 @@ fun ProfileScreen(
                                 ProfileSizingReferenceCard(
                                     profile = profile,
                                     onEdit = onEditProfile,
+                                )
+                                SellerPackageEntitlementCard(
+                                    summary = entitlementSummary,
+                                    loading = entitlementLoading,
+                                    onRefresh = { refreshEntitlements() },
+                                    onUpgrade = onOpenSellerPackages,
+                                    onOpenTools = onOpenSellerPackageTools,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
                                 )
                                 if (meetingReverifyRequired) {
                                     ProfileMeetingIdentityReverifyBanner(

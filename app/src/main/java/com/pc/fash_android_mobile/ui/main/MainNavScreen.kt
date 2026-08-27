@@ -173,6 +173,8 @@ fun MainNavScreen(
     onEditProfile: () -> Unit = {},
     onShippingAddressesClick: () -> Unit = {},
     onInviteFriendsClick: () -> Unit = {},
+    onOpenSellerPackages: () -> Unit = {},
+    onOpenSellerPackageTools: () -> Unit = {},
     onOrdersClick: () -> Unit = {},
     /** [initialTab] 0 = people you follow, 1 = followers. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
@@ -772,6 +774,8 @@ fun MainNavScreen(
                             onEditProfile = onEditProfile,
                             onShippingAddressesClick = onShippingAddressesClick,
                             onInviteFriendsClick = onInviteFriendsClick,
+                            onOpenSellerPackages = onOpenSellerPackages,
+                            onOpenSellerPackageTools = onOpenSellerPackageTools,
                             onListingClick = navigateToListingDetail,
                             onOwnListingClick = onProfileOwnListingClick,
                             onOpenFollowConnections = onOpenFollowConnections,

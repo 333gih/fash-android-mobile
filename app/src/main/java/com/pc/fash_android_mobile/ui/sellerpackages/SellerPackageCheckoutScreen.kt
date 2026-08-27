@@ -46,6 +46,8 @@ fun SellerPackageCheckoutScreen(
     modifier: Modifier = Modifier,
     pkg: SellerProductPackage,
     onBack: () -> Unit,
+    onMockPurchase: ((String) -> Unit)? = null,
+    mockPurchaseInFlight: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val comingSoon = !pkg.isReleased
@@ -92,17 +94,28 @@ fun SellerPackageCheckoutScreen(
                             Text(stringResource(R.string.seller_packages_coming_soon_cta))
                         }
                     } else {
-                        Button(
-                            onClick = { /* future payment gateway */ },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
-                        ) {
-                            Text(
-                                stringResource(
-                                    R.string.seller_packages_pay_amount,
-                                    formatVnd(pkg.priceVnd),
-                                ),
-                            )
+                        if (onMockPurchase != null) {
+                            Button(
+                                onClick = { onMockPurchase(pkg.id) },
+                                enabled = !mockPurchaseInFlight,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                            ) {
+                                Text(stringResource(R.string.seller_packages_mock_purchase))
+                            }
+                        } else {
+                            Button(
+                                onClick = { },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = FashColors.Primary),
+                            ) {
+                                Text(
+                                    stringResource(
+                                        R.string.seller_packages_pay_amount,
+                                        formatVnd(pkg.priceVnd),
+                                    ),
+                                )
+                            }
                         }
                     }
                     OutlinedButton(
