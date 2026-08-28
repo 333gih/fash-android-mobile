@@ -23,6 +23,11 @@ class AuthRepository(
     private val client: OkHttpClient = defaultClient,
 ) {
 
+    private fun JSONObject.putAuthClient(): JSONObject = apply {
+        put("client_channel", "fash_android_app")
+        put("client_platform", "android")
+    }
+
     fun login(email: String, password: String): Result<AuthSession> = runCatching {
         val path = AppEnvironment.authLoginPath.trim().trimStart('/')
         val url = AppEnvironment.authServicePath(path)
@@ -30,7 +35,7 @@ class AuthRepository(
             .put("email", email.trim())
             .put("password", password)
             .put("application_id", AppEnvironment.authApplicationId.trim())
-            .put("client_channel", "fash_android_app")
+            .putAuthClient()
             .toString()
         val body = postJsonBody(url, json)
         parseLoginResponse(body)
@@ -48,7 +53,7 @@ class AuthRepository(
         val json = JSONObject()
             .put("email", email.trim())
             .put("application_id", AppEnvironment.authApplicationId.trim())
-            .put("client_channel", "fash_android_app")
+            .putAuthClient()
             .toString()
         val body = postJsonBody(url, json)
         if (body.isBlank()) return@runCatching false
@@ -65,7 +70,7 @@ class AuthRepository(
             .put("email", email.trim())
             .put("otp", otp.trim())
             .put("application_id", AppEnvironment.authApplicationId.trim())
-            .put("client_channel", "fash_android_app")
+            .putAuthClient()
             .toString()
         val body = postJsonBody(url, json)
         parseLoginResponse(body)
@@ -78,7 +83,7 @@ class AuthRepository(
             .put("provider", provider.trim().lowercase())
             .put("provider_token", providerToken.trim())
             .put("application_id", AppEnvironment.authApplicationId.trim())
-            .put("client_channel", "fash_android_app")
+            .putAuthClient()
             .toString()
         var lastError: Exception? = null
         for (url in AppEnvironment.authServiceCandidateUrls(path)) {
@@ -110,6 +115,7 @@ class AuthRepository(
             .put("ip_address", ClientIpAddress.localIpv4OrEmpty())
             .put("refresh_token", refreshToken.trim())
             .put("user_agent", FASH_HTTP_USER_AGENT)
+            .putAuthClient()
             .toString()
         val body = try {
             postJsonBody(url, json)
