@@ -638,6 +638,7 @@ class MainActivity : ComponentActivity() {
                 var pendingPromoMainTab by remember { mutableIntStateOf(-1) }
                 var pendingPromoOpenOrders by remember { mutableStateOf(false) }
                 var pendingPromoOpenExplore by remember { mutableStateOf(false) }
+                var pendingPromoOpenSellerPackages by remember { mutableStateOf(false) }
                 fun presentAdminPromoIfEligible(promo: AppPromoCampaign) {
                     val appCtx = notificationSnackbarContext.applicationContext
                     if (
@@ -1559,7 +1560,7 @@ class MainActivity : ComponentActivity() {
                                         needsOnboarding = true
                                         fashApp.pendingOpenOnboarding.value = false
                                     }
-                                    LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders, pendingPromoOpenExplore) {
+                                    LaunchedEffect(pendingPromoMainTab, pendingPromoOpenOrders, pendingPromoOpenExplore, pendingPromoOpenSellerPackages) {
                                         if (pendingPromoMainTab >= 0) {
                                             selectedTab = pendingPromoMainTab
                                             pendingPromoMainTab = -1
@@ -1571,6 +1572,11 @@ class MainActivity : ComponentActivity() {
                                         if (pendingPromoOpenExplore) {
                                             exploreOverlayOpenNonce++
                                             pendingPromoOpenExplore = false
+                                        }
+                                        if (pendingPromoOpenSellerPackages) {
+                                            sellerPackageCheckout = null
+                                            showSellerPackagesScreen = true
+                                            pendingPromoOpenSellerPackages = false
                                         }
                                     }
                                     val pendingInboxOpenId by fashApp.pendingInboxNotificationId.collectAsState()
@@ -2868,6 +2874,7 @@ class MainActivity : ComponentActivity() {
                                     onTab = { tab -> pendingPromoMainTab = tab.ordinal },
                                     onOpenOrders = { pendingPromoOpenOrders = true },
                                     onOpenExplore = { pendingPromoOpenExplore = true },
+                                    onOpenSellerPackages = { pendingPromoOpenSellerPackages = true },
                                 )
                             }
                             AppPromoCampaignKind.Welcome -> {
@@ -2928,7 +2935,7 @@ class MainActivity : ComponentActivity() {
                                     campaign,
                                 )
                                 activePromoCampaign = null
-                                pendingPromoMainTab = MainTab.Post.ordinal
+                                pendingPromoOpenSellerPackages = true
                             }
                         }
                     },
@@ -2945,6 +2952,7 @@ class MainActivity : ComponentActivity() {
                                 onTab = { tab -> pendingPromoMainTab = tab.ordinal },
                                 onOpenOrders = { pendingPromoOpenOrders = true },
                                 onOpenExplore = { pendingPromoOpenExplore = true },
+                                onOpenSellerPackages = { pendingPromoOpenSellerPackages = true },
                             )
                         } else {
                             AppPromoCampaignStore.markDismissed(

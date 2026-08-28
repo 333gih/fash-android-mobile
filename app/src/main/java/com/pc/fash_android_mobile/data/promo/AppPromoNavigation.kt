@@ -14,8 +14,13 @@ object AppPromoNavigation {
         onTab: (MainTab) -> Unit,
         onOpenOrders: () -> Unit = {},
         onOpenExplore: () -> Unit = {},
+        onOpenSellerPackages: () -> Unit = {},
     ) {
-        campaign.primaryAction?.let { apply(activity, it, onTab, onOpenOrders, onOpenExplore) }
+        if (campaign.kind == AppPromoCampaignKind.SellerPackage) {
+            onOpenSellerPackages()
+            return
+        }
+        campaign.primaryAction?.let { apply(activity, it, onTab, onOpenOrders, onOpenExplore, onOpenSellerPackages) }
     }
 
     fun applySecondary(
@@ -24,8 +29,9 @@ object AppPromoNavigation {
         onTab: (MainTab) -> Unit,
         onOpenOrders: () -> Unit = {},
         onOpenExplore: () -> Unit = {},
+        onOpenSellerPackages: () -> Unit = {},
     ) {
-        campaign.secondaryAction?.let { apply(activity, it, onTab, onOpenOrders, onOpenExplore) }
+        campaign.secondaryAction?.let { apply(activity, it, onTab, onOpenOrders, onOpenExplore, onOpenSellerPackages) }
     }
 
     private fun apply(
@@ -34,6 +40,7 @@ object AppPromoNavigation {
         onTab: (MainTab) -> Unit,
         onOpenOrders: () -> Unit,
         onOpenExplore: () -> Unit,
+        onOpenSellerPackages: () -> Unit,
     ) {
         when (action.type.trim().lowercase()) {
             "external_url", "deeplink" -> {
@@ -51,6 +58,7 @@ object AppPromoNavigation {
             "in_app_orders" -> onOpenOrders()
             "in_app_chat" -> onTab(MainTab.Chat)
             "in_app_post_tab" -> onTab(MainTab.Post)
+            "in_app_product_packages" -> onOpenSellerPackages()
             "in_app_listing" -> {
                 val listingId = action.payload.trim()
                 if (listingId.isNotEmpty()) {

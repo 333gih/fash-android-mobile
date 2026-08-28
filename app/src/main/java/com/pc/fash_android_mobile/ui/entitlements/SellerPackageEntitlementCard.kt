@@ -61,6 +61,10 @@ fun SellerPackageEntitlementCard(
                         label = stringResource(R.string.seller_packages_feature_fanpage),
                         feature = summary.features["fanpage_spotlight"],
                     )
+                    featureLine(
+                        label = stringResource(R.string.seller_packages_feature_social),
+                        feature = summary.features["social_tiktok_instagram"],
+                    )
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

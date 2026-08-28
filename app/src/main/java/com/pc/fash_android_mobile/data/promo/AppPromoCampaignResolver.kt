@@ -62,6 +62,7 @@ object AppPromoCampaignResolver {
                 primaryActionRes = R.string.app_promo_seller_package_primary,
                 secondaryActionRes = R.string.app_promo_secondary_later,
                 badgeRes = R.string.app_promo_seller_package_badge,
+                primaryAction = AppPromoButtonAction(type = "in_app_product_packages", payload = ""),
             )
             if (AppPromoCampaignStore.isDismissed(appCtx, campaign)) return@AppPromoCampaignProvider null
             campaign

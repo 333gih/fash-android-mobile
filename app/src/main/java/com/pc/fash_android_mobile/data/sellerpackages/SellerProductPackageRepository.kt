@@ -11,7 +11,7 @@ private const val TAG = "SellerProductPackageRepo"
 private const val USER_AGENT = "FashAndroid/1.0"
 
 /**
- * Seller utility packages from core-service CMS, with local catalog fallback.
+ * Seller utility packages from core-service CMS (single source of truth).
  */
 class SellerProductPackageRepository(
     private val securedClient: OkHttpClient,
@@ -48,41 +48,25 @@ class SellerProductPackageRepository(
                 val raw = executeGet(url)
                 val parsed = parseSellerProductPackagesResponse(raw)
                 val visible = if (activeOnly) parsed.packages.filter { it.active } else parsed.packages
-                if (visible.isNotEmpty()) {
-                    if (Log.isLoggable(TAG, Log.DEBUG)) {
-                        visible.forEach { p ->
-                            Log.d(TAG, "package code=${p.code} isReleased=${p.isReleased} active=${p.active}")
-                        }
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    visible.forEach { p ->
+                        Log.d(TAG, "package code=${p.code} isReleased=${p.isReleased} active=${p.active}")
                     }
-                    return@runCatching parsed.copy(packages = visible)
                 }
+                return@runCatching parsed.copy(packages = visible)
             } catch (e: Exception) {
                 last = e
             }
         }
-        Log.w(TAG, "listPackages API empty/failed, using local catalog urls=$urls", last)
-        localCatalog(activeOnly)
+        throw last ?: IllegalStateException("product-packages unavailable")
     }
 
     fun getPackage(code: String): Result<SellerProductPackage> = runCatching {
-        val fromList = listPackages(activeOnly = false).getOrNull()
-            ?.packages
-            ?.firstOrNull { it.code.equals(code.trim(), ignoreCase = true) }
-        fromList ?: SellerProductPackageCatalog.findByCode(code)
-            ?: error("package not found: $code")
-    }
-
-    private fun localCatalog(activeOnly: Boolean): SellerProductPackagesResponse {
-        val all = SellerProductPackageCatalog.defaultPackages()
-        val filtered = if (activeOnly) all.filter { it.active } else all
-        return SellerProductPackagesResponse(
-            packages = filtered.sortedBy { tierOrder(it.tier) },
-        )
-    }
-
-    private fun tierOrder(tier: PackageTier): Int = when (tier) {
-        PackageTier.STARTER -> 0
-        PackageTier.GROWTH -> 1
-        PackageTier.PREMIUM -> 2
+        val trimmed = code.trim()
+        require(trimmed.isNotEmpty())
+        listPackages(activeOnly = false).getOrThrow()
+            .packages
+            .firstOrNull { it.code.equals(trimmed, ignoreCase = true) }
+            ?: error("package not found: $trimmed")
     }
 }
