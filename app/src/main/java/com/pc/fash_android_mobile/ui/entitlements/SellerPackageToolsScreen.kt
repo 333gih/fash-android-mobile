@@ -140,8 +140,7 @@ private fun featureCta(kind: String): String = when (kind) {
     else -> stringResource(R.string.seller_packages_tools_submit)
 }
 
-@Composable
-private fun featureSuccessMessage(kind: String): Int = when (kind) {
+private fun featureSuccessMessageRes(kind: String): Int = when (kind) {
     "boost" -> R.string.seller_packages_tools_success_boost
     else -> R.string.seller_packages_tools_success_request
 }
@@ -230,7 +229,7 @@ fun SellerPackageToolsScreen(
                 onSuccess = {
                     onEntitlementsChanged()
                     reloadEntitlements()
-                    snackbarHostState.showSnackbar(context.getString(featureSuccessMessage(executionKind)))
+                    snackbarHostState.showSnackbar(context.getString(featureSuccessMessageRes(executionKind)))
                 },
                 onFailure = { err ->
                     snackbarHostState.showSnackbar(
