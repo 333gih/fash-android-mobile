@@ -9,6 +9,11 @@ data class UserEntitlementSummary(
 
 data class FeatureUsageSummary(
     val enabled: Boolean = false,
+    val featureGroup: String = "",
+    val executionKind: String = "",
+    val name: String = "",
+    val description: String = "",
+    val requiresListing: Boolean = false,
     val used: Long = 0,
     val remaining: Long? = null,
     val unlimited: Boolean = false,

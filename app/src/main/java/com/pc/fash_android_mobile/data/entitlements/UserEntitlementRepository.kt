@@ -39,20 +39,10 @@ class UserEntitlementRepository(
         }
     }
 
-    fun applyExploreBoost(listingId: String): Result<Unit> = runCatching {
-        val id = listingId.trim()
-        require(id.isNotEmpty())
-        val url = AppEnvironment.apiPath("api/v1/listings/$id/explore-boost")
-        executePost(url, "{}")
-    }
-
-    fun requestAuthenticity(listingId: String): Result<Unit> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/seller/authenticity-requests")
-        executePost(url, JSONObject().put("listing_id", listingId.trim()).toString())
-    }
-
-    fun requestFanpage(listingId: String, caption: String): Result<Unit> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/seller/fanpage-requests")
+    fun invokeFeature(featureKey: String, listingId: String, caption: String = ""): Result<Unit> = runCatching {
+        val key = featureKey.trim()
+        require(key.isNotEmpty())
+        val url = AppEnvironment.apiPath("api/v1/seller/package-features/$key/invoke")
         executePost(
             url,
             JSONObject()
@@ -62,16 +52,15 @@ class UserEntitlementRepository(
         )
     }
 
-    fun requestSocialPromo(listingId: String, caption: String): Result<Unit> = runCatching {
-        val url = AppEnvironment.apiPath("api/v1/seller/social-promo-requests")
-        executePost(
-            url,
-            JSONObject()
-                .put("listing_id", listingId.trim())
-                .put("caption", caption.trim())
-                .toString(),
-        )
-    }
+    fun applyExploreBoost(listingId: String): Result<Unit> = invokeFeature("explore_boost", listingId)
+
+    fun requestAuthenticity(listingId: String): Result<Unit> = invokeFeature("authenticity_verify", listingId)
+
+    fun requestFanpage(listingId: String, caption: String): Result<Unit> =
+        invokeFeature("fanpage_spotlight", listingId, caption)
+
+    fun requestSocialPromo(listingId: String, caption: String): Result<Unit> =
+        invokeFeature("social_tiktok_instagram", listingId, caption)
 
     private fun executeGet(url: String): String {
         val response = securedClient.newCall(
@@ -113,6 +102,11 @@ class UserEntitlementRepository(
             val f = featuresObj.optJSONObject(key) ?: return@forEach
             features[key] = FeatureUsageSummary(
                 enabled = f.optBoolean("enabled", false),
+                featureGroup = f.optString("feature_group", ""),
+                executionKind = f.optString("execution_kind", ""),
+                name = f.optString("name", ""),
+                description = f.optString("description", ""),
+                requiresListing = f.optBoolean("requires_listing", false),
                 used = f.optLong("used", 0),
                 remaining = if (f.has("remaining") && !f.isNull("remaining")) f.optLong("remaining") else null,
                 unlimited = f.optBoolean("unlimited", false),

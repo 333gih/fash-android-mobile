@@ -76,11 +76,74 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class SellerPackageToolKind {
-    Verify,
-    Boost,
-    Fanpage,
-    Social,
+private val FEATURE_GROUP_ORDER = listOf("verification", "visibility", "social_promo")
+
+private data class ToolFeatureEntry(
+    val key: String,
+    val feature: FeatureUsageSummary,
+)
+
+private fun groupedToolFeatures(summary: UserEntitlementSummary?): List<Pair<String, List<ToolFeatureEntry>>> {
+    val feats = summary?.features.orEmpty()
+    if (feats.isEmpty()) return emptyList()
+    val grouped = feats.entries
+        .map { (key, feature) -> ToolFeatureEntry(key, feature) }
+        .groupBy { it.feature.featureGroup.ifBlank { "other" } }
+    val orderedGroups = FEATURE_GROUP_ORDER.filter { grouped.containsKey(it) } +
+        grouped.keys.filter { it !in FEATURE_GROUP_ORDER }.sorted()
+    return orderedGroups.map { group -> group to grouped[group].orEmpty() }
+}
+
+private fun featureGroupLabel(group: String): String = when (group) {
+    "verification" -> "Xác minh"
+    "visibility" -> "Hiển thị"
+    "social_promo" -> "Quảng bá"
+    else -> group.replace('_', ' ').replaceFirstChar { it.uppercase() }
+}
+
+@Composable
+private fun featureIcon(key: String, kind: String): ImageVector = when {
+    kind == "boost" || key == "explore_boost" -> Icons.Outlined.AutoAwesome
+    key.contains("social") -> Icons.Outlined.Share
+    key.contains("fanpage") -> Icons.Outlined.Campaign
+    key.contains("authenticity") || key.contains("verify") -> Icons.Outlined.VerifiedUser
+    else -> Icons.Outlined.WorkspacePremium
+}
+
+@Composable
+private fun featureTitle(key: String, feature: FeatureUsageSummary): String {
+    if (feature.name.isNotBlank()) return feature.name
+    return when (key) {
+        "authenticity_verify" -> stringResource(R.string.seller_packages_feature_authenticity)
+        "explore_boost" -> stringResource(R.string.seller_packages_feature_explore_boost)
+        "fanpage_spotlight" -> stringResource(R.string.seller_packages_feature_fanpage)
+        "social_tiktok_instagram" -> stringResource(R.string.seller_packages_feature_social)
+        else -> key.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+}
+
+@Composable
+private fun featureDescription(key: String, feature: FeatureUsageSummary): String {
+    if (feature.description.isNotBlank()) return feature.description
+    return when (key) {
+        "authenticity_verify" -> stringResource(R.string.seller_packages_tools_desc_verify)
+        "explore_boost" -> stringResource(R.string.seller_packages_tools_desc_boost)
+        "fanpage_spotlight" -> stringResource(R.string.seller_packages_tools_desc_fanpage)
+        "social_tiktok_instagram" -> stringResource(R.string.seller_packages_tools_desc_social)
+        else -> ""
+    }
+}
+
+@Composable
+private fun featureCta(kind: String): String = when (kind) {
+    "boost" -> stringResource(R.string.seller_packages_tools_boost)
+    else -> stringResource(R.string.seller_packages_tools_submit)
+}
+
+@Composable
+private fun featureSuccessMessage(kind: String): Int = when (kind) {
+    "boost" -> R.string.seller_packages_tools_success_boost
+    else -> R.string.seller_packages_tools_success_request
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,7 +167,7 @@ fun SellerPackageToolsScreen(
     var caption by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(summary == null) }
     var listingsLoading by remember { mutableStateOf(true) }
-    var submitting by remember { mutableStateOf<SellerPackageToolKind?>(null) }
+    var submitting by remember { mutableStateOf<String?>(null) }
 
     fun reloadEntitlements() {
         scope.launch {
@@ -145,8 +208,9 @@ fun SellerPackageToolsScreen(
     val hasListing = selectedId.isNotEmpty()
 
     fun runTool(
-        kind: SellerPackageToolKind,
-        successRes: Int,
+        featureKey: String,
+        executionKind: String,
+        needsCaption: Boolean,
         action: () -> Result<Unit>,
     ) {
         if (submitting != null) return
@@ -154,13 +218,11 @@ fun SellerPackageToolsScreen(
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.seller_packages_tools_need_listing)) }
             return
         }
-        if ((kind == SellerPackageToolKind.Fanpage || kind == SellerPackageToolKind.Social) &&
-            caption.trim().isEmpty()
-        ) {
+        if (needsCaption && caption.trim().isEmpty()) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.seller_packages_tools_need_caption)) }
             return
         }
-        submitting = kind
+        submitting = featureKey
         scope.launch {
             val result = withContext(Dispatchers.IO) { action() }
             submitting = null
@@ -168,7 +230,7 @@ fun SellerPackageToolsScreen(
                 onSuccess = {
                     onEntitlementsChanged()
                     reloadEntitlements()
-                    snackbarHostState.showSnackbar(context.getString(successRes))
+                    snackbarHostState.showSnackbar(context.getString(featureSuccessMessage(executionKind)))
                 },
                 onFailure = { err ->
                     snackbarHostState.showSnackbar(
@@ -235,70 +297,34 @@ fun SellerPackageToolsScreen(
                     onSelect = { listingId = it },
                     onListingIdChange = { listingId = it },
                 )
-                ToolActionCard(
-                    icon = Icons.Outlined.VerifiedUser,
-                    title = stringResource(R.string.seller_packages_feature_authenticity),
-                    description = stringResource(R.string.seller_packages_tools_desc_verify),
-                    feature = summary?.features["authenticity_verify"],
-                    cta = stringResource(R.string.seller_packages_tools_verify),
-                    busy = submitting == SellerPackageToolKind.Verify,
-                    enabled = submitting == null,
-                    onUpgrade = onUpgrade,
-                    onSubmit = {
-                        runTool(SellerPackageToolKind.Verify, R.string.seller_packages_tools_success_verify) {
-                            repository.requestAuthenticity(selectedId)
-                        }
-                    },
-                )
-                ToolActionCard(
-                    icon = Icons.Outlined.AutoAwesome,
-                    title = stringResource(R.string.seller_packages_feature_explore_boost),
-                    description = stringResource(R.string.seller_packages_tools_desc_boost),
-                    feature = summary?.features["explore_boost"],
-                    cta = stringResource(R.string.seller_packages_tools_boost),
-                    busy = submitting == SellerPackageToolKind.Boost,
-                    enabled = submitting == null,
-                    onUpgrade = onUpgrade,
-                    onSubmit = {
-                        runTool(SellerPackageToolKind.Boost, R.string.seller_packages_tools_success_boost) {
-                            repository.applyExploreBoost(selectedId)
-                        }
-                    },
-                )
-                ToolActionCard(
-                    icon = Icons.Outlined.Campaign,
-                    title = stringResource(R.string.seller_packages_feature_fanpage),
-                    description = stringResource(R.string.seller_packages_tools_desc_fanpage),
-                    feature = summary?.features["fanpage_spotlight"],
-                    cta = stringResource(R.string.seller_packages_tools_fanpage),
-                    busy = submitting == SellerPackageToolKind.Fanpage,
-                    enabled = submitting == null,
-                    caption = caption,
-                    onCaptionChange = { caption = it },
-                    onUpgrade = onUpgrade,
-                    onSubmit = {
-                        runTool(SellerPackageToolKind.Fanpage, R.string.seller_packages_tools_success_fanpage) {
-                            repository.requestFanpage(selectedId, caption)
-                        }
-                    },
-                )
-                ToolActionCard(
-                    icon = Icons.Outlined.Share,
-                    title = stringResource(R.string.seller_packages_feature_social),
-                    description = stringResource(R.string.seller_packages_tools_desc_social),
-                    feature = summary?.features["social_tiktok_instagram"],
-                    cta = stringResource(R.string.seller_packages_tools_social),
-                    busy = submitting == SellerPackageToolKind.Social,
-                    enabled = submitting == null,
-                    caption = caption,
-                    onCaptionChange = { caption = it },
-                    onUpgrade = onUpgrade,
-                    onSubmit = {
-                        runTool(SellerPackageToolKind.Social, R.string.seller_packages_tools_success_social) {
-                            repository.requestSocialPromo(selectedId, caption)
-                        }
-                    },
-                )
+                groupedToolFeatures(summary).forEach { (group, entries) ->
+                    Text(
+                        text = featureGroupLabel(group),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = scheme.onSurface,
+                    )
+                    entries.forEach { entry ->
+                        val kind = entry.feature.executionKind.ifBlank { "request" }
+                        val showsCaption = kind != "boost"
+                        ToolActionCard(
+                            icon = featureIcon(entry.key, kind),
+                            title = featureTitle(entry.key, entry.feature),
+                            description = featureDescription(entry.key, entry.feature),
+                            feature = entry.feature,
+                            cta = featureCta(kind),
+                            busy = submitting == entry.key,
+                            enabled = submitting == null,
+                            caption = if (showsCaption) caption else null,
+                            onCaptionChange = if (showsCaption) ({ caption = it }) else null,
+                            onUpgrade = onUpgrade,
+                            onSubmit = {
+                                runTool(entry.key, kind, showsCaption) {
+                                    repository.invokeFeature(entry.key, selectedId, caption)
+                                }
+                            },
+                        )
+                    }
+                }
             }
         }
     }
