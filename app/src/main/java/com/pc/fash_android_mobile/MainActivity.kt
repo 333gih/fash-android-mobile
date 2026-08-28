@@ -2531,9 +2531,14 @@ class MainActivity : ComponentActivity() {
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 repository = fashApp.userEntitlementRepository,
+                                                listingRepository = fashApp.listingRepository,
                                                 onBack = { showSellerPackageTools = false },
                                                 onEntitlementsChanged = {
                                                     profileViewModel.loadProfile()
+                                                },
+                                                onUpgrade = {
+                                                    showSellerPackageTools = false
+                                                    showSellerPackagesScreen = true
                                                 },
                                             )
                                         } else if (showSellerPackagesScreen && selectedOrderId == null) {
