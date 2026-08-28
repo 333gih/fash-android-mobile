@@ -26,6 +26,7 @@ class AuthRepository(
     private fun JSONObject.putAuthClient(): JSONObject = apply {
         put("client_channel", "fash_android_app")
         put("client_platform", "android")
+        put("timezone", java.time.ZoneId.systemDefault().id)
     }
 
     fun login(email: String, password: String): Result<AuthSession> = runCatching {
@@ -154,6 +155,7 @@ class AuthRepository(
             .put("fcm_token", fcmToken.trim())
             .put("device_platform", devicePlatform)
         clientLocale?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("client_locale", it) }
+        json.put("timezone", java.time.ZoneId.systemDefault().id)
         val payload = json.toString()
         var lastError: Exception? = null
         for (url in AppEnvironment.authServiceCandidateUrls(path)) {

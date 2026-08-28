@@ -20,6 +20,7 @@ object NotificationEngagementReporter {
         if (!intent.getStringExtra(EXTRA_NOTIFICATION_ID).isNullOrBlank()) return true
         if (!intent.getStringExtra(EXTRA_NOTIFICATION_LISTING_ID).isNullOrBlank()) return true
         if (!intent.getStringExtra(EXTRA_NOTIFICATION_SCENARIO_ID).isNullOrBlank()) return true
+        if (!intent.getStringExtra("scenario_id").isNullOrBlank()) return true
         val deepLink = intent.getStringExtra("deep_link") ?: intent.dataString
         return deepLink?.contains("inbox/", ignoreCase = true) == true
     }
@@ -42,6 +43,9 @@ object NotificationEngagementReporter {
             out["listing_id"] = it
         }
         intent.getStringExtra(EXTRA_NOTIFICATION_SCENARIO_ID)?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            out["scenario_id"] = it
+        }
+        intent.getStringExtra("scenario_id")?.trim()?.takeIf { it.isNotEmpty() }?.let {
             out["scenario_id"] = it
         }
         intent.getStringExtra("notification_payload_type")?.trim()?.takeIf { it.isNotEmpty() }?.let {

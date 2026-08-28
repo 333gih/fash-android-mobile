@@ -16,7 +16,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
- * Schedules local notifications for guest browse users with copy rotation and up to 2/day (VN).
+ * Schedules local notifications for guest browse users with copy rotation and up to 2/day (device local timezone).
  * See core-service/docs/guest-local-reminder.md.
  */
 object GuestLocalReengagementScheduler {
@@ -41,11 +41,11 @@ object GuestLocalReengagementScheduler {
     const val NOTIFICATION_ID = 88001
     const val NOTIFICATION_ID_EVENING = 88002
 
-    private val vnZone: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
+    private val vnZone: ZoneId = ZoneId.systemDefault()
     private val inactiveMs = TimeUnit.HOURS.toMillis(24)
     private val nudgeCooldownMs = TimeUnit.DAYS.toMillis(7)
     private const val MAX_DAILY_REMINDERS = 2
-    private const val EVENING_HOUR_VN = 20
+    private const val EVENING_HOUR_LOCAL = 20
 
     private data class ReminderVariant(
         val titleVi: String,
@@ -166,6 +166,8 @@ object GuestLocalReengagementScheduler {
         seasonLabel?.trim()?.takeIf { it.isNotEmpty() }?.let {
             out[NotificationExploreNavigation.GUEST_EXPLORE_SEASON_LABEL_KEY] = it
         }
+        out["scenario_id"] = "guest_local"
+        out[com.pc.fash_android_mobile.data.recommendation.NotificationEngagementReporter.EXTRA_NOTIFICATION_SCENARIO_ID] = "guest_local"
         return out
     }
 
@@ -211,7 +213,7 @@ object GuestLocalReengagementScheduler {
 
     private fun scheduleEveningAlarm(context: Context, alarmManager: AlarmManager) {
         val now = LocalDateTime.now(vnZone)
-        var fire = LocalDateTime.of(now.toLocalDate(), LocalTime.of(EVENING_HOUR_VN, 0))
+        var fire = LocalDateTime.of(now.toLocalDate(), LocalTime.of(EVENING_HOUR_LOCAL, 0))
         if (!fire.isAfter(now)) {
             fire = fire.plusDays(1)
         }
