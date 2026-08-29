@@ -735,6 +735,8 @@ class MainActivity : ComponentActivity() {
                     hasPendingNotificationNavigation,
                 ) {
                     if (!splashFinished) return@LaunchedEffect
+                    if (!isAuthenticated && !welcomeIntroCompleted) return@LaunchedEffect
+                    if (!isGuestBrowse && !isAuthenticated) return@LaunchedEffect
                     // If we were opened by a notification/deep link, mount the shell immediately so the
                     // pending_* state can be consumed and the user lands on the correct detail screen.
                     if (

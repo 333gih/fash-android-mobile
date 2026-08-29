@@ -60,9 +60,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -92,6 +94,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.advertising.AppAdvertisingSlideItem
+import com.pc.fash_android_mobile.data.onboarding.AppWelcomeIntroStore
+import com.pc.fash_android_mobile.data.onboarding.PreLoginMascotGuideStore
+import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideContext
+import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideOverlay
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.locale.LoginLanguageToggle
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
@@ -421,6 +427,16 @@ fun LoginScreen(
                         )
                     }
                 }
+            }
+            val appContext = LocalContext.current.applicationContext
+            var showPreLoginGuide by rememberSaveable {
+                mutableStateOf(!PreLoginMascotGuideStore.isCompleted(appContext))
+            }
+            if (showPreLoginGuide && AppWelcomeIntroStore.isCompleted(appContext)) {
+                PreLoginMascotGuideOverlay(
+                    context = PreLoginMascotGuideContext.LoginScreen,
+                    onFinish = { showPreLoginGuide = false },
+                )
             }
         }
     }

@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
+import com.pc.fash_android_mobile.ui.components.FashMascotGuideImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.delay
@@ -196,6 +197,12 @@ fun AppFeatureTourOverlay(
                         color = FashColors.Primary,
                         trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                     )
+                    val mascotRes = if (currentStep == AppTourStep.Intro) {
+                        R.drawable.fash_mascot_point_up
+                    } else {
+                        R.drawable.fash_mascot_point_left
+                    }
+                    FashMascotGuideImage(resId = mascotRes, sizeDp = 56)
                     Text(
                         text = stepTitle(currentStep),
                         style = MaterialTheme.typography.titleLarge,

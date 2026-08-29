@@ -31,7 +31,10 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.data.locale.AppLocale
-import com.pc.fash_android_mobile.notifications.GuestLocalReengagementScheduler
+import com.pc.fash_android_mobile.data.onboarding.AppWelcomeIntroStore
+import com.pc.fash_android_mobile.data.onboarding.PreLoginMascotGuideStore
+import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideContext
+import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideOverlay
 import com.pc.fash_android_mobile.notifications.GuestReengagementLifecycleObserver
 import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
 import com.pc.fash_android_mobile.ui.components.FashPromoSlideDef
@@ -498,6 +501,16 @@ fun GuestMainShell(
                     popListingDetail()
                 }
             }
+        }
+
+        var showPreLoginGuide by rememberSaveable {
+            mutableStateOf(!PreLoginMascotGuideStore.isCompleted(context))
+        }
+        if (showPreLoginGuide && AppWelcomeIntroStore.isCompleted(context)) {
+            PreLoginMascotGuideOverlay(
+                context = PreLoginMascotGuideContext.GuestShell,
+                onFinish = { showPreLoginGuide = false },
+            )
         }
     }
 }

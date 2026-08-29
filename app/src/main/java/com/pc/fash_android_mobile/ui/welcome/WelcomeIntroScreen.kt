@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
+import com.pc.fash_android_mobile.ui.components.FashMascotGuideImage
 import com.pc.fash_android_mobile.ui.components.FashPrimaryButton
 import com.pc.fash_android_mobile.ui.locale.LoginLanguageToggle
 import com.pc.fash_android_mobile.ui.theme.FashBrandTypography
@@ -146,7 +147,7 @@ fun WelcomeIntroScreen(
                 .weight(1f)
                 .padding(horizontal = spacing.editorialStart),
         ) { page ->
-            WelcomeIntroSlideCard(slide = slides[page])
+            WelcomeIntroSlideCard(slide = slides[page], pageIndex = page, lastIndex = slides.lastIndex)
         }
 
         WelcomeIntroPageIndicator(
@@ -233,7 +234,11 @@ private fun WelcomeIntroPageIndicator(
 }
 
 @Composable
-private fun WelcomeIntroSlideCard(slide: WelcomeIntroSlideDef) {
+private fun WelcomeIntroSlideCard(
+    slide: WelcomeIntroSlideDef,
+    pageIndex: Int,
+    lastIndex: Int,
+) {
     val shape = RoundedCornerShape(28.dp)
     Surface(
         modifier = Modifier
@@ -265,12 +270,12 @@ private fun WelcomeIntroSlideCard(slide: WelcomeIntroSlideDef) {
                         .background(FashColors.Primary.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = slide.icon,
-                        contentDescription = null,
-                        tint = FashColors.Primary,
-                        modifier = Modifier.size(40.dp),
-                    )
+                    val mascotRes = when (pageIndex) {
+                        0 -> R.drawable.fash_mascot_point_up
+                        lastIndex -> R.drawable.fash_mascot_point_down
+                        else -> R.drawable.fash_mascot_point_left
+                    }
+                    FashMascotGuideImage(resId = mascotRes, sizeDp = 72)
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
