@@ -183,6 +183,7 @@ fun MainNavScreen(
     /** Featured seller chip on Home — opens seller shop without restoring Explore on back. */
     onHomeFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onOutfitSetClick: (com.pc.fash_android_mobile.data.recommendation.OutfitSetCard) -> Unit = {},
+    onOpenDailyOutfitDropList: () -> Unit = {},
     /** Featured seller chip on Explore overlay — restores Explore when seller shop dismisses. */
     onExploreFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
@@ -194,6 +195,7 @@ fun MainNavScreen(
     inboxOpenRequestGeneration: Long = 0L,
     onOpenOrderFromNotification: (String) -> Unit = {},
     onOpenListingFromNotification: (String, String?) -> Unit = { _, _ -> },
+    onOpenOutfitDailyDropFromNotification: (String?) -> Unit = {},
     /** Opens Chat tab with a conversation selected (FCM / inbox `conversation_id`). */
     onNavigateToChatConversation: (String) -> Unit = {},
     /** Home cẩm nang card — open in-app reader (host may route Explore CTA from detail). */
@@ -714,6 +716,7 @@ fun MainNavScreen(
                         onFeaturedSellerClick = onHomeFeaturedSellerClick,
                         onOpenFeaturedSellersAll = onOpenFeaturedSellersAll,
                         onOutfitSetClick = onOutfitSetClick,
+                        onOpenDailyOutfitDropList = onOpenDailyOutfitDropList,
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
                     )
                     MainTab.Orders -> if (isGuestMode) {
@@ -848,6 +851,10 @@ fun MainNavScreen(
             onOpenListing = { listingId, sellerId ->
                 showNotificationScreen = false
                 onOpenListingFromNotification(listingId, sellerId)
+            },
+            onOpenOutfitDailyDrop = { setId ->
+                showNotificationScreen = false
+                onOpenOutfitDailyDropFromNotification(setId)
             },
             onOpenChat = { conversationId ->
                 showNotificationScreen = false

@@ -77,6 +77,8 @@ import com.pc.fash_android_mobile.ui.invite.InviteFriendsScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
 import com.pc.fash_android_mobile.data.recommendation.OutfitSetCard
+import com.pc.fash_android_mobile.deeplink.OutfitDeepLinks
+import com.pc.fash_android_mobile.ui.outfit.DailyOutfitDropListScreen
 import com.pc.fash_android_mobile.ui.outfit.OutfitSetDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
@@ -1506,6 +1508,7 @@ class MainActivity : ComponentActivity() {
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
                                     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedOutfitSet by remember { mutableStateOf<OutfitSetCard?>(null) }
+                                    var showDailyOutfitDropListScreen by rememberSaveable { mutableStateOf(false) }
                                     var showEditorialListScreen by rememberSaveable { mutableStateOf(false) }
                                     var uxSurveyKey by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
@@ -1557,6 +1560,32 @@ class MainActivity : ComponentActivity() {
                                         exploreViewModel.openExploreFromNotificationFilter(filter)
                                         fashApp.pendingExploreNavigationFilter.value = null
                                         exploreOverlayOpenNonce++
+                                    }
+                                    val pendingOpenDailyOutfitDrop by fashApp.pendingOpenDailyOutfitDropList.collectAsState()
+                                    LaunchedEffect(pendingOpenDailyOutfitDrop) {
+                                        if (!pendingOpenDailyOutfitDrop) return@LaunchedEffect
+                                        showDailyOutfitDropListScreen = true
+                                        fashApp.pendingOpenDailyOutfitDropList.value = false
+                                    }
+                                    val pendingOpenOutfitSetId by fashApp.pendingOpenOutfitSetId.collectAsState()
+                                    LaunchedEffect(pendingOpenOutfitSetId) {
+                                        val setId = pendingOpenOutfitSetId?.trim()?.takeIf { it.isNotEmpty() }
+                                            ?: return@LaunchedEffect
+                                        fashApp.pendingOpenOutfitSetId.value = null
+                                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                            val result = fashApp.recommendationRepository.fetchOutfitSet(setId)
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                result.onSuccess { card ->
+                                                    if (card != null) {
+                                                        selectedOutfitSet = card
+                                                    } else {
+                                                        showDailyOutfitDropListScreen = true
+                                                    }
+                                                }.onFailure {
+                                                    showDailyOutfitDropListScreen = true
+                                                }
+                                            }
+                                        }
                                     }
                                     val pendingOpenOnboarding by fashApp.pendingOpenOnboarding.collectAsState()
                                     LaunchedEffect(pendingOpenOnboarding) {
@@ -1919,6 +1948,21 @@ class MainActivity : ComponentActivity() {
                                                 selectedOrderId = null
                                                 openListingDetail(lid, sellerId)
                                             },
+                                            onOpenOutfitDailyDropFromNotification = { setId ->
+                                                chatOrderDetailOverlayId = null
+                                                selectedConversationId = null
+                                                selectedConversationItem = null
+                                                chatViewModel.loadConversations()
+                                                chatViewModel.refreshUnreadCount()
+                                                selectedOrderId = null
+                                                closeListingDetail()
+                                                val trimmed = setId?.trim()?.takeIf { it.isNotEmpty() }
+                                                if (trimmed != null) {
+                                                    fashApp.pendingOpenOutfitSetId.value = trimmed
+                                                } else {
+                                                    showDailyOutfitDropListScreen = true
+                                                }
+                                            },
                                             onNavigateToChatConversation = { conversationId ->
                                                 closeListingDetail()
                                                 selectedOrderId = null
@@ -1956,6 +2000,7 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
                                             onOutfitSetClick = { set -> selectedOutfitSet = set },
+                                            onOpenDailyOutfitDropList = { showDailyOutfitDropListScreen = true },
                                             onHomeFeaturedSellerClick = { seller ->
                                                 openSellerShopFrom(seller, SellerShopEntrySource.Home)
                                             },
@@ -2515,6 +2560,21 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
+                                        if (showDailyOutfitDropListScreen && selectedListingId == null && selectedOrderId == null) {
+                                            DailyOutfitDropListScreen(
+                                                initialSets = homeViewModel.feedUiState.value.discovery.dailyOutfitDrop,
+                                                repository = fashApp.recommendationRepository,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                onBack = { showDailyOutfitDropListScreen = false },
+                                                onSetClick = { set ->
+                                                    showDailyOutfitDropListScreen = false
+                                                    selectedOutfitSet = set
+                                                },
+                                            )
+                                        }
+
                                         if (sellerPackageCheckout != null) {
                                             SellerPackageCheckoutScreen(
                                                 modifier = Modifier
@@ -2776,6 +2836,9 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 selectedOutfitSet != null -> {
                                                     selectedOutfitSet = null
+                                                }
+                                                showDailyOutfitDropListScreen -> {
+                                                    showDailyOutfitDropListScreen = false
                                                 }
                                                 selectedListingId != null -> {
                                                     popListingDetail()
@@ -3177,6 +3240,14 @@ class MainActivity : ComponentActivity() {
             }
             ProfileDeepLinks.parseUsername(uri)?.let { handle ->
                 fashApp.pendingDeepLinkSellerUsername.value = handle
+                return
+            }
+            OutfitDeepLinks.parseOutfitSetId(uri)?.let { setId ->
+                fashApp.pendingOpenOutfitSetId.value = setId
+                return
+            }
+            if (uri.host.equals("outfit-daily-drop", ignoreCase = true)) {
+                fashApp.pendingOpenDailyOutfitDropList.value = true
                 return
             }
         }

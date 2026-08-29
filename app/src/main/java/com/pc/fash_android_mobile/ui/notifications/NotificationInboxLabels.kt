@@ -39,6 +39,7 @@ fun inboxPayloadTypeStringRes(payloadType: String): Int? =
         "marketplace.recommendation.taste_neighbor" -> R.string.notification_pt_marketplace_recommendation_taste_neighbor
         "marketplace.recommendation.hunt_today" -> R.string.notification_pt_marketplace_recommendation_hunt_today
         "marketplace.recommendation.social_style_match" -> R.string.notification_pt_marketplace_recommendation_social_style_match
+        "marketplace.recommendation.daily_outfit_drop" -> R.string.notification_pt_marketplace_recommendation_daily_outfit_drop
         "admin.mobile_push" -> R.string.notification_pt_admin_mobile_push
         "admin.mobile_push.announcement" -> R.string.notification_pt_admin_mobile_push_announcement
         "admin.mobile_push.promo" -> R.string.notification_pt_admin_mobile_push_promo

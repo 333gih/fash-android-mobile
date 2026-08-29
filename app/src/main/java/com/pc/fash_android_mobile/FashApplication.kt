@@ -168,6 +168,10 @@ class FashApplication : Application(), ImageLoaderFactory {
     /** FCM tray / banner tap → chat thread ([MainActivity] consumes). */
     val pendingOpenChatConversationId = MutableStateFlow<String?>(null)
 
+    /** Push/deep link → open a specific outfit set or the daily drop list. */
+    val pendingOpenOutfitSetId = MutableStateFlow<String?>(null)
+    val pendingOpenDailyOutfitDropList = MutableStateFlow(false)
+
     /** Multi-account FCM: user B is active but account A has new inbox rows. */
     val pendingAccountSwitchPrompt = MutableStateFlow<AccountSwitchPrompt?>(null)
 

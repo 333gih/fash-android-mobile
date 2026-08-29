@@ -79,6 +79,7 @@ fun NotificationDetailScreen(
     onOpenExplore: (ExploreNavigationFilter?) -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
     onOpenInviteFriends: () -> Unit = {},
+    onOpenOutfitDailyDrop: (String?) -> Unit = {},
     onPromoMainTab: (MainTab) -> Unit = {},
     onPromoOpenOrders: () -> Unit = {},
 ) {
@@ -239,12 +240,20 @@ fun NotificationDetailScreen(
                         Text(stringResource(R.string.notification_action_open_order))
                     }
                 }
-                if (!actions.listingId.isNullOrBlank()) {
+                if (!actions.listingId.isNullOrBlank() && !actions.openOutfitDailyDrop) {
                     OutlinedButton(
                         onClick = { onOpenListing(actions.listingId!!, actions.sellerUserId) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.notification_action_open_listing))
+                    }
+                }
+                if (actions.openOutfitDailyDrop) {
+                    OutlinedButton(
+                        onClick = { onOpenOutfitDailyDrop(actions.outfitSetId) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.notification_action_open_outfit_daily_drop))
                     }
                 }
                 if (!actions.conversationId.isNullOrBlank()) {

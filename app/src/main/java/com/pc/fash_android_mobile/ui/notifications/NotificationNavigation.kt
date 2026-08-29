@@ -15,6 +15,8 @@ data class NotificationDetailActions(
     val openExploreTab: Boolean,
     val openInviteFriends: Boolean,
     val openOnboarding: Boolean,
+    val openOutfitDailyDrop: Boolean,
+    val outfitSetId: String?,
     val exploreFilter: ExploreNavigationFilter?,
     val richDetailBody: String?,
     val imageUrl: String?,
@@ -34,6 +36,8 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
             openExploreTab = false,
             openInviteFriends = false,
             openOnboarding = false,
+            openOutfitDailyDrop = false,
+            outfitSetId = null,
             exploreFilter = null,
             richDetailBody = rich,
             imageUrl = image,
@@ -66,6 +70,12 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
     val openInviteFriends = nav == "in_app_invite_friends" ||
         ptype.equals("marketplace.referral.invite_rewarded", ignoreCase = true)
 
+    val feedSurface = firstStringFromDataCi(data, "feed_surface", "feedSurface")?.lowercase(Locale.ROOT).orEmpty()
+    val outfitSetId = firstStringFromDataCi(data, "set_id", "setId")
+    val openOutfitDailyDrop = ptype.equals("marketplace.recommendation.daily_outfit_drop", ignoreCase = true) ||
+        nav == "outfit_daily_drop" ||
+        (nav == "home" && feedSurface == "outfit_daily_drop")
+
     val rich = firstStringFromDataCi(data, "detail_body", "detailBody", "rich_body", "richBody")
     val imageUrl = firstStringFromDataCi(
         data,
@@ -92,6 +102,8 @@ fun parseNotificationDetailActions(item: InboxNotificationItem): NotificationDet
         openExploreTab = openExploreTab,
         openInviteFriends = openInviteFriends,
         openOnboarding = openOnboarding,
+        openOutfitDailyDrop = openOutfitDailyDrop,
+        outfitSetId = outfitSetId,
         exploreFilter = exploreFilter,
         richDetailBody = rich,
         imageUrl = imageUrl,

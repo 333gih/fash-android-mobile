@@ -7,6 +7,7 @@ import com.pc.fash_android_mobile.deeplink.AccountSwitchDeepLinks
 import com.pc.fash_android_mobile.deeplink.InboxDeepLinks
 import com.pc.fash_android_mobile.deeplink.InviteDeepLinks
 import com.pc.fash_android_mobile.deeplink.ListingDeepLinks
+import com.pc.fash_android_mobile.deeplink.OutfitDeepLinks
 import com.pc.fash_android_mobile.deeplink.ProfileDeepLinks
 import com.pc.fash_android_mobile.data.recommendation.NotificationEngagementReporter
 import com.pc.fash_android_mobile.ui.chat.ChatInAppNotificationPolicy
@@ -146,6 +147,15 @@ object PushNotificationRouter {
                 return
             }
         }
+        if (nav == "outfit_daily_drop") {
+            val setId = data["set_id"]?.trim()?.takeIf { it.isNotEmpty() }
+            if (setId != null) {
+                fashApp.pendingOpenOutfitSetId.value = setId
+            } else {
+                fashApp.pendingOpenDailyOutfitDropList.value = true
+            }
+            return
+        }
     }
 
     private fun routeDeepLink(fashApp: FashApplication, deepLink: String): Boolean {
@@ -175,6 +185,14 @@ object PushNotificationRouter {
                     fashApp.pendingReferrerUsername.value = ref
                 }
                 fashApp.pendingOpenInviteFriends.value = true
+                return true
+            }
+            OutfitDeepLinks.parseOutfitSetId(uri)?.let { setId ->
+                fashApp.pendingOpenOutfitSetId.value = setId
+                return true
+            }
+            if (uri.host.equals("outfit-daily-drop", ignoreCase = true)) {
+                fashApp.pendingOpenDailyOutfitDropList.value = true
                 return true
             }
         }

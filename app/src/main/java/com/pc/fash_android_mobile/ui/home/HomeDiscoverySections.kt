@@ -27,6 +27,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
@@ -1007,6 +1008,61 @@ fun HomePersonalizedFeedEmptyCard(
                     }
                 }
             }
+        }
+    }
+}
+
+fun HomeDailyOutfitDropCtaBanner(
+    setCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
+) {
+    if (setCount <= 0) return
+    val spacing = FashTheme.spacing
+    val edgeStart = if (includeHorizontalEdgePadding) spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) spacing.editorialEnd else 0.dp
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = edgeStart, end = edgeEnd, top = 4.dp, bottom = 8.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Checkroom,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.home_section_daily_outfit_drop_title),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.outfit_daily_drop_cta_subtitle, setCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = stringResource(R.string.home_daily_outfit_drop_action),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = FashColors.Primary,
+            )
         }
     }
 }
