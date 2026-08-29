@@ -1509,6 +1509,7 @@ class MainActivity : ComponentActivity() {
                                     var followConnectionsInitialTab by rememberSaveable { mutableIntStateOf(0) }
                                     var showFeaturedSellersAll by rememberSaveable { mutableStateOf(false) }
                                     var showSellerPackagesScreen by rememberSaveable { mutableStateOf(false) }
+                                    var sellerPackagesHighlightFeature by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showSellerPackageTools by rememberSaveable { mutableStateOf(false) }
                                     var showInviteFriendsScreen by rememberSaveable { mutableStateOf(false) }
                                     var sellerPackageCheckout by remember { mutableStateOf<SellerProductPackage?>(null) }
@@ -2536,8 +2537,9 @@ class MainActivity : ComponentActivity() {
                                                 onEntitlementsChanged = {
                                                     profileViewModel.loadProfile()
                                                 },
-                                                onUpgrade = {
+                                                onUpgrade = { featureKey ->
                                                     showSellerPackageTools = false
+                                                    sellerPackagesHighlightFeature = featureKey
                                                     showSellerPackagesScreen = true
                                                 },
                                             )
@@ -2547,7 +2549,11 @@ class MainActivity : ComponentActivity() {
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surface),
                                                 viewModel = sellerProductPackagesViewModel,
-                                                onBack = { showSellerPackagesScreen = false },
+                                                highlightFeatureKey = sellerPackagesHighlightFeature,
+                                                onBack = {
+                                                    sellerPackagesHighlightFeature = null
+                                                    showSellerPackagesScreen = false
+                                                },
                                                 onBuyPackage = { pkg ->
                                                     sellerPackageCheckout = pkg
                                                 },

@@ -107,6 +107,17 @@ class UserEntitlementRepository(
                 name = f.optString("name", ""),
                 description = f.optString("description", ""),
                 requiresListing = f.optBoolean("requires_listing", false),
+                fulfillmentMode = f.optString("fulfillment_mode", ""),
+                verificationKind = f.optString("verification_kind", ""),
+                disclaimerText = f.optString("disclaimer_text", ""),
+                latestRequestStatus = f.optString("latest_request_status", ""),
+                latestResultVerdict = f.optString("latest_result_verdict", ""),
+                latestConfidencePct = if (f.has("latest_confidence_pct") && !f.isNull("latest_confidence_pct")) {
+                    f.optInt("latest_confidence_pct")
+                } else {
+                    null
+                },
+                boostAffinityHint = f.optString("boost_affinity_hint", ""),
                 used = f.optLong("used", 0),
                 remaining = if (f.has("remaining") && !f.isNull("remaining")) f.optLong("remaining") else null,
                 unlimited = f.optBoolean("unlimited", false),

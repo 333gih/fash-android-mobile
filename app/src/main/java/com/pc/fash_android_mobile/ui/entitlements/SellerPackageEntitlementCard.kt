@@ -39,6 +39,8 @@ import com.pc.fash_android_mobile.ui.components.FashSecondaryButton
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 
+private val PROFILE_FEATURE_GROUP_ORDER = listOf("verification", "visibility", "social_promo")
+
 @Composable
 fun SellerPackageEntitlementCard(
     summary: UserEntitlementSummary?,
@@ -110,27 +112,14 @@ fun SellerPackageEntitlementCard(
                     )
                 }
             }
-            if (summary != null) {
-                FeatureQuotaRow(
-                    icon = Icons.Outlined.VerifiedUser,
-                    label = stringResource(R.string.seller_packages_feature_authenticity),
-                    feature = summary.features["authenticity_verify"],
-                )
-                FeatureQuotaRow(
-                    icon = Icons.Outlined.AutoAwesome,
-                    label = stringResource(R.string.seller_packages_feature_explore),
-                    feature = summary.features["explore_boost"],
-                )
-                FeatureQuotaRow(
-                    icon = Icons.Outlined.Campaign,
-                    label = stringResource(R.string.seller_packages_feature_fanpage),
-                    feature = summary.features["fanpage_spotlight"],
-                )
-                FeatureQuotaRow(
-                    icon = Icons.Outlined.Share,
-                    label = stringResource(R.string.seller_packages_feature_social),
-                    feature = summary.features["social_tiktok_instagram"],
-                )
+            summary?.let { ent ->
+                profileFeatureRows(ent).forEach { (key, feature) ->
+                    FeatureQuotaRow(
+                        icon = profileFeatureIcon(key, feature.executionKind),
+                        label = profileFeatureLabel(key, feature),
+                        feature = feature,
+                    )
+                }
             }
             FashPrimaryButton(
                 onClick = onOpenTools,
@@ -141,6 +130,39 @@ fun SellerPackageEntitlementCard(
                 label = stringResource(R.string.seller_packages_entitlement_upgrade),
             )
         }
+    }
+}
+
+private fun profileFeatureRows(summary: UserEntitlementSummary): List<Pair<String, FeatureUsageSummary>> {
+    val grouped = summary.features.entries
+        .filter { it.value.featureGroup.isNotBlank() || it.value.name.isNotBlank() }
+        .groupBy { it.value.featureGroup.ifBlank { "other" } }
+    val order = PROFILE_FEATURE_GROUP_ORDER.filter { grouped.containsKey(it) } +
+        grouped.keys.filter { it !in PROFILE_FEATURE_GROUP_ORDER }.sorted()
+    return order.flatMap { group ->
+        grouped[group].orEmpty().sortedBy { it.value.name.ifBlank { it.key } }
+            .map { it.key to it.value }
+    }
+}
+
+private fun profileFeatureIcon(key: String, kind: String): ImageVector = when {
+    kind == "boost" || key == "explore_boost" -> Icons.Outlined.AutoAwesome
+    key.contains("social") -> Icons.Outlined.Share
+    key.contains("fanpage") -> Icons.Outlined.Campaign
+    key.contains("authenticity") || key.contains("verify") || key == "seller_real_badge" -> Icons.Outlined.VerifiedUser
+    else -> Icons.Outlined.WorkspacePremium
+}
+
+@Composable
+private fun profileFeatureLabel(key: String, feature: FeatureUsageSummary): String {
+    if (feature.name.isNotBlank()) return feature.name
+    return when (key) {
+        "authenticity_verify" -> stringResource(R.string.seller_packages_feature_authenticity)
+        "explore_boost" -> stringResource(R.string.seller_packages_feature_explore_boost)
+        "fanpage_spotlight" -> stringResource(R.string.seller_packages_feature_fanpage)
+        "social_tiktok_instagram" -> stringResource(R.string.seller_packages_feature_social)
+        "seller_real_badge" -> stringResource(R.string.seller_packages_feature_real_badge)
+        else -> key.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 }
 

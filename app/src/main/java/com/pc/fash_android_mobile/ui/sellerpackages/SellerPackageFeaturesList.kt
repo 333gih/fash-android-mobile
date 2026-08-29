@@ -3,7 +3,9 @@ package com.pc.fash_android_mobile.ui.sellerpackages
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -29,6 +31,7 @@ fun packageFeatureTitle(featureId: String, apiName: String? = null): String {
         "explore_boost" -> stringResource(R.string.seller_packages_feature_explore_boost)
         "fanpage_spotlight" -> stringResource(R.string.seller_packages_feature_fanpage)
         "social_tiktok_instagram" -> stringResource(R.string.seller_packages_feature_social)
+        "seller_real_badge" -> stringResource(R.string.seller_packages_feature_real_badge)
         else -> featureId
     }
 }
@@ -38,6 +41,7 @@ fun SellerPackageFeaturesList(
     features: List<SellerPackageFeature>,
     modifier: Modifier = Modifier,
     sectionTitle: String? = null,
+    highlightFeatureKey: String? = null,
 ) {
     if (features.isEmpty()) return
     val scheme = MaterialTheme.colorScheme
@@ -51,9 +55,22 @@ fun SellerPackageFeaturesList(
         }
         features.forEach { feature ->
             val title = packageFeatureTitle(feature.id, feature.name)
+            val highlighted = highlightFeatureKey != null && feature.id == highlightFeatureKey && feature.included
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(
+                        if (highlighted) {
+                            Modifier
+                                .background(
+                                    FashColors.Primary.copy(alpha = 0.12f),
+                                    RoundedCornerShape(8.dp),
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -106,7 +106,7 @@ private fun featureIcon(key: String, kind: String): ImageVector = when {
     kind == "boost" || key == "explore_boost" -> Icons.Outlined.AutoAwesome
     key.contains("social") -> Icons.Outlined.Share
     key.contains("fanpage") -> Icons.Outlined.Campaign
-    key.contains("authenticity") || key.contains("verify") -> Icons.Outlined.VerifiedUser
+    key.contains("authenticity") || key.contains("verify") || key == "seller_real_badge" -> Icons.Outlined.VerifiedUser
     else -> Icons.Outlined.WorkspacePremium
 }
 
@@ -118,6 +118,7 @@ private fun featureTitle(key: String, feature: FeatureUsageSummary): String {
         "explore_boost" -> stringResource(R.string.seller_packages_feature_explore_boost)
         "fanpage_spotlight" -> stringResource(R.string.seller_packages_feature_fanpage)
         "social_tiktok_instagram" -> stringResource(R.string.seller_packages_feature_social)
+        "seller_real_badge" -> stringResource(R.string.seller_packages_feature_real_badge)
         else -> key.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 }
@@ -152,7 +153,7 @@ fun SellerPackageToolsScreen(
     listingRepository: ListingRepository,
     onBack: () -> Unit,
     onEntitlementsChanged: () -> Unit,
-    onUpgrade: () -> Unit,
+    onUpgrade: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -163,6 +164,9 @@ fun SellerPackageToolsScreen(
     var summary by remember { mutableStateOf(repository.peekCached()) }
     var listings by remember { mutableStateOf<List<ListingFeedItem>>(emptyList()) }
     var listingId by remember { mutableStateOf("") }
+    var selectedListingTitle by remember { mutableStateOf("") }
+    var showListingPicker by remember { mutableStateOf(false) }
+    var showAdvancedListingId by remember { mutableStateOf(false) }
     var caption by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(summary == null) }
     var listingsLoading by remember { mutableStateOf(true) }
@@ -193,6 +197,7 @@ fun SellerPackageToolsScreen(
                 listings = items
                 if (listingId.isBlank() && items.isNotEmpty()) {
                     listingId = items.first().id
+                    selectedListingTitle = items.first().title
                 }
             }
         }
@@ -209,11 +214,12 @@ fun SellerPackageToolsScreen(
     fun runTool(
         featureKey: String,
         executionKind: String,
+        needsListing: Boolean,
         needsCaption: Boolean,
         action: () -> Result<Unit>,
     ) {
         if (submitting != null) return
-        if (!hasListing) {
+        if (needsListing && !hasListing) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.seller_packages_tools_need_listing)) }
             return
         }
@@ -229,7 +235,11 @@ fun SellerPackageToolsScreen(
                 onSuccess = {
                     onEntitlementsChanged()
                     reloadEntitlements()
-                    snackbarHostState.showSnackbar(context.getString(featureSuccessMessageRes(executionKind)))
+                    val msgRes = when {
+                        executionKind == "boost" -> R.string.seller_packages_tools_success_boost_affinity
+                        else -> featureSuccessMessageRes(executionKind)
+                    }
+                    snackbarHostState.showSnackbar(context.getString(msgRes))
                 },
                 onFailure = { err ->
                     snackbarHostState.showSnackbar(
@@ -287,14 +297,28 @@ fun SellerPackageToolsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
-                PackageStatusCard(summary = summary, loading = loading, onUpgrade = onUpgrade)
-                ListingPickerSection(
-                    listings = listings,
-                    listingsLoading = listingsLoading,
+                PackageStatusCard(summary = summary, loading = loading, onUpgrade = { onUpgrade(null) })
+                val anyNeedsListing = summary?.features?.values?.any { it.requiresListing } == true
+                if (anyNeedsListing) {
+                    ListingPickerSection(
+                        selectedTitle = selectedListingTitle.ifBlank { selectedId.take(8) },
+                        hasSelection = hasListing,
+                        showAdvanced = showAdvancedListingId,
+                        listingId = listingId,
+                        onOpenPicker = { showListingPicker = true },
+                        onToggleAdvanced = { showAdvancedListingId = !showAdvancedListingId },
+                        onListingIdChange = { listingId = it },
+                    )
+                }
+                SellerListingPickerSheet(
+                    visible = showListingPicker,
+                    listingRepository = listingRepository,
                     selectedId = selectedId,
-                    listingId = listingId,
-                    onSelect = { listingId = it },
-                    onListingIdChange = { listingId = it },
+                    onDismiss = { showListingPicker = false },
+                    onSelect = { item ->
+                        listingId = item.id
+                        selectedListingTitle = item.title
+                    },
                 )
                 groupedToolFeatures(summary).forEach { (group, entries) ->
                     Text(
@@ -304,8 +328,10 @@ fun SellerPackageToolsScreen(
                     )
                     entries.forEach { entry ->
                         val kind = entry.feature.executionKind.ifBlank { "request" }
-                        val showsCaption = kind != "boost"
+                        val showsCaption = kind != "boost" && entry.key != "seller_real_badge"
+                        val needsListing = entry.feature.requiresListing
                         ToolActionCard(
+                            featureKey = entry.key,
                             icon = featureIcon(entry.key, kind),
                             title = featureTitle(entry.key, entry.feature),
                             description = featureDescription(entry.key, entry.feature),
@@ -315,10 +341,11 @@ fun SellerPackageToolsScreen(
                             enabled = submitting == null,
                             caption = if (showsCaption) caption else null,
                             onCaptionChange = if (showsCaption) ({ caption = it }) else null,
-                            onUpgrade = onUpgrade,
+                            onUpgrade = { onUpgrade(entry.key) },
                             onSubmit = {
-                                runTool(entry.key, kind, showsCaption) {
-                                    repository.invokeFeature(entry.key, selectedId, caption)
+                                val listingArg = if (needsListing) selectedId else ""
+                                runTool(entry.key, kind, needsListing, showsCaption) {
+                                    repository.invokeFeature(entry.key, listingArg, caption)
                                 }
                             },
                         )
@@ -408,11 +435,12 @@ private fun PackageStatusCard(
 
 @Composable
 private fun ListingPickerSection(
-    listings: List<ListingFeedItem>,
-    listingsLoading: Boolean,
-    selectedId: String,
+    selectedTitle: String,
+    hasSelection: Boolean,
+    showAdvanced: Boolean,
     listingId: String,
-    onSelect: (String) -> Unit,
+    onOpenPicker: () -> Unit,
+    onToggleAdvanced: () -> Unit,
     onListingIdChange: (String) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -421,105 +449,54 @@ private fun ListingPickerSection(
             text = stringResource(R.string.seller_packages_tools_pick_listing),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
         )
-        when {
-            listingsLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(96.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = FashColors.Primary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                }
-            }
-            listings.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.seller_packages_tools_no_listings),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-            else -> {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    listings.forEach { item ->
-                        ListingPickTile(
-                            item = item,
-                            selected = item.id == selectedId,
-                            onClick = { onSelect(item.id) },
-                        )
-                    }
-                }
-            }
-        }
-        FashFilledTextField(
-            value = listingId,
-            onValueChange = onListingIdChange,
-            label = { Text(stringResource(R.string.seller_packages_tools_listing_id)) },
-            singleLine = true,
-        )
-        Text(
-            text = stringResource(R.string.seller_packages_tools_listing_helper),
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun ListingPickTile(
-    item: ListingFeedItem,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin)
-    val imageUrl = item.coverImageUrl.takeIf { it.isNotBlank() }?.let { resolveListingImageUrl(it) }.orEmpty()
-    Column(
-        modifier = Modifier
-            .width(112.dp)
-            .clip(shape)
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) FashColors.Primary else scheme.outlineVariant.copy(alpha = 0.5f),
-                shape = shape,
-            )
-            .background(scheme.surface)
-            .clickable(onClick = onClick)
-            .padding(6.dp),
-    ) {
-        Box(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(84.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(scheme.surfaceContainerHigh),
+                .clickable(onClick = onOpenPicker),
+            shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
+            colors = CardDefaults.cardColors(containerColor = scheme.surface),
+            border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
         ) {
-            if (imageUrl.isNotEmpty()) {
-                FashAsyncImage(
-                    model = imageUrl,
-                    contentDescription = item.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    targetPixelSize = 224 to 168,
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = if (hasSelection) selectedTitle else stringResource(R.string.seller_packages_tools_tap_pick_listing),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (hasSelection) FontWeight.SemiBold else FontWeight.Normal,
+                    ),
+                    color = if (hasSelection) scheme.onSurface else scheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = stringResource(R.string.seller_packages_tools_change_listing),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = FashColors.Primary,
                 )
             }
         }
-        Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = item.title.ifBlank { item.id },
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            color = scheme.onSurface,
+            text = stringResource(R.string.seller_packages_tools_advanced_listing_id),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = FashColors.Primary,
+            modifier = Modifier.clickable(onClick = onToggleAdvanced),
         )
+        if (showAdvanced) {
+            FashFilledTextField(
+                value = listingId,
+                onValueChange = onListingIdChange,
+                label = { Text(stringResource(R.string.seller_packages_tools_listing_id)) },
+                singleLine = true,
+            )
+        }
     }
 }
 
 @Composable
 private fun ToolActionCard(
+    featureKey: String,
     icon: ImageVector,
     title: String,
     description: String,
@@ -535,6 +512,11 @@ private fun ToolActionCard(
     val scheme = MaterialTheme.colorScheme
     val canUse = feature.canUse()
     val locked = feature == null || !feature.enabled
+    val disclaimer = feature?.disclaimerText?.takeIf { it.isNotBlank() }
+    val boostHint = feature?.boostAffinityHint?.takeIf { it.isNotBlank() && featureKey == "explore_boost" }
+    val showResearchResult = featureKey == "authenticity_verify" &&
+        feature?.latestRequestStatus == "fulfilled" &&
+        feature.latestConfidencePct != null
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FashTheme.spacing.radiusCard),
@@ -570,6 +552,49 @@ private fun ToolActionCard(
                     )
                 }
                 QuotaChip(feature = feature)
+            }
+            disclaimer?.let { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(scheme.surfaceContainerHigh, RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                )
+            }
+            boostHint?.let { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = FashColors.Primary,
+                )
+            }
+            if (feature?.latestRequestStatus == "pending") {
+                Text(
+                    text = stringResource(R.string.seller_packages_tools_status_pending),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (showResearchResult) {
+                Text(
+                    text = stringResource(
+                        R.string.seller_packages_tools_result_confidence,
+                        feature.latestConfidencePct ?: 0,
+                        feature.latestResultVerdict.ifBlank { "—" },
+                    ),
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                )
+            }
+            if (featureKey == "seller_real_badge" && feature?.latestRequestStatus == "fulfilled") {
+                Text(
+                    text = stringResource(R.string.seller_packages_tools_badge_granted),
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = FashColors.Primary,
+                )
             }
             if (onCaptionChange != null && caption != null && canUse) {
                 FashFilledTextField(

@@ -36,9 +36,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -55,6 +63,7 @@ import com.pc.fash_android_mobile.ui.theme.FashTheme
 fun SellerProductPackagesScreen(
     modifier: Modifier = Modifier,
     viewModel: SellerProductPackagesViewModel,
+    highlightFeatureKey: String? = null,
     onBack: () -> Unit,
     onBuyPackage: (SellerProductPackage) -> Unit,
 ) {
@@ -62,9 +71,22 @@ fun SellerProductPackagesScreen(
     val packages by viewModel.packages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
+    val listState = rememberLazyListState()
+    val highlightKey = highlightFeatureKey?.trim().orEmpty()
+    val targetIndex = remember(packages, highlightKey) {
+        if (highlightKey.isEmpty()) -1
+        else packages.indexOfFirst { pkg -> pkg.features.any { it.id == highlightKey && it.included } }
+    }
+    val targetPackage = packages.getOrNull(targetIndex)
+    val highlightFeatureName = targetPackage?.features?.firstOrNull { it.id == highlightKey }?.name
 
     LaunchedEffect(Unit) {
         viewModel.refresh()
+    }
+    LaunchedEffect(targetIndex, packages.size) {
+        if (targetIndex >= 0) {
+            listState.animateScrollToItem(targetIndex + 1)
+        }
     }
 
     Scaffold(
@@ -124,6 +146,7 @@ fun SellerProductPackagesScreen(
                 }
                 else -> {
                     LazyColumn(
+                        state = listState,
                         contentPadding = PaddingValues(
                             horizontal = FashTheme.spacing.editorialStart,
                             vertical = 12.dp,
@@ -136,11 +159,19 @@ fun SellerProductPackagesScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = scheme.onSurfaceVariant,
                             )
+                            if (highlightKey.isNotEmpty() && targetPackage != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HighlightUpgradeBanner(
+                                    featureName = highlightFeatureName ?: highlightKey,
+                                    packageName = targetPackage.name,
+                                )
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                         }
                         items(packages, key = { it.code }) { pkg ->
                             SellerPackageCard(
                                 pkg = pkg,
+                                highlightFeatureKey = if (pkg.code == targetPackage?.code) highlightKey else null,
                                 onBuy = { onBuyPackage(pkg) },
                             )
                         }
@@ -153,15 +184,42 @@ fun SellerProductPackagesScreen(
 }
 
 @Composable
+private fun HighlightUpgradeBanner(featureName: String, packageName: String) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(FashTheme.spacing.radiusSoftMin),
+        color = scheme.primaryContainer.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(R.string.seller_packages_upgrade_highlight, featureName, packageName),
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            color = scheme.onPrimaryContainer,
+            modifier = Modifier.padding(12.dp),
+        )
+    }
+}
+
+@Composable
 private fun SellerPackageCard(
     pkg: SellerProductPackage,
+    highlightFeatureKey: String? = null,
     onBuy: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val border = if (pkg.isBestSeller) {
-        BorderStroke(2.dp, FashColors.Primary)
-    } else {
-        BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f))
+    val pulseTransition = rememberInfiniteTransition(label = "pkgPulse")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val isHighlighted = highlightFeatureKey != null &&
+        pkg.features.any { it.id == highlightFeatureKey && it.included }
+    val border = when {
+        isHighlighted -> BorderStroke(2.dp, FashColors.Primary.copy(alpha = pulseAlpha))
+        pkg.isBestSeller -> BorderStroke(2.dp, FashColors.Primary)
+        else -> BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f))
     }
     val container = if (pkg.isBestSeller) {
         scheme.primaryContainer.copy(alpha = 0.35f)
@@ -234,7 +292,10 @@ private fun SellerPackageCard(
                 ),
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-            SellerPackageFeaturesList(features = pkg.features)
+            SellerPackageFeaturesList(
+                features = pkg.features,
+                highlightFeatureKey = highlightFeatureKey,
+            )
             Spacer(modifier = Modifier.height(16.dp))
             val comingSoon = !pkg.isReleased
             if (comingSoon) {
