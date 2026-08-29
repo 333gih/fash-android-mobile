@@ -125,6 +125,7 @@ import com.pc.fash_android_mobile.ui.sellerpackages.SellerProductPackagesViewMod
 import com.pc.fash_android_mobile.ui.login.LoginScreen
 import com.pc.fash_android_mobile.ui.login.LoginHeroSlidesViewModel
 import com.pc.fash_android_mobile.ui.onboarding.ProfilePhotoOnboardScreen
+import com.pc.fash_android_mobile.data.onboarding.AppWelcomeIntroStore
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingFlowProgress
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingShoppingScreen
 import com.pc.fash_android_mobile.ui.onboarding.OnboardingScreen
@@ -139,6 +140,7 @@ import com.pc.fash_android_mobile.ui.login.OtpVerifyScreen
 import com.pc.fash_android_mobile.ui.settings.ChangePasswordViewModel
 import com.pc.fash_android_mobile.ui.settings.NotificationPreferencesViewModel
 import com.pc.fash_android_mobile.ui.splash.FashWaitingScreen
+import com.pc.fash_android_mobile.ui.welcome.WelcomeIntroScreen
 import com.pc.fash_android_mobile.ui.splash.MaintenanceScreen
 import com.pc.fash_android_mobile.ui.splash.MaintenanceReturnGate
 import com.pc.fash_android_mobile.ui.splash.MaintenanceResumeOverlay
@@ -494,6 +496,9 @@ class MainActivity : ComponentActivity() {
                 var shellWarmupComplete by remember { mutableStateOf(false) }
                 /** One-shot: cold start without session may enter guest shell; logout does not. */
                 var initialGuestShellDecided by rememberSaveable { mutableStateOf(false) }
+                var welcomeIntroCompleted by rememberSaveable {
+                    mutableStateOf(AppWelcomeIntroStore.isCompleted(this@MainActivity))
+                }
                 // When app is opened by a notification/deep link, do not block the shell on Home warmup.
                 val pendingInboxNotificationId by fashApp.pendingInboxNotificationId.collectAsState()
                 val pendingOpenOrderId by fashApp.pendingOpenOrderId.collectAsState()
@@ -544,7 +549,7 @@ class MainActivity : ComponentActivity() {
                     // splashFinished so all three mutations are batched into one recomposition.
                     if (!initialGuestShellDecided) {
                         initialGuestShellDecided = true
-                        if (!authenticated && PublicBrowseHttp.isConfigured()) {
+                        if (!authenticated && PublicBrowseHttp.isConfigured() && welcomeIntroCompleted) {
                             isGuestBrowse = true
                             fashApp.isGuestBrowseActive = true
                         }
@@ -564,7 +569,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(splashFinished, isAuthenticated) {
                     if (!splashFinished || initialGuestShellDecided) return@LaunchedEffect
                     initialGuestShellDecided = true
-                    if (!isAuthenticated && PublicBrowseHttp.isConfigured()) {
+                    if (!isAuthenticated && PublicBrowseHttp.isConfigured() && welcomeIntroCompleted) {
                         isGuestBrowse = true
                     }
                 }
@@ -1389,6 +1394,28 @@ class MainActivity : ComponentActivity() {
                                             FashWaitingScreen()
                                         }
                                     }
+                                }
+                                !welcomeIntroCompleted && !isAuthenticated -> {
+                                    WelcomeIntroScreen(
+                                        onSignIn = {
+                                            AppWelcomeIntroStore.markCompleted(this@MainActivity)
+                                            welcomeIntroCompleted = true
+                                            isGuestBrowse = false
+                                            fashApp.isGuestBrowseActive = false
+                                        },
+                                        onBrowseGuest = if (PublicBrowseHttp.isConfigured()) {
+                                            {
+                                                AppWelcomeIntroStore.markCompleted(this@MainActivity)
+                                                welcomeIntroCompleted = true
+                                                isGuestBrowse = true
+                                                fashApp.isGuestBrowseActive = true
+                                                shellWarmupComplete = false
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
                                 }
                                 isGuestBrowse && !isAuthenticated -> {
                                     GuestMainShell(
