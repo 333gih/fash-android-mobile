@@ -1010,3 +1010,80 @@ fun HomePersonalizedFeedEmptyCard(
         }
     }
 }
+
+@Composable
+fun HomeDailyOutfitDropSection(
+    sets: List<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard>,
+    onListingClick: (listingId: String) -> Unit,
+    modifier: Modifier = Modifier,
+    includeHorizontalEdgePadding: Boolean = true,
+) {
+    if (sets.isEmpty()) return
+    val spacing = FashTheme.spacing
+    val edgeStart = if (includeHorizontalEdgePadding) spacing.editorialStart else 0.dp
+    val edgeEnd = if (includeHorizontalEdgePadding) spacing.editorialEnd else 0.dp
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = edgeStart, end = edgeEnd, bottom = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.home_section_daily_outfit_drop_title),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        )
+        Text(
+            text = stringResource(R.string.home_section_daily_outfit_drop_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(sets, key = { it.id }) { set ->
+                Surface(
+                    shape = RoundedCornerShape(spacing.radiusSoftMin),
+                    tonalElevation = 1.dp,
+                    modifier = Modifier
+                        .width(220.dp)
+                        .clickable {
+                            set.items.firstOrNull()?.listingId?.let(onListingClick)
+                        },
+                ) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text(
+                            text = set.title,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (set.reasonLabel.isNotBlank()) {
+                            Text(
+                                text = set.reasonLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            set.items.take(4).forEach { item ->
+                                FashAsyncImage(
+                                    model = item.coverImageUrl,
+                                    contentDescription = item.title,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(0.75f)
+                                        .clip(RoundedCornerShape(6.dp)),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

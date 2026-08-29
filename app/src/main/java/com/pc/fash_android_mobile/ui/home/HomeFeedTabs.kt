@@ -177,6 +177,8 @@ fun HomeFeedTabHost(
     stylePickItems: List<ListingFeedItem>,
     similarSavedItems: List<ListingFeedItem>,
     seasonalNearYouItems: List<ListingFeedItem>,
+    dailyOutfitDropSets: List<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard> = emptyList(),
+    onOutfitListingClick: (String) -> Unit = {},
     shoppingContextChip: String? = null,
     isGuestBrowse: Boolean,
     showSizingBanner: Boolean,
@@ -238,6 +240,7 @@ fun HomeFeedTabHost(
     val showGuestFeaturedSkeleton = isGuestBrowse && featuredSellers.isEmpty() &&
         (featuredSellersLoading || shellLoading)
     val hasFeaturedSellersBlock = hasFeaturedSellers || showFeaturedSellersSkeleton || showGuestFeaturedSkeleton
+    val hasOutfitDrop = dailyOutfitDropSets.isNotEmpty()
     var tabSwipeConsuming by remember { mutableStateOf(false) }
     var suppressListingClicks by remember { mutableStateOf(false) }
     val swipeScope = rememberCoroutineScope()
@@ -248,6 +251,7 @@ fun HomeFeedTabHost(
         (if (showJourneyRow) 1 else 0) +
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
         (if (hasFeaturedSellersBlock) 1 else 0) +
+        (if (hasOutfitDrop) 1 else 0) +
         (if (showExploreShortcut) 1 else 0)
     var stableTabRowIndex by remember { mutableIntStateOf(-1) }
     LaunchedEffect(tabRowIndex, shellLoading, featuredSellersLoading) {
@@ -427,6 +431,16 @@ fun HomeFeedTabHost(
             } else if (showFeaturedSellersSkeleton || showGuestFeaturedSkeleton) {
                 item(span = StaggeredGridItemSpan.FullLine, key = "home_featured_sellers_skeleton") {
                     HomeRecommendedSellersSkeleton(includeHorizontalEdgePadding = false)
+                }
+            }
+
+            if (hasOutfitDrop) {
+                item(span = StaggeredGridItemSpan.FullLine, key = "home_daily_outfit_drop") {
+                    HomeDailyOutfitDropSection(
+                        sets = dailyOutfitDropSets,
+                        onListingClick = onOutfitListingClick,
+                        includeHorizontalEdgePadding = false,
+                    )
                 }
             }
 

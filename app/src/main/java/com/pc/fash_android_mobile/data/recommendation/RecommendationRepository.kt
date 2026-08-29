@@ -20,6 +20,7 @@ data class HomeRecommendationSections(
     val continueBrowsing: List<ListingFeedItem> = emptyList(),
     val similarToSaved: List<ListingFeedItem> = emptyList(),
     val seasonalNearYou: List<ListingFeedItem> = emptyList(),
+    val dailyOutfitDrop: List<OutfitSetCard> = emptyList(),
     val shoppingContext: ShoppingContext? = null,
 )
 
@@ -134,8 +135,37 @@ class RecommendationRepository(
             continueBrowsing = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("continue_browsing")),
             similarToSaved = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("similar_to_saved")),
             seasonalNearYou = ListingFeedJsonParser.parseItemsArray(data.optJSONArray("seasonal_near_you")),
+            dailyOutfitDrop = OutfitStylistJsonParser.parseSetsArray(data.optJSONArray("daily_outfit_drop")),
             shoppingContext = ShoppingContext.fromJson(data.optJSONObject("shopping_context")),
         )
+    }
+
+    fun completeTheLook(listingId: String): Result<OutfitSetCard?> = runCatching {
+        val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
+        val path = AppEnvironment.apiPath("api/v1/recommendations/outfit-complete?listing_id=${enc(listingId.trim())}")
+        val response = executeGetWithResponse(path, publicBrowse = false)
+        OutfitStylistJsonParser.parseCompleteTheLookResponse(response.body)
+    }
+
+    fun recordOutfitEvents(events: List<OutfitEventPayload>): Result<Unit> = runCatching {
+        if (events.isEmpty()) return@runCatching
+        val path = AppEnvironment.apiPath("api/v1/recommendations/outfit-events")
+        val arr = JSONArray()
+        for (e in events.take(50)) {
+            arr.put(
+                JSONObject()
+                    .put("event_type", e.eventType)
+                    .put("set_id", e.setId)
+                    .put("listing_id", e.listingId)
+                    .put("surface", e.surface)
+                    .put("session_id", e.sessionId),
+            )
+        }
+        val body = JSONObject().put("events", arr).toString().toRequestBody("application/json".toMediaType())
+        val req = Request.Builder().url(path).post(body).build()
+        securedClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) error("outfit-events HTTP ${resp.code}")
+        }
     }
 
     fun shoppingContext(publicBrowse: Boolean): Result<ShoppingContext> = runCatching {

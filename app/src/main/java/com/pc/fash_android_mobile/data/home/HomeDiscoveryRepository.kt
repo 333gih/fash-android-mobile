@@ -23,6 +23,7 @@ data class HomeDiscoveryBundle(
     /** Personalized for-you from home-sections (shown only when signals ≥ 3). */
     val forYou: List<ListingFeedItem> = emptyList(),
     val seasonalNearYou: List<ListingFeedItem> = emptyList(),
+    val dailyOutfitDrop: List<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard> = emptyList(),
     val shoppingContext: com.pc.fash_android_mobile.data.recommendation.ShoppingContext? = null,
     /** Trending aesthetic tag names from /search/trending-tags for the style chips row (display only). */
     val trendingStyleTags: List<String> = emptyList(),

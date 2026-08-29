@@ -959,6 +959,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         stylePicks = sections.stylePicks,
                         similarToSaved = sections.similarToSaved,
                         seasonalNearYou = sections.seasonalNearYou,
+                        dailyOutfitDrop = sections.dailyOutfitDrop,
                         shoppingContext = sections.shoppingContext ?: cur.shoppingContext,
                     )
                 }

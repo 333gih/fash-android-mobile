@@ -121,6 +121,7 @@ class HttpHomeDiscoveryRepository(
                 stylePicks = rec?.stylePicks.orEmpty(),
                 similarToSaved = rec?.similarToSaved.orEmpty(),
                 forYou = rec?.forYou.orEmpty(),
+                dailyOutfitDrop = rec?.dailyOutfitDrop.orEmpty(),
                 trendingStyleTagChips = trendingTagsAsync.await(),
                 trendingStyleTags = trendingTagsAsync.await().map { it.name },
             ),

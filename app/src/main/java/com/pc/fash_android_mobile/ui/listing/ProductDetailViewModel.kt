@@ -98,6 +98,12 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
     private val _isDiscoveryLoading = MutableStateFlow(false)
     val isDiscoveryLoading: StateFlow<Boolean> = _isDiscoveryLoading.asStateFlow()
 
+    private val _completeTheLook = MutableStateFlow<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard?>(null)
+    val completeTheLook: StateFlow<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard?> = _completeTheLook.asStateFlow()
+
+    private val _completeTheLookQuotaHit = MutableStateFlow(false)
+    val completeTheLookQuotaHit: StateFlow<Boolean> = _completeTheLookQuotaHit.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -148,6 +154,8 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByCategory.value = emptyList()
         _relatedByBrand.value = emptyList()
         _relatedByStyle.value = emptyList()
+        _completeTheLook.value = null
+        _completeTheLookQuotaHit.value = false
         _discoveryFeed.value = emptyList()
         _isDiscoveryLoading.value = false
         _isLoading.value = false
@@ -176,6 +184,8 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
         _relatedByCategory.value = emptyList()
         _relatedByBrand.value = emptyList()
         _relatedByStyle.value = emptyList()
+        _completeTheLook.value = null
+        _completeTheLookQuotaHit.value = false
         _discoveryFeed.value = emptyList()
         _isDiscoveryLoading.value = false
             _bottomBarMode.value = ProductBottomBarMode.Normal
@@ -390,6 +400,21 @@ class ProductDetailViewModel(application: Application) : AndroidViewModel(applic
             _relatedByCategory.value = categoryRail.await()
             _relatedByBrand.value = brandRail.await()
             _relatedByStyle.value = styleRail.await()
+            if (!publicBrowse) {
+                launch {
+                    fashApp.recommendationRepository.completeTheLook(excludeListingId).fold(
+                        onSuccess = { set ->
+                            _completeTheLook.value = set?.takeIf { it.items.size >= 2 }
+                            _completeTheLookQuotaHit.value = false
+                        },
+                        onFailure = { err ->
+                            _completeTheLook.value = null
+                            _completeTheLookQuotaHit.value = err.message?.contains("quota", ignoreCase = true) == true ||
+                                err.message?.contains("429", ignoreCase = true) == true
+                        },
+                    )
+                }
+            }
             val sellerBadge = d.sellerUsername?.trim()?.takeIf { it.isNotEmpty() }?.let { "@$it" }
                 ?: d.sellerDisplayName?.trim()?.takeIf { it.isNotEmpty() }
                 ?: getApplication<Application>().getString(R.string.product_relation_badge_seller)

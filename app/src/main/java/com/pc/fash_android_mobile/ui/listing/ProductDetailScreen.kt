@@ -192,6 +192,8 @@ fun ProductDetailScreen(
     val sellerProfile by viewModel.sellerProfile.collectAsState()
     val discoveryFeed by viewModel.discoveryFeed.collectAsState()
     val isDiscoveryLoading by viewModel.isDiscoveryLoading.collectAsState()
+    val completeTheLook by viewModel.completeTheLook.collectAsState()
+    val completeTheLookQuotaHit by viewModel.completeTheLookQuotaHit.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val isOpeningChat by viewModel.isOpeningChat.collectAsState()
@@ -369,6 +371,11 @@ fun ProductDetailScreen(
                                 DetailAboutCard(
                                     detail = d,
                                     onNavigateToExplore = onExploreFromProfile,
+                                )
+                                CompleteTheLookSection(
+                                    set = completeTheLook,
+                                    quotaHit = completeTheLookQuotaHit,
+                                    onListingClick = { id -> onListingClick(id, null) },
                                 )
                                 if (discoveryFeed.isNotEmpty() || isDiscoveryLoading) {
                                     DetailProductDiscoveryHub(

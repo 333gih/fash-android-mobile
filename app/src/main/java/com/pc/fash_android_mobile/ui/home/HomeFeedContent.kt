@@ -126,6 +126,8 @@ fun HomeFeedContent(
                 stylePickItems = ui.discovery.stylePicks,
                 similarSavedItems = ui.discovery.similarToSaved,
                 seasonalNearYouItems = ui.discovery.seasonalNearYou,
+                dailyOutfitDropSets = ui.discovery.dailyOutfitDrop,
+                onOutfitListingClick = { listingId -> onListingClick(listingId, null) },
                 shoppingContextChip = ui.discovery.shoppingContext?.chipLabel(),
                 isGuestBrowse = isGuestBrowse,
                 showSizingBanner = ui.showSizingBanner && !isGuestBrowse,
