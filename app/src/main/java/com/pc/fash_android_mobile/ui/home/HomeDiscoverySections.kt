@@ -1014,7 +1014,7 @@ fun HomePersonalizedFeedEmptyCard(
 @Composable
 fun HomeDailyOutfitDropSection(
     sets: List<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard>,
-    onListingClick: (listingId: String) -> Unit,
+    onSetClick: (com.pc.fash_android_mobile.data.recommendation.OutfitSetCard) -> Unit,
     modifier: Modifier = Modifier,
     includeHorizontalEdgePadding: Boolean = true,
 ) {
@@ -1044,9 +1044,7 @@ fun HomeDailyOutfitDropSection(
                     tonalElevation = 1.dp,
                     modifier = Modifier
                         .width(220.dp)
-                        .clickable {
-                            set.items.firstOrNull()?.listingId?.let(onListingClick)
-                        },
+                        .clickable { onSetClick(set) },
                 ) {
                     Column(Modifier.padding(10.dp)) {
                         Text(

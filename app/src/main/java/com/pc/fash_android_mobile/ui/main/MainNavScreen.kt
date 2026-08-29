@@ -182,6 +182,7 @@ fun MainNavScreen(
     onOpenFeaturedSellersAll: () -> Unit = {},
     /** Featured seller chip on Home — opens seller shop without restoring Explore on back. */
     onHomeFeaturedSellerClick: (UserSearchResult) -> Unit = {},
+    onOutfitSetClick: (com.pc.fash_android_mobile.data.recommendation.OutfitSetCard) -> Unit = {},
     /** Featured seller chip on Explore overlay — restores Explore when seller shop dismisses. */
     onExploreFeaturedSellerClick: (UserSearchResult) -> Unit = {},
     onConversationClick: (ConversationItem) -> Unit = {},
@@ -712,6 +713,7 @@ fun MainNavScreen(
                         onHomeEditorialPostClick = onHomeEditorialPostClick,
                         onFeaturedSellerClick = onHomeFeaturedSellerClick,
                         onOpenFeaturedSellersAll = onOpenFeaturedSellersAll,
+                        onOutfitSetClick = onOutfitSetClick,
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
                     )
                     MainTab.Orders -> if (isGuestMode) {

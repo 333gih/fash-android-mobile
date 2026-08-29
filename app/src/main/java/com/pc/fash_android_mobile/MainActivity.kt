@@ -76,6 +76,8 @@ import com.pc.fash_android_mobile.ui.home.HomeViewModel
 import com.pc.fash_android_mobile.ui.invite.InviteFriendsScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingScreen
 import com.pc.fash_android_mobile.ui.listing.EditListingViewModel
+import com.pc.fash_android_mobile.data.recommendation.OutfitSetCard
+import com.pc.fash_android_mobile.ui.outfit.OutfitSetDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailScreen
 import com.pc.fash_android_mobile.ui.listing.ProductDetailViewModel
 import com.pc.fash_android_mobile.ui.main.tabs.SellerProfileScreen
@@ -1503,6 +1505,7 @@ class MainActivity : ComponentActivity() {
                                     var showAddAddressScreen by rememberSaveable { mutableStateOf(false) }
                                     var addAddressOpenedFromList by rememberSaveable { mutableStateOf(false) }
                                     var homeEditorialSlug by rememberSaveable { mutableStateOf<String?>(null) }
+                                    var selectedOutfitSet by remember { mutableStateOf<OutfitSetCard?>(null) }
                                     var showEditorialListScreen by rememberSaveable { mutableStateOf(false) }
                                     var uxSurveyKey by rememberSaveable { mutableStateOf<String?>(null) }
                                     var showFollowConnections by rememberSaveable { mutableStateOf(false) }
@@ -1952,6 +1955,7 @@ class MainActivity : ComponentActivity() {
                                                 showFollowConnections = true
                                             },
                                             onOpenFeaturedSellersAll = { showFeaturedSellersAll = true },
+                                            onOutfitSetClick = { set -> selectedOutfitSet = set },
                                             onHomeFeaturedSellerClick = { seller ->
                                                 openSellerShopFrom(seller, SellerShopEntrySource.Home)
                                             },
@@ -2499,6 +2503,18 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
+                                        val outfitSet = selectedOutfitSet
+                                        if (outfitSet != null && selectedListingId == null && selectedOrderId == null) {
+                                            OutfitSetDetailScreen(
+                                                set = outfitSet,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                onBack = { selectedOutfitSet = null },
+                                                onItemClick = { listingId -> openListingDetail(listingId, null) },
+                                            )
+                                        }
+
                                         if (sellerPackageCheckout != null) {
                                             SellerPackageCheckoutScreen(
                                                 modifier = Modifier
@@ -2757,6 +2773,9 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 editListingId != null -> {
                                                     editListingId = null
+                                                }
+                                                selectedOutfitSet != null -> {
+                                                    selectedOutfitSet = null
                                                 }
                                                 selectedListingId != null -> {
                                                     popListingDetail()

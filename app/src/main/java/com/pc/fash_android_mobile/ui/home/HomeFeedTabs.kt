@@ -178,7 +178,7 @@ fun HomeFeedTabHost(
     similarSavedItems: List<ListingFeedItem>,
     seasonalNearYouItems: List<ListingFeedItem>,
     dailyOutfitDropSets: List<com.pc.fash_android_mobile.data.recommendation.OutfitSetCard> = emptyList(),
-    onOutfitListingClick: (String) -> Unit = {},
+    onOutfitSetClick: (com.pc.fash_android_mobile.data.recommendation.OutfitSetCard) -> Unit = {},
     shoppingContextChip: String? = null,
     isGuestBrowse: Boolean,
     showSizingBanner: Boolean,
@@ -438,7 +438,7 @@ fun HomeFeedTabHost(
                 item(span = StaggeredGridItemSpan.FullLine, key = "home_daily_outfit_drop") {
                     HomeDailyOutfitDropSection(
                         sets = dailyOutfitDropSets,
-                        onListingClick = onOutfitListingClick,
+                        onSetClick = onOutfitSetClick,
                         includeHorizontalEdgePadding = false,
                     )
                 }
