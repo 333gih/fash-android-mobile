@@ -58,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -96,8 +97,13 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.data.advertising.AppAdvertisingSlideItem
 import com.pc.fash_android_mobile.data.onboarding.AppWelcomeIntroStore
 import com.pc.fash_android_mobile.data.onboarding.PreLoginMascotGuideStore
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.IntOffset
 import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideContext
 import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideOverlay
+import com.pc.fash_android_mobile.ui.onboarding.FeatureTourAnchor
+import com.pc.fash_android_mobile.ui.onboarding.guideSpotlightAnchor
 import com.pc.fash_android_mobile.ui.components.FashAsyncImage
 import com.pc.fash_android_mobile.ui.locale.LoginLanguageToggle
 import com.pc.fash_android_mobile.ui.components.FashBrandMarkText
@@ -143,6 +149,16 @@ fun LoginScreen(
     onContinueWithoutAccount: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val appContext = LocalContext.current.applicationContext
+    var showPreLoginGuide by rememberSaveable {
+        mutableStateOf(!PreLoginMascotGuideStore.isCompleted(appContext))
+    }
+    val preLoginAnchors = remember { mutableStateMapOf<FeatureTourAnchor, LayoutCoordinates>() }
+    val guideAnchorsEnabled = showPreLoginGuide && AppWelcomeIntroStore.isCompleted(appContext)
+    val onPreLoginAnchorPositioned: (FeatureTourAnchor, LayoutCoordinates?) -> Unit = { key, coords ->
+        val c = coords?.takeIf { it.isAttached }
+        if (c == null) preLoginAnchors.remove(key) else preLoginAnchors[key] = c
+    }
     val formLockedForSocial = isSocialLoading
     val signingInLabel = stringResource(R.string.login_social_signing_in)
     val emailValid = isValidEmail(email)
@@ -229,10 +245,16 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Column(
-                    modifier = Modifier.graphicsLayer {
-                        alpha = formAnim.value
-                        translationY = (1f - formAnim.value) * 22f
-                    },
+                    modifier = Modifier
+                        .graphicsLayer {
+                            alpha = formAnim.value
+                            translationY = (1f - formAnim.value) * 22f
+                        }
+                        .guideSpotlightAnchor(
+                            anchor = FeatureTourAnchor.LoginEmailForm,
+                            enabled = guideAnchorsEnabled,
+                            onPositioned = onPreLoginAnchorPositioned,
+                        ),
                 ) {
                 EmailFieldWithRail(
                     email = email,
@@ -327,10 +349,16 @@ fun LoginScreen(
                 }
 
                 Column(
-                    modifier = Modifier.graphicsLayer {
-                        alpha = bottomAnim.value
-                        translationY = (1f - bottomAnim.value) * 18f
-                    },
+                    modifier = Modifier
+                        .graphicsLayer {
+                            alpha = bottomAnim.value
+                            translationY = (1f - bottomAnim.value) * 18f
+                        }
+                        .guideSpotlightAnchor(
+                            anchor = FeatureTourAnchor.LoginSocialRow,
+                            enabled = guideAnchorsEnabled,
+                            onPositioned = onPreLoginAnchorPositioned,
+                        ),
                 ) {
                     val hasSocialButtons = isGoogleConfigured || showFacebookLogin
                     Spacer(modifier = Modifier.height(12.dp))
@@ -371,7 +399,13 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         TextButton(
                             onClick = onContinueWithoutAccount,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .guideSpotlightAnchor(
+                                    anchor = FeatureTourAnchor.LoginGuestBrowse,
+                                    enabled = guideAnchorsEnabled,
+                                    onPositioned = onPreLoginAnchorPositioned,
+                                ),
                             enabled = !isSocialLoading && !isOtpLoading,
                         ) {
                             Text(stringResource(R.string.login_continue_without_account))
@@ -428,13 +462,10 @@ fun LoginScreen(
                     }
                 }
             }
-            val appContext = LocalContext.current.applicationContext
-            var showPreLoginGuide by rememberSaveable {
-                mutableStateOf(!PreLoginMascotGuideStore.isCompleted(appContext))
-            }
-            if (showPreLoginGuide && AppWelcomeIntroStore.isCompleted(appContext)) {
+            if (guideAnchorsEnabled) {
                 PreLoginMascotGuideOverlay(
                     context = PreLoginMascotGuideContext.LoginScreen,
+                    anchors = preLoginAnchors,
                     onFinish = { showPreLoginGuide = false },
                 )
             }

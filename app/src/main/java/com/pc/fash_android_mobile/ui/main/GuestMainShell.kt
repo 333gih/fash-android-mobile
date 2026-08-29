@@ -33,8 +33,11 @@ import com.pc.fash_android_mobile.FashApplication
 import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.onboarding.AppWelcomeIntroStore
 import com.pc.fash_android_mobile.data.onboarding.PreLoginMascotGuideStore
+import com.pc.fash_android_mobile.ui.onboarding.FeatureTourAnchor
 import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideContext
 import com.pc.fash_android_mobile.ui.onboarding.PreLoginMascotGuideOverlay
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.layout.LayoutCoordinates
 import com.pc.fash_android_mobile.notifications.GuestLocalReengagementScheduler
 import com.pc.fash_android_mobile.notifications.GuestReengagementLifecycleObserver
 import com.pc.fash_android_mobile.ui.common.ReloadWhenVisible
@@ -287,6 +290,12 @@ fun GuestMainShell(
         }
     }
 
+    var showPreLoginGuide by rememberSaveable {
+        mutableStateOf(!PreLoginMascotGuideStore.isCompleted(context))
+    }
+    val preLoginAnchors = remember { mutableStateMapOf<FeatureTourAnchor, LayoutCoordinates>() }
+    val preLoginGuideActive = showPreLoginGuide && AppWelcomeIntroStore.isCompleted(context)
+
     Box(modifier = modifier.fillMaxSize()) {
         MainNavScreen(
             modifier = Modifier.fillMaxSize(),
@@ -329,6 +338,11 @@ fun GuestMainShell(
             isGuestMode = true,
             onRequestLogin = requestLogin,
             featureTourActive = false,
+            preLoginGuideAnchorsEnabled = preLoginGuideActive,
+            onPreLoginGuideAnchorPositioned = { key, coords ->
+                val c = coords?.takeIf { it.isAttached }
+                if (c == null) preLoginAnchors.remove(key) else preLoginAnchors[key] = c
+            },
             promoSlides = mappedPromoSlides,
             onPromoSlideClick = handlePromoClick,
         )
@@ -504,12 +518,10 @@ fun GuestMainShell(
             }
         }
 
-        var showPreLoginGuide by rememberSaveable {
-            mutableStateOf(!PreLoginMascotGuideStore.isCompleted(context))
-        }
-        if (showPreLoginGuide && AppWelcomeIntroStore.isCompleted(context)) {
+        if (preLoginGuideActive) {
             PreLoginMascotGuideOverlay(
                 context = PreLoginMascotGuideContext.GuestShell,
+                anchors = preLoginAnchors,
                 onFinish = { showPreLoginGuide = false },
             )
         }

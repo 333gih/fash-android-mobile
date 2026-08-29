@@ -229,6 +229,9 @@ fun MainNavScreen(
     /** Browse-only shell: Home + Explore + PDP; locked tabs/actions prompt [onRequestLogin]. */
     isGuestMode: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
+    /** Guest pre-login mascot guide — report bottom-tab anchor frames to host overlay. */
+    preLoginGuideAnchorsEnabled: Boolean = false,
+    onPreLoginGuideAnchorPositioned: (FeatureTourAnchor, LayoutCoordinates?) -> Unit = { _, _ -> },
 ) {
     val inboxApiEnabled by notificationsViewModel.inboxApiReady.collectAsState()
     var showNotificationScreen by remember { mutableStateOf(false) }
@@ -606,15 +609,18 @@ fun MainNavScreen(
                     },
                     onTabReselected = onMainTabReselected,
                     isTabNavLoading = isMainTabNavLoading,
-                    tourAnchorsEnabled = featureTourActive,
+                    tourAnchorsEnabled = featureTourActive || preLoginGuideAnchorsEnabled,
                     onTourAnchorPositioned = { key, coords ->
+                        val c = coords?.takeIf { it.isAttached }
                         if (featureTourActive) {
-                            val c = coords?.takeIf { it.isAttached }
                             if (c == null) {
                                 tourAnchors.remove(key)
                             } else {
                                 tourAnchors[key] = c
                             }
+                        }
+                        if (preLoginGuideAnchorsEnabled) {
+                            onPreLoginGuideAnchorPositioned(key, c)
                         }
                     },
                 )

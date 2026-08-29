@@ -13,6 +13,9 @@ enum class FeatureTourAnchor {
     BottomChat,
     BottomProfile,
     TopActionsRow,
+    LoginEmailForm,
+    LoginSocialRow,
+    LoginGuestBrowse,
 }
 
 enum class AppTourStep {
