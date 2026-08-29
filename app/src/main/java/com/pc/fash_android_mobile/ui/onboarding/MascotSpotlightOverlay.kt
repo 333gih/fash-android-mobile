@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CapsuleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +51,8 @@ import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashMascotGuideImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import kotlinx.coroutines.delay
+
+private val PillShape = RoundedCornerShape(50)
 
 private enum class MascotPointDirection(val resId: Int) {
     Up(R.drawable.fash_mascot_point_up),
@@ -238,7 +239,7 @@ fun MascotSpotlightOverlay(
                             modifier = Modifier
                                 .height(6.dp)
                                 .width(if (page == stepIndex) 16.dp else 6.dp)
-                                .clip(CapsuleShape)
+                                .clip(PillShape)
                                 .background(
                                     if (page == stepIndex) {
                                         FashColors.Primary
@@ -262,7 +263,7 @@ fun MascotSpotlightOverlay(
                     TextButton(
                         onClick = onNext,
                         modifier = Modifier
-                            .clip(CapsuleShape)
+                            .clip(PillShape)
                             .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.96f)),
                     ) {
                         Text(
