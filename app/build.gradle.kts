@@ -286,7 +286,7 @@ android {
         applicationId = "com.pc.fash_android_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 98
+        versionCode = 99
         versionName = "1.0.96"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
