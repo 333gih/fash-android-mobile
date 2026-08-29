@@ -1012,6 +1012,7 @@ fun HomePersonalizedFeedEmptyCard(
     }
 }
 
+@Composable
 fun HomeDailyOutfitDropCtaBanner(
     setCount: Int,
     onClick: () -> Unit,

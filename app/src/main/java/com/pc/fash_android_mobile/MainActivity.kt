@@ -1572,19 +1572,17 @@ class MainActivity : ComponentActivity() {
                                         val setId = pendingOpenOutfitSetId?.trim()?.takeIf { it.isNotEmpty() }
                                             ?: return@LaunchedEffect
                                         fashApp.pendingOpenOutfitSetId.value = null
-                                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            val result = fashApp.recommendationRepository.fetchOutfitSet(setId)
-                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                result.onSuccess { card ->
-                                                    if (card != null) {
-                                                        selectedOutfitSet = card
-                                                    } else {
-                                                        showDailyOutfitDropListScreen = true
-                                                    }
-                                                }.onFailure {
-                                                    showDailyOutfitDropListScreen = true
-                                                }
+                                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            fashApp.recommendationRepository.fetchOutfitSet(setId)
+                                        }
+                                        result.onSuccess { card ->
+                                            if (card != null) {
+                                                selectedOutfitSet = card
+                                            } else {
+                                                showDailyOutfitDropListScreen = true
                                             }
+                                        }.onFailure {
+                                            showDailyOutfitDropListScreen = true
                                         }
                                     }
                                     val pendingOpenOnboarding by fashApp.pendingOpenOnboarding.collectAsState()

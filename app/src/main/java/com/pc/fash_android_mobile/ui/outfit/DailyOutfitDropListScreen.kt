@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -98,13 +99,17 @@ fun DailyOutfitDropListScreen(
             }
             loadError && sets.isEmpty() -> {
                 FashEmptyState(
+                    icon = Icons.Outlined.Checkroom,
                     title = stringResource(R.string.feed_load_error),
+                    subtitle = "",
                     modifier = Modifier.fillMaxSize(),
                 )
             }
             sets.isEmpty() -> {
                 FashEmptyState(
+                    icon = Icons.Outlined.Checkroom,
                     title = stringResource(R.string.outfit_daily_drop_list_empty),
+                    subtitle = stringResource(R.string.home_section_daily_outfit_drop_subtitle),
                     modifier = Modifier.fillMaxSize(),
                 )
             }

@@ -303,14 +303,11 @@ class RecommendationRepository(
     }
 
     fun fetchDailyOutfitDrop(limit: Int = 24): Result<List<OutfitSetCard>> = runCatching {
-        val response = securedClient.newCall(
-            Request.Builder()
-                .url("${AppEnvironment.coreBaseUrl}api/v1/recommendations/outfit-daily-drop?limit=${limit.coerceAtLeast(1)}")
-                .get()
-                .build(),
-        ).execute()
-        CoreServiceErrors.ensureSuccess(response)
-        val root = JSONObject(response.body?.string().orEmpty())
+        val path = AppEnvironment.apiPath(
+            "api/v1/recommendations/outfit-daily-drop?limit=${limit.coerceAtLeast(1)}",
+        )
+        val response = executeGetWithResponse(path, publicBrowse = false)
+        val root = JSONObject(response.body)
         val data = root.optJSONObject("data") ?: root
         OutfitStylistJsonParser.parseSetsArray(data.optJSONArray("sets"))
     }
@@ -319,14 +316,9 @@ class RecommendationRepository(
         val id = setId.trim()
         if (id.isEmpty()) return@runCatching null
         val enc = java.net.URLEncoder.encode(id, "UTF-8")
-        val response = securedClient.newCall(
-            Request.Builder()
-                .url("${AppEnvironment.coreBaseUrl}api/v1/recommendations/outfit-sets/$enc")
-                .get()
-                .build(),
-        ).execute()
-        CoreServiceErrors.ensureSuccess(response)
-        val root = JSONObject(response.body?.string().orEmpty())
+        val path = AppEnvironment.apiPath("api/v1/recommendations/outfit-sets/$enc")
+        val response = executeGetWithResponse(path, publicBrowse = false)
+        val root = JSONObject(response.body)
         val data = root.optJSONObject("data") ?: root
         OutfitStylistJsonParser.parseSet(data.optJSONObject("set"))
     }
