@@ -286,8 +286,8 @@ android {
         applicationId = "com.pc.fash_android_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 93
-        versionName = "1.0.92"
+        versionCode = 94
+        versionName = "1.0.93"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Overridden per flavor by [injectFromEnv] (LISTING_SHARE_BASE_URL host).
