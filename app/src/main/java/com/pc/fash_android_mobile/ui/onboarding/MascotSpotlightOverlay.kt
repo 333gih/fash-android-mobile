@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -46,11 +45,14 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.pc.fash_android_mobile.R
 import com.pc.fash_android_mobile.ui.components.FashMascotGuideImage
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import kotlinx.coroutines.delay
+import kotlin.math.max
+import kotlin.math.min
 
 private val PillShape = RoundedCornerShape(50)
 
@@ -60,11 +62,20 @@ private enum class MascotPointDirection(val resId: Int) {
     Left(R.drawable.fash_mascot_point_left),
 }
 
+private enum class CoachStackLayout {
+    VerticalMascotFirst,
+    VerticalCaptionFirst,
+    HorizontalMascotFirst,
+}
+
 private data class MascotCoachPlacement(
-    val mascotCenter: Offset,
+    val stackCenter: Offset,
+    val stackHalfWidth: Float,
+    val stackHalfHeight: Float,
     val direction: MascotPointDirection,
     val flipHorizontal: Boolean,
-    val captionCenter: Offset,
+    val layout: CoachStackLayout,
+    val captionMaxWidth: Dp,
 )
 
 @Composable
@@ -87,8 +98,13 @@ fun MascotSpotlightOverlay(
     val holePadding = 10.dp
     val corner = 18.dp
     val scrim = MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f)
-    val mascotSizePx = with(density) { 72.dp.toPx() }
+    val mascotSizeDp = 72.dp
+    val mascotSizePx = with(density) { mascotSizeDp.toPx() }
     val mascotGapPx = with(density) { 14.dp.toPx() }
+    val controlsReservePx = with(density) { 132.dp.toPx() }
+    val topSafePx = with(density) { 56.dp.toPx() }
+    val stackSpacingPx = with(density) { 8.dp.toPx() }
+    val captionHeightEstimatePx = with(density) { 104.dp.toPx() }
 
     val holeRect = remember(anchor, anchors, overlayCoords, density) {
         val a = anchor?.let { anchors[it] } ?: return@remember null
@@ -157,48 +173,57 @@ fun MascotSpotlightOverlay(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val maxWpx = with(density) { maxWidth.toPx() }
             val maxHpx = with(density) { maxHeight.toPx() }
+            val captionMaxWidthDp = minOf(maxWidth - 40.dp, 300.dp)
+            val captionMaxWidthPx = with(density) { captionMaxWidthDp.toPx() }
+            val verticalStackHeightPx = mascotSizePx + stackSpacingPx + captionHeightEstimatePx
+            val horizontalStackWidthPx = mascotSizePx + stackSpacingPx + captionMaxWidthPx
+
             val placement = hr?.let {
                 coachPlacement(
                     hole = it,
                     overlayWidth = maxWpx,
                     overlayHeight = maxHpx,
-                    mascotSize = mascotSizePx,
                     mascotGap = mascotGapPx,
+                    verticalStackHeight = verticalStackHeightPx,
+                    horizontalStackWidth = horizontalStackWidthPx,
+                    controlsReserve = controlsReservePx,
+                    topSafe = topSafePx,
+                    captionMaxWidthDp = captionMaxWidthDp,
+                    captionMaxWidthPx = captionMaxWidthPx,
+                    mascotSizePx = mascotSizePx,
                 )
             }
 
             if (placement != null) {
-                val mascotOffsetX = with(density) { (placement.mascotCenter.x - mascotSizePx / 2f).toDp() }
-                val mascotOffsetY = with(density) { (placement.mascotCenter.y - mascotSizePx / 2f).toDp() }
-                val captionOffsetX = with(density) { (placement.captionCenter.x).toDp() }
-                val captionOffsetY = with(density) { (placement.captionCenter.y).toDp() }
-                FashMascotGuideImage(
-                    resId = placement.direction.resId,
-                    sizeDp = 72,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = mascotOffsetX, y = mascotOffsetY)
-                        .scale(scaleX = if (placement.flipHorizontal) -1f else 1f, scaleY = 1f),
-                )
-                CaptionBubble(
+                val stackOffsetX = with(density) {
+                    (placement.stackCenter.x - placement.stackHalfWidth).toDp()
+                }
+                val stackOffsetY = with(density) {
+                    (placement.stackCenter.y - placement.stackHalfHeight).toDp()
+                }
+                CoachStack(
+                    direction = placement.direction,
+                    flipHorizontal = placement.flipHorizontal,
+                    layout = placement.layout,
                     title = title,
                     bodyText = bodyText,
+                    mascotSizeDp = 72,
+                    captionMaxWidth = placement.captionMaxWidth,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = (captionOffsetX - minOf(maxWidth, 300.dp) / 2).coerceAtLeast(8.dp),
-                            y = (captionOffsetY - 48.dp).coerceAtLeast(72.dp),
-                        )
-                        .widthIn(max = minOf(maxWidth - 40.dp, 300.dp)),
+                            x = stackOffsetX.coerceAtLeast(8.dp),
+                            y = stackOffsetY.coerceAtLeast(with(density) { topSafePx.toDp() }),
+                        ),
                 )
             } else {
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = maxHeight * 0.28f)
+                        .padding(top = maxHeight * 0.22f)
                         .widthIn(max = minOf(maxWidth - 48.dp, 320.dp)),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     FashMascotGuideImage(resId = MascotPointDirection.Up.resId, sizeDp = 88)
                     CaptionBubble(title = title, bodyText = bodyText)
@@ -281,6 +306,66 @@ fun MascotSpotlightOverlay(
 }
 
 @Composable
+private fun CoachStack(
+    direction: MascotPointDirection,
+    flipHorizontal: Boolean,
+    layout: CoachStackLayout,
+    title: String,
+    bodyText: String,
+    mascotSizeDp: Int,
+    captionMaxWidth: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val mascot = @Composable {
+        FashMascotGuideImage(
+            resId = direction.resId,
+            sizeDp = mascotSizeDp,
+            modifier = Modifier.scale(scaleX = if (flipHorizontal) -1f else 1f, scaleY = 1f),
+        )
+    }
+    val caption = @Composable {
+        CaptionBubble(
+            title = title,
+            bodyText = bodyText,
+            modifier = Modifier.widthIn(max = captionMaxWidth),
+        )
+    }
+
+    when (layout) {
+        CoachStackLayout.VerticalMascotFirst -> {
+            Column(
+                modifier = modifier,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                mascot()
+                caption()
+            }
+        }
+        CoachStackLayout.VerticalCaptionFirst -> {
+            Column(
+                modifier = modifier,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                caption()
+                mascot()
+            }
+        }
+        CoachStackLayout.HorizontalMascotFirst -> {
+            Row(
+                modifier = modifier,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                mascot()
+                caption()
+            }
+        }
+    }
+}
+
+@Composable
 private fun CaptionBubble(
     title: String,
     bodyText: String,
@@ -310,54 +395,103 @@ private fun coachPlacement(
     hole: Rect,
     overlayWidth: Float,
     overlayHeight: Float,
-    mascotSize: Float,
     mascotGap: Float,
+    verticalStackHeight: Float,
+    horizontalStackWidth: Float,
+    controlsReserve: Float,
+    topSafe: Float,
+    captionMaxWidthDp: Dp,
+    captionMaxWidthPx: Float,
+    mascotSizePx: Float,
 ): MascotCoachPlacement {
-    val spaceAbove = hole.top
-    val spaceBelow = overlayHeight - hole.bottom
+    val contentBottom = overlayHeight - controlsReserve
+    val spaceAbove = hole.top - topSafe
+    val spaceBelow = contentBottom - hole.bottom
     val spaceLeft = hole.left
     val spaceRight = overlayWidth - hole.right
-    val captionHeight = 96f
-    val halfMascot = mascotSize / 2f
+    val halfVertical = verticalStackHeight / 2f
+    val halfHorizontal = horizontalStackWidth / 2f
+    val verticalHalfWidth = max(captionMaxWidthPx / 2f, mascotSizePx / 2f)
 
-    if (spaceBelow >= mascotSize + mascotGap + 40f && spaceBelow >= spaceAbove) {
-        val mascotY = hole.bottom + mascotGap + halfMascot
-        val captionY = minOf(mascotY + halfMascot + captionHeight / 2f + 8f, overlayHeight - 120f)
+    val canPlaceBelow = spaceBelow >= verticalStackHeight + mascotGap
+    val canPlaceAbove = spaceAbove >= verticalStackHeight + mascotGap
+
+    if (canPlaceBelow && spaceBelow >= spaceAbove) {
+        val stackCenterY = min(hole.bottom + mascotGap + halfVertical, contentBottom - halfVertical)
+        val stackCenterX = hole.center.x.coerceIn(verticalHalfWidth + 12f, overlayWidth - verticalHalfWidth - 12f)
         return MascotCoachPlacement(
-            mascotCenter = Offset(hole.center.x, mascotY),
+            stackCenter = Offset(stackCenterX, stackCenterY),
+            stackHalfWidth = verticalHalfWidth,
+            stackHalfHeight = halfVertical,
             direction = MascotPointDirection.Up,
             flipHorizontal = false,
-            captionCenter = Offset(hole.center.x, captionY),
+            layout = CoachStackLayout.VerticalMascotFirst,
+            captionMaxWidth = captionMaxWidthDp,
         )
     }
 
-    if (spaceAbove >= mascotSize + mascotGap + 40f) {
-        val mascotY = hole.top - mascotGap - halfMascot
-        val captionY = maxOf(mascotY - halfMascot - captionHeight / 2f - 8f, 80f)
+    if (canPlaceAbove) {
+        val stackCenterY = max(hole.top - mascotGap - halfVertical, topSafe + halfVertical)
+        val stackCenterX = hole.center.x.coerceIn(verticalHalfWidth + 12f, overlayWidth - verticalHalfWidth - 12f)
         return MascotCoachPlacement(
-            mascotCenter = Offset(hole.center.x, mascotY),
+            stackCenter = Offset(stackCenterX, stackCenterY),
+            stackHalfWidth = verticalHalfWidth,
+            stackHalfHeight = halfVertical,
             direction = MascotPointDirection.Down,
             flipHorizontal = false,
-            captionCenter = Offset(hole.center.x, captionY),
+            layout = CoachStackLayout.VerticalCaptionFirst,
+            captionMaxWidth = captionMaxWidthDp,
         )
     }
 
-    if (spaceRight >= mascotSize + mascotGap + 40f && spaceRight >= spaceLeft) {
-        val mascotX = hole.right + mascotGap + halfMascot
+    val canPlaceRight = spaceRight >= horizontalStackWidth + mascotGap
+    val canPlaceLeft = spaceLeft >= horizontalStackWidth + mascotGap
+
+    if (canPlaceRight && spaceRight >= spaceLeft) {
+        val stackCenterX = min(hole.right + mascotGap + halfHorizontal, overlayWidth - halfHorizontal - 12f)
+        val stackCenterY = hole.center.y.coerceIn(
+            halfVertical + topSafe,
+            contentBottom - halfVertical,
+        )
         return MascotCoachPlacement(
-            mascotCenter = Offset(mascotX, hole.center.y),
+            stackCenter = Offset(stackCenterX, stackCenterY),
+            stackHalfWidth = halfHorizontal,
+            stackHalfHeight = mascotSizePx / 2f,
             direction = MascotPointDirection.Left,
             flipHorizontal = true,
-            captionCenter = Offset(minOf(mascotX + halfMascot + 130f, overlayWidth - 20f), hole.center.y),
+            layout = CoachStackLayout.HorizontalMascotFirst,
+            captionMaxWidth = captionMaxWidthDp,
         )
     }
 
-    val mascotX = hole.left - mascotGap - halfMascot
+    if (canPlaceLeft) {
+        val stackCenterX = max(hole.left - mascotGap - halfHorizontal, halfHorizontal + 12f)
+        val stackCenterY = hole.center.y.coerceIn(
+            halfVertical + topSafe,
+            contentBottom - halfVertical,
+        )
+        return MascotCoachPlacement(
+            stackCenter = Offset(stackCenterX, stackCenterY),
+            stackHalfWidth = halfHorizontal,
+            stackHalfHeight = mascotSizePx / 2f,
+            direction = MascotPointDirection.Left,
+            flipHorizontal = false,
+            layout = CoachStackLayout.HorizontalMascotFirst,
+            captionMaxWidth = captionMaxWidthDp,
+        )
+    }
+
+    // Fallback: center stack in safe area above controls
+    val fallbackY = max(topSafe + halfVertical, contentBottom - halfVertical)
+    val fallbackX = hole.center.x.coerceIn(verticalHalfWidth + 12f, overlayWidth - verticalHalfWidth - 12f)
     return MascotCoachPlacement(
-        mascotCenter = Offset(maxOf(halfMascot + 12f, mascotX), hole.center.y),
-        direction = MascotPointDirection.Left,
+        stackCenter = Offset(fallbackX, fallbackY),
+        stackHalfWidth = verticalHalfWidth,
+        stackHalfHeight = halfVertical,
+        direction = MascotPointDirection.Up,
         flipHorizontal = false,
-        captionCenter = Offset(maxOf(130f, mascotX - halfMascot - 10f), hole.center.y),
+        layout = CoachStackLayout.VerticalMascotFirst,
+        captionMaxWidth = captionMaxWidthDp,
     )
 }
 
