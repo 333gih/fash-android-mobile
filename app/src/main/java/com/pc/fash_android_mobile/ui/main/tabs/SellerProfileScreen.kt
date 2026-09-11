@@ -123,6 +123,8 @@ fun SellerProfileScreen(
     promoSlides: List<FashPromoSlideDef> = emptyList(),
     isGuestMode: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
+    onStartChatFromListing: (listingId: String) -> Unit = {},
+    existingChatListingIds: Set<String> = emptySet(),
 ) {
     val profile by viewModel.profile.collectAsState()
     val sellingListings by viewModel.sellingListings.collectAsState()
@@ -418,9 +420,12 @@ fun SellerProfileScreen(
                                 onRequestLogin(GuestLoginReason.BuyOrChat)
                             } else {
                                 val nav = homeVm.openChatFromPreview()
-                                if (nav != null) pendingListingDetail = nav
+                                if (nav != null) onStartChatFromListing(nav.first)
                             }
                         },
+                        hasExistingConversation = existingChatListingIds.contains(
+                            p.feedItem.id.trim().lowercase(),
+                        ),
                     )
                 }
             }

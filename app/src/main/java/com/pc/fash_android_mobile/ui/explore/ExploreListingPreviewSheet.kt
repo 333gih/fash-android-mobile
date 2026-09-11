@@ -121,6 +121,7 @@ fun ExploreListingPreviewSheet(
     isGuestMode: Boolean,
     onRequestLogin: (GuestLoginReason) -> Unit,
     onMessageSeller: () -> Unit,
+    hasExistingConversation: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -294,6 +295,7 @@ fun ExploreListingPreviewSheet(
                 isLiked = detail?.isLiked ?: feedItem.isLiked,
                 isSaved = detail?.isSaved ?: feedItem.isSaved,
                 buyNowEnabled = buyNowEnabled,
+                hasExistingConversation = hasExistingConversation,
                 onLike = {
                     if (isGuestMode) onRequestLogin(GuestLoginReason.Like) else onLike()
                 },
@@ -787,6 +789,7 @@ private fun ExplorePreviewActionBar(
     isLiked: Boolean,
     isSaved: Boolean,
     buyNowEnabled: Boolean,
+    hasExistingConversation: Boolean,
     onLike: () -> Unit,
     onSave: () -> Unit,
     onViewDetail: () -> Unit,
@@ -873,10 +876,10 @@ private fun ExplorePreviewActionBar(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(
-                    if (buyNowEnabled) {
-                        R.string.explore_preview_message_seller
-                    } else {
-                        R.string.product_chat
+                    when {
+                        hasExistingConversation -> R.string.notification_action_open_chat
+                        buyNowEnabled -> R.string.explore_preview_message_seller
+                        else -> R.string.product_chat
                     },
                 ),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),

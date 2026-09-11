@@ -198,6 +198,8 @@ fun MainNavScreen(
     onOpenOutfitDailyDropFromNotification: (String?) -> Unit = {},
     /** Opens Chat tab with a conversation selected (FCM / inbox `conversation_id`). */
     onNavigateToChatConversation: (String) -> Unit = {},
+    /** Start or reopen chat for a listing (preview Message CTA / PDP). */
+    onStartChatFromListing: (listingId: String) -> Unit = {},
     /** Home cẩm nang card — open in-app reader (host may route Explore CTA from detail). */
     onHomeEditorialPostClick: (HomeEditorialPostStub) -> Unit = {},
     /** Profile / seller shop: open Explore → Posts with filters + search + optional country. */
@@ -279,6 +281,24 @@ fun MainNavScreen(
     val ordersRefreshing by ordersViewModel.isRefreshing.collectAsState()
     val ordersLoading by ordersViewModel.isLoading.collectAsState()
     val postNavReloading by postViewModel.navReselectLoading.collectAsState()
+    val chatConversations by chatViewModel.conversations.collectAsState()
+    val chatDisplayGroups by chatViewModel.displayGroups.collectAsState()
+    val existingChatListingIds = remember(chatConversations, chatDisplayGroups) {
+        buildSet {
+            chatConversations.forEach { item ->
+                val pid = item.productId.trim()
+                if (pid.isNotEmpty()) add(pid.lowercase())
+            }
+            chatDisplayGroups.forEach { group ->
+                val lid = group.listingId.trim()
+                if (lid.isNotEmpty()) add(lid.lowercase())
+                group.conversations.forEach { item ->
+                    val pid = item.productId.trim()
+                    if (pid.isNotEmpty()) add(pid.lowercase())
+                }
+            }
+        }
+    }
 
     val openExploreOverlay: (expandSearch: Boolean) -> Unit = { expandSearch ->
         exploreViewModel.onExploreOpened()
@@ -724,6 +744,8 @@ fun MainNavScreen(
                         onOutfitSetClick = onOutfitSetClick,
                         onOpenDailyOutfitDropList = onOpenDailyOutfitDropList,
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
+                        onStartChatFromListing = onStartChatFromListing,
+                        existingChatListingIds = existingChatListingIds,
                     )
                     MainTab.Orders -> if (isGuestMode) {
                         GuestTabPlaceholder(
@@ -821,6 +843,8 @@ fun MainNavScreen(
             onRequestLogin = onRequestLogin,
             onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
             onOpenShippingAddresses = onShippingAddressesClick,
+            onStartChatFromListing = onStartChatFromListing,
+            existingChatListingIds = existingChatListingIds,
         )
     }
     if (featureTourVisible) {

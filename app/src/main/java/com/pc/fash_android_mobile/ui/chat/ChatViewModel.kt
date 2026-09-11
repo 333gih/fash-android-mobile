@@ -561,4 +561,27 @@ class ChatViewModel(
         if (isOrderCancelledChatMessage(item.lastMessageType, rawLast)) return false
         return rawLast.isBlank()
     }
+
+    /** Existing thread for a listing from the last inbox fetch (flat or grouped). */
+    fun conversationIdForListingId(listingId: String): String? {
+        val lid = listingId.trim()
+        if (lid.isEmpty()) return null
+        _allConversations.value.find { it.productId.equals(lid, ignoreCase = true) }?.let {
+            return it.conversationId
+        }
+        _conversationGroups.value
+            .asSequence()
+            .flatMap { it.conversations }
+            .find { it.productId.equals(lid, ignoreCase = true) }
+            ?.let { return it.conversationId }
+        _conversationGroups.value
+            .find { it.listingId.equals(lid, ignoreCase = true) }
+            ?.conversations
+            ?.firstOrNull()
+            ?.let { return it.conversationId }
+        return null
+    }
+
+    fun hasConversationForListingId(listingId: String): Boolean =
+        conversationIdForListingId(listingId) != null
 }

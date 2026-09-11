@@ -28,6 +28,8 @@ fun ExploreOverlayHost(
     onRequestLogin: (GuestLoginReason) -> Unit,
     onOpenSizingSetup: (() -> Unit)?,
     onOpenShippingAddresses: (() -> Unit)?,
+    onStartChatFromListing: (listingId: String) -> Unit = {},
+    existingChatListingIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -56,6 +58,8 @@ fun ExploreOverlayHost(
                 onRequestLogin = onRequestLogin,
                 onOpenSizingSetup = onOpenSizingSetup,
                 onOpenShippingAddresses = onOpenShippingAddresses,
+                onStartChatFromListing = onStartChatFromListing,
+                existingChatListingIds = existingChatListingIds,
             )
         }
     }

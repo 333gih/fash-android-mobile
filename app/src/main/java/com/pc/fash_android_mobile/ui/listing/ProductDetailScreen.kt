@@ -154,6 +154,7 @@ fun ProductDetailScreen(
     viewModel: ProductDetailViewModel,
     onBack: () -> Unit,
     onChat: (String) -> Unit = {},
+    hasExistingChat: Boolean = false,
     onBuyNow: (String) -> Unit = {},
     /** Share sheet: [listingId] + [title] for message text. */
     onShare: (listingId: String, title: String) -> Unit = { _, _ -> },
@@ -444,7 +445,13 @@ fun ProductDetailScreen(
                                             shape = RoundedCornerShape(20.dp),
                                         ) {
                                             Text(
-                                                text = stringResource(R.string.product_save_nudge_cta),
+                                                text = stringResource(
+                                                    if (hasExistingChat) {
+                                                        R.string.notification_action_open_chat
+                                                    } else {
+                                                        R.string.product_save_nudge_cta
+                                                    },
+                                                ),
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                                                 color = Color.White,
                                             )
@@ -456,6 +463,7 @@ fun ProductDetailScreen(
                         DetailBottomBar(
                             mode = bottomBarMode,
                             chatLoading = isOpeningChat,
+                            hasExistingChat = hasExistingChat,
                             buyNowEnabled = buyNowEnabled,
                             buyerOrderAmountVnd = buyerActiveOrder?.amountVnd ?: 0L,
                             onChat = {
@@ -1742,6 +1750,7 @@ private fun ProductPurchaseGuideDialog(
 private fun DetailBottomBar(
     mode: ProductBottomBarMode,
     chatLoading: Boolean,
+    hasExistingChat: Boolean = false,
     buyNowEnabled: Boolean = true,
     buyerOrderAmountVnd: Long = 0L,
     onChat: () -> Unit,
@@ -1774,7 +1783,10 @@ private fun DetailBottomBar(
                         ),
                         shape = RoundedCornerShape(12.dp),
                     ) {
-                        DetailChatButtonContent(chatLoading = chatLoading)
+                        DetailChatButtonContent(
+                            chatLoading = chatLoading,
+                            hasExistingChat = hasExistingChat,
+                        )
                     }
                     DetailPrimaryGradientButton(
                         onClick = onBuyNow,
@@ -1795,7 +1807,11 @@ private fun DetailBottomBar(
                         enabled = !chatLoading,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        DetailChatButtonContent(chatLoading = chatLoading, contentColor = Color.White)
+                        DetailChatButtonContent(
+                            chatLoading = chatLoading,
+                            hasExistingChat = hasExistingChat,
+                            contentColor = Color.White,
+                        )
                     }
                 }
             }
@@ -1959,6 +1975,7 @@ private fun resolveSellerAvatarUrl(profile: ProfileInfo?, detail: ListingDetail)
 @Composable
 private fun RowScope.DetailChatButtonContent(
     chatLoading: Boolean,
+    hasExistingChat: Boolean = false,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     if (chatLoading) {
@@ -1967,7 +1984,9 @@ private fun RowScope.DetailChatButtonContent(
         Icon(Icons.AutoMirrored.Filled.Message, null, Modifier.size(20.dp), tint = contentColor)
         Spacer(Modifier.width(8.dp))
         Text(
-            stringResource(R.string.product_chat),
+            stringResource(
+                if (hasExistingChat) R.string.notification_action_open_chat else R.string.product_chat,
+            ),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = contentColor,
         )

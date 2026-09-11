@@ -57,6 +57,10 @@ fun HomeFeedContent(
     isGuestBrowse: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
     onOpenSizingSetup: (() -> Unit)? = null,
+    /** Opens chat for a listing from the preview Message CTA (not PDP). */
+    onStartChatFromListing: (listingId: String) -> Unit = {},
+    /** Listing ids (lowercase) that already have an inbox thread. */
+    existingChatListingIds: Set<String> = emptySet(),
 ) {
     val ui by viewModel.feedUiState.collectAsState()
     val onLikeListing: (ListingFeedItem) -> Unit = { item ->
@@ -191,9 +195,12 @@ fun HomeFeedContent(
                         onRequestLogin(GuestLoginReason.BuyOrChat)
                     } else {
                         val nav = viewModel.openChatFromPreview()
-                        if (nav != null) pendingListingDetail = nav
+                        if (nav != null) onStartChatFromListing(nav.first)
                     }
                 },
+                hasExistingConversation = existingChatListingIds.contains(
+                    preview.feedItem.id.trim().lowercase(),
+                ),
             )
         }
     }

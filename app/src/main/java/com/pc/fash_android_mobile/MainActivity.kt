@@ -1840,6 +1840,22 @@ class MainActivity : ComponentActivity() {
                                     }
                                     val chatConversations by chatViewModel.conversations.collectAsState()
                                     val chatDisplayGroups by chatViewModel.displayGroups.collectAsState()
+                                    val existingChatListingIds = remember(chatConversations, chatDisplayGroups) {
+                                        buildSet {
+                                            chatConversations.forEach { item ->
+                                                val pid = item.productId.trim()
+                                                if (pid.isNotEmpty()) add(pid.lowercase())
+                                            }
+                                            chatDisplayGroups.forEach { group ->
+                                                val lid = group.listingId.trim()
+                                                if (lid.isNotEmpty()) add(lid.lowercase())
+                                                group.conversations.forEach { item ->
+                                                    val pid = item.productId.trim()
+                                                    if (pid.isNotEmpty()) add(pid.lowercase())
+                                                }
+                                            }
+                                        }
+                                    }
                                     val otherInboxUnread = remember(
                                         selectedConversationId,
                                         chatUnreadCount,
@@ -1998,6 +2014,36 @@ class MainActivity : ComponentActivity() {
                                                 selectedConversationId = conversationId.trim()
                                                 selectedTab = MainTab.Chat.ordinal
                                             },
+                                            onStartChatFromListing = { listingId ->
+                                                scope.launch {
+                                                    val existing = chatViewModel.conversationIdForListingId(listingId)
+                                                    if (existing != null) {
+                                                        closeListingDetail()
+                                                        selectedTab = MainTab.Chat.ordinal
+                                                        selectedConversationItem = null
+                                                        chatOrderDetailOverlayId = null
+                                                        selectedConversationId = existing
+                                                        return@launch
+                                                    }
+                                                    chatViewModel.startConversation(listingId).fold(
+                                                        onSuccess = { convId ->
+                                                            closeListingDetail()
+                                                            selectedTab = MainTab.Chat.ordinal
+                                                            selectedConversationItem = null
+                                                            chatOrderDetailOverlayId = null
+                                                            selectedConversationId = convId
+                                                            chatViewModel.loadConversations()
+                                                        },
+                                                        onFailure = {
+                                                            enqueueSnackbarSerial {
+                                                                showSnackbar(
+                                                                    it.message ?: getString(R.string.chat_load_error),
+                                                                )
+                                                            }
+                                                        },
+                                                    )
+                                                }
+                                            },
                                             snackbarHostState = snackbarHostState,
                                             chatUnreadCount = chatUnreadCount,
                                             onListingClick = { lid, sellerId ->
@@ -2118,10 +2164,23 @@ class MainActivity : ComponentActivity() {
                                                 viewModel = productDetailViewModel,
                                                 profileExploreNavigationEnabled = sellerShopUsername == null &&
                                                     !suppressPdpExploreNav,
+                                                hasExistingChat = existingChatListingIds.contains(
+                                                    currentListingId.trim().lowercase(),
+                                                ),
                                                 onBack = { popListingDetail() },
                                                 onChat = { listingId ->
                                                     scope.launch {
                                                         productDetailViewModel.setOpeningChat(true)
+                                                        val existing = chatViewModel.conversationIdForListingId(listingId)
+                                                        if (existing != null) {
+                                                            productDetailViewModel.setOpeningChat(false)
+                                                            closeListingDetail()
+                                                            selectedTab = MainTab.Chat.ordinal
+                                                            selectedConversationItem = null
+                                                            chatOrderDetailOverlayId = null
+                                                            selectedConversationId = existing
+                                                            return@launch
+                                                        }
                                                         chatViewModel.startConversation(listingId).fold(
                                                             onSuccess = { convId ->
                                                                 productDetailViewModel.setOpeningChat(false)
@@ -2259,6 +2318,36 @@ class MainActivity : ComponentActivity() {
                                                 onNavigateToExploreFromProfile = openExploreFromSellerProfileChips,
                                                 onPromoSlideClick = handlePromoClick,
                                                 promoSlides = mappedPromoSlides,
+                                                onStartChatFromListing = { listingId ->
+                                                    scope.launch {
+                                                        val existing = chatViewModel.conversationIdForListingId(listingId)
+                                                        if (existing != null) {
+                                                            selectedTab = MainTab.Chat.ordinal
+                                                            selectedConversationItem = null
+                                                            chatOrderDetailOverlayId = null
+                                                            selectedConversationId = existing
+                                                            return@launch
+                                                        }
+                                                        chatViewModel.startConversation(listingId).fold(
+                                                            onSuccess = { convId ->
+                                                                selectedTab = MainTab.Chat.ordinal
+                                                                selectedConversationItem = null
+                                                                chatOrderDetailOverlayId = null
+                                                                selectedConversationId = convId
+                                                                chatViewModel.loadConversations()
+                                                            },
+                                                            onFailure = {
+                                                                enqueueSnackbarSerial {
+                                                                    showSnackbar(
+                                                                        it.message
+                                                                            ?: getString(R.string.chat_load_error),
+                                                                    )
+                                                                }
+                                                            },
+                                                        )
+                                                    }
+                                                },
+                                                existingChatListingIds = existingChatListingIds,
                                             )
                                         }
                                         if (editListingId != null) {

@@ -168,6 +168,8 @@ fun ExploreScreen(
     onOpenSizingSetup: (() -> Unit)? = null,
     /** Opens saved shipping addresses when nearby filter needs a default address. */
     onOpenShippingAddresses: (() -> Unit)? = null,
+    onStartChatFromListing: (listingId: String) -> Unit = {},
+    existingChatListingIds: Set<String> = emptySet(),
 ) {
     val aestheticTagsCatalog by viewModel.aestheticTagsCatalog.collectAsState()
     val selectedAestheticTagIds by viewModel.selectedAestheticTagIds.collectAsState()
@@ -684,9 +686,12 @@ fun ExploreScreen(
                             onRequestLogin(GuestLoginReason.BuyOrChat)
                         } else {
                             val nav = viewModel.openChatFromPreview()
-                            if (nav != null) pendingListingDetail = nav
+                            if (nav != null) onStartChatFromListing(nav.first)
                         }
                     },
+                    hasExistingConversation = existingChatListingIds.contains(
+                        preview.feedItem.id.trim().lowercase(),
+                    ),
                 )
             }
         }
