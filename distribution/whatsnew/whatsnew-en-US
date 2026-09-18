@@ -1,2 +1,1 @@
-• Show the maintenance screen even if the app was closed or offline (FCM + status check on launch)
-• Keep the last maintenance state if the network fails — do not open Home by mistake
+• New: Heads-up notice in chat reminding you that Fash only protects deals done entirely on the app — messaging, pricing, and scheduling meetups through Fash
