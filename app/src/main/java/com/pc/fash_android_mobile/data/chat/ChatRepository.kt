@@ -1157,6 +1157,8 @@ data class ChatMessage(
     val meetingAppointment: MeetingAppointmentPayload? = null,
     /** When [messageType] is `order_cancelled` or legacy embedded cancel text. */
     val orderCancelled: OrderCancelledChatPayload? = null,
+    /** True when a `message.deleted` realtime event arrived — renders a "deleted" placeholder. */
+    val isDeleted: Boolean = false,
 )
 
 data class PriceOffer(

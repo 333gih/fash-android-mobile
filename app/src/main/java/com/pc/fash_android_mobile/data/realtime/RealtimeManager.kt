@@ -467,6 +467,20 @@ class RealtimeManager(
                         systemSubtype = sysSub,
                     )
                 }
+                "message.deleted" -> RealtimeEvent.MessageDeleted(
+                    conversationId = firstNonBlankPayload(
+                        payload, json,
+                        "conversation_id", "ConversationID", "conversationId",
+                    ),
+                    messageId = firstNonBlankPayload(
+                        payload, json,
+                        "message_id", "MessageID", "messageId",
+                    ),
+                    deletedById = firstNonBlankPayload(
+                        payload, json,
+                        "deleted_by_id", "DeletedByID", "deletedById",
+                    ),
+                )
                 "read.receipts" -> RealtimeEvent.ReadReceipts(
                     conversationId = firstNonBlankPayload(
                         payload, json,

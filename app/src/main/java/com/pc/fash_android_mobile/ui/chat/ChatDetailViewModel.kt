@@ -275,6 +275,11 @@ class ChatDetailViewModel(
                             scheduleDebouncedSilentPoll(conversationId)
                         }
                     }
+                    is RealtimeEvent.MessageDeleted -> {
+                        if (sameConversation(event.conversationId, conversationId)) {
+                            applyMessageDeletedFromRealtime(event.messageId)
+                        }
+                    }
                     is RealtimeEvent.ReadReceipts -> {
                         // INTEGRATION.md §5: other participant read our messages — refresh to show
                         // updated readAt timestamps on sent bubbles
@@ -568,6 +573,12 @@ class ChatDetailViewModel(
         _inputText.value = ""
         _showOfferDialog.value = false
         realtimeManager.sendTypingStop(conversationId)
+    }
+
+    private fun applyMessageDeletedFromRealtime(messageId: String) {
+        _messages.value = _messages.value.map { m ->
+            if (m.messageId.equals(messageId, ignoreCase = true)) m.copy(isDeleted = true) else m
+        }
     }
 
     private fun applyConversationClosedFromRealtime(conversationId: String) {

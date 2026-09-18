@@ -24,6 +24,13 @@ sealed class RealtimeEvent {
         val systemSubtype: String? = null,
     ) : RealtimeEvent()
 
+    /** A message was soft-deleted (`type: message.deleted`). Hide it in the UI immediately. */
+    data class MessageDeleted(
+        val conversationId: String,
+        val messageId: String,
+        val deletedById: String,
+    ) : RealtimeEvent()
+
     /** Someone marked messages read (`type: read.receipts`). */
     data class ReadReceipts(
         val conversationId: String,

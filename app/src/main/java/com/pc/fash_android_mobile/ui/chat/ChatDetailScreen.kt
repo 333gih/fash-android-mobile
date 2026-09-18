@@ -850,7 +850,12 @@ fun ChatDetailScreen(
                                                 },
                                             ),
                                     ) {
-                                        when (msg.messageType) {
+                                        if (msg.isDeleted) {
+                                            DeletedMessageBubble(
+                                                message = msg,
+                                                formatTime = viewModel::formatTime,
+                                            )
+                                        } else when (msg.messageType) {
                                             "meeting_proposal" -> {
                                                 msg.meetingAppointment?.let { mtg ->
                                                     MeetingProposalMessageCard(
@@ -2350,6 +2355,51 @@ private fun OfferStatusBadge(status: String) {
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = textColor,
         )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deleted message bubble
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun DeletedMessageBubble(
+    message: ChatMessage,
+    formatTime: (String) -> String,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = if (message.isFromMe) Arrangement.End else Arrangement.Start,
+    ) {
+        if (!message.isFromMe) Spacer(Modifier.width(48.dp))
+        Column(horizontalAlignment = if (message.isFromMe) Alignment.End else Alignment.Start) {
+            Text(
+                text = stringResource(R.string.chat_message_deleted),
+                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                color = scheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .background(
+                        color = scheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = scheme.outline.copy(alpha = 0.4f),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+            Text(
+                text = formatTime(message.timestamp),
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (message.isFromMe) Spacer(Modifier.width(48.dp))
     }
 }
 
