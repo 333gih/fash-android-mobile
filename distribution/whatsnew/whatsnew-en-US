@@ -1,2 +1,3 @@
+• Fix: Home screen now opens at Featured Users and Featured Sellers as intended, not at product tabs
 • Performance: listing images now load as fast WebP thumbnails instead of full-size downloads
 • New: Heads-up notice in chat reminding you that Fash only protects deals done entirely on the app — messaging, pricing, and scheduling meetups through Fash

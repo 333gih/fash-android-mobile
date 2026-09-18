@@ -237,9 +237,10 @@ fun HomeFeedTabHost(
     val scheme = MaterialTheme.colorScheme
     val hasFeaturedSellers = featuredSellers.isNotEmpty()
     val showFeaturedSellersSkeleton = featuredSellersLoading && featuredSellers.isEmpty()
-    // Guest home: reserve featured-sellers rail while shell loads so tabs are never the first row.
-    val showGuestFeaturedSkeleton = isGuestBrowse && featuredSellers.isEmpty() &&
-        (featuredSellersLoading || shellLoading)
+    // Guest home: always reserve the featured-sellers rail so tabs are never the first row.
+    // Without this, when both loading flags go false with empty sellers the block disappears and
+    // tabRowIndex drops to 0, placing the tab bar at grid position 0 on cold start.
+    val showGuestFeaturedSkeleton = isGuestBrowse && featuredSellers.isEmpty()
     val hasFeaturedSellersBlock = hasFeaturedSellers || showFeaturedSellersSkeleton || showGuestFeaturedSkeleton
     val hasOutfitDrop = dailyOutfitDropSets.isNotEmpty()
     var tabSwipeConsuming by remember { mutableStateOf(false) }
