@@ -267,6 +267,11 @@ fun ChatDetailScreen(
 
     val context = LocalContext.current
 
+    val prefs = remember { context.getSharedPreferences("fash_chat_prefs", android.content.Context.MODE_PRIVATE) }
+    var offPlatformNoticeDismissed by remember {
+        mutableStateOf(prefs.getBoolean("chat_off_platform_notice_dismissed", false))
+    }
+
     LaunchedEffect(Unit) {
         viewModel.navigateToOrderDetail.collectLatest { oid ->
             if (oid.isNotBlank()) onOrderDetails(oid.trim())
@@ -654,6 +659,20 @@ fun ChatDetailScreen(
                             onCancel = { viewModel.cancelActiveOfflineDeal() },
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f))
+                    }
+
+                    AnimatedVisibility(
+                        visible = !offPlatformNoticeDismissed,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        ChatOffPlatformNoticeBanner(
+                            onDismiss = {
+                                offPlatformNoticeDismissed = true
+                                prefs.edit().putBoolean("chat_off_platform_notice_dismissed", true).apply()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
 
                     // Messages
@@ -1343,6 +1362,54 @@ private fun OfferLimitPolicyBanner(
                 style = MaterialTheme.typography.bodySmall,
                 color = onContainer,
             )
+        }
+    }
+}
+
+@Composable
+private fun ChatOffPlatformNoticeBanner(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        color = scheme.surfaceContainerHighest,
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = FashColors.Primary,
+                modifier = Modifier.size(18.dp).padding(top = 1.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.chat_off_platform_notice_title),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.chat_off_platform_notice_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                TextButton(
+                    onClick = onDismiss,
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_off_platform_notice_dismiss),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                        color = FashColors.Primary,
+                    )
+                }
+            }
         }
     }
 }
