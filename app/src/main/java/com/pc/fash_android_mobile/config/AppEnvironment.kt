@@ -244,4 +244,11 @@ object AppEnvironment {
      */
     val shippingEnabled: Boolean
         get() = BuildConfig.SHIPPING_ENABLED
+
+    /**
+     * imgproxy base URL for feed-tile thumbnail resizing (no trailing slash).
+     * Empty string when imgproxy is not deployed — [FeedListingImageSizer] falls back to full-res.
+     */
+    val imageResizeBaseUrl: String
+        get() = BuildConfig.IMAGE_RESIZE_BASE_URL.trimEnd('/')
 }

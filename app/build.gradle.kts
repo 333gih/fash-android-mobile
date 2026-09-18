@@ -255,6 +255,15 @@ fun ApplicationProductFlavor.injectFromEnv(env: Map<String, String>, flavorName:
     buildConfigField("String", "IDENTITY_REVERIFY_URL", buildConfigStringLiteral(envOrEmpty("IDENTITY_REVERIFY_URL")))
 
     /**
+     * imgproxy base URL for feed-tile image resizing.
+     * When set, self-hosted listing/avatar image URLs (path starts with /fash-uploads/) are
+     * rewritten as imgproxy resize requests so feed tiles download a small WebP thumbnail
+     * instead of the full-resolution original (up to 10 MB). Empty = fall back to full-res.
+     * Prod: https://img.fashandcurious.com  Dev: http://76.13.211.193:9003
+     */
+    buildConfigField("String", "IMAGE_RESIZE_BASE_URL", buildConfigStringLiteral(envOrEmpty("IMAGE_RESIZE_BASE_URL")))
+
+    /**
      * C2C chat: after a deal exists, offer **ship + online payment** path from the fulfillment chooser.
      * When false, the Ship option shows as coming soon / disabled (copy from strings).
      */
