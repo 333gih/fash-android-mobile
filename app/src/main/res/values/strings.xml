@@ -1130,6 +1130,13 @@
     <string name="profile_products">Sản phẩm</string>
     <string name="profile_sold">Đã bán</string>
     <string name="profile_completed_sales">Giao dịch</string>
+    <string name="profile_completion_title">Hồ sơ phong cách của bạn</string>
+    <string name="profile_completion_step_photo">Tải ảnh đại diện</string>
+    <string name="profile_completion_step_tags">Chọn phong cách yêu thích</string>
+    <string name="profile_completion_step_sizing">Thêm thông tin kích thước</string>
+    <string name="profile_completion_step_bio">Viết giới thiệu ngắn</string>
+    <string name="profile_completion_step_follow">Theo dõi một người bán</string>
+    <string name="milestone_profile_complete">Hồ sơ phong cách của bạn đã hoàn tất!</string>
     <string name="profile_seller_trust_completed_sales">%1$d giao dịch thành công</string>
     <string name="profile_seller_trust_completed_sales_hint">Đơn đã xác nhận giao hàng trong app</string>
     <string name="profile_rating_format">%1$.1f (%2$d đánh giá)</string>

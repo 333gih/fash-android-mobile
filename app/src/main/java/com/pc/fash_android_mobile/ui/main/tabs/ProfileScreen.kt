@@ -509,6 +509,13 @@ fun ProfileScreen(
                                         }
                                     },
                                 )
+                                val completionState = ProfileCompletionState.from(profile)
+                                if (profile != null && !completionState.isComplete) {
+                                    ProfileCompletionCard(
+                                        state = completionState,
+                                        onAction = onEditProfile,
+                                    )
+                                }
                                 ProfileOwnMetricsCard(
                                     profile = profile,
                                     onFollowersClick = { onOpenFollowConnections(1) },
