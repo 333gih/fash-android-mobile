@@ -40,7 +40,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Warning
@@ -126,6 +128,8 @@ private val ProfileHeroAvatarInnerDp = 80.dp
 private fun ProfileHeroSection(
     coverModel: Any,
     avatarUrl: String?,
+    onEditAvatar: (() -> Unit)? = null,
+    onEditCover: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
@@ -158,6 +162,25 @@ private fun ProfileHeroSection(
                         ),
                     ),
             )
+            if (onEditCover != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable(onClick = onEditCover),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
         }
         Box(
             modifier = Modifier
@@ -183,6 +206,26 @@ private fun ProfileHeroSection(
                         modifier = Modifier
                             .size(ProfileHeroAvatarInnerDp)
                             .clip(CircleShape),
+                    )
+                }
+            }
+            if (onEditAvatar != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 2.dp, y = 2.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(FashColors.Primary)
+                        .border(2.dp, scheme.surface, CircleShape)
+                        .clickable(onClick = onEditAvatar),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp),
                     )
                 }
             }
@@ -344,6 +387,9 @@ fun ProfileScreen(
     /** 0 = Following tab, 1 = Followers — same as [com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen]. */
     onOpenFollowConnections: (initialTab: Int) -> Unit = {},
     /** Opens Explore → Posts with filters + optional text search (from aesthetic tag chips). */
+    onOpenPersonalization: () -> Unit = { },
+    onEditAvatar: (() -> Unit)? = null,
+    onEditCover: (() -> Unit)? = null,
     onNavigateToExploreFromProfile: (
         categoryId: String?,
         brandId: String?,
@@ -508,6 +554,8 @@ fun ProfileScreen(
                                             onNavigateToExploreFromProfile(null, null, null, tagName, null, null)
                                         }
                                     },
+                                    onEditAvatar = onEditAvatar,
+                                    onEditCover = onEditCover,
                                 )
                                 val completionState = ProfileCompletionState.from(profile)
                                 if (profile != null && !completionState.isComplete) {
@@ -517,7 +565,7 @@ fun ProfileScreen(
                                     )
                                     ProfileCompletionCard(
                                         state = completionState,
-                                        onAction = onEditProfile,
+                                        onAction = onOpenPersonalization,
                                         modifier = Modifier.padding(top = FashTheme.spacing.spacing2),
                                     )
                                     Spacer(modifier = Modifier.height(FashTheme.spacing.spacing5))
@@ -808,11 +856,13 @@ private fun ProfileHeader(
     profile: com.pc.fash_android_mobile.data.user.ProfileInfo?,
     onEditClick: () -> Unit,
     onAestheticTagClick: (tagName: String, tagId: String?) -> Unit = { _, _ -> },
+    onEditAvatar: (() -> Unit)? = null,
+    onEditCover: (() -> Unit)? = null,
 ) {
     val coverUrl = profile?.coverImageUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() }?.let { resolveImageUrl(it) }
     val coverModel: Any = coverUrl ?: FashDefaultProfileAssets.coverRes
-    ProfileHeroSection(coverModel = coverModel, avatarUrl = avatarUrl)
+    ProfileHeroSection(coverModel = coverModel, avatarUrl = avatarUrl, onEditAvatar = onEditAvatar, onEditCover = onEditCover)
     ProfileIdentityBlock(
         profile = profile,
         onEditClick = onEditClick,

@@ -102,6 +102,7 @@ import com.pc.fash_android_mobile.ui.chat.ShipFlowSource
 import com.pc.fash_android_mobile.ui.chat.ChatViewModel
 import com.pc.fash_android_mobile.ui.profile.EditProfileScreen
 import com.pc.fash_android_mobile.ui.profile.EditProfileViewModel
+import com.pc.fash_android_mobile.ui.profile.PersonalizationScreen
 import com.pc.fash_android_mobile.ui.post.PostViewModel
 import com.pc.fash_android_mobile.ui.follow.FollowConnectionsScreen
 import com.pc.fash_android_mobile.ui.follow.FollowConnectionsViewModel
@@ -1522,6 +1523,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     var profileEditReturnTab by rememberSaveable { mutableIntStateOf(-1) }
                                     var showEditProfile by rememberSaveable { mutableStateOf(false) }
+                                    var showPersonalization by rememberSaveable { mutableStateOf(false) }
                                     var selectedConversationItem by remember { mutableStateOf<ConversationItem?>(null) }
                                     var selectedCheckoutListingId by rememberSaveable { mutableStateOf<String?>(null) }
                                     var selectedCheckoutOfferPrice by rememberSaveable { mutableStateOf(0L) }
@@ -2055,6 +2057,9 @@ class MainActivity : ComponentActivity() {
                                                 editListingId = lid
                                             },
                                             onEditProfile = { showEditProfile = true },
+                                            onOpenPersonalization = { showPersonalization = true },
+                                            onEditAvatar = { showEditProfile = true },
+                                            onEditCover = { showEditProfile = true },
                                             onShippingAddressesClick = {
                                                 addressFlowOrderId = null
                                                 showShippingAddressList = true
@@ -2364,6 +2369,22 @@ class MainActivity : ComponentActivity() {
                                                         profileViewModel.completeEditReturn(tab, "")
                                                     }
                                                     profileEditReturnTab = -1
+                                                },
+                                            )
+                                        }
+                                        if (showPersonalization) {
+                                            PersonalizationScreen(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                                onBack = { showPersonalization = false },
+                                                onOpenEditProfile = {
+                                                    showPersonalization = false
+                                                    showEditProfile = true
+                                                },
+                                                onNavigateToExplore = {
+                                                    showPersonalization = false
+                                                    exploreOverlayOpenNonce++
                                                 },
                                             )
                                         }
