@@ -93,8 +93,7 @@ fun ProfileCompletionCard(
         onClick = onAction,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = FashTheme.spacing.editorialStart)
-            .padding(top = FashTheme.spacing.spacing3),
+            .padding(horizontal = FashTheme.spacing.editorialStart),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -111,12 +110,12 @@ fun ProfileCompletionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = stringResource(R.string.profile_completion_title),
+                    text = stringResource(R.string.profile_completion_improve_title),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "${(state.fraction * 100).toInt()}%",
+                    text = stringResource(R.string.profile_completion_steps_format, state.completedSteps, state.totalSteps),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = FashColors.Primary,
                 )

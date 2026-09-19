@@ -511,10 +511,25 @@ fun ProfileScreen(
                                 )
                                 val completionState = ProfileCompletionState.from(profile)
                                 if (profile != null && !completionState.isComplete) {
+                                    ProfileSectionLabel(
+                                        text = stringResource(R.string.profile_personalization_section),
+                                        modifier = Modifier.padding(top = FashTheme.spacing.spacing3),
+                                    )
                                     ProfileCompletionCard(
                                         state = completionState,
                                         onAction = onEditProfile,
+                                        modifier = Modifier.padding(top = FashTheme.spacing.spacing2),
                                     )
+                                    Spacer(modifier = Modifier.height(FashTheme.spacing.spacing5))
+                                }
+                                if (profile != null) {
+                                    ProfileSectionLabel(
+                                        text = stringResource(R.string.profile_activity_section),
+                                        modifier = Modifier.padding(
+                                            top = if (completionState.isComplete) FashTheme.spacing.spacing3 else 0.dp,
+                                        ),
+                                    )
+                                    Spacer(modifier = Modifier.height(FashTheme.spacing.spacing2))
                                 }
                                 ProfileOwnMetricsCard(
                                     profile = profile,
@@ -1164,6 +1179,22 @@ private fun ProfileSizingReferenceCard(
             }
         }
     }
+}
+
+@Composable
+private fun ProfileSectionLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+        color = scheme.onSurfaceVariant,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = FashTheme.spacing.editorialStart + 4.dp),
+    )
 }
 
 /** Share shop + shipping + invite grouped under one account section. */
