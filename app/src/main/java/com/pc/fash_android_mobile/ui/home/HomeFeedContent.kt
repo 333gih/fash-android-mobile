@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.pc.fash_android_mobile.ui.main.tabs.ProfileCompletionState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,12 +58,14 @@ fun HomeFeedContent(
     isGuestBrowse: Boolean = false,
     onRequestLogin: (GuestLoginReason) -> Unit = {},
     onOpenSizingSetup: (() -> Unit)? = null,
+    onOpenPersonalization: (() -> Unit)? = null,
     /** Opens chat for a listing from the preview Message CTA (not PDP). */
     onStartChatFromListing: (listingId: String) -> Unit = {},
     /** Listing ids (lowercase) that already have an inbox thread. */
     existingChatListingIds: Set<String> = emptySet(),
 ) {
     val ui by viewModel.feedUiState.collectAsState()
+    val profileCompletionState: ProfileCompletionState? by viewModel.profileCompletionState.collectAsState()
     val onLikeListing: (ListingFeedItem) -> Unit = { item ->
         if (isGuestBrowse) onRequestLogin(GuestLoginReason.Like) else viewModel.toggleLike(item)
     }
@@ -140,6 +143,8 @@ fun HomeFeedContent(
                 showSizingBanner = ui.showSizingBanner && !isGuestBrowse,
                 onDismissSizingBanner = viewModel::dismissSizingBanner,
                 onOpenSizingSetup = onOpenSizingSetup,
+                profileCompletionState = if (!isGuestBrowse) profileCompletionState else null,
+                onOpenPersonalization = if (!isGuestBrowse) onOpenPersonalization else null,
                 buyerStats = ui.buyerStats,
                 onDeliveringJourneyClick = onDeliveringJourneyClick,
                 onSavedJourneyClick = onNavigateToSaved,

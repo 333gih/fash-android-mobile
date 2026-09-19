@@ -43,6 +43,7 @@ import com.pc.fash_android_mobile.data.locale.AppLocale
 import com.pc.fash_android_mobile.data.locale.PreferredLocaleSync
 import com.pc.fash_android_mobile.data.user.NotificationPreferencesRepository
 import com.pc.fash_android_mobile.ui.notifications.ExploreNavigationFilter
+import com.pc.fash_android_mobile.data.user.UserProfileStore
 import com.pc.fash_android_mobile.data.user.UserRepository
 import com.pc.fash_android_mobile.deeplink.AccountSwitchPrompt
 import com.pc.fash_android_mobile.notifications.FashNotificationChannels
@@ -397,6 +398,9 @@ class FashApplication : Application(), ImageLoaderFactory {
             authRepository = AuthRepository(),
         )
     }
+
+    /** Canonical own-user profile — shared across ViewModels to avoid redundant getMeProfile() calls. */
+    val userProfileStore = UserProfileStore()
 
     val userRepository: UserRepository by lazy {
         UserRepository(

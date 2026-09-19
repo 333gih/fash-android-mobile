@@ -196,6 +196,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private fun clearProfileCachesOnly() {
         loadProfileJob?.cancel()
         _profile.value = null
+        fashApp.userProfileStore.clear()
         _sellingListings.value = emptyList()
         _inReviewListings.value = emptyList()
         _rejectedListings.value = emptyList()
@@ -318,7 +319,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun fetchProfileAndListings() {
         withContext(Dispatchers.IO) {
             userRepository.getMeProfile().fold(
-                onSuccess = { _profile.value = it },
+                onSuccess = {
+                    _profile.value = it
+                    fashApp.userProfileStore.update(it)
+                },
                 onFailure = {
                     _loadError.value = true
                     val gate = userRepository.getUserAccessStatus().getOrNull()

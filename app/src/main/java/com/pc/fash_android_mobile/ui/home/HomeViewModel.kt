@@ -28,6 +28,7 @@ import com.pc.fash_android_mobile.data.search.shopReadyOnly
 import com.pc.fash_android_mobile.data.realtime.RealtimeEvent
 import com.pc.fash_android_mobile.data.realtime.RealtimeManager
 import com.pc.fash_android_mobile.data.user.UserRepository
+import com.pc.fash_android_mobile.ui.main.tabs.ProfileCompletionState
 import com.pc.fash_android_mobile.ui.components.FeedEngagementFeedback
 import com.pc.fash_android_mobile.ui.components.emitSnackbarMessage
 import com.pc.fash_android_mobile.ui.explore.ExploreListingPreviewState
@@ -48,6 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.currentCoroutineContext
@@ -421,6 +423,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _featuredSellers = MutableStateFlow<List<FeaturedSellerItem>>(emptyList())
     private val _featuredSellersLoading = MutableStateFlow(false)
+
+    /** Derived from the app-level canonical profile store — no extra network call. */
+    val profileCompletionState: StateFlow<ProfileCompletionState?> =
+        fashApp.userProfileStore.profile
+            .map { profile -> profile?.let { ProfileCompletionState.from(it) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val feedUiState: StateFlow<HomeFeedUiState> = combine(
         _items,
@@ -1021,6 +1029,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Call after the viewer saves profile sizing so the Home banner hides without restarting. */
     fun refreshSizingBannerAfterProfileSave() {
+        // Fast path: compute locally from canonical profile to avoid a redundant getMeProfile call.
+        val cached = fashApp.userProfileStore.profile.value
+        if (cached != null) {
+            val hasSize = !cached.referenceSize.isNullOrBlank()
+            val hasMeasurement = listOf(
+                cached.referenceMeasurementChest,
+                cached.referenceMeasurementHem,
+                cached.referenceMeasurementLength,
+                cached.referenceMeasurementShoulders,
+                cached.referenceMeasurementSleeveLength,
+            ).any { it != null && it > 0.0 }
+            _showSizingBanner.value = !hasSize && !hasMeasurement
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) { refreshSizingBannerState() }
     }
 

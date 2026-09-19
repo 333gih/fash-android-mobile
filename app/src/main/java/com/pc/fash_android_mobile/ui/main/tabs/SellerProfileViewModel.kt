@@ -208,24 +208,25 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
     fun toggleFollow() {
         val p = _profile.value ?: return
         if (isGuestBrowse() || !canFollowSeller()) return
-        val target = p.username.trim().ifBlank { p.userId.trim() }
+        // Prefer UUID to bypass the resolveFollowTargetUserId extra network call.
+        val target = p.userId.trim().ifBlank { p.username.trim() }
         if (target.isBlank()) return
         viewModelScope.launch {
             _followInFlight.value = true
             try {
-                val unfollow = _isFollowing.value
+                val wasFollowing = _isFollowing.value
+                val nowFollowing = !wasFollowing
+                // Optimistic update — flip state immediately for instant feedback.
+                _isFollowing.value = nowFollowing
+                _profile.value = p.copy(
+                    isFollowing = nowFollowing,
+                    followerCount = (p.followerCount + if (nowFollowing) 1 else -1).coerceAtLeast(0),
+                )
                 val result = withContext(Dispatchers.IO) {
-                    if (unfollow) userRepository.unfollow(target) else userRepository.follow(target)
+                    if (wasFollowing) userRepository.unfollow(target) else userRepository.follow(target)
                 }
                 result.fold(
                     onSuccess = {
-                        val nowFollowing = !unfollow
-                        _isFollowing.value = nowFollowing
-                        val fc = p.followerCount
-                        _profile.value = p.copy(
-                            isFollowing = nowFollowing,
-                            followerCount = (fc + if (nowFollowing) 1 else -1).coerceAtLeast(0),
-                        )
                         if (nowFollowing) {
                             _events.emit(
                                 getApplication<Application>().getString(R.string.follow_success),
@@ -233,6 +234,12 @@ class SellerProfileViewModel(application: Application) : AndroidViewModel(applic
                         }
                     },
                     onFailure = { e ->
+                        // Rollback optimistic update on failure.
+                        _isFollowing.value = wasFollowing
+                        _profile.value = (_profile.value ?: p).copy(
+                            isFollowing = wasFollowing,
+                            followerCount = ((_profile.value ?: p).followerCount + if (wasFollowing) 1 else -1).coerceAtLeast(0),
+                        )
                         _events.emit(
                             e.message?.takeIf { m -> m.isNotBlank() }
                                 ?: getApplication<Application>().getString(R.string.feed_action_error),

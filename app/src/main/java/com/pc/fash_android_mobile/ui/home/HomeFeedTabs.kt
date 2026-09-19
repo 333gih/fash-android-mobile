@@ -77,6 +77,8 @@ import com.pc.fash_android_mobile.ui.feed.listingMasonryAspectRatio
 import com.pc.fash_android_mobile.ui.feed.listingMasonryTileSize
 import com.pc.fash_android_mobile.ui.feed.rememberListingMasonryColumnWidthDp
 import com.pc.fash_android_mobile.ui.guest.GuestLoginReason
+import com.pc.fash_android_mobile.ui.main.tabs.ProfileCompletionCard
+import com.pc.fash_android_mobile.ui.main.tabs.ProfileCompletionState
 import com.pc.fash_android_mobile.ui.theme.FashColors
 import com.pc.fash_android_mobile.ui.theme.FashTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -185,6 +187,8 @@ fun HomeFeedTabHost(
     showSizingBanner: Boolean,
     onDismissSizingBanner: () -> Unit,
     onOpenSizingSetup: (() -> Unit)?,
+    profileCompletionState: ProfileCompletionState? = null,
+    onOpenPersonalization: (() -> Unit)? = null,
     buyerStats: BuyerHomeStats,
     onDeliveringJourneyClick: () -> Unit,
     onSavedJourneyClick: () -> Unit,
@@ -249,8 +253,12 @@ fun HomeFeedTabHost(
     val selectedVisualIndex = tabs.indexOf(safeSelected).coerceAtLeast(0)
     val showJourneyRow = !isGuestBrowse
     val showExploreShortcut = !isGuestBrowse && exploreShortcut != null
+    val showCompletionCard = !isGuestBrowse &&
+        profileCompletionState != null && !profileCompletionState.isComplete &&
+        onOpenPersonalization != null
     val tabRowIndex = (if (!shoppingContextChip.isNullOrBlank()) 1 else 0) +
         (if (showJourneyRow) 1 else 0) +
+        (if (showCompletionCard) 1 else 0) +
         (if (showSizingBanner && onOpenSizingSetup != null) 1 else 0) +
         (if (hasFeaturedSellersBlock) 1 else 0) +
         (if (hasOutfitDrop) 1 else 0) +
@@ -406,6 +414,16 @@ fun HomeFeedTabHost(
                         onInReviewClick = onInReviewJourneyClick,
                         modifier = Modifier.fillMaxWidth(),
                         includeHorizontalEdgePadding = false,
+                    )
+                }
+            }
+
+            if (showCompletionCard) {
+                item(span = StaggeredGridItemSpan.FullLine, key = "home_profile_completion") {
+                    ProfileCompletionCard(
+                        state = profileCompletionState!!,
+                        onAction = onOpenPersonalization!!,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }

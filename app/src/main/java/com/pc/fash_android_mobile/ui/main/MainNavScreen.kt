@@ -747,6 +747,7 @@ fun MainNavScreen(
                         onOutfitSetClick = onOutfitSetClick,
                         onOpenDailyOutfitDropList = onOpenDailyOutfitDropList,
                         onOpenSizingSetup = if (isGuestMode) null else onEditProfile,
+                        onOpenPersonalization = if (isGuestMode) null else onOpenPersonalization,
                         onStartChatFromListing = onStartChatFromListing,
                         existingChatListingIds = existingChatListingIds,
                     )
