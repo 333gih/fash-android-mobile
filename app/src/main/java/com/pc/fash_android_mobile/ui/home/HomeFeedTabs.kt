@@ -629,9 +629,12 @@ private fun HomeFeedTabSwitcher(
             Tab(
                 selected = selected,
                 onClick = { onSelect(index) },
-                modifier = Modifier.padding(horizontal = 2.dp),
+                // No outer modifier padding — padding here is chained before the Tab's internal
+                // .selectable(), which reduces the clickable region. Visual spacing is applied
+                // inside the text Row so the full Tab width remains interactive.
                 text = {
                     androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.padding(horizontal = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
